@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>Ragic 欄位 ID 探測工具</title>
+  <style>
+    body{font-family:monospace;background:#1e1e1e;color:#d4d4d4;padding:20px;max-width:900px;margin:0 auto}
+    h2{color:#4fc1ff;margin-bottom:6px}
+    .sub{color:#888;font-size:13px;margin-bottom:20px}
+    input,select{background:#2d2d2d;color:#d4d4d4;border:1px solid #555;padding:8px 12px;border-radius:6px;font-size:14px;font-family:monospace}
+    input{width:340px}
+    button{background:#1a73e8;color:#fff;border:none;padding:9px 20px;border-radius:6px;cursor:pointer;font-size:14px;margin-left:8px}
+    button:hover{background:#1557b0}
+    .row{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    label{color:#9cdcfe;min-width:100px;font-size:13px}
+    pre{background:#252526;border:1px solid #444;border-radius:8px;padding:16px;overflow-x:auto;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+    .ok{color:#6a9955}
+    .key{color:#9cdcfe}
+    .val{color:#ce9178}
+    .num{color:#b5cea8}
+    .err{color:#f44747;background:#2d1e1e;border-color:#5a2525}
+    .section{margin-top:24px;border-top:1px solid #333;padding-top:20px}
+    .hint{color:#888;font-size:12px;margin-top:6px}
+    table{border-collapse:collapse;width:100%;font-size:13px}
+    th{background:#2a2a2a;padding:8px 12px;text-align:left;border:1px solid #444;color:#9cdcfe}
+    td{padding:7px 12px;border:1px solid #333}
+    .fid{color:#b5cea8;font-weight:bold}
+    .fname{color:#ce9178}
+  </style>
+</head>
+<body>
+<h2>🔍 Ragic 欄位 ID 探測工具</h2>
+<div class="sub">建好 Ragic 表單後，用這個工具找出各欄位的數字 ID，再填回 index.html 的 CONFIG.FID</div>
+
+<div class="row">
+  <label>Ragic APIKey</label>
+  <input id="apikey" type="password" placeholder="貼入 Ragic Account Level API Key">
+</div>
+<div class="row">
+  <label>Sheet 路徑</label>
+  <input id="sheet" placeholder="例如：punch-clock/1">
+  <button onclick="probe()">探測 ▶</button>
+</div>
+<div class="hint">路徑格式：帳號名稱後面那段，例如 ap10.ragic.com/Fan28/<strong>punch-clock/1</strong></div>
+
+<div id="out" style="margin-top:20px"></div>
+
+<div class="section">
+  <h2 style="font-size:15px;margin-bottom:8px">📋 快速填表格（三表探測完後用）</h2>
+  <div class="hint" style="margin-bottom:10px">依序探測 Workers / Records / Requests 三張表，把下面的 ID 填入 index.html 的 CONFIG.FID</div>
+  <table id="summary-table">
+    <thead>
+      <tr><th>表</th><th>欄位名稱</th><th>填入 CONFIG.FID 的鍵</th><th>欄位 ID（你填）</th></tr>
+    </thead>
+    <tbody>
+      <tr><td rowspan="6">Workers<br>(SHEETS.WORKERS)</td><td>email</td><td>W.email</td><td><input id="fi-w-email" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>name / 姓名</td><td>W.name</td><td><input id="fi-w-name" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>weekday_rate / 平日時薪</td><td>W.weekday_rate</td><td><input id="fi-w-wd" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>weekend_rate / 假日時薪</td><td>W.weekend_rate</td><td><input id="fi-w-we" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>color / 顏色</td><td>W.color</td><td><input id="fi-w-col" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>active / 啟用</td><td>W.active</td><td><input id="fi-w-act" style="width:80px" placeholder="0"></td></tr>
+
+      <tr><td rowspan="12">Records<br>(SHEETS.RECORDS)</td><td>email</td><td>R.email</td><td><input id="fi-r-email" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>name / 姓名</td><td>R.name</td><td><input id="fi-r-name" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>date / 日期</td><td>R.date</td><td><input id="fi-r-date" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>start_time / 上班時間</td><td>R.start_time</td><td><input id="fi-r-st" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>end_time / 下班時間</td><td>R.end_time</td><td><input id="fi-r-et" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>hours / 時數</td><td>R.hours</td><td><input id="fi-r-h" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>subtotal / 薪資</td><td>R.subtotal</td><td><input id="fi-r-sub" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>location / 地點</td><td>R.location</td><td><input id="fi-r-loc" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>work_content / 工作內容</td><td>R.work_content</td><td><input id="fi-r-wc" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>breaks_minutes / 休息分鐘</td><td>R.breaks_minutes</td><td><input id="fi-r-brk" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>paused_at / 休息開始時間</td><td>R.paused_at</td><td><input id="fi-r-pa" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>rec_status / 狀態</td><td>R.rec_status</td><td><input id="fi-r-rs" style="width:80px" placeholder="0"></td></tr>
+
+      <tr><td rowspan="12">Requests<br>(SHEETS.REQUESTS)</td><td>email</td><td>Q.email</td><td><input id="fi-q-email" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>name / 姓名</td><td>Q.name</td><td><input id="fi-q-name" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>date / 日期</td><td>Q.date</td><td><input id="fi-q-date" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>start_time / 上班時間</td><td>Q.start_time</td><td><input id="fi-q-st" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>end_time / 下班時間</td><td>Q.end_time</td><td><input id="fi-q-et" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>location / 地點</td><td>Q.location</td><td><input id="fi-q-loc" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>work_content / 工作內容</td><td>Q.work_content</td><td><input id="fi-q-wc" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>reason / 申請原因</td><td>Q.reason</td><td><input id="fi-q-rsn" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>status / 狀態</td><td>Q.status</td><td><input id="fi-q-sta" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>reviewed_by / 審核者</td><td>Q.reviewed_by</td><td><input id="fi-q-rb" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>reviewed_at / 審核時間</td><td>Q.reviewed_at</td><td><input id="fi-q-ra" style="width:80px" placeholder="0"></td></tr>
+      <tr><td>review_note / 駁回原因</td><td>Q.review_note</td><td><input id="fi-q-rn" style="width:80px" placeholder="0"></td></tr>
+    </tbody>
+  </table>
+  <button style="margin-top:12px;background:#34a853" onclick="genCode()">產生 CONFIG.FID 程式碼 ▶</button>
+  <pre id="gen-out" style="margin-top:12px;display:none"></pre>
+</div>
+
+<script>
+async function probe() {
+  const key = document.getElementById('apikey').value.trim();
+  const sheet = document.getElementById('sheet').value.trim();
+  if (!key || !sheet) { alert('請填入 API Key 和 Sheet 路徑'); return; }
+
+  const out = document.getElementById('out');
+  out.innerHTML = '<pre>載入中…</pre>';
+
+  try {
+    const url = `https://ap10.ragic.com/Fan28/${sheet}?api&APIKey=${encodeURIComponent(key)}&naming=fid&limit=1`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+
+    const records = Object.values(data).filter(r => r && r._ragicId);
+    if (!records.length) {
+      out.innerHTML = `<pre class="ok">✅ 表格存在，但目前沒有任何資料列。\n\n先手動在 Ragic 新增一筆測試資料，再重新探測。\n\n（空表格無法列出欄位 ID）</pre>`;
+      return;
+    }
+
+    const sample = records[0];
+    const entries = Object.entries(sample).filter(([k]) => k !== '_ragicId');
+
+    let html = `<pre class="ok">✅ 探測成功！Sheet: Fan28/${sheet}\n共 ${records.length} 筆資料，以下是第一筆的欄位 ID：\n</pre>`;
+    html += `<table><thead><tr><th>欄位 ID</th><th>目前值（可對照欄位名稱）</th></tr></thead><tbody>`;
+    entries.forEach(([k, v]) => {
+      html += `<tr><td class="fid">${k}</td><td class="fname">${String(v).slice(0,80)}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+    html += `<pre style="margin-top:10px"><span class="ok">提示：</span> 對照 Ragic 的欄位名稱，把左欄數字填入上面的表格</pre>`;
+    out.innerHTML = html;
+  } catch (e) {
+    out.innerHTML = `<pre class="err">❌ 錯誤：${e.message}\n\n可能原因：\n1. API Key 錯誤\n2. Sheet 路徑錯誤（應為 punch-clock/1 這種格式）\n3. 該 Sheet 沒有給服務帳戶存取權</pre>`;
+  }
+}
+
+function genCode() {
+  const g = id => document.getElementById(id).value.trim() || '0';
+  const code = `FID: {
+    W: {
+      email:        ${g('fi-w-email')},
+      name:         ${g('fi-w-name')},
+      weekday_rate: ${g('fi-w-wd')},
+      weekend_rate: ${g('fi-w-we')},
+      color:        ${g('fi-w-col')},
+      active:       ${g('fi-w-act')}
+    },
+    R: {
+      email:          ${g('fi-r-email')},
+      name:           ${g('fi-r-name')},
+      date:           ${g('fi-r-date')},
+      start_time:     ${g('fi-r-st')},
+      end_time:       ${g('fi-r-et')},
+      hours:          ${g('fi-r-h')},
+      subtotal:       ${g('fi-r-sub')},
+      location:       ${g('fi-r-loc')},
+      work_content:   ${g('fi-r-wc')},
+      breaks_minutes: ${g('fi-r-brk')},
+      paused_at:      ${g('fi-r-pa')},
+      rec_status:     ${g('fi-r-rs')}
+    },
+    Q: {
+      email:       ${g('fi-q-email')},
+      name:        ${g('fi-q-name')},
+      date:        ${g('fi-q-date')},
+      start_time:  ${g('fi-q-st')},
+      end_time:    ${g('fi-q-et')},
+      location:    ${g('fi-q-loc')},
+      work_content:${g('fi-q-wc')},
+      reason:      ${g('fi-q-rsn')},
+      status:      ${g('fi-q-sta')},
+      reviewed_by: ${g('fi-q-rb')},
+      reviewed_at: ${g('fi-q-ra')},
+      review_note: ${g('fi-q-rn')}
+    }
+  }`;
+  const el = document.getElementById('gen-out');
+  el.textContent = code;
+  el.style.display = 'block';
+}
+</script>
+</body>
+</html>

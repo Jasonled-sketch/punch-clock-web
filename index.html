@@ -1,0 +1,2896 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>工讀生打卡系統</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#222;min-height:100vh}
+    /* ── Login ── */
+    #login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+    .login-card{background:#fff;border-radius:20px;padding:40px 32px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:360px;width:100%}
+    .login-icon{font-size:52px;margin-bottom:16px}
+    .login-title{font-size:22px;font-weight:700;margin-bottom:6px}
+    .login-sub{color:#888;font-size:14px;margin-bottom:28px}
+    /* ── Topbar ── */
+    #topbar{background:#1a73e8;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
+    #topbar .t{font-size:16px;font-weight:600}
+    .btn-logout{background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+    /* ── Tabs ── */
+    .tab-bar{background:#fff;display:flex;border-bottom:1px solid #e0e0e0;overflow-x:auto;position:sticky;top:52px;z-index:199;scrollbar-width:none}
+    .tab-bar::-webkit-scrollbar{display:none}
+    .tab-btn{flex:1;min-width:56px;padding:13px 6px;border:none;background:none;cursor:pointer;font-size:13px;color:#666;border-bottom:2px solid transparent;white-space:nowrap;position:relative;transition:color .15s,border-color .15s}
+    .tab-btn.active{color:#1a73e8;border-bottom-color:#1a73e8;font-weight:600}
+    .tab-badge{background:#ea4335;color:#fff;font-size:10px;padding:1px 5px;border-radius:10px;position:absolute;top:6px;right:2px}
+    /* ── Content ── */
+    .view{padding:16px;max-width:640px;margin:0 auto}
+    /* ── Card ── */
+    .card{background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:14px}
+    /* ── Status ── */
+    .status-lbl{font-size:12px;color:#888;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+    .status-val{font-size:32px;font-weight:700}
+    .status-none{color:#aaa}
+    .status-work{color:#34a853}
+    .status-break{color:#fbbc04}
+    .status-time{font-size:13px;color:#999;margin-top:4px}
+    .timer{font-size:44px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums;margin-top:8px}
+    /* ── Location ── */
+    .loc-btn{display:flex;align-items:center;width:100%;padding:13px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;font-size:15px;margin-bottom:8px;gap:10px;transition:border-color .15s,background .15s}
+    .loc-btn.sel{border-color:#1a73e8;background:#e8f0fe}
+    .loc-map{margin-left:auto;font-size:12px;color:#1a73e8;background:#e8f0fe;padding:4px 8px;border-radius:6px;text-decoration:none}
+    /* ── Buttons ── */
+    .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+    .btn{padding:15px;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-weight:600;transition:opacity .15s}
+    .btn:disabled{opacity:.3;cursor:not-allowed}
+    .btn-full{grid-column:1/-1}
+    .btn-blue{background:#1a73e8;color:#fff}
+    .btn-green{background:#34a853;color:#fff}
+    .btn-yellow{background:#f9ab00;color:#fff}
+    .btn-red{background:#ea4335;color:#fff}
+    .btn-grey{background:#f1f3f4;color:#444}
+    /* ── Work items ── */
+    .wi-row{display:flex;gap:8px;margin-bottom:8px;align-items:center}
+    .wi-input{flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+    .wi-del{background:none;border:none;color:#bbb;cursor:pointer;font-size:20px;line-height:1;padding:4px}
+    .wi-add{background:none;border:1px dashed #1a73e8;color:#1a73e8;border-radius:8px;padding:9px;cursor:pointer;font-size:14px;width:100%;margin-top:4px}
+    /* ── Table ── */
+    .tbl-wrap{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:14px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f8f9fa;padding:10px 12px;text-align:left;font-size:12px;color:#666;border-bottom:1px solid #e0e0e0}
+    td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f0f0f0}
+    tr:last-child td{border-bottom:none}
+    tbody tr{cursor:pointer}
+    tbody tr:hover td{background:#fafafa}
+    /* ── Filter bar ── */
+    .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+    .filter-bar select{padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;cursor:pointer}
+    /* ── Summary card ── */
+    .sum-row{display:flex;justify-content:space-around;margin-top:10px}
+    .sum-item .lbl{font-size:12px;color:#888}
+    .sum-item .val{font-size:22px;font-weight:700;color:#1a73e8}
+    /* ── Worker cards (admin overview) ── */
+    .wk-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+    .wk-card{background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid #1a73e8}
+    .wk-name{font-size:17px;font-weight:700;margin-bottom:3px}
+    .wk-email{font-size:11px;color:#aaa;margin-bottom:10px}
+    .wk-stat{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px}
+    .wk-stat .v{font-weight:600}
+    /* ── Calendar ── */
+    .cal{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:6px}
+    .cal-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #f0f0f0}
+    .cal-nav{background:none;border:none;font-size:22px;cursor:pointer;padding:2px 10px;color:#555}
+    .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+    .cal-dh{text-align:center;padding:6px 2px;font-size:12px;color:#888;font-weight:700}
+    .cal-dh.sun{color:#ea4335}
+    .cal-dh.sat{color:#1a73e8}
+    .cal-d{min-height:62px;padding:4px;border-radius:8px;background:#fafbfc;display:flex;flex-direction:column;gap:2px;transition:background .15s}
+    .cal-d.weekend{background:#f3f5f8}
+    .cal-d.other{background:transparent}
+    .cal-d .dn{font-size:12px;font-weight:600;color:#444;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0}
+    .cal-d.sun .dn{color:#ea4335}
+    .cal-d.today{background:#e8f0fe;box-shadow:inset 0 0 0 2px #1a73e8}
+    .cal-d.today .dn{background:#1a73e8;color:#fff;font-weight:700}
+    .cal-ev{font-size:11px;padding:2px 5px;border-radius:4px;background:#fff;color:#222;border-left:3px solid #1a73e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500;line-height:1.5}
+    .cal-ev:hover{background:#eef3ff}
+    /* ── Month nav ── */
+    .month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .month-nav strong{font-size:16px}
+    /* ── Modal ── */
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:flex-end;justify-content:center;padding:0}
+    .modal-bg.open{display:flex}
+    .modal-bg.center{align-items:center;padding:16px}
+    .modal-box{background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+    .modal-bg.center .modal-box{border-radius:16px;max-height:85vh}
+    .modal-title{font-size:18px;font-weight:700;margin-bottom:16px}
+    .modal-row{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f5f5f5;font-size:14px}
+    .modal-row:last-of-type{border:none}
+    .modal-lbl{color:#999}
+    .modal-actions{display:flex;gap:8px;margin-top:20px}
+    .modal-actions .btn{flex:1}
+    /* ── Form ── */
+    .ff{margin-bottom:12px}
+    .ff label{display:block;font-size:13px;color:#666;margin-bottom:4px;font-weight:500}
+    .ff input,.ff select,.ff textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+    .ff textarea{min-height:80px;resize:vertical}
+    /* ── Status badges ── */
+    .b-pending{background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:12px}
+    .b-approved{background:#d1e7dd;color:#0a3622;padding:2px 8px;border-radius:10px;font-size:12px}
+    .b-rejected{background:#f8d7da;color:#58151c;padding:2px 8px;border-radius:10px;font-size:12px}
+    /* ── Avatar ── */
+    .avatar{width:44px;height:44px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;flex-shrink:0;vertical-align:middle}
+    .avatar-lg{width:52px;height:52px;font-size:22px}
+    /* ── GPS badge ── */
+    .gps-link{display:inline-block;margin-top:6px;font-size:12px;color:#1a73e8;text-decoration:none;background:#e8f0fe;padding:3px 8px;border-radius:6px}
+    /* ── Announcement cards ── */
+    .ann-list{display:flex;flex-direction:column;gap:10px}
+    .ann-card{background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid #1a73e8;transition:opacity .2s}
+    .ann-card.read{opacity:.6}
+    .ann-card.pri-重要{border-left-color:#f59e0b}
+    .ann-card.pri-緊急{border-left-color:#ef4444}
+    .ann-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .ann-title{font-size:16px;font-weight:700;flex:1;line-height:1.3}
+    .ann-badge{font-size:11px;padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0;font-weight:600}
+    .ann-badge.pri-一般{background:#e8f0fe;color:#1a73e8}
+    .ann-badge.pri-重要{background:#fef3c7;color:#b45309}
+    .ann-badge.pri-緊急{background:#fee2e2;color:#dc2626}
+    .ann-date-right{font-size:11px;color:#aaa;white-space:nowrap;flex-shrink:0}
+    .ann-content{font-size:14px;color:#333;white-space:pre-wrap;line-height:1.6;margin-bottom:8px}
+    .ann-content.collapsed{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap}
+    .btn-expand{background:none;border:none;color:#1a73e8;font-size:12px;cursor:pointer;padding:0;display:block}
+    /* ── Leave cards ── */
+    .leave-card{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 2px 12px rgba(0,0,0,.06);margin-bottom:10px;border-left:4px solid #1a73e8}
+    .leave-card.st-pending{border-left-color:#f59e0b}
+    .leave-card.st-approved{border-left-color:#34a853}
+    .leave-card.st-rejected{border-left-color:#ea4335}
+    .leave-hd{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+    .leave-hd-left{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+    .leave-hd-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .leave-name{font-size:13px;color:#666;font-weight:600}
+    .leave-type{font-size:15px;font-weight:700;color:#1a1a1a}
+    .leave-date-main{font-size:14px;font-weight:700;color:#1a1a1a;margin-left:1.5em}
+    .leave-days{font-size:13px;color:#555;background:#f1f3f4;padding:2px 10px;border-radius:10px}
+    .leave-reason{font-size:13px;color:#444;white-space:pre-wrap;word-break:break-word;margin-top:2px}
+    .leave-photo{max-width:140px;max-height:140px;object-fit:cover;border-radius:8px;margin-top:8px;cursor:pointer;display:block}
+    .leave-apply{font-size:11px;color:#888;text-align:right;margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:8px}
+    /* ── 薪資月報 ── */
+    .rpt-card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 2px 12px rgba(0,0,0,.06);border-left:4px solid #1a73e8;margin-bottom:12px}
+    .rpt-hd{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .rpt-name{font-size:16px;font-weight:700;color:#1a1a1a}
+    .rpt-type{font-size:10px;padding:1px 6px;border-radius:8px}
+    .rpt-shift{font-size:10px;padding:1px 6px;border-radius:8px;background:#fff3cd;color:#856404}
+    .rpt-shift.none{background:#f1f3f4;color:#999}
+    .rpt-email{font-size:11px;color:#aaa}
+    .rpt-annual{flex-shrink:0;text-align:center;background:#e8f0fe;border-radius:10px;padding:6px 10px}
+    .rpt-annual-lbl{font-size:10px;color:#1a73e8}
+    .rpt-annual-val{font-size:15px;font-weight:700;color:#1a73e8}
+    .rpt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px}
+    .rpt-cell{background:#f8f9fa;border-radius:8px;padding:8px 10px}
+    .rpt-lbl{font-size:11px;color:#999;margin-bottom:2px}
+    .rpt-val{font-size:15px;font-weight:700;color:#1a1a1a}
+    .rpt-val.warn{color:#ea4335}
+    .pay-box{margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#0f9d58,#1a73e8);border-radius:10px;color:#fff}
+    .pay-net{font-size:18px;font-weight:700}
+    .pay-detail{font-size:12px;opacity:.92;margin-top:4px;line-height:1.6}
+    .rd-sec{margin-bottom:14px}
+    .rd-title{font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px;border-bottom:1px solid #eee;padding-bottom:4px}
+    .rd-row{font-size:13px;color:#444;padding:4px 0;line-height:1.5}
+    .rd-empty{font-size:12px;color:#bbb;padding:2px 0}
+    /* ── 補休餘額橫幅 ── */
+    .ot-balance{background:linear-gradient(135deg,#9333ea,#1a73e8);color:#fff;border-radius:14px;padding:16px;font-size:15px;margin-bottom:14px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    .ot-balance b{font-size:24px;margin:0 2px}
+    .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
+    .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+    .btn-quick:hover{background:#d2e3fc}
+    .btn-quick.active{background:#1a73e8;color:#fff}
+    .urgent-badge{background:#fff0f0;color:#dc2626;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;border:1px solid #fca5a5;white-space:nowrap}
+    .ann-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+    .read-tag{font-size:12px;color:#34a853;font-weight:600}
+    .btn-read{background:#e8f0fe;border:none;color:#1a73e8;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+    .btn-read:hover{background:#d2e3fc}
+    /* ── Worker card avatar row ── */
+    .wk-hd{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .wk-hd-info{flex:1;min-width:0}
+    /* ── Misc ── */
+    .loading{text-align:center;padding:40px;color:#aaa;font-size:15px}
+    .err-box{background:#fce8e6;color:#c62828;padding:12px 16px;border-radius:10px;margin-bottom:12px;font-size:14px}
+    .hidden{display:none!important}
+    #toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:12px;font-size:14px;font-weight:500;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.15);color:#fff;transition:opacity .3s;white-space:nowrap}
+  </style>
+</head>
+<body>
+
+<!-- ══ LOGIN ══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-icon">🕐</div>
+    <div class="login-title">工讀生打卡系統</div>
+    <div class="login-sub">請用公司 Google 帳號登入</div>
+    <div id="g-btn"></div>
+    <div id="login-err" style="margin-top:14px;color:#c62828;font-size:14px"></div>
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app" class="hidden">
+  <div id="topbar">
+    <div class="t">打卡系統</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="tb-user" style="font-size:13px;opacity:.9"></span>
+      <button class="btn-logout" onclick="logout()">登出</button>
+    </div>
+  </div>
+  <div class="tab-bar" id="tab-bar"></div>
+  <div id="view"></div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div class="modal-bg" id="modal-bg" onclick="onOverlayClick(event)">
+  <div class="modal-box" id="modal-box"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  ██████╗ ██████╗ ███╗   ██╗███████╗██╗ ██████╗
+// ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝
+// ██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗
+// ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║
+// ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝
+//  ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝
+// ═══════════════════════════════════════════════
+
+const CONFIG = {
+  GOOGLE_CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+
+  ADMIN_EMAILS: ['covernself@gmail.com'],
+
+  RAGIC_BASE: 'https://ap10.ragic.com/Fan28',
+  // 目前 Ragic EVERYONE = 管理者（測試用）。正式上線後換成 Account Level API Key
+  // 並把 EVERYONE 改回「無權限」
+  RAGIC_KEY:  '',  // 部署版留空，靠 Ragic EVERYONE=管理者運作；正式上線關 EVERYONE 後改用 Cloudflare Worker 代理藏 key
+
+  SHEETS: {
+    WORKERS:  'check-in-system/2',
+    RECORDS:  'check-in-system/3',
+    REQUESTS: 'check-in-system/4',
+    ANNOUNCE: 'check-in-system/5',
+    LEAVES:   'check-in-system/6',
+    OVERTIME: 'check-in-system/8'
+  },
+
+  // POST / WHERE 必須用數字 ID；GET 回傳中文名，由 FNAME_MAP 轉換
+  FID: {
+    W: {
+      email:          1002864,
+      name:           1002865,
+      weekday_rate:   1002866,
+      weekend_rate:   1002867,
+      color:          1002868,
+      active:         1002869,
+      photo:          1002897,
+      emp_type:       1002898,
+      monthly_salary: 1002899,
+      start_date:     1002900,
+      shift:          1002921,
+      dependents:     1002940
+    },
+    R: {
+      email:          1002871,
+      name:           1002872,
+      date:           1002873,
+      start_time:     1002874,
+      end_time:       1002875,
+      hours:          1002876,
+      subtotal:       1002877,
+      location:       1002879,
+      work_content:   1002880,
+      breaks_minutes: 1002881,
+      paused_at:      1002882,
+      rec_status:     1002883
+    },
+    Q: {
+      email:       1002884,
+      name:        1002885,
+      date:        1002886,
+      start_time:  1002887,
+      end_time:    1002888,
+      location:    1002889,
+      work_content:1002890,
+      reason:      1002891,
+      status:      1002892,
+      reviewed_by: 1002893,
+      reviewed_at: 1002894,
+      review_note: 1002895
+    },
+    A: {
+      title:     1002901,
+      content:   1002902,
+      pub_date:  1002903,
+      priority:  1002904,
+      publisher: 1002905,
+      read_by:   1002906
+    },
+    L: {
+      email:       1002908,
+      name:        1002909,
+      leave_type:  1002910,
+      start_date:  1002911,
+      end_date:    1002912,
+      days:        1002913,
+      reason:      1002914,
+      apply_time:  1002915,
+      status:      1002916,
+      reviewed_by: 1002917,
+      reviewed_at: 1002918,
+      reject_note: 1002919,
+      hours:       1002922,
+      start_time:  1002923,
+      end_time:    1002924,
+      photo:       1002925
+    },
+    O: {
+      email:       1002926,
+      name:        1002927,
+      ot_type:     1002928,
+      date:        1002929,
+      start_time:  1002930,
+      end_time:    1002931,
+      hours:       1002932,
+      reason:      1002933,
+      apply_time:  1002934,
+      status:      1002935,
+      reviewed_by: 1002936,
+      reviewed_at: 1002937,
+      reject_note: 1002938
+    }
+  },
+
+  LOCATIONS: [
+    { name:'地點 A', url:'https://share.google/IvDqWBnOcpiRXUvTe' },
+    { name:'地點 B', url:'https://maps.app.goo.gl/qFHd8AcXDw29Ztsi9' }
+  ],
+
+  // 班表：每班上午/下午時段，午休統一 12:30–14:00（不計入工時）
+  SHIFTS: {
+    A: { hours: 8, am: ['08:30','12:30'], pm: ['14:00','18:00'] },
+    B: { hours: 8, am: ['07:30','12:30'], pm: ['14:00','17:00'] },
+    C: { hours: 7, am: ['08:45','12:30'], pm: ['14:00','17:15'] }
+  },
+
+  LUNCH: ['12:30','14:00']  // 午休時段，計算時數時扣除
+};
+
+// ─── Ragic API helpers ───────────────────────────────────────────────────────
+
+function ragicUrl(sheet) {
+  return `${CONFIG.RAGIC_BASE}/${sheet}`;
+}
+
+// Ragic GET 回傳中文欄位名，此表將中文名對應到數字 ID，讓其他程式碼統一用數字 ID
+const FNAME_MAP = {
+  'check-in-system/2': {
+    'Email':1002864,'姓名':1002865,'平日時薪':1002866,
+    '假日時薪':1002867,'顏色標籤':1002868,'啟用':1002869,
+    '大頭照':1002897,'員工類型':1002898,'月薪':1002899,'到職日':1002900,
+    '班別':1002921,'眷口數':1002940
+  },
+  'check-in-system/3': {
+    'Email':1002871,'姓名':1002872,'日期':1002873,
+    '上班時間':1002874,'下班時間':1002875,'時數':1002876,
+    '薪資':1002877,'地點':1002879,'工作內容':1002880,
+    '休息分鐘':1002881,'休息開始時間':1002882,'狀態':1002883
+  },
+  'check-in-system/4': {
+    'Email':1002884,'姓名':1002885,'日期':1002886,
+    '上班時間':1002887,'下班時間':1002888,'地點':1002889,
+    '工作內容':1002890,'申請原因':1002891,'審核狀態':1002892,
+    '審核者':1002893,'審核時間':1002894,'駁回原因':1002895
+  },
+  'check-in-system/5': {
+    '標題':1002901,'內容':1002902,'發布日期':1002903,
+    '重要程度':1002904,'發布者':1002905,'已閱覽名單':1002906
+  },
+  'check-in-system/6': {
+    'Email':1002908,'姓名':1002909,'請假類型':1002910,
+    '開始日期':1002911,'結束日期':1002912,'天數':1002913,
+    '申請原因':1002914,'申請時間':1002915,'審核狀態':1002916,
+    '審核者':1002917,'審核時間':1002918,'駁回原因':1002919,
+    '時數':1002922,'開始時間':1002923,'結束時間':1002924,'證明照片':1002925
+  },
+  'check-in-system/8': {
+    'Email':1002926,'姓名':1002927,'類型':1002928,'日期':1002929,
+    '開始時間':1002930,'結束時間':1002931,'時數':1002932,'原因':1002933,
+    '申請時間':1002934,'審核狀態':1002935,'審核者':1002936,'審核時間':1002937,'駁回原因':1002938
+  }
+};
+
+function normalizeRec(sheet, r) {
+  const map = FNAME_MAP[sheet];
+  if (!map) return r;
+  const out = { _ragicId: r._ragicId };
+  for (const [name, id] of Object.entries(map)) out[id] = r[name] ?? '';
+  return out;
+}
+
+async function ragicGet(sheet, extra = {}) {
+  const u = new URL(ragicUrl(sheet));
+  u.searchParams.set('api', '');
+  if (CONFIG.RAGIC_KEY) u.searchParams.set('APIKey', CONFIG.RAGIC_KEY);
+  for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
+  const res = await fetch(u.toString());
+  if (!res.ok) throw new Error(`Ragic GET 失敗 ${res.status}`);
+  const data = await res.json();
+  return Object.values(data)
+    .filter(r => r && r._ragicId)
+    .map(r => normalizeRec(sheet, r));
+}
+
+async function ragicPost(sheet, fields) {
+  const keyParam = CONFIG.RAGIC_KEY ? `&APIKey=${encodeURIComponent(CONFIG.RAGIC_KEY)}` : '';
+  const url = `${ragicUrl(sheet)}?api${keyParam}`;
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined && v !== null) fd.append(String(k), String(v));
+  }
+  const res = await fetch(url, { method:'POST', body:fd });
+  if (!res.ok) throw new Error(`Ragic POST 失敗 ${res.status}`);
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
+  return data.ragicId;
+}
+
+async function ragicUpdate(sheet, id, fields) {
+  const keyParam = CONFIG.RAGIC_KEY ? `&APIKey=${encodeURIComponent(CONFIG.RAGIC_KEY)}` : '';
+  const url = `${ragicUrl(sheet)}/${id}?api${keyParam}`;
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) {
+    if (v !== undefined && v !== null) fd.append(String(k), String(v));
+  }
+  const res = await fetch(url, { method:'POST', body:fd });
+  if (!res.ok) throw new Error(`Ragic UPDATE 失敗 ${res.status}`);
+  const data = await res.json();
+  if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
+}
+
+function stripSec(t) { return t ? String(t).slice(0, 5) : ''; }
+
+function makeAvatar(name, color, size, photoRaw) {
+  const cls = size === 'lg' ? 'avatar avatar-lg' : 'avatar';
+  const photoUrl = getPhotoUrl(photoRaw);
+  if (photoUrl) {
+    return `<img src="${photoUrl}" class="${cls}" style="object-fit:cover;border-radius:50%">`;
+  }
+  const ch = name ? name.slice(0, 1) : '?';
+  return `<div class="${cls}" style="background:${color||'#1a73e8'}">${ch}</div>`;
+}
+
+function getPhotoUrl(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const v = raw.trim();
+  if (!v || v === '0') return null;
+  if (v.startsWith('http')) return v;
+  return null;
+}
+
+// Ragic 圖片 URL：/sims/file.jsp?a={account}&f={token@filename}（公開，不需 APIKey）
+function resolvePhotoUrl(ragicId, rawPhoto) {
+  if (!rawPhoto) return '';
+  const v = String(rawPhoto).trim();
+  if (!v || v === '0') return '';
+  if (v.startsWith('http')) return v;
+  return `https://ap10.ragic.com/sims/file.jsp?a=Fan28&f=${encodeURIComponent(v)}`;
+}
+
+function calcSeniority(startDateStr) {
+  if (!startDateStr) return '—';
+  const start = new Date(startDateStr.replace(/\//g, '-'));
+  const now = new Date();
+  const months = Math.floor((now - start) / (30.44 * 24 * 3600 * 1000));
+  const y = Math.floor(months / 12), m = months % 12;
+  return y > 0 ? `${y}年${m}個月` : `${m}個月`;
+}
+
+function calcAnnualLeave(startDateStr) {
+  if (!startDateStr) return 0;
+  const start = new Date(startDateStr.replace(/\//g, '-'));
+  const years = (new Date() - start) / (365.25 * 24 * 3600 * 1000);
+  if (years < 0.5) return 0;
+  if (years < 1)  return 3;
+  if (years < 2)  return 7;
+  if (years < 3)  return 10;
+  if (years < 5)  return 14;
+  if (years < 10) return 15;
+  return Math.min(15 + Math.floor(years - 10), 30);
+}
+
+function getWorkDays(year, month) {
+  const days = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= days; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count;
+}
+
+async function uploadWorkerPhoto(ragicId, file) {
+  const keyParam = CONFIG.RAGIC_KEY ? `&APIKey=${encodeURIComponent(CONFIG.RAGIC_KEY)}` : '';
+  const url = `${ragicUrl(CONFIG.SHEETS.WORKERS)}/${ragicId}?api${keyParam}`;
+  const fd = new FormData();
+  fd.append(String(CONFIG.FID.W.photo), file);
+  const res = await fetch(url, { method: 'POST', body: fd });
+  if (!res.ok) throw new Error('圖片上傳失敗 ' + res.status);
+  const data = await res.json();
+  return data;
+}
+
+async function captureGPS() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude.toFixed(5), lng: pos.coords.longitude.toFixed(5) }),
+      () => resolve(null),
+      { timeout: 8000, enableHighAccuracy: true }
+    );
+  });
+}
+
+function parseGPS(locStr) {
+  const m = locStr && locStr.match(/GPS:([-\d.]+),([-\d.]+)/);
+  return m ? { lat: m[1], lng: m[2] } : null;
+}
+
+function locName(locStr) {
+  return locStr ? locStr.replace(/\s*\[GPS:[^\]]*\]/, '') : '—';
+}
+
+function gpsMapLink(locStr) {
+  const g = parseGPS(locStr);
+  if (!g) return '';
+  return `<a class="gps-link" href="https://maps.google.com/?q=${g.lat},${g.lng}" target="_blank">📍 GPS 驗證 (${g.lat},${g.lng})</a>`;
+}
+
+function fmtDate(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${dt.getFullYear()}/${pad(dt.getMonth()+1)}/${pad(dt.getDate())}`;
+}
+function fmtDateTime(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${fmtDate(dt)} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+// 日期字串加上星期，e.g. "2026/05/30 (六)"
+function addDay(s) {
+  if (!s) return s || '';
+  const dt = new Date(String(s).replace(/\//g, '-').slice(0, 10));
+  if (isNaN(dt)) return s;
+  const days = ['日','一','二','三','四','五','六'];
+  return `${String(s).slice(0, 10).replace(/-/g,'/')} (${days[dt.getDay()]})`;
+}
+function fmtHHMM(d) {
+  const dt = d instanceof Date ? d : new Date(d);
+  return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+function parseDatetime(s) {
+  if (!s) return null;
+  return new Date(s.replace(/\//g,'-').replace(' ','T'));
+}
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+let ME = null;
+
+function handleGoogleSignIn(resp) {
+  const pl = JSON.parse(atob(resp.credential.split('.')[1]));
+  const email = pl.email.toLowerCase();
+  ME = {
+    email,
+    name: pl.name || email,
+    picture: pl.picture || '',
+    isAdmin: CONFIG.ADMIN_EMAILS.includes(email)
+  };
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('tb-user').textContent = ME.name;
+  initApp();
+}
+
+function logout() {
+  ME = null;
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+  google.accounts.id.disableAutoSelect();
+}
+
+function gsiReady() {
+  google.accounts.id.initialize({
+    client_id: CONFIG.GOOGLE_CLIENT_ID,
+    callback: handleGoogleSignIn,
+    auto_select: true,
+    cancel_on_tap_outside: false
+  });
+  google.accounts.id.renderButton(document.getElementById('g-btn'), {
+    theme:'outline', size:'large', width:280
+  });
+  google.accounts.id.prompt();
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+let WORKERS = [];
+let OPEN_REC = null;
+let MY_WORKER = null;
+let CUR_TAB = '';
+let CUR_YEAR = new Date().getFullYear();
+let CUR_MONTH = new Date().getMonth(); // 0-indexed
+let TIMER_IV = null;
+let _MD = {}; // modal data store
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+async function initApp() {
+  if (ME.isAdmin) {
+    renderAdminTabs();
+    switchTab('overview');
+  } else {
+    await loadMyWorker();
+    renderWorkerTabs();
+    switchTab('punch');
+    startPunchReminder();
+  }
+}
+
+async function loadMyWorker() {
+  try {
+    const F = CONFIG.FID.W;
+    const recs = await ragicGet(CONFIG.SHEETS.WORKERS, { where:`${F.email},eq,${ME.email}` });
+    if (recs.length) {
+      const r = recs[0];
+      const rawPhoto = r[F.photo] || '';
+      MY_WORKER = {
+        ragicId: r._ragicId,
+        email: r[F.email],
+        name: r[F.name],
+        weekday_rate: Number(r[F.weekday_rate]) || 0,
+        weekend_rate: Number(r[F.weekend_rate]) || 0,
+        color: r[F.color] || '#1a73e8',
+        photo: resolvePhotoUrl(r._ragicId, rawPhoto) || ME.picture || '',
+        shift: r[F.shift] || '',
+        emp_type: r[F.emp_type] || '工讀生'
+      };
+      // 若 Ragic 尚無大頭照，自動把 Google 頭貼 URL 存入（fire & forget）
+      if (!rawPhoto && ME.picture) {
+        ragicPost(`${CONFIG.SHEETS.WORKERS}/${r._ragicId}`, {
+          [CONFIG.FID.W.photo]: ME.picture
+        }).catch(() => {});
+      }
+    }
+  } catch (e) { console.warn('loadMyWorker:', e); }
+}
+
+// ─── 打卡提醒（頁內通知，頁面開啟時生效）─────────────────────────────────────────
+
+let _REMIND_IV = null;
+const _NOTIFIED = new Set();
+
+function startPunchReminder() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') Notification.requestPermission();
+  clearInterval(_REMIND_IV);
+  _REMIND_IV = setInterval(checkPunchReminder, 60000);
+  checkPunchReminder();
+}
+
+async function checkPunchReminder() {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
+  if (!sh) return;  // 沒設班別不提醒
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const today = fmtDate(now);
+  const inMin = toMin(sh.am[0]), outMin = toMin(sh.pm[1]);
+
+  // 上班提醒：上班時間 ~ +30 分內，尚未開始上班
+  if (nowMin >= inMin && nowMin <= inMin + 30 && !_NOTIFIED.has('in-' + today)) {
+    _NOTIFIED.add('in-' + today);
+    if (!(await getOpenRec())) {
+      pushLocalNotify('⏰ 上班打卡提醒', `${MY_WORKER.shift} 班 ${sh.am[0]} 上班，記得打卡！`);
+    }
+  }
+  // 下班提醒：下班時間 ~ +30 分內，還在上班中
+  if (nowMin >= outMin && nowMin <= outMin + 30 && !_NOTIFIED.has('out-' + today)) {
+    _NOTIFIED.add('out-' + today);
+    if (await getOpenRec()) {
+      pushLocalNotify('⏰ 下班打卡提醒', `${sh.pm[1]} 下班時間到了，記得打卡下班！`);
+    }
+  }
+}
+
+function pushLocalNotify(title, body) {
+  try { new Notification(title, { body }); } catch (e) {}
+  toast(`${title}　${body}`, 'green');
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+
+function renderWorkerTabs() {
+  document.getElementById('tab-bar').innerHTML =
+    tab('punch','打卡') + tab('calendar','月曆') + tab('records','明細') +
+    tab('requests','補登申請') + tab('leave','請假') +
+    (MY_WORKER?.emp_type === '正式員工' ? tab('ot','加班補休') : '') + tab('announce','公告');
+}
+
+function renderAdminTabs() {
+  document.getElementById('tab-bar').innerHTML =
+    tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
+    `<button class="tab-btn" id="tab-areq" onclick="switchTab('areq')">補登審核<span class="tab-badge hidden" id="req-badge">0</span></button>` +
+    tab('report','月報') + tab('wrkrs','工讀生') + tab('aleave','請假審核') +
+    tab('aot','加班審核') + tab('aannounce','公告管理');
+  updateBadge();
+}
+
+function tab(id, label) {
+  return `<button class="tab-btn" id="tab-${id}" onclick="switchTab('${id}')">${label}</button>`;
+}
+
+function switchTab(t) {
+  CUR_TAB = t;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + t)?.classList.add('active');
+  clearInterval(TIMER_IV);
+  ({
+    punch: viewPunch,
+    calendar: viewCalendar,
+    records: viewRecords,
+    requests: viewRequests,
+    announce: viewAnnounce,
+    leave: viewLeave,
+    ot: viewOt,
+    overview: viewOverview,
+    acal: viewACal,
+    arec: viewARec,
+    areq: viewAReq,
+    wrkrs: viewWrkrs,
+    report: viewReport,
+    aleave: viewAdminLeave,
+    aot: viewAdminOt,
+    aannounce: viewAdminAnnounce
+  })[t]?.();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  WORKER VIEWS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function viewPunch() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    OPEN_REC = await getOpenRec();
+    setView(buildPunchHTML());
+    startTimer();
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function getOpenRec() {
+  const F = CONFIG.FID.R;
+  const recs = await ragicGet(CONFIG.SHEETS.RECORDS, { where:`${F.email},eq,${ME.email}` });
+  const open = recs.find(r => !r[F.end_time] && r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted');
+  if (!open) return null;
+  return {
+    ragicId: open._ragicId,
+    date: open[F.date],
+    start_time: stripSec(open[F.start_time]),
+    end_time: stripSec(open[F.end_time]),
+    location: open[F.location],
+    breaks_minutes: Number(open[F.breaks_minutes]) || 0,
+    paused_at: open[F.paused_at] || ''
+  };
+}
+
+function getStatus() {
+  if (!OPEN_REC) return 'none';
+  if (OPEN_REC.paused_at) return 'break';
+  return 'work';
+}
+
+function buildPunchHTML() {
+  const s = getStatus();
+  const labels = { none:'未打卡', work:'上班中', break:'休息中' };
+  const cls = { none:'status-none', work:'status-work', break:'status-break' };
+  let h = '<div class="view">';
+
+  // Status card
+  const locDisplay = OPEN_REC ? locName(OPEN_REC.location) : '';
+  const gpsVerified = OPEN_REC && parseGPS(OPEN_REC.location);
+  h += `<div class="card" style="text-align:center">
+    <div style="display:flex;justify-content:flex-end">
+      <button onclick="showPunchInfo()" style="background:none;border:1px solid #ddd;border-radius:8px;padding:3px 10px;font-size:12px;color:#888;cursor:pointer">？打卡說明</button>
+    </div>
+    <div class="status-lbl" style="margin-top:6px">目前狀態</div>
+    <div class="status-val ${cls[s]}">${labels[s]}</div>
+    ${OPEN_REC ? `<div class="status-time">📍 ${locDisplay}　${addDay(OPEN_REC.date)} ${OPEN_REC.start_time} 打卡</div>` : ''}
+    ${gpsVerified ? `<div style="font-size:12px;color:#34a853;margin-top:4px">✅ GPS 位置已驗證</div>` : (OPEN_REC ? `<div style="font-size:12px;color:#f9ab00;margin-top:4px">⚠️ GPS 未取得（手動確認地點）</div>` : '')}
+    ${s !== 'none' ? '<div class="timer" id="timer">00:00:00</div>' : ''}
+  </div>`;
+
+  // Location picker
+  if (s === 'none') {
+    h += `<div class="card"><div style="font-weight:600;margin-bottom:12px">選擇打卡地點</div>`;
+    CONFIG.LOCATIONS.forEach((loc, i) => {
+      h += `<button class="loc-btn" id="loc${i}" onclick="selLoc(${i})">
+        <span>📍 ${loc.name}</span>
+        <a href="${loc.url}" target="_blank" class="loc-map" onclick="event.stopPropagation()">地圖 ↗</a>
+      </button>`;
+    });
+    h += '</div>';
+  }
+
+  // Action buttons
+  h += '<div class="btn-grid">';
+  if (s === 'none') {
+    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>上班打卡</button>`;
+  }
+  if (s === 'work') {
+    h += `<button class="btn btn-yellow" onclick="doPause()">開始休息 ☕</button>`;
+    h += `<button class="btn btn-red" onclick="showPunchOutModal()">下班打卡 🏠</button>`;
+    h += `<button class="btn btn-grey btn-full" onclick="doCancel()">取消此次打卡</button>`;
+  }
+  if (s === 'break') {
+    h += `<button class="btn btn-green btn-full" onclick="doResume()">結束休息 ▶</button>`;
+  }
+  h += '</div></div>';
+  return h;
+}
+
+function showPunchInfo() {
+  openModal(`
+    <div class="modal-title">📋 打卡說明</div>
+    <div style="font-size:14px;line-height:1.8;color:#444">
+      <p style="margin-bottom:12px">打卡系統使用以下方式驗證你的位置：</p>
+      <div style="background:#e8f0fe;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-weight:600;color:#1a73e8;margin-bottom:4px">📡 GPS 定位（主要）</div>
+        <div style="font-size:13px">打卡時系統會自動取得你的 GPS 座標。管理者可在明細中點擊「GPS 驗證」連結，確認你的位置在工作地點附近。</div>
+      </div>
+      <div style="background:#e6f4ea;border-radius:10px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-weight:600;color:#34a853;margin-bottom:4px">📶 Wi-Fi（備用確認）</div>
+        <div style="font-size:13px">若 GPS 無法取得，請確保你連接的是工作場所的 Wi-Fi 網路，並在地點選擇中選取對應地點。</div>
+      </div>
+      <div style="background:#fce8e6;border-radius:10px;padding:12px 14px">
+        <div style="font-weight:600;color:#ea4335;margin-bottom:4px">⚠️ 注意事項</div>
+        <div style="font-size:13px">請在實際工作地點打卡。GPS 未取得時仍可打卡，但管理者會看到「GPS 未取得」提示，請確保地點選擇正確。</div>
+      </div>
+    </div>
+    <div class="modal-actions"><button class="btn btn-grey btn-full" onclick="closeModal()">了解了</button></div>
+  `);
+}
+
+let SEL_LOC = null;
+function selLoc(i) {
+  SEL_LOC = CONFIG.LOCATIONS[i];
+  document.querySelectorAll('.loc-btn').forEach((b, j) => b.classList.toggle('sel', j === i));
+  document.getElementById('btn-in').disabled = false;
+}
+
+async function doPunchIn() {
+  if (!SEL_LOC) return;
+  const btn = document.getElementById('btn-in');
+  btn.disabled = true; btn.textContent = '取得位置中…';
+  try {
+    const F = CONFIG.FID.R;
+    const now = new Date();
+    const name = MY_WORKER?.name || ME.name;
+
+    // 嘗試取得 GPS 座標
+    const gps = await captureGPS();
+    const locStr = gps ? `${SEL_LOC.name} [GPS:${gps.lat},${gps.lng}]` : SEL_LOC.name;
+
+    await ragicPost(CONFIG.SHEETS.RECORDS, {
+      [F.email]: ME.email, [F.name]: name,
+      [F.date]: fmtDate(now), [F.start_time]: fmtHHMM(now),
+      [F.end_time]: '', [F.location]: locStr,
+      [F.breaks_minutes]: '0', [F.paused_at]: '', [F.rec_status]: ''
+    });
+    const gpsMsg = gps ? `　GPS ✓` : `　GPS 未取得`;
+    toast('上班打卡成功！' + fmtHHMM(now) + gpsMsg, 'green');
+    await viewPunch();
+  } catch (e) { toast('打卡失敗：' + e.message, 'red'); btn.disabled = false; btn.textContent = '上班打卡'; }
+}
+
+async function doPause() {
+  if (!OPEN_REC) return;
+  try {
+    const F = CONFIG.FID.R;
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, { [F.paused_at]: fmtDateTime(new Date()) });
+    toast('開始休息 ☕', 'green');
+    await viewPunch();
+  } catch (e) { toast('操作失敗：' + e.message, 'red'); }
+}
+
+async function doResume() {
+  if (!OPEN_REC?.paused_at) return;
+  try {
+    const F = CONFIG.FID.R;
+    const pausedAt = parseDatetime(OPEN_REC.paused_at);
+    const addMin = Math.round((new Date() - pausedAt) / 60000);
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, {
+      [F.paused_at]: '', [F.breaks_minutes]: String(OPEN_REC.breaks_minutes + addMin)
+    });
+    toast('結束休息 ▶', 'green');
+    await viewPunch();
+  } catch (e) { toast('操作失敗：' + e.message, 'red'); }
+}
+
+async function doCancel() {
+  if (!OPEN_REC) return;
+  if (!confirm('確定取消此次打卡？')) return;
+  try {
+    const F = CONFIG.FID.R;
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, { [F.rec_status]: 'cancelled' });
+    toast('已取消此次打卡', 'green');
+    await viewPunch();
+  } catch (e) { toast('操作失敗：' + e.message, 'red'); }
+}
+
+// ─── Punch out modal ─────────────────────────────────────────────────────────
+
+let _wiCount = 0;
+
+function showPunchOutModal() {
+  _wiCount = 3;
+  let items = '';
+  for (let i = 1; i <= 3; i++) {
+    items += wiRow(i, '');
+  }
+  openModal(`
+    <div class="modal-title">下班打卡 🏠</div>
+    <div style="font-weight:600;margin-bottom:10px">工作內容（必填）</div>
+    <div id="wi-list">${items}</div>
+    <button class="wi-add" onclick="addWI()">＋ 新增項目</button>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal()">取消</button>
+      <button class="btn btn-red" onclick="doPunchOut()">確認下班</button>
+    </div>
+  `);
+}
+
+function wiRow(i, val) {
+  return `<div class="wi-row" id="wi${i}">
+    <input class="wi-input" id="wii${i}" placeholder="工作項目" value="${val}">
+    <button class="wi-del" onclick="rmWI(${i})">✕</button>
+  </div>`;
+}
+
+function addWI() {
+  _wiCount++;
+  document.getElementById('wi-list').insertAdjacentHTML('beforeend', wiRow(_wiCount, ''));
+}
+
+function rmWI(i) { document.getElementById('wi' + i)?.remove(); }
+
+function getWorkContent() {
+  const vals = Array.from(document.querySelectorAll('.wi-input'))
+    .map(el => el.value.trim()).filter(Boolean);
+  return vals.map(v => '• ' + v).join('\n');
+}
+
+async function doPunchOut() {
+  const wc = getWorkContent();
+  if (!wc) { toast('請填寫至少一項工作內容', 'red'); return; }
+  if (!OPEN_REC) return;
+
+  const now = new Date();
+  const todayStr = fmtDate(now);
+  if (todayStr !== OPEN_REC.date) {
+    toast('跨日下班不允許，請申請補登', 'red'); closeModal(); return;
+  }
+
+  try {
+    const F = CONFIG.FID.R;
+    const startDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.start_time}`);
+    const grossMin = (now - startDt) / 60000;
+    const workMin = grossMin - OPEN_REC.breaks_minutes;
+    const hours = Math.round(workMin / 60 * 100) / 100;
+    const rate = calcRate(OPEN_REC.date, MY_WORKER);
+    const subtotal = Math.round(hours * rate);
+
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, {
+      [F.end_time]: fmtHHMM(now),
+      [F.hours]: String(hours),
+      [F.subtotal]: String(subtotal),
+      [F.work_content]: wc
+    });
+    closeModal();
+    toast(`下班打卡成功！${hours}h　$${subtotal}`, 'green');
+    await viewPunch();
+  } catch (e) { toast('下班失敗：' + e.message, 'red'); }
+}
+
+function calcRate(dateStr, worker) {
+  if (!worker) return 0;
+  const d = parseDatetime(dateStr + ' 12:00');
+  const dow = d.getDay();
+  return (dow === 0 || dow === 6) ? worker.weekend_rate : worker.weekday_rate;
+}
+
+// ─── Timer ───────────────────────────────────────────────────────────────────
+
+function startTimer() {
+  clearInterval(TIMER_IV);
+  const el = document.getElementById('timer');
+  if (!el || !OPEN_REC) return;
+  TIMER_IV = setInterval(() => {
+    const el2 = document.getElementById('timer');
+    if (!el2) { clearInterval(TIMER_IV); return; }
+    const startDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.start_time}`);
+    let elapsed = Math.floor((new Date() - startDt) / 1000) - OPEN_REC.breaks_minutes * 60;
+    if (OPEN_REC.paused_at) {
+      elapsed -= Math.floor((new Date() - parseDatetime(OPEN_REC.paused_at)) / 1000);
+    }
+    if (elapsed < 0) elapsed = 0;
+    el2.textContent = `${pad(Math.floor(elapsed/3600))}:${pad(Math.floor(elapsed%3600/60))}:${pad(elapsed%60)}`;
+  }, 1000);
+}
+
+// ─── Worker: Records view ────────────────────────────────────────────────────
+
+async function viewRecords() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const recs = await getMyRecs(CUR_YEAR, CUR_MONTH + 1);
+    let h = `<div class="view">${monthNav(false)}`;
+    if (!recs.length) {
+      h += '<div class="loading">本月無打卡紀錄</div>';
+    } else {
+      const totH = recs.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+      const totP = recs.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+      h += `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>時數</th><th>薪資</th></tr></thead><tbody>`;
+      recs.forEach(r => {
+        h += `<tr onclick='showRecDetail(${JSON.stringify(r)})'>
+          <td>${addDay(r.date)}</td><td>${r.start_time}</td><td>${r.end_time||'—'}</td>
+          <td>${r.hours||'—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
+        </tr>`;
+      });
+      h += `</tbody></table></div>
+        <div class="card"><div class="sum-row">
+          <div class="sum-item"><div class="lbl">本月工時</div><div class="val">${totH.toFixed(2)}h</div></div>
+          <div class="sum-item"><div class="lbl">本月薪資</div><div class="val">$${totP}</div></div>
+        </div></div>`;
+    }
+    h += '</div>';
+    setView(h);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function getMyRecs(year, month) {
+  const F = CONFIG.FID.R;
+  const all = await ragicGet(CONFIG.SHEETS.RECORDS, { where:`${F.email},eq,${ME.email}` });
+  return all.filter(r => {
+    if (!r[F.end_time]) return false;
+    if (r[F.rec_status] === 'cancelled' || r[F.rec_status] === 'deleted') return false;
+    const [y, m] = (r[F.date] || '').split('/');
+    return Number(y) === year && Number(m) === month;
+  }).map(r => ({
+    ragicId: r._ragicId, email: r[F.email], name: r[F.name],
+    date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+    hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
+    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
+  })).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── Worker: Calendar view ───────────────────────────────────────────────────
+
+async function viewCalendar() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const recs = await getMyRecs(CUR_YEAR, CUR_MONTH + 1);
+    const byDate = {};
+    recs.forEach(r => { byDate[r.date] = r; });
+    const color = MY_WORKER?.color || '#1a73e8';
+    setView(`<div class="view">${monthNav(false)}${buildCal(byDate, rec => `
+      <div class="cal-ev" style="border-left-color:${color}" onclick='showRecDetail(${JSON.stringify(rec)})'>${rec.start_time}–${rec.end_time||'?'}</div>
+    `)}</div>`);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+function buildCal(byDate, renderRec) {
+  const firstDay = new Date(CUR_YEAR, CUR_MONTH, 1).getDay();
+  const days = new Date(CUR_YEAR, CUR_MONTH + 1, 0).getDate();
+  const todayStr = fmtDate(new Date());
+  let h = '<div class="cal"><div class="cal-grid">';
+  ['日','一','二','三','四','五','六'].forEach((d, i) => {
+    const c = i === 0 ? ' sun' : (i === 6 ? ' sat' : '');
+    h += `<div class="cal-dh${c}">${d}</div>`;
+  });
+  for (let i = 0; i < firstDay; i++) h += '<div class="cal-d other"></div>';
+  for (let d = 1; d <= days; d++) {
+    const dow = new Date(CUR_YEAR, CUR_MONTH, d).getDay();
+    const ds = `${CUR_YEAR}/${pad(CUR_MONTH+1)}/${pad(d)}`;
+    const isToday = ds === todayStr;
+    const recs = Array.isArray(byDate[ds]) ? byDate[ds] : (byDate[ds] ? [byDate[ds]] : []);
+    const cls = [isToday ? 'today' : '', dow === 0 ? 'sun' : '', (dow === 0 || dow === 6) ? 'weekend' : ''].filter(Boolean).join(' ');
+    h += `<div class="cal-d${cls ? ' ' + cls : ''}"><div class="dn">${d}</div>`;
+    recs.forEach(r => { h += renderRec(r); });
+    h += '</div>';
+  }
+  return h + '</div></div>';
+}
+
+function monthNav(isAdmin) {
+  const fn = isAdmin ? 'chgAMonth' : 'chgMonth';
+  const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  return `<div class="month-nav">
+    <button class="cal-nav" onclick="${fn}(-1)">‹</button>
+    <strong>${CUR_YEAR}年 ${months[CUR_MONTH]}</strong>
+    <button class="cal-nav" onclick="${fn}(1)">›</button>
+  </div>`;
+}
+
+function chgMonth(d) {
+  CUR_MONTH += d;
+  if (CUR_MONTH < 0) { CUR_MONTH = 11; CUR_YEAR--; }
+  if (CUR_MONTH > 11) { CUR_MONTH = 0; CUR_YEAR++; }
+  ({ calendar: viewCalendar, records: viewRecords })[CUR_TAB]?.();
+}
+
+function showRecDetail(rec) {
+  _MD.rec = rec;
+  openModal(`
+    <div class="modal-title">打卡明細</div>
+    <div class="modal-row"><span class="modal-lbl">日期</span><span>${addDay(rec.date)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">地點</span><span>${locName(rec.location)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">上班</span><span>${rec.start_time}</span></div>
+    <div class="modal-row"><span class="modal-lbl">下班</span><span>${rec.end_time||'—'}</span></div>
+    <div class="modal-row"><span class="modal-lbl">休息</span><span>${rec.breaks_minutes||0} 分鐘</span></div>
+    <div class="modal-row"><span class="modal-lbl">時數</span><span>${rec.hours||'—'} h</span></div>
+    <div class="modal-row"><span class="modal-lbl">薪資</span><span>${rec.subtotal ? '$'+rec.subtotal : '—'}</span></div>
+    ${gpsMapLink(rec.location)}
+    <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
+    <div style="white-space:pre-line;background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${rec.work_content||'（無）'}</div>
+    <div class="modal-actions"><button class="btn btn-grey btn-full" onclick="closeModal()">關閉</button></div>
+  `);
+}
+
+// ─── Worker: Requests view ───────────────────────────────────────────────────
+
+async function viewRequests() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const reqs = await getMyReqs();
+    let h = `<div class="view">
+      <button class="btn btn-blue btn-full" onclick="showReqForm()" style="margin-bottom:14px">＋ 申請補登</button>`;
+    if (!reqs.length) {
+      h += '<div class="loading">尚無補登申請</div>';
+    } else {
+      h += `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>時間</th><th>狀態</th></tr></thead><tbody>`;
+      reqs.forEach(r => {
+        h += `<tr onclick='showMyReqDetail(${JSON.stringify(r)})'>
+          <td>${addDay(r.date)}</td>
+          <td>${r.start_time}–${r.end_time}</td>
+          <td><span class="b-${r.status}">${{pending:'待審核',approved:'已核准',rejected:'已駁回'}[r.status]||r.status}</span></td>
+        </tr>`;
+      });
+      h += '</tbody></table></div>';
+    }
+    setView(h + '</div>');
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function getMyReqs() {
+  const F = CONFIG.FID.Q;
+  const all = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.email},eq,${ME.email}` });
+  return all.map(r => ({
+    ragicId: r._ragicId, date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+    location: r[F.location], work_content: r[F.work_content], reason: r[F.reason],
+    status: r[F.status], review_note: r[F.review_note]
+  })).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function showReqForm() {
+  openModal(`
+    <div class="modal-title">申請補登</div>
+    <div class="ff"><label>日期</label><input type="date" id="qd"></div>
+    <div class="ff"><label>上班時間</label><input type="time" id="qs"></div>
+    <div class="ff"><label>下班時間</label><input type="time" id="qe"></div>
+    <div class="ff"><label>地點</label>
+      <select id="ql">${CONFIG.LOCATIONS.map(l=>`<option value="${l.name}">${l.name}</option>`).join('')}</select>
+    </div>
+    <div class="ff"><label>工作內容（每行一項）</label>
+      <textarea id="qc" placeholder="• 工作項目1&#10;• 工作項目2"></textarea></div>
+    <div class="ff"><label>申請原因</label>
+      <textarea id="qr" placeholder="說明無法即時打卡的原因"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-grey" onclick="closeModal()">取消</button>
+      <button class="btn btn-blue" onclick="doSubmitReq()">送出申請</button>
+    </div>
+  `);
+}
+
+async function doSubmitReq() {
+  const date = document.getElementById('qd').value;
+  const start = document.getElementById('qs').value;
+  const end = document.getElementById('qe').value;
+  const loc = document.getElementById('ql').value;
+  const content = document.getElementById('qc').value.trim();
+  const reason = document.getElementById('qr').value.trim();
+  if (!date || !start || !end || !content || !reason) {
+    toast('請填寫所有欄位', 'red'); return;
+  }
+  try {
+    const F = CONFIG.FID.Q;
+    await ragicPost(CONFIG.SHEETS.REQUESTS, {
+      [F.email]: ME.email, [F.name]: MY_WORKER?.name || ME.name,
+      [F.date]: date.replace(/-/g,'/'), [F.start_time]: start, [F.end_time]: end,
+      [F.location]: loc, [F.work_content]: content, [F.reason]: reason, [F.status]: 'pending'
+    });
+    closeModal(); toast('補登申請已送出', 'green'); viewRequests();
+  } catch (e) { toast('申請失敗：' + e.message, 'red'); }
+}
+
+function showMyReqDetail(req) {
+  openModal(`
+    <div class="modal-title">補登申請明細</div>
+    <div class="modal-row"><span class="modal-lbl">日期</span><span>${addDay(req.date)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">時間</span><span>${req.start_time} – ${req.end_time}</span></div>
+    <div class="modal-row"><span class="modal-lbl">地點</span><span>${req.location}</span></div>
+    <div class="modal-row"><span class="modal-lbl">狀態</span>
+      <span class="b-${req.status}">${{pending:'待審核',approved:'已核准',rejected:'已駁回'}[req.status]||req.status}</span></div>
+    ${req.review_note ? `<div class="modal-row"><span class="modal-lbl">駁回原因</span><span>${req.review_note}</span></div>` : ''}
+    <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
+    <div style="white-space:pre-line;background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${req.work_content}</div>
+    <div style="font-size:13px;color:#999;margin:12px 0 6px">申請原因</div>
+    <div style="background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${req.reason}</div>
+    <div class="modal-actions"><button class="btn btn-grey btn-full" onclick="closeModal()">關閉</button></div>
+  `);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ADMIN VIEWS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function getAllWorkers() {
+  const F = CONFIG.FID.W;
+  const all = await ragicGet(CONFIG.SHEETS.WORKERS);
+  return all.map(r => ({
+    ragicId:        r._ragicId,
+    email:          r[F.email] || '',
+    name:           r[F.name] || '',
+    weekday_rate:   Number(r[F.weekday_rate]) || 0,
+    weekend_rate:   Number(r[F.weekend_rate]) || 0,
+    color:          r[F.color] || '#1a73e8',
+    active:         r[F.active] || '1',
+    photo:          resolvePhotoUrl(r._ragicId, r[F.photo]),
+    emp_type:       r[F.emp_type] || '工讀生',
+    monthly_salary: Number(r[F.monthly_salary]) || 0,
+    start_date:     r[F.start_date] || '',
+    shift:          r[F.shift] || '',
+    dependents:     Number(F.dependents ? r[F.dependents] : 0) || 0
+  }));
+}
+
+async function getAllRecs(year, month) {
+  const F = CONFIG.FID.R;
+  const all = await ragicGet(CONFIG.SHEETS.RECORDS);
+  return all.filter(r => {
+    if (!r[F.end_time]) return false;
+    if (r[F.rec_status] === 'cancelled' || r[F.rec_status] === 'deleted') return false;
+    const [y, m] = (r[F.date] || '').split('/');
+    return Number(y) === year && Number(m) === month;
+  }).map(r => ({
+    ragicId: r._ragicId, email: r[F.email], name: r[F.name],
+    date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+    hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
+    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
+  })).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// 抓「有上班、沒下班」的未完成記錄（漏打下班）
+async function getIncompleteRecs(year, month) {
+  const F = CONFIG.FID.R;
+  const all = await ragicGet(CONFIG.SHEETS.RECORDS);
+  return all.filter(r => {
+    if (!r[F.start_time] || r[F.end_time]) return false;
+    if (r[F.rec_status] === 'cancelled' || r[F.rec_status] === 'deleted') return false;
+    const [y, m] = (r[F.date] || '').split('/');
+    return Number(y) === year && Number(m) === month;
+  }).map(r => ({ email: r[F.email], name: r[F.name], date: r[F.date], start_time: stripSec(r[F.start_time]) }));
+}
+
+function chgAMonth(d) {
+  CUR_MONTH += d;
+  if (CUR_MONTH < 0) { CUR_MONTH = 11; CUR_YEAR--; }
+  if (CUR_MONTH > 11) { CUR_MONTH = 0; CUR_YEAR++; }
+  ({ overview: viewOverview, acal: viewACal, arec: viewARec, report: viewReport })[CUR_TAB]?.();
+}
+
+// ─── Admin: Overview ─────────────────────────────────────────────────────────
+
+async function viewOverview() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    WORKERS = await getAllWorkers();
+    const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
+    let h = `<div class="view">${monthNav(true)}<div class="wk-cards">`;
+    WORKERS.filter(w => w.active !== '0').forEach(w => {
+      const wr = recs.filter(r => r.email === w.email);
+      const totH = wr.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+      const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+      const isFull = w.emp_type === '正式員工';
+      let statsHtml = '';
+      if (isFull) {
+        const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
+        const attendDays = new Set(wr.map(r => r.date)).size;
+        const est = workDays > 0 ? Math.round(w.monthly_salary / workDays * attendDays) : 0;
+        statsHtml = `
+          <div class="wk-stat"><span>應出勤</span><span class="v">${workDays} 天</span></div>
+          <div class="wk-stat"><span>實出勤</span><span class="v">${attendDays} 天</span></div>
+          <div class="wk-stat"><span>預估薪資</span><span class="v">$${est.toLocaleString()}</span></div>
+          <div class="wk-stat"><span>年資</span><span class="v">${calcSeniority(w.start_date)}</span></div>`;
+      } else {
+        statsHtml = `
+          <div class="wk-stat"><span>工時</span><span class="v">${totH.toFixed(2)} h</span></div>
+          <div class="wk-stat"><span>薪資</span><span class="v">$${totP}</span></div>
+          <div class="wk-stat"><span>打卡</span><span class="v">${wr.length} 次</span></div>`;
+      }
+      h += `<div class="wk-card" style="border-left-color:${w.color}">
+        <div class="wk-hd">
+          ${makeAvatar(w.name, w.color, '', w.photo)}
+          <div class="wk-hd-info">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+              <span class="wk-name">${w.name}</span>
+              <span style="font-size:10px;padding:1px 6px;border-radius:8px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式員工':'工讀生'}</span>
+            </div>
+            <div class="wk-email">${w.email}</div>
+          </div>
+        </div>
+        ${statsHtml}
+      </div>`;
+    });
+    setView(h + '</div></div>');
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// ─── 勞健保自付額（2026 / 115 年）─────────────────────────────────────────────
+// 投保金額分級表（健保用，前段與勞保共用；涵蓋常見月薪範圍）
+const INSURANCE_GRADES = [
+  29500, 30300, 31800, 33300, 34800, 36300, 38200, 40100, 42000, 43900, 45800,
+  48200, 50600, 53000, 55400, 57800, 60800, 63800, 66800, 69800, 72800,
+  76500, 80200, 83900, 87600, 92100, 96600, 101100, 105600, 110100,
+  115500, 120900, 126300, 131700, 137100, 142500, 147900, 150000,
+  156400, 162800, 169200, 175600, 182000
+];
+const LABOR_CAP = 45800;   // 勞保投保上限
+const LABOR_EE_RATE  = 0.125 * 0.20;   // 勞保員工自付 = 投保 × 12.5% × 20%
+const HEALTH_EE_RATE = 0.0517 * 0.30;  // 健保員工自付 = 投保 × 5.17% × 30%
+
+// 月薪 → 投保級距（取 ≥ 月薪的最小級距）
+function insuranceGrade(salary) {
+  for (const g of INSURANCE_GRADES) if (salary <= g) return g;
+  return INSURANCE_GRADES[INSURANCE_GRADES.length - 1];
+}
+function laborInsuranceEE(salary) {
+  return Math.round(Math.min(insuranceGrade(salary), LABOR_CAP) * LABOR_EE_RATE);
+}
+function healthInsuranceEE(salary, dependents) {
+  return Math.round(insuranceGrade(salary) * HEALTH_EE_RATE * (1 + (Number(dependents) || 0)));
+}
+
+// ─── 勞基法薪資計算 ───────────────────────────────────────────────────────────
+
+// 加班費倍率：平日 前2hr×1.34、3hr起×1.67；休息日(週六/日) 2-8hr×1.67、超過×2.67
+function calcOtPayByHours(h, rate, isWeekend) {
+  let mult;
+  if (isWeekend) {
+    mult = Math.min(h, 2) * 1.34 + Math.min(Math.max(0, h - 2), 6) * 1.67 + Math.max(0, h - 8) * 2.67;
+  } else {
+    mult = Math.min(h, 2) * 1.34 + Math.max(0, h - 2) * 1.67;
+  }
+  return mult * rate;
+}
+
+// 當月加班費：補休 FIFO 先扣最早的加班，剩餘加班依各自當天倍率算錢
+function calcMonthOvertimePay(email, otAll, ym, hourly) {
+  const mine = otAll.filter(o => o.email === email && o.status === 'approved' && (o.date || '').startsWith(ym));
+  const otList = mine.filter(o => o.ot_type === '加班').sort((a, b) => a.date.localeCompare(b.date));
+  let comp = mine.filter(o => o.ot_type === '補休').reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);
+  let pay = 0, paidHours = 0;
+  for (const ot of otList) {
+    let h = parseFloat(ot.hours) || 0;
+    if (comp > 0) { const d = Math.min(comp, h); h -= d; comp -= d; }  // 補休先扣
+    if (h > 0) {
+      const dow = new Date((ot.date || '').replace(/\//g, '-')).getDay();
+      pay += calcOtPayByHours(h, hourly, dow === 0 || dow === 6);
+      paidHours += h;
+    }
+  }
+  return { pay: Math.round(pay), hours: Math.round(paidHours * 100) / 100 };
+}
+
+// 請假扣薪：特休/公假不扣、病假半薪、事假/臨時假/其他全扣
+function calcLeaveDeduct(apprLeaves, hourly) {
+  let d = 0;
+  apprLeaves.forEach(l => {
+    const h = parseFloat(l.hours) || 0;
+    if (l.leave_type === '特休') return;
+    if (l.leave_type === '病假') d += h * hourly * 0.5;
+    else d += h * hourly;
+  });
+  return Math.round(d);
+}
+
+// 單筆請假扣薪（給明細用）
+function oneLeaveDeduct(l, hourly) {
+  const h = parseFloat(l.hours) || 0;
+  if (l.leave_type === '特休') return 0;
+  if (l.leave_type === '病假') return Math.round(h * hourly * 0.5);
+  return Math.round(h * hourly);
+}
+
+// 加班費明細（逐筆 FIFO，記錄補休抵扣與計薪）
+function overtimeDetail(email, otAll, ym, hourly) {
+  const mine = otAll.filter(o => o.email === email && o.status === 'approved' && (o.date || '').startsWith(ym));
+  const otList = mine.filter(o => o.ot_type === '加班').sort((a, b) => a.date.localeCompare(b.date));
+  let comp = mine.filter(o => o.ot_type === '補休').reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);
+  const compTotal = comp;
+  const rows = [];
+  let totalPay = 0;
+  for (const ot of otList) {
+    const orig = parseFloat(ot.hours) || 0;
+    let h = orig, used = 0;
+    if (comp > 0) { used = Math.min(comp, h); h -= used; comp -= used; }
+    const dow = new Date((ot.date || '').replace(/\//g, '-')).getDay();
+    const pay = h > 0 ? Math.round(calcOtPayByHours(h, hourly, dow === 0 || dow === 6)) : 0;
+    totalPay += pay;
+    rows.push({ date: ot.date, orig, used, paid: h, pay, weekend: dow === 0 || dow === 6 });
+  }
+  return { rows, compTotal, totalPay };
+}
+
+let _RPT = null;  // 月報資料快取，供明細彈窗使用
+
+// ─── Admin: 薪資月報 ───────────────────────────────────────────────────────────
+
+async function viewReport() {
+  setView('<div class="loading">統計中…</div>');
+  try {
+    WORKERS = await getAllWorkers();
+    const recs   = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
+    const leaves = await getAllLeaves();
+    const otAll  = await getAllOt();
+    const incomplete = await getIncompleteRecs(CUR_YEAR, CUR_MONTH + 1);
+    const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
+    const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
+    _RPT = { recs, leaves, otAll, incomplete, ym, year: CUR_YEAR, workDays };
+
+    let h = `<div class="view">${monthNav(true)}`;
+    const actives = WORKERS.filter(w => w.active !== '0');
+    if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
+
+    actives.forEach(w => {
+      const isFull = w.emp_type === '正式員工';
+      const sh = CONFIG.SHIFTS[w.shift];
+      const wr = recs.filter(r => r.email === w.email);
+      const totH = wr.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+      const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+      const attendDays = new Set(wr.map(r => r.date)).size;
+
+      // 遲到 / 早退（依班別時段）
+      let lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0;
+      if (sh) {
+        wr.forEach(r => {
+          if (r.start_time) {
+            const d = toMin(r.start_time) - toMin(sh.am[0]);
+            if (d > 0) { lateCnt++; lateMin += d; }
+          }
+          if (r.end_time) {
+            const d = toMin(sh.pm[1]) - toMin(r.end_time);
+            if (d > 0) { earlyCnt++; earlyMin += d; }
+          }
+        });
+      }
+
+      // 請假（本月已核准）
+      const appr = leaves.filter(l => l.email === w.email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
+      const leaveHours = appr.reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
+      const leaveDays  = new Set(appr.map(l => l.start_date)).size;
+      const urgentCnt  = appr.filter(isUrgentLeave).length;
+      const pendingCnt = leaves.filter(l => l.email === w.email && l.status === 'pending' && (l.start_date || '').startsWith(ym)).length;
+
+      // 缺勤（正職）：應出勤工作日 - 實出勤 - 請假日
+      const absent = isFull ? Math.max(0, workDays - attendDays - leaveDays) : null;
+      // ── 勞基法薪資計算 ──
+      const hourly = isFull ? Math.round(w.monthly_salary / 240) : w.weekday_rate;
+      const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);
+      // 遲到/早退：月累計 ≤15 分免責，>15 分扣全部
+      const latePen  = lateMin  > 15 ? lateMin  : 0;
+      const earlyPen = earlyMin > 15 ? earlyMin : 0;
+      const lateDeduct = Math.round((latePen + earlyPen) / 60 * hourly);
+      const leaveDeduct = calcLeaveDeduct(appr, hourly);
+      const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
+      const base = isFull ? w.monthly_salary : totP;
+      const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
+      const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
+      const net = Math.round(base + ot.pay - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+      // 特休：應有 / 已用(當年度特休請假時數→天) / 剩餘
+      const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
+      const shHours = sh ? sh.hours : 8;
+      const usedAnnual = isFull ? Math.round(
+        leaves.filter(l => l.email === w.email && l.leave_type === '特休' && l.status === 'approved' && (l.start_date || '').startsWith(String(CUR_YEAR)))
+          .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
+      const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
+      const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
+
+      const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
+      const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
+
+      h += `<div class="rpt-card" style="border-left-color:${w.color}">
+        <div class="rpt-hd" style="cursor:pointer" onclick="showReportDetail('${w.email}')" title="點看完整明細">
+          ${makeAvatar(w.name, w.color, '', w.photo)}
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="rpt-name">${w.name}</span>
+              <span class="rpt-type" style="background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':'工讀'}</span>
+              ${shiftTag}
+            </div>
+            <div class="rpt-email">${w.email}</div>
+          </div>
+          ${isFull ? `<div class="rpt-annual"><div class="rpt-annual-lbl">特休尚餘</div><div class="rpt-annual-val">${annualRemain}/${annualTotal} 天</div></div>` : ''}
+        </div>
+        <div class="rpt-grid">
+          ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
+          ${cell('總時數', `${totH.toFixed(1)} h`)}
+          ${cell('實出勤', `${attendDays} 天`)}
+          ${isFull ? cell('缺勤', `${absent} 天`, absent>0) : ''}
+          ${cell('漏打卡', `${noClockOut} 次`, noClockOut>0)}
+          ${cell('遲到', `${lateCnt} 次 / ${lateMin} 分`, latePen>0)}
+          ${cell('早退', `${earlyCnt} 次 / ${earlyMin} 分`, earlyPen>0)}
+          ${cell('請假', `${leaveHours} 小時`)}
+          ${cell('臨時假', `${urgentCnt} 次`, urgentCnt>0)}
+          ${isFull ? cell('補休餘額', `${calcOtBalance(otAll.filter(o => o.email === w.email))} 小時`) : ''}
+          ${cell('加班費', `$${ot.pay.toLocaleString()}${ot.hours?` (${ot.hours}h)`:''}`, ot.pay>0)}
+          ${pendingCnt ? cell('待審請假', `${pendingCnt} 件`, true) : ''}
+        </div>
+        <div style="text-align:center;font-size:11px;color:#1a73e8;margin-top:8px">👆 點頭像看完整明細</div>
+        <div class="pay-box">
+          <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
+          <div class="pay-detail">
+            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${ot.pay?`　＋加班 $${ot.pay.toLocaleString()}`:''}${absentDeduct?`　－缺勤 $${absentDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
+          </div>
+        </div>
+      </div>`;
+    });
+    setView(h + '</div>');
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// 點員工頭像 → 完整明細彈窗（跟員工核對用）
+function showReportDetail(email) {
+  if (!_RPT) return;
+  const w = (WORKERS || []).find(x => x.email === email);
+  if (!w) return;
+  const { recs, leaves, otAll, incomplete, ym, year, workDays } = _RPT;
+  const isFull = w.emp_type === '正式員工';
+  const sh = CONFIG.SHIFTS[w.shift];
+  const shHours = sh ? sh.hours : 8;
+  const hourly = isFull ? Math.round(w.monthly_salary / 240) : w.weekday_rate;
+  const wr = recs.filter(r => r.email === email);
+
+  // 遲到 / 早退逐筆
+  const lateRows = [], earlyRows = [];
+  let lateMin = 0, earlyMin = 0;
+  if (sh) {
+    wr.forEach(r => {
+      if (r.start_time) { const d = toMin(r.start_time) - toMin(sh.am[0]); if (d > 0) { lateMin += d; lateRows.push(`${addDay(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
+      if (r.end_time)   { const d = toMin(sh.pm[1]) - toMin(r.end_time);   if (d > 0) { earlyMin += d; earlyRows.push(`${addDay(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
+    });
+  }
+  const latePen = lateMin > 15 ? lateMin : 0, earlyPen = earlyMin > 15 ? earlyMin : 0;
+  const lateDeduct = Math.round((latePen + earlyPen) / 60 * hourly);
+
+  // 加班費明細
+  const od = overtimeDetail(email, otAll, ym, hourly);
+  const otRows = od.rows.map(r =>
+    r.paid <= 0
+      ? `${addDay(r.date)}　加班 ${r.orig}h → 補休全抵 ${r.used}h（不計薪）`
+      : `${addDay(r.date)}　加班 ${r.orig}h${r.used ? `（補休抵 ${r.used}h）` : ''} → 計薪 ${r.paid}h${r.weekend ? '(休息日)' : ''}　$${r.pay}`
+  );
+
+  // 補休明細（當月已核准）
+  const compRows = otAll.filter(o => o.email === email && o.ot_type === '補休' && o.status === 'approved' && (o.date || '').startsWith(ym))
+    .map(o => `${addDay(o.date)}${(o.start_time && o.end_time) ? ` ${o.start_time}–${o.end_time}` : ''}　${o.hours}h`);
+
+  // 漏打下班明細
+  const noOutRows = (incomplete || []).filter(r => r.email === email)
+    .map(r => `${addDay(r.date)}　${r.start_time} 上班，未打下班卡`);
+
+  // 請假明細（當月已核准）
+  const appr = leaves.filter(l => l.email === email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
+  const leaveRows = appr.map(l => {
+    const ded = oneLeaveDeduct(l, hourly);
+    const urgent = isUrgentLeave(l) ? ' ⚡臨時' : '';
+    const tr = (l.start_time && l.end_time) ? ` ${l.start_time}–${l.end_time}` : '';
+    return `${addDay(l.start_date)}${tr}　${l.leave_type}${urgent}　${l.hours}h　扣 $${ded}`;
+  });
+
+  // 特休
+  const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
+  const usedAnnual = isFull ? Math.round(
+    leaves.filter(l => l.email === email && l.leave_type === '特休' && l.status === 'approved' && (l.start_date || '').startsWith(String(year)))
+      .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
+
+  // 薪資彙整
+  const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+  const attendDays = new Set(wr.map(r => r.date)).size;
+  const leaveDays = new Set(appr.map(l => l.start_date)).size;
+  const absent = isFull ? Math.max(0, workDays - attendDays - leaveDays) : 0;
+  const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
+  const leaveDeduct = calcLeaveDeduct(appr, hourly);
+  const base = isFull ? w.monthly_salary : totP;
+  const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
+  const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
+  const net = Math.round(base + od.totalPay - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+
+  const section = (title, rows, empty) =>
+    `<div class="rd-sec"><div class="rd-title">${title}</div>` +
+    (rows.length ? rows.map(r => `<div class="rd-row">${r}</div>`).join('') : `<div class="rd-empty">${empty}</div>`) +
+    `</div>`;
+
+  openModal(`
+    <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
+    <div style="font-size:12px;color:#999;margin-bottom:12px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
+    ${section('🕐 遲到（月累計 >15 分才扣薪）', lateRows, '無遲到')}
+    ${section('🕐 早退（月累計 >15 分才扣薪）', earlyRows, '無早退')}
+    ${section('💪 加班費（補休先扣最早的加班）', otRows, '無加班')}
+    ${od.compTotal ? `<div class="rd-row" style="color:#9333ea;font-weight:600">本月補休共 ${od.compTotal}h，已優先抵扣最早的加班</div>` : ''}
+    ${section('🔄 補休', compRows, '無補休')}
+    ${section('🌴 請假', leaveRows, '無請假')}
+    ${section('⚠️ 漏打下班', noOutRows, '無')}
+    ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
+    ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
+    <div class="pay-box" style="margin-top:14px">
+      <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
+      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${absentDeduct ? `　－缺勤 $${absentDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
+  `, true);
+}
+
+// ─── Admin: Records ───────────────────────────────────────────────────────────
+
+async function viewARec() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    if (!WORKERS.length) WORKERS = await getAllWorkers();
+    const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
+    _MD.arecs = recs;
+
+    let h = `<div class="view">${monthNav(true)}
+      <div class="filter-bar">
+        <select id="fw" onchange="filterRecs(this.value)">
+          <option value="">全部工讀生</option>
+          ${WORKERS.map(w=>`<option value="${w.email}">${w.name}</option>`).join('')}
+        </select>
+      </div>
+      <div id="recs-tbl">${buildRecsTable(recs)}</div>
+    </div>`;
+    setView(h);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+function buildRecsTable(recs) {
+  if (!recs.length) return '<div class="loading">本月無打卡紀錄</div>';
+  let h = `<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>日期</th><th>時數</th><th>薪資</th></tr></thead><tbody>`;
+  recs.forEach(r => {
+    h += `<tr onclick='showAdminRecDetail(${JSON.stringify(r)})'>
+      <td>${r.name}</td><td>${addDay(r.date)}</td>
+      <td>${r.hours||'—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
+    </tr>`;
+  });
+  return h + '</tbody></table></div>';
+}
+
+function filterRecs(email) {
+  const filtered = email ? _MD.arecs.filter(r => r.email === email) : _MD.arecs;
+  document.getElementById('recs-tbl').innerHTML = buildRecsTable(filtered);
+}
+
+function showAdminRecDetail(rec) {
+  _MD.rec = rec;
+  const w = WORKERS.find(w => w.email === rec.email) || {};
+  const color = w.color || '#1a73e8';
+  const name = w.name || rec.name;
+  openModal(`
+    <div class="modal-title">打卡明細</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      ${makeAvatar(name, color, 'lg', w.photo)}
+      <div><div style="font-weight:700;font-size:16px;color:${color}">${name}</div>
+      <div style="font-size:12px;color:#999">${rec.email}</div></div>
+    </div>
+    <div class="modal-row"><span class="modal-lbl">日期</span><span>${addDay(rec.date)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">地點</span><span>${locName(rec.location)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">上班</span><span>${rec.start_time}</span></div>
+    <div class="modal-row"><span class="modal-lbl">下班</span><span>${rec.end_time}</span></div>
+    <div class="modal-row"><span class="modal-lbl">休息</span><span>${rec.breaks_minutes||0} 分鐘</span></div>
+    <div class="modal-row"><span class="modal-lbl">時數</span><span>${rec.hours} h</span></div>
+    <div class="modal-row"><span class="modal-lbl">薪資</span><span>$${rec.subtotal}</span></div>
+    ${gpsMapLink(rec.location)}
+    <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
+    <div style="white-space:pre-line;background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${rec.work_content||'（無）'}</div>
+    <div class="modal-actions">
+      <button class="btn btn-red" onclick="doAdminDelRec()">刪除此筆</button>
+      <button class="btn btn-grey" onclick="closeModal()">關閉</button>
+    </div>
+  `);
+}
+
+async function doAdminDelRec() {
+  if (!confirm('確定刪除此筆打卡紀錄？')) return;
+  try {
+    const F = CONFIG.FID.R;
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, _MD.rec.ragicId, { [F.rec_status]: 'deleted' });
+    closeModal(); toast('已刪除', 'green'); viewARec();
+  } catch (e) { toast('刪除失敗：' + e.message, 'red'); }
+}
+
+// ─── Admin: Calendar ─────────────────────────────────────────────────────────
+
+async function viewACal() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    if (!WORKERS.length) WORKERS = await getAllWorkers();
+    const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
+    const byDate = {};
+    recs.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+
+    setView(`<div class="view">${monthNav(true)}${buildCal(byDate, rec => {
+      const color = (WORKERS.find(w => w.email === rec.email) || {}).color || '#1a73e8';
+      return `<div class="cal-ev" style="border-left-color:${color}" onclick='showAdminRecDetail(${JSON.stringify(rec)})'>${rec.name}</div>`;
+    })}</div>`);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// ─── Admin: Requests ─────────────────────────────────────────────────────────
+
+async function viewAReq() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const F = CONFIG.FID.Q;
+    const all = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` });
+    const reqs = all.map(r => ({
+      ragicId: r._ragicId, email: r[F.email], name: r[F.name],
+      date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+      location: r[F.location], work_content: r[F.work_content], reason: r[F.reason],
+      status: r[F.status]
+    }));
+
+    let h = '<div class="view">';
+    if (!reqs.length) {
+      h += '<div class="loading">目前無待審核的補登申請 ✅</div>';
+    } else {
+      h += `<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>日期</th><th>時間</th><th></th></tr></thead><tbody>`;
+      reqs.forEach(r => {
+        h += `<tr>
+          <td>${r.name}</td><td>${addDay(r.date)}</td><td>${r.start_time}–${r.end_time}</td>
+          <td><button style="background:none;border:1px solid #1a73e8;color:#1a73e8;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px" onclick='showApproveModal(${JSON.stringify(r)})'>審核</button></td>
+        </tr>`;
+      });
+      h += '</tbody></table></div>';
+    }
+    setView(h + '</div>');
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+function showApproveModal(req) {
+  _MD.req = req;
+  openModal(`
+    <div class="modal-title">審核補登申請</div>
+    <div class="modal-row"><span class="modal-lbl">姓名</span><span>${req.name}</span></div>
+    <div class="modal-row"><span class="modal-lbl">日期</span><span>${addDay(req.date)}</span></div>
+    <div class="modal-row"><span class="modal-lbl">時間</span><span>${req.start_time} – ${req.end_time}</span></div>
+    <div class="modal-row"><span class="modal-lbl">地點</span><span>${req.location}</span></div>
+    <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
+    <div style="white-space:pre-line;background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${req.work_content}</div>
+    <div style="font-size:13px;color:#999;margin:10px 0 6px">申請原因</div>
+    <div style="background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${req.reason}</div>
+    <div class="ff" style="margin-top:14px"><label>駁回原因（駁回時填）</label>
+      ${rejectPresetBtns('rej-note')}
+      <textarea id="rej-note" placeholder="選填"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-green" onclick="doApprove()">✓ 核准</button>
+      <button class="btn btn-red" onclick="doReject()">✕ 駁回</button>
+      <button class="btn btn-grey" onclick="closeModal()">取消</button>
+    </div>
+  `);
+}
+
+async function doApprove() {
+  const req = _MD.req;
+  try {
+    if (!WORKERS.length) WORKERS = await getAllWorkers();
+    const worker = WORKERS.find(w => w.email === req.email);
+    let hours = 0, subtotal = 0;
+    if (worker) {
+      const start = parseDatetime(`${req.date} ${req.start_time}`);
+      const end = parseDatetime(`${req.date} ${req.end_time}`);
+      const grossMin = (end - start) / 60000;
+      hours = Math.round(grossMin / 60 * 100) / 100;
+      subtotal = Math.round(hours * calcRate(req.date, worker));
+    }
+    const F = CONFIG.FID.R;
+    await ragicPost(CONFIG.SHEETS.RECORDS, {
+      [F.email]: req.email, [F.name]: req.name,
+      [F.date]: req.date, [F.start_time]: req.start_time, [F.end_time]: req.end_time,
+      [F.location]: req.location, [F.work_content]: req.work_content,
+      [F.hours]: String(hours), [F.subtotal]: String(subtotal),
+      [F.breaks_minutes]: '0', [F.paused_at]: '', [F.rec_status]: ''
+    });
+    const FQ = CONFIG.FID.Q;
+    await ragicUpdate(CONFIG.SHEETS.REQUESTS, req.ragicId, {
+      [FQ.status]: 'approved', [FQ.reviewed_by]: ME.email, [FQ.reviewed_at]: fmtDateTime(new Date())
+    });
+    closeModal(); toast('已核准補登！', 'green'); updateBadge(); viewAReq();
+  } catch (e) { toast('核准失敗：' + e.message, 'red'); }
+}
+
+async function doReject() {
+  const req = _MD.req;
+  const note = document.getElementById('rej-note').value.trim();
+  try {
+    const F = CONFIG.FID.Q;
+    await ragicUpdate(CONFIG.SHEETS.REQUESTS, req.ragicId, {
+      [F.status]: 'rejected', [F.reviewed_by]: ME.email,
+      [F.reviewed_at]: fmtDateTime(new Date()), [F.review_note]: note
+    });
+    closeModal(); toast('已駁回', 'green'); updateBadge(); viewAReq();
+  } catch (e) { toast('駁回失敗：' + e.message, 'red'); }
+}
+
+async function updateBadge() {
+  try {
+    const F = CONFIG.FID.Q;
+    const all = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` });
+    const badge = document.getElementById('req-badge');
+    if (badge) { badge.textContent = all.length; badge.classList.toggle('hidden', !all.length); }
+  } catch (e) {}
+}
+
+// ─── Admin: Workers CRUD ─────────────────────────────────────────────────────
+
+async function viewWrkrs() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    WORKERS = await getAllWorkers();
+    let h = `<div class="view">
+      <button class="btn btn-blue btn-full" onclick="showWrkrForm(null)" style="margin-bottom:14px">＋ 新增工讀生</button>
+      <div class="tbl-wrap"><table><thead><tr><th>員工</th><th>薪資設定</th><th></th></tr></thead><tbody>`;
+    WORKERS.forEach(w => {
+      const inactive = w.active === '0';
+      const isFull = w.emp_type === '正式員工';
+      const salaryLabel = isFull ? `月薪 $${(w.monthly_salary||0).toLocaleString()}` : `平日 $${w.weekday_rate} / 假日 $${w.weekend_rate}`;
+      h += `<tr style="${inactive ? 'opacity:.45' : ''}">
+        <td style="display:flex;align-items:center;gap:8px;padding:10px 12px">
+          ${makeAvatar(w.name, w.color, '', w.photo)}
+          <div>
+            <div style="font-weight:500">${w.name}
+              <span style="font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':'工讀'}</span>
+              ${inactive ? '<span style="font-size:11px;color:#ea4335;margin-left:4px">停用</span>' : ''}
+            </div>
+            <div style="font-size:12px;color:#999">${w.email}</div>
+          </div>
+        </td>
+        <td style="font-size:13px">${salaryLabel}</td>
+        <td><button style="background:none;border:1px solid #ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px" onclick='showWrkrForm(${JSON.stringify(w)})'>編輯</button></td>
+      </tr>`;
+    });
+    setView(h + '</tbody></table></div></div>');
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+function showWrkrForm(w) {
+  _MD.wrkr = w;
+  const isFullTime = w?.emp_type === '正式員工';
+  const photoUrl = getPhotoUrl(w?.photo);
+  openModal(`
+    <div class="modal-title">${w ? '編輯員工' : '新增員工'}</div>
+
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+      <div id="wf-avatar-preview" style="flex-shrink:0">
+        ${makeAvatar(w?.name||'?', w?.color||'#1a73e8', 'lg', w?.photo)}
+      </div>
+      <div style="flex:1">
+        <label style="font-size:13px;color:#666;display:block;margin-bottom:4px">大頭照（JPEG/PNG）</label>
+        <input type="file" id="wf-photo" accept="image/jpeg,image/png,image/jpg"
+          style="font-size:13px" onchange="previewWfPhoto(this)">
+      </div>
+    </div>
+
+    <div class="ff"><label>員工類型</label>
+      <select id="wf-type" onchange="toggleEmpTypeFields(this.value)">
+        <option value="工讀生" ${!isFullTime?'selected':''}>工讀生（時薪制）</option>
+        <option value="正式員工" ${isFullTime?'selected':''}>正式員工（月薪制）</option>
+      </select>
+    </div>
+    <div class="ff"><label>Email</label><input id="wf-email" type="email" value="${w?.email||''}" ${w?'readonly':''}></div>
+    <div class="ff"><label>姓名</label><input id="wf-name" value="${w?.name||''}"></div>
+
+    <div id="wf-hourly-fields" style="${isFullTime?'display:none':''}">
+      <div class="ff"><label>平日時薪（元）</label><input id="wf-wd" type="number" value="${w?.weekday_rate||''}"></div>
+      <div class="ff"><label>假日時薪（元）</label><input id="wf-we" type="number" value="${w?.weekend_rate||''}"></div>
+    </div>
+
+    <div id="wf-monthly-fields" style="${isFullTime?'':'display:none'}">
+      <div class="ff"><label>月薪（元）</label><input id="wf-monthly" type="number" value="${w?.monthly_salary||''}"></div>
+      <div class="ff"><label>到職日</label><input id="wf-start" type="date" value="${(w?.start_date||'').replace(/\//g,'-')}"></div>
+    </div>
+
+    <div class="ff"><label>班別</label>
+      <select id="wf-shift">
+        <option value="">未設定</option>
+        ${Object.keys(CONFIG.SHIFTS).map(k =>
+          `<option value="${k}" ${w?.shift===k?'selected':''}>${k} 班（${CONFIG.SHIFTS[k].hours}hr｜${CONFIG.SHIFTS[k].am.join('-')} ${CONFIG.SHIFTS[k].pm.join('-')}）</option>`
+        ).join('')}
+      </select>
+    </div>
+
+    <div class="ff"><label>健保眷口數（0 = 只保本人）</label>
+      <input id="wf-dependents" type="number" min="0" step="1" value="${w?.dependents||0}"></div>
+
+    <div class="ff"><label>顏色標籤</label><input id="wf-color" type="color" value="${w?.color||'#1a73e8'}"></div>
+
+    <div class="modal-actions" style="flex-wrap:wrap;gap:8px">
+      ${w ? (w.active === '0'
+        ? `<button class="btn btn-green" style="flex:0 0 100%" onclick="doReactivateWrkr()">重新啟用</button>`
+        : `<button class="btn btn-red" style="flex:0 0 100%" onclick="doDeleteWrkr()">停用</button>`)
+        : ''}
+      <button class="btn btn-grey" onclick="closeModal()">取消</button>
+      <button class="btn btn-blue" onclick="doSaveWrkr()">儲存</button>
+    </div>
+  `);
+}
+
+function previewWfPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('wf-avatar-preview').innerHTML =
+      `<img src="${e.target.result}" class="avatar avatar-lg" style="object-fit:cover;border-radius:50%">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function toggleEmpTypeFields(type) {
+  const isFull = type === '正式員工';
+  document.getElementById('wf-hourly-fields').style.display = isFull ? 'none' : '';
+  document.getElementById('wf-monthly-fields').style.display = isFull ? '' : 'none';
+}
+
+async function doReactivateWrkr() {
+  const w = _MD.wrkr;
+  if (!w) return;
+  try {
+    await ragicUpdate(CONFIG.SHEETS.WORKERS, w.ragicId, { [CONFIG.FID.W.active]: '1' });
+    closeModal(); toast(`已重新啟用 ${w.name}`, 'green'); viewWrkrs();
+  } catch(e) { toast('啟用失敗：' + e.message, 'red'); }
+}
+
+async function doDeleteWrkr() {
+  const w = _MD.wrkr;
+  if (!w) return;
+  if (!confirm(`確定停用「${w.name}」？停用後不會顯示在總覽，但打卡紀錄保留。`)) return;
+  try {
+    const F = CONFIG.FID.W;
+    await ragicUpdate(CONFIG.SHEETS.WORKERS, w.ragicId, { [F.active]: '0' });
+    closeModal(); toast(`已停用 ${w.name}`, 'green'); viewWrkrs();
+  } catch(e) { toast('停用失敗：' + e.message, 'red'); }
+}
+
+async function doSaveWrkr() {
+  const w = _MD.wrkr;
+  const F = CONFIG.FID.W;
+  const empType = document.getElementById('wf-type').value;
+  const isFull = empType === '正式員工';
+  const startVal = document.getElementById('wf-start')?.value || '';
+
+  const fields = {
+    [F.email]:          document.getElementById('wf-email').value.trim().toLowerCase(),
+    [F.name]:           document.getElementById('wf-name').value.trim(),
+    [F.weekday_rate]:   isFull ? '0' : (document.getElementById('wf-wd').value || '0'),
+    [F.weekend_rate]:   isFull ? '0' : (document.getElementById('wf-we').value || '0'),
+    [F.monthly_salary]: isFull ? (document.getElementById('wf-monthly').value || '0') : '0',
+    [F.start_date]:     startVal ? startVal.replace(/-/g, '/') : '',
+    [F.emp_type]:       empType,
+    [F.shift]:          document.getElementById('wf-shift').value,
+    [F.dependents]:     document.getElementById('wf-dependents')?.value || '0',
+    [F.color]:          document.getElementById('wf-color').value,
+    [F.active]:         '1'
+  };
+
+  if (!fields[F.email] || !fields[F.name]) { toast('Email 和姓名必填', 'red'); return; }
+
+  try {
+    let ragicId = w?.ragicId;
+    if (ragicId) {
+      await ragicUpdate(CONFIG.SHEETS.WORKERS, ragicId, fields);
+    } else {
+      ragicId = await ragicPost(CONFIG.SHEETS.WORKERS, fields);
+    }
+
+    // 上傳大頭照（若有選擇檔案）
+    const photoFile = document.getElementById('wf-photo')?.files?.[0];
+    if (photoFile && ragicId) {
+      toast('上傳大頭照中…', 'green');
+      await uploadWorkerPhoto(ragicId, photoFile);
+    }
+
+    closeModal(); toast('儲存成功 ✓', 'green'); viewWrkrs();
+  } catch (e) { toast('儲存失敗：' + e.message, 'red'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  LEAVE REQUESTS
+// ═══════════════════════════════════════════════════════════════════════
+
+const LEAVE_TYPES = ['特休','病假','事假','臨時假','其他'];
+const LEAVE_STATUS = { pending:'待審核', approved:'已核准', rejected:'已駁回' };
+
+function toMin(t) { const [h,m] = String(t||'').split(':').map(Number); return (h||0)*60 + (m||0); }
+
+// 時間文字輸入自動補冒號：0830 → 08:30
+function fmtTimeInput(el) {
+  let v = el.value.replace(/[^0-9]/g, '').slice(0, 4);
+  if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2);
+  el.value = v;
+}
+
+// 計算時數：扣除午休 12:30–14:00 的重疊
+function calcLeaveHours(start, end) {
+  if (!start || !end) return 0;
+  let mins = toMin(end) - toMin(start);
+  if (mins <= 0) return 0;
+  const [ls, le] = CONFIG.LUNCH.map(toMin);
+  mins -= Math.max(0, Math.min(toMin(end), le) - Math.max(toMin(start), ls));
+  return Math.round(mins / 60 * 100) / 100;
+}
+
+// 駁回原因快捷
+const REJECT_PRESETS = ['時數異常請重新確認', '未與主管交接知會', '未附上證明文件'];
+function rejectPresetBtns(targetId) {
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">` +
+    REJECT_PRESETS.map(t =>
+      `<button type="button" class="btn-quick" style="flex:none;padding:5px 10px;font-size:12px" onclick="document.getElementById('${targetId}').value='${t}'">${t}</button>`
+    ).join('') + `</div>`;
+}
+
+// 臨時假：請假起始時間 與 申請時間 相差不足 72 小時
+function isUrgentLeave(lv) {
+  if (!lv.start_date || !lv.apply_time) return false;
+  const leaveDt = new Date(`${lv.start_date} ${lv.start_time || '00:00'}`);
+  const applyDt = new Date(lv.apply_time);
+  if (isNaN(leaveDt) || isNaN(applyDt)) return false;
+  return (leaveDt - applyDt) / 3600000 < 72;
+}
+
+function parseLeaveRec(r) {
+  const F = CONFIG.FID.L;
+  return {
+    ragicId:     r._ragicId,
+    email:       r[F.email]       || '',
+    name:        r[F.name]        || '',
+    leave_type:  r[F.leave_type]  || '',
+    start_date:  (r[F.start_date] || '').slice(0,10).replace(/-/g,'/'),
+    end_date:    (r[F.end_date]   || '').slice(0,10).replace(/-/g,'/'),
+    days:        r[F.days]        || '',
+    hours:       r[F.hours]       || '',
+    start_time:  stripSec(r[F.start_time]) || '',
+    end_time:    stripSec(r[F.end_time])   || '',
+    reason:      r[F.reason]      || '',
+    apply_time:  r[F.apply_time]  || '',
+    status:      r[F.status]      || 'pending',
+    reviewed_by: r[F.reviewed_by] || '',
+    reviewed_at: r[F.reviewed_at] || '',
+    reject_note: r[F.reject_note] || '',
+    photo:       resolvePhotoUrl(r._ragicId, r[F.photo])
+  };
+}
+
+async function uploadLeavePhoto(ragicId, file) {
+  if (!CONFIG.FID.L.photo) return;  // 尚未設定照片欄位 ID
+  const keyParam = CONFIG.RAGIC_KEY ? `&APIKey=${encodeURIComponent(CONFIG.RAGIC_KEY)}` : '';
+  const url = `${ragicUrl(CONFIG.SHEETS.LEAVES)}/${ragicId}?api${keyParam}`;
+  const fd = new FormData();
+  fd.append(String(CONFIG.FID.L.photo), file);
+  const res = await fetch(url, { method:'POST', body:fd });
+  if (!res.ok) throw new Error('照片上傳失敗 ' + res.status);
+}
+
+async function getMyLeaves() {
+  const F = CONFIG.FID.L;
+  const all = await ragicGet(CONFIG.SHEETS.LEAVES, { where:`${F.email},eq,${ME.email}` });
+  return all.map(parseLeaveRec).filter(l => l.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
+}
+
+async function getAllLeaves() {
+  const all = await ragicGet(CONFIG.SHEETS.LEAVES);
+  return all.map(parseLeaveRec).filter(l => l.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
+}
+
+function buildLeaveCard(lv, isAdmin) {
+  const stCls = { pending:'st-pending', approved:'st-approved', rejected:'st-rejected' }[lv.status] || '';
+  const stLabel = LEAVE_STATUS[lv.status] || lv.status;
+  const stBadge = `<span class="b-${lv.status}">${stLabel}</span>`;
+  const nameTag = isAdmin ? `<span class="leave-name">${escHtml(lv.name)}</span>` : '';
+  const rejectNote = lv.reject_note ? `<div class="leave-note">駁回原因：${escHtml(lv.reject_note)}</div>` : '';
+  const adminBtn = isAdmin && lv.status === 'pending'
+    ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px" onclick="showLeaveApproval(${lv.ragicId})">審核</button>`
+    : '';
+  const dayNum  = parseFloat(lv.days) || 0;
+  const hourNum = parseFloat(lv.hours) || 0;
+  const amount  = dayNum >= 1
+    ? `共 ${dayNum % 1 === 0 ? dayNum : dayNum.toFixed(1)} 天`
+    : `${hourNum} 小時`;
+  const timeRange = (lv.start_time && lv.end_time) ? `${lv.start_time}–${lv.end_time}` : '';
+  const urgent = isUrgentLeave(lv) ? `<span class="urgent-badge">⚡ 臨時假</span>` : '';
+  const ap = lv.apply_time || '';
+  const applyTxt = ap ? `${addDay(ap)} ${ap.slice(11,16)}` : '—';
+  const ownerEdit = isAdmin ? '' :
+    lv.status === 'pending'
+      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">編輯</button>`
+      : lv.status === 'rejected'
+      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">重新申請</button>
+         <button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyLeave(${lv.ragicId})">取消</button>`
+      : '';
+  return `
+    <div class="leave-card ${stCls}">
+      <div class="leave-hd">
+        <div class="leave-hd-left">
+          ${nameTag}
+          <span class="leave-type">${escHtml(lv.leave_type)}</span>
+          <span class="leave-date-main">${addDay(lv.start_date)}${timeRange ? ' '+timeRange : ''}</span>
+        </div>
+        <div class="leave-hd-right">
+          <span class="leave-days">${amount}</span>
+          ${stBadge}
+          ${adminBtn}
+          ${ownerEdit}
+        </div>
+      </div>
+      <div class="leave-reason">${escHtml(lv.reason)}</div>
+      ${lv.photo ? `<img class="leave-photo" src="${lv.photo}" onclick="window.open('${lv.photo}','_blank')">` : ''}
+      ${rejectNote}
+      <div class="leave-apply">${urgent}申請：${applyTxt}</div>
+    </div>`;
+}
+
+let _MY_LEAVES = [];
+
+function editMyLeave(id) {
+  const lv = _MY_LEAVES.find(l => l.ragicId === id);
+  if (lv) showLeaveForm(lv);
+}
+
+async function cancelMyLeave(id) {
+  if (!confirm('確定取消此次請假申請？取消後不可復原。')) return;
+  try {
+    await ragicPost(CONFIG.SHEETS.LEAVES + '/' + id, { [CONFIG.FID.L.status]: 'cancelled' });
+    toast('已取消申請', 'green'); viewLeave();
+  } catch(e){ toast('取消失敗：' + e.message, 'red'); }
+}
+
+async function viewLeave() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const leaves = await getMyLeaves();
+    _MY_LEAVES = leaves;
+    const list = leaves.map(l => buildLeaveCard(l, false)).join('');
+    setView(`<div class="view">
+      <button class="btn btn-full" style="margin-bottom:14px" onclick="showLeaveForm()">＋ 申請請假</button>
+      ${list || '<p style="color:#999;text-align:center;margin-top:30px">尚無請假紀錄</p>'}
+    </div>`);
+  } catch(e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function viewAdminLeave() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const leaves = await getAllLeaves();
+    const pending = leaves.filter(l => l.status === 'pending');
+    const others  = leaves.filter(l => l.status !== 'pending');
+    let h = '<div class="view">';
+    if (pending.length) {
+      h += `<div style="font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:8px">待審核（${pending.length}）</div>`;
+      h += pending.map(l => buildLeaveCard(l, true)).join('');
+      h += `<div style="height:1px;background:#eee;margin:14px 0"></div>`;
+    }
+    if (others.length) {
+      h += `<div style="font-size:13px;font-weight:600;color:#999;margin-bottom:8px">已處理</div>`;
+      h += others.map(l => buildLeaveCard(l, true)).join('');
+    }
+    if (!leaves.length) h += '<p style="color:#999;text-align:center;margin-top:30px">尚無請假申請</p>';
+    setView(h + '</div>');
+  } catch(e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+let _LF_SHIFT = null;     // 當前請假表單使用的班別時段
+let _LF_EDIT_ID = null;   // 編輯中的請假 ragicId（null = 新建）
+
+function showLeaveForm(lv) {
+  const editing = !!lv;
+  _LF_EDIT_ID = editing ? lv.ragicId : null;
+  const today = editing
+    ? (lv.start_date || '').slice(0,10).replace(/\//g,'-')
+    : fmtDate(new Date()).replace(/\//g,'-');
+  const shift = MY_WORKER?.shift || '';
+  const sh = CONFIG.SHIFTS[shift] || { am:['08:30','12:30'], pm:['14:00','18:00'], hours:8 };
+  const shiftNote = shift
+    ? `你的班別：${shift} 班（上午 ${sh.am[0]}–${sh.am[1]}、下午 ${sh.pm[0]}–${sh.pm[1]}）`
+    : '尚未設定班別，預設以 A 班時段計（請管理者於員工資料設定班別）';
+  const photoNote = editing && lv.photo ? '（已有照片，重新選擇可覆蓋）' : '（選填，病假等可附）';
+  openModal(`
+    <div class="modal-title">${editing ? '編輯請假申請' : '申請請假'}</div>
+    <div class="ff"><label>請假類型</label>
+      <select id="lf-type">
+        ${LEAVE_TYPES.map(t => `<option ${editing && lv.leave_type===t ? 'selected':''}>${t}</option>`).join('')}
+      </select></div>
+    <div class="ff"><label>請假日期</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="date" id="lf-date" value="${today}" onchange="updateLeaveDay()" style="width:auto">
+        <span id="lf-date-day" style="color:#1a73e8;font-size:16px;font-weight:700"></span>
+      </div>
+    </div>
+    <div class="ff"><label>預計請假</label>
+      <div style="display:flex;gap:6px">
+        <button type="button" class="btn-quick" id="lq-full"   onclick="pickLeavePreset('full')">整天</button>
+        <button type="button" class="btn-quick" id="lq-am"     onclick="pickLeavePreset('am')">上午</button>
+        <button type="button" class="btn-quick" id="lq-pm"     onclick="pickLeavePreset('pm')">下午</button>
+        <button type="button" class="btn-quick" id="lq-custom" onclick="pickLeavePreset('custom')">零計</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="ff" style="flex:1"><label>開始時間（24h）</label>
+        <input type="text" id="lf-start" inputmode="numeric" maxlength="5" placeholder="08:30" oninput="fmtTimeInput(this);markLeaveCustom();updateLeaveCalc()"></div>
+      <div class="ff" style="flex:1"><label>結束時間（24h）</label>
+        <input type="text" id="lf-end" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="fmtTimeInput(this);markLeaveCustom();updateLeaveCalc()"></div>
+    </div>
+    <div id="lf-calc" style="background:#f1f3f4;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px">請選擇預計請假時段</div>
+    <div class="ff"><label>申請原因</label>
+      <textarea id="lf-reason" rows="3" placeholder="請填寫請假原因">${editing ? escHtml(lv.reason) : ''}</textarea></div>
+    <div class="ff"><label>證明照片${photoNote}</label>
+      <input type="file" id="lf-photo" accept="image/*" style="font-size:13px"></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveLeave()">${editing ? '更新並重新送審' : '送出申請'}</button>
+    </div>
+    <div style="font-size:11px;color:#999;margin-top:8px">${shiftNote}</div>`, true);
+  _LF_SHIFT = sh;
+  updateLeaveDay();
+  if (editing) {
+    document.getElementById('lf-start').value = lv.start_time || '';
+    document.getElementById('lf-end').value   = lv.end_time   || '';
+    updateLeaveCalc();
+  } else {
+    pickLeavePreset('full');
+  }
+}
+
+function updateLeaveDay() {
+  const v = document.getElementById('lf-date')?.value;
+  const span = document.getElementById('lf-date-day');
+  if (v && span) {
+    const days = ['日','一','二','三','四','五','六'];
+    span.textContent = `(${days[new Date(v).getDay()]})`;
+  }
+}
+
+function pickLeavePreset(kind) {
+  const sh = _LF_SHIFT || { am:['08:30','12:30'], pm:['14:00','18:00'] };
+  const s = document.getElementById('lf-start');
+  const e = document.getElementById('lf-end');
+  if (kind === 'full')        { s.value = sh.am[0]; e.value = sh.pm[1]; }
+  else if (kind === 'am')     { s.value = sh.am[0]; e.value = sh.am[1]; }
+  else if (kind === 'pm')     { s.value = sh.pm[0]; e.value = sh.pm[1]; }
+  else if (kind === 'custom') { s.value = ''; e.value = ''; }
+  ['full','am','pm','custom'].forEach(k =>
+    document.getElementById('lq-'+k)?.classList.toggle('active', k === kind));
+  updateLeaveCalc();
+}
+
+function markLeaveCustom() {
+  ['full','am','pm'].forEach(k => document.getElementById('lq-'+k)?.classList.remove('active'));
+  document.getElementById('lq-custom')?.classList.add('active');
+}
+
+function updateLeaveCalc() {
+  const s = document.getElementById('lf-start')?.value;
+  const e = document.getElementById('lf-end')?.value;
+  const box = document.getElementById('lf-calc');
+  if (!box) return;
+  const hrs = calcLeaveHours(s, e);
+  if (!hrs) {
+    box.textContent = (s && e) ? '⚠️ 時間區間無效' : '請選擇預計請假時段';
+    box.dataset.hours = ''; box.dataset.days = '';
+    return;
+  }
+  const shiftHours = _LF_SHIFT?.hours || 8;
+  const days = hrs / shiftHours;
+  const dayTxt = days >= 1 ? `（共 ${days % 1 === 0 ? days : days.toFixed(2)} 天）` : '';
+  box.innerHTML = `本次請假 <b>${hrs}</b> 小時${dayTxt}`;
+  box.dataset.hours = hrs;
+  box.dataset.days = days.toFixed(2);
+}
+
+async function saveLeave() {
+  const type   = document.getElementById('lf-type').value;
+  const date   = document.getElementById('lf-date').value;
+  const start  = document.getElementById('lf-start').value;
+  const end    = document.getElementById('lf-end').value;
+  const reason = document.getElementById('lf-reason').value.trim();
+  const box    = document.getElementById('lf-calc');
+  const hours  = box?.dataset.hours;
+  const days   = box?.dataset.days;
+  if (!date) { toast('請選擇請假日期', 'red'); return; }
+  if (!start || !end) { toast('請填寫開始與結束時間', 'red'); return; }
+  if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
+  const F = CONFIG.FID.L;
+  const photoFile = document.getElementById('lf-photo')?.files?.[0];
+  const fields = {
+    [F.email]:      ME.email,
+    [F.name]:       MY_WORKER?.name || ME.name,
+    [F.leave_type]: type,
+    [F.start_date]: date.replace(/-/g,'/'),
+    [F.start_time]: start,
+    [F.end_time]:   end,
+    [F.hours]:      hours,
+    [F.days]:       days,
+    [F.reason]:     reason,
+    [F.apply_time]: fmtDateTime(new Date()),  // 以最後送出時間為準
+    [F.status]:     'pending'
+  };
+  const editing = !!_LF_EDIT_ID;
+  try {
+    let ragicId;
+    if (editing) {
+      await ragicPost(CONFIG.SHEETS.LEAVES + '/' + _LF_EDIT_ID, fields);
+      ragicId = _LF_EDIT_ID;
+    } else {
+      ragicId = await ragicPost(CONFIG.SHEETS.LEAVES, fields);
+    }
+    if (photoFile && ragicId && CONFIG.FID.L.photo) {
+      toast('上傳照片中…', 'green');
+      await uploadLeavePhoto(ragicId, photoFile);
+    }
+    _LF_EDIT_ID = null;
+    closeModal(); toast(editing ? '已更新 ✓' : '請假申請已送出 ✓', 'green'); viewLeave();
+  } catch(e) { toast('送出失敗：' + e.message, 'red'); }
+}
+
+function showLeaveApproval(ragicId) {
+  openModal(`
+    <div class="modal-title">審核請假申請</div>
+    <div class="ff"><label>駁回原因（核准可留空）</label>
+      ${rejectPresetBtns('la-note')}
+      <textarea id="la-note" rows="3" placeholder="選填，駁回時請填寫原因"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" style="background:#ea4335" onclick="doLeaveReview(${ragicId},'rejected')">駁回</button>
+      <button class="btn" onclick="doLeaveReview(${ragicId},'approved')">核准</button>
+    </div>`, true);
+}
+
+async function doLeaveReview(ragicId, decision) {
+  const note = document.getElementById('la-note')?.value.trim() || '';
+  if (decision === 'rejected' && !note) { toast('請填寫駁回原因', 'red'); return; }
+  const F = CONFIG.FID.L;
+  try {
+    await ragicPost(CONFIG.SHEETS.LEAVES + '/' + ragicId, {
+      [F.status]:      decision,
+      [F.reviewed_by]: ME.email,
+      [F.reviewed_at]: fmtDateTime(new Date()),
+      [F.reject_note]: note
+    });
+    closeModal(); toast(decision === 'approved' ? '已核准 ✓' : '已駁回', 'green'); viewAdminLeave();
+  } catch(e) { toast('審核失敗：' + e.message, 'red'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  加班 / 補休（正職員工）
+// ═══════════════════════════════════════════════════════════════════════
+
+const OT_TYPES = ['加班','補休'];
+let _MY_OT = [];
+let _OF_SHIFT = null, _OF_EDIT_ID = null;
+
+function parseOtRec(r) {
+  const F = CONFIG.FID.O;
+  return {
+    ragicId:     r._ragicId,
+    email:       r[F.email]       || '',
+    name:        r[F.name]        || '',
+    ot_type:     r[F.ot_type]     || '',
+    date:        (r[F.date]       || '').slice(0,10).replace(/-/g,'/'),
+    start_time:  stripSec(r[F.start_time]) || '',
+    end_time:    stripSec(r[F.end_time])   || '',
+    hours:       r[F.hours]       || '',
+    reason:      r[F.reason]      || '',
+    apply_time:  r[F.apply_time]  || '',
+    status:      r[F.status]      || 'pending',
+    reviewed_by: r[F.reviewed_by] || '',
+    reviewed_at: r[F.reviewed_at] || '',
+    reject_note: r[F.reject_note] || ''
+  };
+}
+
+async function getMyOt() {
+  const F = CONFIG.FID.O;
+  const all = await ragicGet(CONFIG.SHEETS.OVERTIME, { where:`${F.email},eq,${ME.email}` });
+  return all.map(parseOtRec).filter(o => o.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
+}
+async function getAllOt() {
+  const all = await ragicGet(CONFIG.SHEETS.OVERTIME);
+  return all.map(parseOtRec).filter(o => o.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
+}
+
+function minToStr(m) { return `${pad(Math.floor(m/60))}:${pad(m%60)}`; }
+// 加班時數：單純 end−start，不扣午休（午休加班是真的在工作）
+function calcRawHours(s, e) {
+  if (!s || !e) return 0;
+  const m = toMin(e) - toMin(s);
+  return m > 0 ? Math.round(m / 60 * 100) / 100 : 0;
+}
+
+// 依類型渲染快捷按鈕：加班=早晨/中午/下午，補休=整天/上午/下午/零計
+function renderOtPresets() {
+  const type = document.getElementById('of-type')?.value;
+  const box = document.getElementById('of-presets');
+  if (!box) return;
+  if (type === '加班') {
+    box.innerHTML =
+      `<button type="button" class="btn-quick" onclick="pickOtPreset('morning')">早晨</button>
+       <button type="button" class="btn-quick" onclick="pickOtPreset('noon')">中午</button>
+       <button type="button" class="btn-quick" onclick="pickOtPreset('evening')">下午</button>`;
+  } else {
+    box.innerHTML =
+      `<button type="button" class="btn-quick" onclick="pickOtPreset('full')">整天</button>
+       <button type="button" class="btn-quick" onclick="pickOtPreset('am')">上午</button>
+       <button type="button" class="btn-quick" onclick="pickOtPreset('pm')">下午</button>
+       <button type="button" class="btn-quick" onclick="pickOtPreset('custom')">零計</button>`;
+  }
+}
+
+// 補休餘額：已核准加班時數 − 已核准補休時數
+function calcOtBalance(records) {
+  let bal = 0;
+  records.forEach(o => {
+    if (o.status !== 'approved') return;
+    const h = parseFloat(o.hours) || 0;
+    if (o.ot_type === '加班') bal += h;
+    else if (o.ot_type === '補休') bal -= h;
+  });
+  return Math.round(bal * 100) / 100;
+}
+
+function buildOtCard(ot, isAdmin) {
+  const stCls = { pending:'st-pending', approved:'st-approved', rejected:'st-rejected' }[ot.status] || '';
+  const stBadge = `<span class="b-${ot.status}">${LEAVE_STATUS[ot.status] || ot.status}</span>`;
+  const nameTag = isAdmin ? `<span class="leave-name">${escHtml(ot.name)}</span>` : '';
+  const typeColor = ot.ot_type === '加班' ? '#1a73e8' : '#9333ea';
+  const rejectNote = ot.reject_note ? `<div class="leave-note">駁回原因：${escHtml(ot.reject_note)}</div>` : '';
+  const adminBtn = isAdmin && ot.status === 'pending'
+    ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px" onclick="showOtApproval(${ot.ragicId})">審核</button>` : '';
+  const ownerEdit = isAdmin ? '' :
+    ot.status === 'pending'
+      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">編輯</button>`
+      : ot.status === 'rejected'
+      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">重新申請</button>
+         <button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyOt(${ot.ragicId})">取消</button>`
+      : '';
+  const timeRange = (ot.start_time && ot.end_time) ? `${ot.start_time}–${ot.end_time}` : '';
+  const ap = ot.apply_time || '';
+  const applyTxt = ap ? `${addDay(ap)} ${ap.slice(11,16)}` : '—';
+  return `
+    <div class="leave-card ${stCls}">
+      <div class="leave-hd">
+        <div class="leave-hd-left">
+          ${nameTag}
+          <span class="leave-type" style="color:${typeColor}">${ot.ot_type}</span>
+          <span class="leave-date-main">${addDay(ot.date)}${timeRange ? ' '+timeRange : ''}</span>
+        </div>
+        <div class="leave-hd-right">
+          <span class="leave-days">${parseFloat(ot.hours)||0} 小時</span>
+          ${stBadge}${adminBtn}${ownerEdit}
+        </div>
+      </div>
+      <div class="leave-reason">${escHtml(ot.reason)}</div>
+      ${rejectNote}
+      <div class="leave-apply">申請：${applyTxt}</div>
+    </div>`;
+}
+
+function editMyOt(id) { const o = _MY_OT.find(x => x.ragicId === id); if (o) showOtForm(o); }
+
+async function cancelMyOt(id) {
+  if (!confirm('確定取消此次申請？取消後不可復原。')) return;
+  try {
+    await ragicPost(CONFIG.SHEETS.OVERTIME + '/' + id, { [CONFIG.FID.O.status]: 'cancelled' });
+    toast('已取消申請', 'green'); viewOt();
+  } catch(e){ toast('取消失敗：' + e.message, 'red'); }
+}
+
+async function viewOt() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const list = await getMyOt();
+    _MY_OT = list;
+    const bal = calcOtBalance(list);
+    const cards = list.map(o => buildOtCard(o, false)).join('');
+    setView(`<div class="view">
+      <div class="ot-balance">補休餘額　<b>${bal}</b> 小時</div>
+      <button class="btn btn-full" style="margin-bottom:14px" onclick="showOtForm()">＋ 申請加班 / 補休</button>
+      ${cards || '<p style="color:#999;text-align:center;margin-top:30px">尚無申請紀錄</p>'}
+    </div>`);
+  } catch(e){ setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function viewAdminOt() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const list = await getAllOt();
+    const pending = list.filter(o => o.status === 'pending');
+    const others  = list.filter(o => o.status !== 'pending');
+    let h = '<div class="view">';
+    if (pending.length) {
+      h += `<div style="font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:8px">待審核（${pending.length}）</div>`;
+      h += pending.map(o => buildOtCard(o, true)).join('');
+      h += `<div style="height:1px;background:#eee;margin:14px 0"></div>`;
+    }
+    if (others.length) {
+      h += `<div style="font-size:13px;font-weight:600;color:#999;margin-bottom:8px">已處理</div>`;
+      h += others.map(o => buildOtCard(o, true)).join('');
+    }
+    if (!list.length) h += '<p style="color:#999;text-align:center;margin-top:30px">尚無加班/補休申請</p>';
+    setView(h + '</div>');
+  } catch(e){ setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+function showOtForm(ot) {
+  const editing = !!ot;
+  _OF_EDIT_ID = editing ? ot.ragicId : null;
+  const today = editing ? (ot.date||'').slice(0,10).replace(/\//g,'-') : fmtDate(new Date()).replace(/\//g,'-');
+  const shift = MY_WORKER?.shift || '';
+  _OF_SHIFT = CONFIG.SHIFTS[shift] || { am:['08:30','12:30'], pm:['14:00','18:00'], hours:8 };
+  const bal = calcOtBalance(_MY_OT);
+  openModal(`
+    <div class="modal-title">${editing ? '編輯申請' : '申請加班 / 補休'}</div>
+    <div class="ff"><label>類型</label>
+      <select id="of-type" onchange="renderOtPresets();updateOtCalc()">
+        ${OT_TYPES.map(t => `<option ${editing && ot.ot_type===t ? 'selected':''}>${t}</option>`).join('')}
+      </select>
+      <div style="font-size:11px;color:#999;margin-top:4px">補休餘額：${bal} 小時（加班核准後累積，補休核准後扣除）</div>
+    </div>
+    <div class="ff"><label>日期</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="date" id="of-date" value="${today}" onchange="updateOtDay()" style="width:auto">
+        <span id="of-date-day" style="color:#1a73e8;font-size:16px;font-weight:700"></span>
+      </div>
+    </div>
+    <div class="ff"><label>快捷時段</label>
+      <div id="of-presets" style="display:flex;gap:6px"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <div class="ff" style="flex:1"><label>開始時間（24h）</label>
+        <input type="text" id="of-start" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="fmtTimeInput(this);updateOtCalc()"></div>
+      <div class="ff" style="flex:1"><label>結束時間（24h）</label>
+        <input type="text" id="of-end" inputmode="numeric" maxlength="5" placeholder="20:00" oninput="fmtTimeInput(this);updateOtCalc()"></div>
+    </div>
+    <div id="of-calc" style="background:#f1f3f4;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px">請填寫時間</div>
+    <div class="ff"><label>原因</label>
+      <textarea id="of-reason" rows="3" placeholder="請填寫加班 / 補休原因">${editing ? escHtml(ot.reason) : ''}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveOt()">${editing ? '更新並重新送審' : '送出申請'}</button>
+    </div>`, true);
+  updateOtDay();
+  renderOtPresets();
+  if (editing) {
+    document.getElementById('of-start').value = ot.start_time || '';
+    document.getElementById('of-end').value   = ot.end_time   || '';
+  }
+  updateOtCalc();
+}
+
+function updateOtDay() {
+  const v = document.getElementById('of-date')?.value, span = document.getElementById('of-date-day');
+  if (v && span) { const d = ['日','一','二','三','四','五','六']; span.textContent = `(${d[new Date(v).getDay()]})`; }
+}
+function pickOtPreset(kind) {
+  const sh = _OF_SHIFT || { am:['08:30','12:30'], pm:['14:00','18:00'] };
+  const s = document.getElementById('of-start'), e = document.getElementById('of-end');
+  // 加班時段
+  if (kind === 'morning')      { s.value = minToStr(toMin(sh.am[0]) - 60); e.value = sh.am[0]; }  // 上班前1小時
+  else if (kind === 'noon')    { s.value = sh.am[1]; e.value = sh.pm[0]; }                        // 午休 12:30–14:00
+  else if (kind === 'evening') { s.value = sh.pm[1]; e.value = minToStr(toMin(sh.pm[1]) + 30); }  // 下班後
+  // 補休時段
+  else if (kind === 'full')    { s.value = sh.am[0]; e.value = sh.pm[1]; }
+  else if (kind === 'am')      { s.value = sh.am[0]; e.value = sh.am[1]; }
+  else if (kind === 'pm')      { s.value = sh.pm[0]; e.value = sh.pm[1]; }
+  else                         { s.value = ''; e.value = ''; }
+  updateOtCalc();
+}
+function updateOtCalc() {
+  const s = document.getElementById('of-start')?.value, e = document.getElementById('of-end')?.value;
+  const box = document.getElementById('of-calc'); if (!box) return;
+  const type = document.getElementById('of-type')?.value;
+  // 加班不扣午休；補休扣午休
+  const hrs = type === '加班' ? calcRawHours(s, e) : calcLeaveHours(s, e);
+  if (!hrs) { box.textContent = (s && e) ? '⚠️ 時間區間無效' : '請填寫時間'; box.dataset.hours = ''; return; }
+  let msg = `本次 <b>${hrs}</b> 小時`;
+  if (type === '補休') {
+    const bal = calcOtBalance(_MY_OT);
+    msg += `（補休餘額 ${bal} 小時）`;
+    if (!Number.isInteger(hrs)) msg += ` <span style="color:#ea4335">需整數小時</span>`;
+    else if (hrs > bal) msg += ` <span style="color:#ea4335">超過餘額！</span>`;
+  }
+  box.innerHTML = msg; box.dataset.hours = hrs;
+}
+async function saveOt() {
+  const type   = document.getElementById('of-type').value;
+  const date   = document.getElementById('of-date').value;
+  const start  = document.getElementById('of-start').value;
+  const end    = document.getElementById('of-end').value;
+  const reason = document.getElementById('of-reason').value.trim();
+  const hours  = document.getElementById('of-calc')?.dataset.hours;
+  if (!date) { toast('請選擇日期', 'red'); return; }
+  if (!start || !end) { toast('請填寫時間', 'red'); return; }
+  if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
+  if (type === '補休') {
+    if (!Number.isInteger(Number(hours))) {
+      toast('補休需以整數小時為單位申請（例如 1、2、3 小時）', 'red'); return;
+    }
+    if (Number(hours) > calcOtBalance(_MY_OT)) {
+      toast(`補休時數超過餘額（${calcOtBalance(_MY_OT)} 小時）`, 'red'); return;
+    }
+  }
+  const F = CONFIG.FID.O;
+  const fields = {
+    [F.email]:      ME.email,
+    [F.name]:       MY_WORKER?.name || ME.name,
+    [F.ot_type]:    type,
+    [F.date]:       date.replace(/-/g,'/'),
+    [F.start_time]: start,
+    [F.end_time]:   end,
+    [F.hours]:      hours,
+    [F.reason]:     reason,
+    [F.apply_time]: fmtDateTime(new Date()),
+    [F.status]:     'pending'
+  };
+  const editing = !!_OF_EDIT_ID;
+  try {
+    if (editing) await ragicPost(CONFIG.SHEETS.OVERTIME + '/' + _OF_EDIT_ID, fields);
+    else         await ragicPost(CONFIG.SHEETS.OVERTIME, fields);
+    _OF_EDIT_ID = null;
+    closeModal(); toast(editing ? '已更新 ✓' : '申請已送出 ✓', 'green'); viewOt();
+  } catch(e){ toast('送出失敗：' + e.message, 'red'); }
+}
+function showOtApproval(id) {
+  openModal(`
+    <div class="modal-title">審核加班 / 補休</div>
+    <div class="ff"><label>駁回原因（核准可留空）</label>
+      ${rejectPresetBtns('oa-note')}
+      <textarea id="oa-note" rows="3" placeholder="駁回時請填寫原因"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" style="background:#ea4335" onclick="doOtReview(${id},'rejected')">駁回</button>
+      <button class="btn" onclick="doOtReview(${id},'approved')">核准</button>
+    </div>`, true);
+}
+async function doOtReview(id, decision) {
+  const note = document.getElementById('oa-note')?.value.trim() || '';
+  if (decision === 'rejected' && !note) { toast('請填寫駁回原因', 'red'); return; }
+  const F = CONFIG.FID.O;
+  try {
+    await ragicPost(CONFIG.SHEETS.OVERTIME + '/' + id, {
+      [F.status]:      decision,
+      [F.reviewed_by]: ME.email,
+      [F.reviewed_at]: fmtDateTime(new Date()),
+      [F.reject_note]: note
+    });
+    closeModal(); toast(decision === 'approved' ? '已核准 ✓' : '已駁回', 'green'); viewAdminOt();
+  } catch(e){ toast('審核失敗：' + e.message, 'red'); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  ANNOUNCEMENTS
+// ═══════════════════════════════════════════════════════════════════════
+
+async function getAllAnnouncements() {
+  const all = await ragicGet(CONFIG.SHEETS.ANNOUNCE);
+  const F = CONFIG.FID.A;
+  return all
+    .map(r => ({
+      ragicId:   r._ragicId,
+      title:     r[F.title]     || '',
+      content:   r[F.content]   || '',
+      pub_date:  r[F.pub_date]  || '',
+      priority:  r[F.priority]  || '一般',
+      publisher: r[F.publisher] || '',
+      read_by:   r[F.read_by]   || ''
+    }))
+    .sort((a, b) => (b.pub_date > a.pub_date ? 1 : -1));
+}
+
+function buildAnnCard(ann, isAdmin) {
+  const pri = ann.priority || '一般';
+  const isRead = ann.read_by.split(',').map(s => s.trim()).includes(ME.email);
+  const readBtn = isRead
+    ? `<span class="read-tag">✓ 已閱覽</span>`
+    : `<button class="btn-read" onclick="markAnnouncementRead(${ann.ragicId},this)">標記已閱覽</button>`;
+  const adminBtns = isAdmin
+    ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px" onclick="showAnnForm(${ann.ragicId})">編輯</button>`
+    : '';
+  const uid = `ann-${ann.ragicId}`;
+  return `
+    <div class="ann-card pri-${pri}${isRead ? ' read' : ''}" id="${uid}">
+      <div class="ann-hd">
+        <span class="ann-badge pri-${pri}">${pri}</span>
+        <div class="ann-title">${escHtml(ann.title)}</div>
+        <span class="ann-date-right">${addDay(ann.pub_date)} ‧ 發布</span>
+      </div>
+      <div class="ann-content collapsed" id="${uid}-body">${escHtml(ann.content)}</div>
+      <div class="ann-footer">
+        <button class="btn-expand" id="${uid}-toggle" onclick="toggleAnnContent('${uid}')">▼ 展開全文</button>
+        <div style="display:flex;gap:8px;align-items:center">${readBtn}${adminBtns}</div>
+      </div>
+    </div>`;
+}
+
+function toggleAnnContent(uid) {
+  const body = document.getElementById(uid + '-body');
+  const btn  = document.getElementById(uid + '-toggle');
+  if (!body) return;
+  const collapsed = body.classList.toggle('collapsed');
+  btn.textContent = collapsed ? '▼ 展開全文' : '▲ 收合';
+}
+
+async function viewAnnounce() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const anns = await getAllAnnouncements();
+    if (!anns.length) {
+      setView('<div class="view"><p style="color:#999;text-align:center;margin-top:40px">目前沒有公告</p></div>');
+      return;
+    }
+    setView(`<div class="view"><div class="ann-list">${anns.map(a => buildAnnCard(a, false)).join('')}</div></div>`);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function viewAdminAnnounce() {
+  setView('<div class="loading">載入中…</div>');
+  try {
+    const anns = await getAllAnnouncements();
+    const list = anns.map(a => buildAnnCard(a, true)).join('');
+    setView(`<div class="view">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn" onclick="showAnnForm()">＋ 新增公告</button>
+      </div>
+      <div class="ann-list">${list || '<p style="color:#999;text-align:center">尚無公告</p>'}</div>
+    </div>`);
+  } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+async function markAnnouncementRead(ragicId, btn) {
+  btn.disabled = true;
+  btn.textContent = '處理中…';
+  try {
+    const F = CONFIG.FID.A;
+    const keyParam = CONFIG.RAGIC_KEY ? `&APIKey=${encodeURIComponent(CONFIG.RAGIC_KEY)}` : '';
+    const res = await fetch(`${ragicUrl(CONFIG.SHEETS.ANNOUNCE)}/${ragicId}?api${keyParam}`);
+    const data = await res.json();
+    const rec = Object.values(data).find(r => r && r._ragicId == ragicId);
+    const cur = (rec?.['已閱覽名單'] || '').trim();
+    const emails = cur ? cur.split(',').map(s => s.trim()).filter(Boolean) : [];
+    if (!emails.includes(ME.email)) emails.push(ME.email);
+    await ragicPost(CONFIG.SHEETS.ANNOUNCE + '/' + ragicId, { [F.read_by]: emails.join(',') });
+    const card = document.getElementById('ann-' + ragicId);
+    if (card) {
+      card.classList.add('read');
+      btn.outerHTML = '<span class="read-tag">✓ 已閱覽</span>';
+    }
+  } catch (e) { toast('標記失敗：' + e.message, 'red'); btn.disabled = false; btn.textContent = '標記已閱覽'; }
+}
+
+function showAnnForm(ragicId) {
+  const editing = ragicId != null;
+  // 編輯時從 DOM 取現有資料（已渲染在卡片上）
+  const card = editing ? document.getElementById('ann-' + ragicId) : null;
+  const curTitle   = card ? card.querySelector('.ann-title').textContent.trim() : '';
+  const curContent = card ? card.querySelector('.ann-content').textContent.trim() : '';
+  const curDate    = card ? card.querySelector('.ann-meta').textContent.split(' ')[0] : fmtDate(new Date());
+  const curPri     = card ? (card.classList.contains('pri-緊急') ? '緊急' : card.classList.contains('pri-重要') ? '重要' : '一般') : '一般';
+
+  openModal(`
+    <div class="modal-title">${editing ? '編輯公告' : '新增公告'}</div>
+    <div class="ff"><label>標題 *</label>
+      <input id="af-title" value="${escAttr(curTitle)}" placeholder="公告標題"></div>
+    <div class="ff"><label>內容</label>
+      <textarea id="af-content" rows="5">${escHtml(curContent)}</textarea></div>
+    <div class="ff"><label>發布日期</label>
+      <input type="date" id="af-date" value="${curDate}"></div>
+    <div class="ff"><label>重要程度</label>
+      <select id="af-pri">
+        <option${curPri==='一般'?' selected':''}>一般</option>
+        <option${curPri==='重要'?' selected':''}>重要</option>
+        <option${curPri==='緊急'?' selected':''}>緊急</option>
+      </select></div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="saveAnnouncement(${editing ? ragicId : 'null'})">儲存</button>
+    </div>`, true);
+}
+
+async function saveAnnouncement(ragicId) {
+  const title   = document.getElementById('af-title').value.trim();
+  const content = document.getElementById('af-content').value.trim();
+  const date    = document.getElementById('af-date').value.replace(/-/g, '/');
+  const pri     = document.getElementById('af-pri').value;
+  if (!title) { toast('請填寫標題', 'red'); return; }
+
+  const F = CONFIG.FID.A;
+  const fields = {
+    [F.title]:     title,
+    [F.content]:   content,
+    [F.pub_date]:  date,
+    [F.priority]:  pri,
+    [F.publisher]: ME.name || ME.email
+  };
+
+  try {
+    const sheet = ragicId != null
+      ? CONFIG.SHEETS.ANNOUNCE + '/' + ragicId
+      : CONFIG.SHEETS.ANNOUNCE;
+    await ragicPost(sheet, fields);
+    closeModal();
+    toast('公告已儲存 ✓', 'green');
+    viewAdminAnnounce();
+  } catch (e) { toast('儲存失敗：' + e.message, 'red'); }
+}
+
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) { return escHtml(s); }
+
+// ═══════════════════════════════════════════════════════════════════════
+//  MODAL + TOAST + UTILS
+// ═══════════════════════════════════════════════════════════════════════
+
+function setView(html) { document.getElementById('view').innerHTML = html; }
+
+function openModal(html, center) {
+  document.getElementById('modal-box').innerHTML = html;
+  const bg = document.getElementById('modal-bg');
+  bg.classList.toggle('center', !!center);
+  bg.classList.add('open');
+}
+
+function closeModal() {
+  const bg = document.getElementById('modal-bg');
+  bg.classList.remove('open', 'center');
+}
+
+function onOverlayClick(e) {
+  if (e.target === document.getElementById('modal-bg')) closeModal();
+}
+
+function toast(msg, type) {
+  let el = document.getElementById('toast');
+  if (el) el.remove();
+  el = document.createElement('div');
+  el.id = 'toast';
+  el.textContent = msg;
+  el.style.background = type === 'red' ? '#ea4335' : '#34a853';
+  document.body.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+</script>
+<script src="https://accounts.google.com/gsi/client" onload="gsiReady()" async defer></script>
+</body>
+</html>
