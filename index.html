@@ -194,7 +194,10 @@
     .kpi-light.green,.kpi-health.green{background:#e6f4ea;color:#137333}
     .kpi-light.yellow,.kpi-health.yellow{background:#fef7e0;color:#b06000}
     .kpi-light.red,.kpi-health.red{background:#fce8e6;color:#c5221f}
-    .rpt-warn{background:#fff3e0;color:#b06000;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-bottom:10px}
+    .rpt-warn{background:#fff3e0;color:#b06000;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-bottom:10px;line-height:1.7}
+    .sp-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+    .sp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f8f9fa;border-radius:8px;padding:8px 12px;font-size:13px}
+    .sp-del{background:#fce8e6;color:#ea4335;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0}
     .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
     .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
     .btn-quick:hover{background:#d2e3fc}
@@ -271,7 +274,8 @@ const CONFIG = {
     REQUESTS: 'check-in-system/4',
     ANNOUNCE: 'check-in-system/5',
     LEAVES:   'check-in-system/6',
-    OVERTIME: 'check-in-system/8'
+    OVERTIME: 'check-in-system/8',
+    SPECIAL:  'check-in-system/9'
   },
 
   // POST / WHERE 必須用數字 ID；GET 回傳中文名，由 FNAME_MAP 轉換
@@ -358,6 +362,12 @@ const CONFIG = {
       reviewed_by: 1002936,
       reviewed_at: 1002937,
       reject_note: 1002938
+    },
+    S: {
+      date: 1002941,
+      type: 1002942,
+      paid: 1002943,
+      note: 1002944
     }
   },
 
@@ -417,6 +427,9 @@ const FNAME_MAP = {
     'Email':1002926,'姓名':1002927,'類型':1002928,'日期':1002929,
     '開始時間':1002930,'結束時間':1002931,'時數':1002932,'原因':1002933,
     '申請時間':1002934,'審核狀態':1002935,'審核者':1002936,'審核時間':1002937,'駁回原因':1002938
+  },
+  'check-in-system/9': {
+    '日期':1002941,'類型':1002942,'是否支薪':1002943,'說明':1002944
   }
 };
 
@@ -796,9 +809,10 @@ async function loadMyKPI() {
     const now = new Date();
     const year = now.getFullYear(), month = now.getMonth() + 1;
     const ym = `${year}/${pad(month)}`;
-    const [myRecs, allInc, myLeaves] = await Promise.all([
-      getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves()
+    const [myRecs, allInc, myLeaves, specialDays] = await Promise.all([
+      getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves(), getSpecialDays()
     ]);
+    const specialSet = new Set(specialDays.map(s => s.date));
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
     let lateCnt = 0, lateMin = 0, earlyCnt = 0;
@@ -813,7 +827,7 @@ async function loadMyKPI() {
     const sickCnt = appr.filter(l => l.leave_type === '病假').length;
     const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
     const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
-    const ab = isFull ? analyzeAbsence(MY_WORKER, myRecs, myLeaves, year, month) : { confirmed: 0, pending: [] };
+    const ab = isFull ? analyzeAbsence(MY_WORKER, myRecs, myLeaves, year, month, specialSet) : { confirmed: 0, pending: [] };
     const absent = ab.confirmed;
     const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, lateMin, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
     box.innerHTML = `
@@ -1505,8 +1519,63 @@ let _RPT = null;  // 月報資料快取，供明細彈窗使用
 // ─── 出勤 KPI（即時算，不另存表）────────────────────────────────────────────────
 const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
 
-// 曠職分析：逐日掃應出勤工作日，缺席(無打卡無請假)且過 72hr 沒補單 → 確定曠職；未過 → 待補單(警告)
-function analyzeAbsence(worker, recs, leaves, year, month) {
+// 特殊日（國定假/颱風/全特休）：該日不計缺席
+async function getSpecialDays() {
+  const F = CONFIG.FID.S;
+  const all = await ragicGet(CONFIG.SHEETS.SPECIAL);
+  return all.map(r => ({
+    ragicId: r._ragicId,
+    date: (r[F.date] || '').slice(0, 10).replace(/-/g, '/'),
+    type: r[F.type] || '',
+    paid: r[F.paid] || '',
+    note: r[F.note] || ''
+  })).filter(s => s.date).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+async function showSpecialDays() {
+  openModal('<div class="loading">載入中…</div>', true);
+  const days = await getSpecialDays();
+  const list = days.length ? days.map(s => `
+    <div class="sp-row">
+      <span>${addDay(s.date)}　<b>${escHtml(s.type)}</b>${s.paid === '否' ? '<span style="color:#ea4335"> (不支薪)</span>' : ''}　<span style="color:#888">${escHtml(s.note)}</span></span>
+      <button class="sp-del" onclick="delSpecialDay(${s.ragicId})">刪除</button>
+    </div>`).join('') : '<p style="color:#999;text-align:center">尚無特殊日</p>';
+  openModal(`
+    <div class="modal-title">📅 特殊日設定</div>
+    <div style="font-size:12px;color:#999;margin-bottom:12px">設定的日期不計缺席、不影響全勤；颱風假可標記不支薪。</div>
+    <div class="ff"><label>日期</label><input type="date" id="sp-date"></div>
+    <div class="ff"><label>類型</label><select id="sp-type"><option>國定假日</option><option>颱風假</option><option>全體特休</option><option>其他</option></select></div>
+    <div class="ff"><label>是否支薪</label><select id="sp-paid"><option>是</option><option>否</option></select></div>
+    <div class="ff"><label>說明</label><input id="sp-note" placeholder="例：中秋節、海葵颱風"></div>
+    <button class="btn btn-full" onclick="saveSpecialDay()" style="margin-bottom:14px">＋ 新增特殊日</button>
+    <div class="sp-list">${list}</div>
+    <div class="modal-actions"><button class="btn btn-gray" onclick="closeModal()">關閉</button></div>
+  `, true);
+}
+async function saveSpecialDay() {
+  const date = document.getElementById('sp-date').value;
+  if (!date) { toast('請選擇日期', 'red'); return; }
+  const F = CONFIG.FID.S;
+  try {
+    await ragicPost(CONFIG.SHEETS.SPECIAL, {
+      [F.date]: date.replace(/-/g, '/'),
+      [F.type]: document.getElementById('sp-type').value,
+      [F.paid]: document.getElementById('sp-paid').value,
+      [F.note]: document.getElementById('sp-note').value.trim()
+    });
+    toast('已新增特殊日 ✓', 'green'); showSpecialDays();
+  } catch (e) { toast('新增失敗：' + e.message, 'red'); }
+}
+async function delSpecialDay(id) {
+  if (!confirm('確定刪除此特殊日？')) return;
+  try {
+    await ragicPost(CONFIG.SHEETS.SPECIAL + '/' + id, { [CONFIG.FID.S.date]: '' });  // 清空日期=軟刪除
+    toast('已刪除', 'green'); showSpecialDays();
+  } catch (e) { toast('刪除失敗：' + e.message, 'red'); }
+}
+
+// 曠職分析：逐日掃應出勤工作日，缺席(無打卡無請假無特殊日)且過 30hr 沒補單 → 曠職；未過 → 待補單
+function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
   const now = new Date();
   const dim = new Date(year, month, 0).getDate();
   const ym = `${year}/${pad(month)}`;
@@ -1526,6 +1595,7 @@ function analyzeAbsence(worker, recs, leaves, year, month) {
     if (dt > now) continue;                                            // 未來
     if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
     const ds = `${ym}/${pad(d)}`;
+    if (specialSet && specialSet.has(ds)) continue;                    // 特殊日(國定假/颱風/全特休)不計缺席
     if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有打卡或有請假
     const elapsed = (now - dt) / 3600000;
     if (elapsed > 30) confirmed++;                                     // 過 30hr 未補單 → 曠職
@@ -1620,9 +1690,11 @@ async function viewReport() {
     const leaves = await getAllLeaves();
     const otAll  = await getAllOt();
     const incomplete = await getIncompleteRecs(CUR_YEAR, CUR_MONTH + 1);
+    const specialDays = await getSpecialDays();
+    const specialSet = new Set(specialDays.map(s => s.date));
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
-    _RPT = { recs, leaves, otAll, incomplete, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays };
+    _RPT = { recs, leaves, otAll, incomplete, specialSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays };
 
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
@@ -1660,7 +1732,7 @@ async function viewReport() {
       const pendingCnt = leaves.filter(l => l.email === w.email && l.status === 'pending' && (l.start_date || '').startsWith(ym)).length;
 
       // 曠職（正職）：逐日分析，過 72hr 未補單才算；緩衝期內列待補單
-      const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1) : { confirmed: 0, pending: [] };
+      const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialSet) : { confirmed: 0, pending: [] };
       const absent = ab.confirmed;
       const pendingAbsent = ab.pending.length;
       // ── 勞基法薪資計算 ──
@@ -1743,7 +1815,7 @@ function showReportDetail(email) {
   if (!_RPT) return;
   const w = (WORKERS || []).find(x => x.email === email);
   if (!w) return;
-  const { recs, leaves, otAll, incomplete, ym, year, month, workDays } = _RPT;
+  const { recs, leaves, otAll, incomplete, specialSet, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
   const sh = CONFIG.SHIFTS[w.shift];
   const shHours = sh ? sh.hours : 8;
@@ -1796,7 +1868,7 @@ function showReportDetail(email) {
   // 薪資彙整
   const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
   const attendDays = new Set(wr.map(r => r.date)).size;
-  const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month) : { confirmed: 0, pending: [] };
+  const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month, specialSet) : { confirmed: 0, pending: [] };
   const absent = ab.confirmed;
   const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
   const leaveDeduct = calcLeaveDeduct(appr, hourly);
@@ -1918,10 +1990,12 @@ async function viewACal() {
     const byDate = {};
     recs.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
 
-    setView(`<div class="view">${monthNav(true)}${buildCal(byDate, rec => {
-      const color = (WORKERS.find(w => w.email === rec.email) || {}).color || '#1a73e8';
-      return `<div class="cal-ev" style="border-left-color:${color}" onclick='showAdminRecDetail(${JSON.stringify(rec)})'>${rec.name}</div>`;
-    })}</div>`);
+    setView(`<div class="view">${monthNav(true)}
+      <button class="btn" style="width:100%;margin-bottom:12px;background:#f1f3f4;color:#5f6368" onclick="showSpecialDays()">📅 特殊日設定（國定假/颱風/全特休）</button>
+      ${buildCal(byDate, rec => {
+        const color = (WORKERS.find(w => w.email === rec.email) || {}).color || '#1a73e8';
+        return `<div class="cal-ev" style="border-left-color:${color}" onclick='showAdminRecDetail(${JSON.stringify(rec)})'>${rec.name}</div>`;
+      })}</div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
 }
 
