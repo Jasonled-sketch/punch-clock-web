@@ -821,7 +821,7 @@ async function loadMyKPI() {
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
         <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
       </div>
-      ${ab.pending.length ? `<div class="rpt-warn">⚠️ 缺席尚未補單：${ab.pending.map(p => `${addDay(p.ds)}(剩 ${p.hoursLeft}hr)`).join('、')}，請盡快補請假否則計曠職</div>` : ''}
+      ${ab.pending.length ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
       ${teamLifeHtml(allInc.length)}`;
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
@@ -1528,8 +1528,8 @@ function analyzeAbsence(worker, recs, leaves, year, month) {
     const ds = `${ym}/${pad(d)}`;
     if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有打卡或有請假
     const elapsed = (now - dt) / 3600000;
-    if (elapsed > 72) confirmed++;                                     // 過 72hr 未補單 → 曠職
-    else pending.push({ ds, hoursLeft: Math.max(0, Math.round(72 - elapsed)) });  // 緩衝期 → 待補單+倒數
+    if (elapsed > 30) confirmed++;                                     // 過 30hr 未補單 → 曠職
+    else pending.push({ ds, hoursLeft: Math.max(0, Math.round(30 - elapsed)) });  // 緩衝期 → 待補單+倒數
   }
   return { confirmed, pending };
 }
@@ -1602,7 +1602,7 @@ function showKpiInfo() {
       <div class="rd-row" style="color:#999;margin-top:4px">匿名計算，不公布是誰漏打卡，避免對立</div>
     </div>
     <div class="rd-sec"><div class="rd-title">📌 名詞定義</div>
-      <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假；缺席後給 <b>72hr 補單緩衝</b>，期間顯示「待補單」提醒，超過 72hr 仍未補請假才確定計曠職（−30）</div>
+      <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假；缺席後給 <b>30hr 補單緩衝</b>，期間顯示「待補單」提醒，超過 30hr 仍未補請假才確定計曠職（−30）</div>
       <div class="rd-row"><b>漏打卡</b>：有來上班，但忘了打上班或下班卡</div>
       <div class="rd-row"><b>補單逾期</b>：請假後超過 12hr 才補送假單，每超過 12hr 再扣一次（−5/次）</div>
     </div>
@@ -1710,7 +1710,7 @@ async function viewReport() {
           <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
           <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
         </div>
-        ${pendingAbsent ? `<div class="rpt-warn">⚠️ 缺席待補單：${ab.pending.map(p => `${addDay(p.ds)}(剩 ${p.hoursLeft}hr)`).join('、')}　超過 72hr 未補計曠職</div>` : ''}
+        ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
           ${cell('總時數', `${totH.toFixed(1)} h`)}
@@ -1820,7 +1820,7 @@ function showReportDetail(email) {
     ${section('🔄 補休', compRows, '無補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${section('⚠️ 漏打下班', noOutRows, '無')}
-    ${isFull && ab.pending.length ? section('🟠 缺席待補單（72hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
+    ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     <div class="pay-box" style="margin-top:14px">
