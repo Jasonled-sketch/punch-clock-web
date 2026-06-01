@@ -809,10 +809,11 @@ async function loadMyKPI() {
     const appr = myLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym));
     const urgentCnt = appr.filter(isUrgentLeave).length;
     const personalCnt = appr.filter(l => l.leave_type === '事假').length;
+    const sickCnt = appr.filter(l => l.leave_type === '病假').length;
     const attendDays = new Set(myRecs.map(r => r.date)).size;
     const leaveDays = new Set(appr.map(l => l.start_date)).size;
     const absent = isFull ? Math.max(0, getWorkDays(year, month) - attendDays - leaveDays) : 0;
-    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, earlyCnt, urgentCnt, personalCnt });
+    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, earlyCnt, sickCnt, personalCnt, urgentCnt });
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
@@ -1501,16 +1502,20 @@ let _RPT = null;  // 月報資料快取，供明細彈窗使用
 // ─── 出勤 KPI（即時算，不另存表）────────────────────────────────────────────────
 const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
 
-// 個人全勤燈號 + 出勤健康度（曠職=無故未到，與請假/漏打卡分開）
+// 個人全勤燈號 + 出勤健康度（加分制：基礎 80，疏失才扣、沒請假給獎勵，避免勞資爭議）
 function calcAttendanceKPI(p) {
-  const { absent = 0, noClockOut = 0, lateCnt = 0, earlyCnt = 0, urgentCnt = 0, personalCnt = 0 } = p;
+  const { absent = 0, noClockOut = 0, lateCnt = 0, earlyCnt = 0, sickCnt = 0, personalCnt = 0, urgentCnt = 0 } = p;
   let light, lightLabel;
   if (absent >= 1 || noClockOut >= 3) { light = 'red';    lightLabel = '全勤失效'; }
   else if (noClockOut >= 1)           { light = 'yellow'; lightLabel = '留意'; }
   else                                { light = 'green';  lightLabel = '全勤'; }
-  // 重罰只給曠職/漏打卡；請假類輕扣或不扣，避免驟降
-  const health = Math.max(0,
-    100 - absent * 15 - noClockOut * 5 - lateCnt * 2 - earlyCnt * 2 - urgentCnt * 3 - personalCnt * 1);
+  // 基礎 80；無請假給獎勵（最高 +20 → 100）；疏失扣分（不涉勞基法權利）
+  let health = 80;
+  if (urgentCnt === 0)   health += 6;  // 本月無臨時假
+  if (personalCnt === 0) health += 7;  // 本月無事假
+  if (sickCnt === 0)     health += 7;  // 本月無病假
+  health -= absent * 15 + noClockOut * 5 + lateCnt * 2 + earlyCnt * 2;
+  health = Math.max(0, Math.min(100, health));
   const hColor = health >= 90 ? 'green' : health >= 80 ? 'yellow' : 'red';
   return { light, lightLabel, health, hColor };
 }
@@ -1537,14 +1542,16 @@ function showKpiInfo() {
       <div class="rd-row">🟡 留意：漏打卡 1~2 次</div>
       <div class="rd-row">🔴 失效：曠職 ≥1 天 或 漏打卡 ≥3 次</div>
     </div>
-    <div class="rd-sec"><div class="rd-title">💯 出勤健康度（每月 100 分起）</div>
+    <div class="rd-sec"><div class="rd-title">💯 出勤健康度（基礎 80 分・加分制）</div>
+      <div class="rd-row" style="color:#137333">＝ 加分（沒請假的獎勵，請假是權利不扣分）＝</div>
+      <div class="rd-row">本月無臨時假　+6 分</div>
+      <div class="rd-row">本月無事假　　+7 分</div>
+      <div class="rd-row">本月無病假　　+7 分　（全達 → 100 分）</div>
+      <div class="rd-row" style="color:#c5221f;margin-top:6px">＝ 扣分（紀律疏失，與請假權利無關）＝</div>
       <div class="rd-row">曠職　　−15 分／天</div>
       <div class="rd-row">漏打卡　−5 分／次</div>
       <div class="rd-row">遲到　　−2 分／次　・　早退 −2 分／次</div>
-      <div class="rd-row">臨時假　−3 分／次（僅提醒）</div>
-      <div class="rd-row">事假　　−1 分／次</div>
-      <div class="rd-row">病假・特休・公假：<b>不扣分</b>（正當權利）</div>
-      <div class="rd-row" style="color:#999;margin-top:4px">90+ 🟢穩定　80~89 🟡留意　80 以下 🔴異常</div>
+      <div class="rd-row" style="color:#999;margin-top:6px">病假・事假・特休・公假本身<b>不扣分</b>；90+ 🟢　80~89 🟡　80 以下 🔴</div>
     </div>
     <div class="rd-sec"><div class="rd-title">❤️ 團隊生命值</div>
       <div class="rd-row">每月 ❤️❤️❤️ 三顆愛心</div>
@@ -1633,7 +1640,8 @@ async function viewReport() {
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
-      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, earlyCnt, urgentCnt, personalCnt });
+      const sickCnt = appr.filter(l => l.leave_type === '病假').length;
+      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, earlyCnt, sickCnt, personalCnt, urgentCnt });
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
