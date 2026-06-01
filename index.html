@@ -198,6 +198,8 @@
     .sp-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
     .sp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f8f9fa;border-radius:8px;padding:8px 12px;font-size:13px}
     .sp-del{background:#fce8e6;color:#ea4335;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0}
+    .lock-bar{margin-bottom:12px;text-align:right}
+    .lock-on{font-size:13px;color:#137333;font-weight:600;background:#e6f4ea;border-radius:8px;padding:6px 12px;display:inline-block}
     .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
     .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
     .btn-quick:hover{background:#d2e3fc}
@@ -233,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -275,7 +277,8 @@ const CONFIG = {
     ANNOUNCE: 'check-in-system/5',
     LEAVES:   'check-in-system/6',
     OVERTIME: 'check-in-system/8',
-    SPECIAL:  'check-in-system/9'
+    SPECIAL:  'check-in-system/9',
+    PAYROLL:  'check-in-system/10'
   },
 
   // POST / WHERE 必須用數字 ID；GET 回傳中文名，由 FNAME_MAP 轉換
@@ -368,6 +371,11 @@ const CONFIG = {
       type: 1002942,
       paid: 1002943,
       note: 1002944
+    },
+    P: {
+      email: 1002946, name: 1002947, ym: 1002948, base: 1002949, ot: 1002950,
+      absentd: 1002951, lated: 1002952, leaved: 1002953, labor: 1002954, health: 1002955,
+      net: 1002956, annual_remain: 1002957, comp_remain: 1002958, locked_at: 1002959, locked_by: 1002960
     }
   },
 
@@ -430,6 +438,11 @@ const FNAME_MAP = {
   },
   'check-in-system/9': {
     '日期':1002941,'類型':1002942,'是否支薪':1002943,'說明':1002944
+  },
+  'check-in-system/10': {
+    'Email':1002946,'姓名':1002947,'年月':1002948,'本薪':1002949,'加班費':1002950,
+    '缺勤扣':1002951,'遲退扣':1002952,'請假扣':1002953,'勞保':1002954,'健保':1002955,
+    '應發薪資':1002956,'特休剩餘':1002957,'補休剩餘':1002958,'鎖定時間':1002959,'鎖定者':1002960
   }
 };
 
@@ -1771,6 +1784,35 @@ function showKpiInfo() {
   `, true);
 }
 
+// ─── 月結鎖定 ─────────────────────────────────────────────────────────────────
+async function getPayrollLocks(ym) {
+  const F = CONFIG.FID.P;
+  const all = await ragicGet(CONFIG.SHEETS.PAYROLL, { where:`${F.ym},eq,${ym}` });
+  return all.map(r => ({ email: r[F.email], net: r[F.net], locked_at: r[F.locked_at], locked_by: r[F.locked_by] }));
+}
+
+async function lockPayroll() {
+  if (!_RPT || !_RPT.payrollRows.length) { toast('無資料可鎖定', 'red'); return; }
+  if (!confirm(`確定鎖定 ${_RPT.ym} 薪資？\n鎖定後該月以此快照為準，事後改打卡不影響已發薪資。`)) return;
+  const F = CONFIG.FID.P;
+  const ym = _RPT.ym;
+  const now = fmtDateTime(new Date());
+  toast('鎖定中…', 'green');
+  try {
+    for (const r of _RPT.payrollRows) {
+      await ragicPost(CONFIG.SHEETS.PAYROLL, {
+        [F.email]: r.email, [F.name]: r.name, [F.ym]: ym,
+        [F.base]: r.base, [F.ot]: r.ot, [F.absentd]: r.absentd, [F.lated]: r.lated,
+        [F.leaved]: r.leaved, [F.labor]: r.labor, [F.health]: r.health, [F.net]: r.net,
+        [F.annual_remain]: r.annualRemain, [F.comp_remain]: r.compRemain,
+        [F.locked_at]: now, [F.locked_by]: ME.email
+      });
+    }
+    toast(`已鎖定 ${ym} 薪資 ✓（${_RPT.payrollRows.length} 人）`, 'green');
+    viewReport();
+  } catch (e) { toast('鎖定失敗：' + e.message, 'red'); }
+}
+
 // ─── Admin: 薪資月報 ───────────────────────────────────────────────────────────
 
 async function viewReport() {
@@ -1787,12 +1829,18 @@ async function viewReport() {
     const specialSet = new Set(specialDays.map(s => s.date));
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
-    _RPT = { recs, leaves, otAll, incomplete, specialSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays };
+    const payrollLocks = await getPayrollLocks(ym);
+    const isLocked = payrollLocks.length > 0;
+    const payrollRows = [];
+    _RPT = { recs, leaves, otAll, incomplete, specialSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
 
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
     h += teamLifeHtml(incomplete.length);  // 團隊生命值（全員漏打卡總數）
+    h += `<div class="lock-bar">${isLocked
+      ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
+      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}</div>`;
 
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
@@ -1849,6 +1897,9 @@ async function viewReport() {
           .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
+      const compRemain = calcOtBalance(otAll.filter(o => o.email === w.email));
+      payrollRows.push({ email: w.email, name: w.name, base, ot: ot.pay, absentd: absentDeduct,
+        lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain });
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
       const sickCnt = appr.filter(l => l.leave_type === '病假').length;
       const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
