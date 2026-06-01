@@ -1555,7 +1555,7 @@ function showKpiInfo() {
       <div class="rd-row" style="color:#c5221f;margin-top:6px">＝ 扣分（紀律疏失，與請假權利無關）＝</div>
       <div class="rd-row">曠職　　　　　　−30 分／天</div>
       <div class="rd-row">漏打卡　　　　　−5 分／次</div>
-      <div class="rd-row">請假逾期（24hr 內才報備）−5 分／次</div>
+      <div class="rd-row">補單逾期（請假後超過 24hr 未補單）−5 分／次</div>
       <div class="rd-row">遲到　−2 分／次　・　早退 −2 分／次</div>
       <div class="rd-row" style="color:#999;margin-top:6px">請假本身<b>不扣分</b>；90+ 🟢　80~89 🟡　80 以下 🔴</div>
     </div>
@@ -2206,13 +2206,13 @@ function isUrgentLeave(lv) {
   return (leaveDt - applyDt) / 3600000 < 72;
 }
 
-// 請假逾期：申請距請假起始不足 24 小時（太晚報備，紀律扣分）
+// 補單逾期：請假事由發生後，超過 24 小時才在系統補送假單（拖延補單，紀律扣分）
 function isOverdueLeave(lv) {
   if (!lv.start_date || !lv.apply_time) return false;
   const leaveDt = new Date(`${lv.start_date} ${lv.start_time || '00:00'}`);
   const applyDt = new Date(lv.apply_time);
   if (isNaN(leaveDt) || isNaN(applyDt)) return false;
-  return (leaveDt - applyDt) / 3600000 < 24;
+  return (applyDt - leaveDt) / 3600000 > 24;  // 補單時間比請假起始晚超過 24hr
 }
 
 function parseLeaveRec(r) {
