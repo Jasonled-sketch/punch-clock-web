@@ -234,7 +234,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -841,50 +841,61 @@ async function loadMyKPI() {
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
 
+// 取「今天」的記錄（含已完成；上下班獨立後一天一筆）
 async function getOpenRec() {
   const F = CONFIG.FID.R;
+  const today = fmtDate(new Date());
   const recs = await ragicGet(CONFIG.SHEETS.RECORDS, { where:`${F.email},eq,${ME.email}` });
-  const open = recs.find(r => !r[F.end_time] && r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted');
-  if (!open) return null;
+  const rec = recs.find(r => r[F.date] === today && r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted');
+  if (!rec) return null;
   return {
-    ragicId: open._ragicId,
-    date: open[F.date],
-    start_time: stripSec(open[F.start_time]),
-    end_time: stripSec(open[F.end_time]),
-    location: open[F.location],
-    breaks_minutes: Number(open[F.breaks_minutes]) || 0,
-    paused_at: open[F.paused_at] || ''
+    ragicId: rec._ragicId,
+    date: rec[F.date],
+    start_time: stripSec(rec[F.start_time]),
+    end_time: stripSec(rec[F.end_time]),
+    location: rec[F.location] || '',
+    breaks_minutes: Number(rec[F.breaks_minutes]) || 0,
+    paused_at: rec[F.paused_at] || '',
+    work_content: rec[F.work_content] || ''
   };
 }
 
+// 狀態：none未打 / work上班中 / break休息 / done已完成 / missin漏打上班(只有下班)
 function getStatus() {
   if (!OPEN_REC) return 'none';
+  if (OPEN_REC.start_time && OPEN_REC.end_time) return 'done';
+  if (!OPEN_REC.start_time && OPEN_REC.end_time) return 'missin';
   if (OPEN_REC.paused_at) return 'break';
   return 'work';
 }
 
 function buildPunchHTML() {
   const s = getStatus();
-  const labels = { none:'未打卡', work:'上班中', break:'休息中' };
-  const cls = { none:'status-none', work:'status-work', break:'status-break' };
+  const labels = { none:'未打卡', work:'上班中', break:'休息中', done:'今日已完成', missin:'⚠️ 漏打上班卡' };
+  const cls = { none:'status-none', work:'status-work', break:'status-break', done:'status-work', missin:'status-none' };
   let h = '<div class="view"><div id="my-kpi"></div>';
 
-  // Status card
   const locDisplay = OPEN_REC ? locName(OPEN_REC.location) : '';
   const gpsVerified = OPEN_REC && parseGPS(OPEN_REC.location);
+  let timeInfo = '';
+  if (OPEN_REC) {
+    if (s === 'done')        timeInfo = `上班 ${OPEN_REC.start_time || '—'} ～ 下班 ${OPEN_REC.end_time}`;
+    else if (s === 'missin') timeInfo = `下班 ${OPEN_REC.end_time}（上班卡漏打，請補打）`;
+    else                     timeInfo = `${OPEN_REC.start_time} 上班打卡`;
+  }
   h += `<div class="card" style="text-align:center">
     <div style="display:flex;justify-content:flex-end">
       <button onclick="showPunchInfo()" style="background:none;border:1px solid #ddd;border-radius:8px;padding:3px 10px;font-size:12px;color:#888;cursor:pointer">？打卡說明</button>
     </div>
     <div class="status-lbl" style="margin-top:6px">目前狀態</div>
     <div class="status-val ${cls[s]}">${labels[s]}</div>
-    ${OPEN_REC ? `<div class="status-time">📍 ${locDisplay}　${addDay(OPEN_REC.date)} ${OPEN_REC.start_time} 打卡</div>` : ''}
-    ${gpsVerified ? `<div style="font-size:12px;color:#34a853;margin-top:4px">✅ GPS 位置已驗證</div>` : (OPEN_REC ? `<div style="font-size:12px;color:#f9ab00;margin-top:4px">⚠️ GPS 未取得（手動確認地點）</div>` : '')}
-    ${s !== 'none' ? '<div class="timer" id="timer">00:00:00</div>' : ''}
+    ${OPEN_REC ? `<div class="status-time">${locDisplay ? '📍 '+locDisplay+'　' : ''}${addDay(OPEN_REC.date)}　${timeInfo}</div>` : ''}
+    ${(s==='work'||s==='break') && gpsVerified ? `<div style="font-size:12px;color:#34a853;margin-top:4px">✅ GPS 位置已驗證</div>` : ((s==='work'||s==='break') ? `<div style="font-size:12px;color:#f9ab00;margin-top:4px">⚠️ GPS 未取得（手動確認地點）</div>` : '')}
+    ${(s === 'work' || s === 'break') ? '<div class="timer" id="timer">00:00:00</div>' : ''}
   </div>`;
 
-  // Location picker
-  if (s === 'none') {
+  // 地點選擇（要打上班卡時：未打卡 或 漏打上班補打）
+  if (s === 'none' || s === 'missin') {
     h += `<div class="card"><div style="font-weight:600;margin-bottom:12px">選擇打卡地點</div>`;
     CONFIG.LOCATIONS.forEach((loc, i) => {
       h += `<button class="loc-btn" id="loc${i}" onclick="selLoc(${i})">
@@ -895,10 +906,14 @@ function buildPunchHTML() {
     h += '</div>';
   }
 
-  // Action buttons
+  // 動作按鈕
   h += '<div class="btn-grid">';
   if (s === 'none') {
     h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>上班打卡</button>`;
+    h += `<button class="btn btn-grey btn-full" onclick="showPunchOutModal()" style="margin-top:8px">下班打卡（上班忘打時用）</button>`;
+  }
+  if (s === 'missin') {
+    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>補打上班卡</button>`;
   }
   if (s === 'work') {
     h += `<button class="btn btn-yellow" onclick="doPause()">開始休息 ☕</button>`;
@@ -907,6 +922,9 @@ function buildPunchHTML() {
   }
   if (s === 'break') {
     h += `<button class="btn btn-green btn-full" onclick="doResume()">結束休息 ▶</button>`;
+  }
+  if (s === 'done') {
+    h += `<div style="text-align:center;color:#34a853;font-size:14px;padding:8px">✅ 今日上下班已完成，辛苦了！</div>`;
   }
   h += '</div></div>';
   return h;
@@ -944,26 +962,27 @@ function selLoc(i) {
 async function doPunchIn() {
   if (!SEL_LOC) return;
   const btn = document.getElementById('btn-in');
+  const origLabel = btn.textContent;
   btn.disabled = true; btn.textContent = '取得位置中…';
   try {
     const F = CONFIG.FID.R;
     const now = new Date();
-    const name = MY_WORKER?.name || ME.name;
-
-    // 嘗試取得 GPS 座標
     const gps = await captureGPS();
     const locStr = gps ? `${SEL_LOC.name} [GPS:${gps.lat},${gps.lng}]` : SEL_LOC.name;
-
-    await ragicPost(CONFIG.SHEETS.RECORDS, {
-      [F.email]: ME.email, [F.name]: name,
-      [F.date]: fmtDate(now), [F.start_time]: fmtHHMM(now),
-      [F.end_time]: '', [F.location]: locStr,
-      [F.breaks_minutes]: '0', [F.paused_at]: '', [F.rec_status]: ''
-    });
-    const gpsMsg = gps ? `　GPS ✓` : `　GPS 未取得`;
-    toast('上班打卡成功！' + fmtHHMM(now) + gpsMsg, 'green');
+    if (OPEN_REC) {
+      // 補打上班（今天已有記錄，如先打了下班）
+      await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, { [F.start_time]: fmtHHMM(now), [F.location]: locStr });
+    } else {
+      await ragicPost(CONFIG.SHEETS.RECORDS, {
+        [F.email]: ME.email, [F.name]: MY_WORKER?.name || ME.name,
+        [F.date]: fmtDate(now), [F.start_time]: fmtHHMM(now),
+        [F.end_time]: '', [F.location]: locStr,
+        [F.breaks_minutes]: '0', [F.paused_at]: '', [F.rec_status]: ''
+      });
+    }
+    toast('上班打卡成功！' + fmtHHMM(now) + (gps ? '　GPS ✓' : '　GPS 未取得'), 'green');
     await viewPunch();
-  } catch (e) { toast('打卡失敗：' + e.message, 'red'); btn.disabled = false; btn.textContent = '上班打卡'; }
+  } catch (e) { toast('打卡失敗：' + e.message, 'red'); btn.disabled = false; btn.textContent = origLabel; }
 }
 
 async function doPause() {
@@ -1046,31 +1065,36 @@ function getWorkContent() {
 async function doPunchOut() {
   const wc = getWorkContent();
   if (!wc) { toast('請填寫至少一項工作內容', 'red'); return; }
-  if (!OPEN_REC) return;
-
   const now = new Date();
-  const todayStr = fmtDate(now);
-  if (todayStr !== OPEN_REC.date) {
-    toast('跨日下班不允許，請申請補登', 'red'); closeModal(); return;
-  }
-
+  const F = CONFIG.FID.R;
   try {
-    const F = CONFIG.FID.R;
-    const startDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.start_time}`);
-    const grossMin = (now - startDt) / 60000;
-    const workMin = grossMin - OPEN_REC.breaks_minutes;
-    const hours = Math.round(workMin / 60 * 100) / 100;
-    const rate = calcRate(OPEN_REC.date, MY_WORKER);
-    const subtotal = Math.round(hours * rate);
-
-    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, {
-      [F.end_time]: fmtHHMM(now),
-      [F.hours]: String(hours),
-      [F.subtotal]: String(subtotal),
-      [F.work_content]: wc
-    });
-    closeModal();
-    toast(`下班打卡成功！${hours}h　$${subtotal}`, 'green');
+    if (OPEN_REC) {
+      if (fmtDate(now) !== OPEN_REC.date) { toast('跨日下班不允許，請申請補登', 'red'); closeModal(); return; }
+      // 有上班時間才算時數薪資；漏打上班則時數 0（待補上班卡後重算）
+      let hours = 0, subtotal = 0;
+      if (OPEN_REC.start_time) {
+        const startDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.start_time}`);
+        const workMin = (now - startDt) / 60000 - OPEN_REC.breaks_minutes;
+        hours = Math.round(workMin / 60 * 100) / 100;
+        subtotal = Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER));
+      }
+      await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, {
+        [F.end_time]: fmtHHMM(now), [F.hours]: String(hours), [F.subtotal]: String(subtotal), [F.work_content]: wc
+      });
+      closeModal();
+      toast(OPEN_REC.start_time ? `下班打卡成功！${hours}h　$${subtotal}` : '已記錄下班，請記得補打上班卡', 'green');
+    } else {
+      // 今天還沒有任何記錄就先打下班 → 建立漏打上班的記錄
+      const gps = await captureGPS();
+      await ragicPost(CONFIG.SHEETS.RECORDS, {
+        [F.email]: ME.email, [F.name]: MY_WORKER?.name || ME.name,
+        [F.date]: fmtDate(now), [F.start_time]: '', [F.end_time]: fmtHHMM(now),
+        [F.location]: gps ? `[GPS:${gps.lat},${gps.lng}]` : '', [F.breaks_minutes]: '0',
+        [F.paused_at]: '', [F.work_content]: wc, [F.rec_status]: ''
+      });
+      closeModal();
+      toast('已記錄下班，請記得補打上班卡（上班漏打）', 'green');
+    }
     await viewPunch();
   } catch (e) { toast('下班失敗：' + e.message, 'red'); }
 }
@@ -1087,7 +1111,7 @@ function calcRate(dateStr, worker) {
 function startTimer() {
   clearInterval(TIMER_IV);
   const el = document.getElementById('timer');
-  if (!el || !OPEN_REC) return;
+  if (!el || !OPEN_REC || !OPEN_REC.start_time || OPEN_REC.end_time) return;  // 只有上班中才計時
   TIMER_IV = setInterval(() => {
     const el2 = document.getElementById('timer');
     if (!el2) { clearInterval(TIMER_IV); return; }
@@ -1349,8 +1373,17 @@ async function getMonthRecsBundle(year, month) {
     hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
     work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
   })).sort((a, b) => a.date.localeCompare(b.date));
-  const incomplete = all.filter(r => r[F.start_time] && !r[F.end_time] && ok(r) && inM(r))
-    .map(r => ({ email: r[F.email], name: r[F.name], date: r[F.date], start_time: stripSec(r[F.start_time]) }));
+  // 漏打卡：缺一段打卡（有上班無下班=漏下班；無上班有下班=漏上班）。今天上班中(有上班無下班且=今天)不算
+  const today = fmtDate(new Date());
+  const incomplete = all.filter(r => {
+    if (!ok(r) || !inM(r)) return false;
+    const hasS = !!r[F.start_time], hasE = !!r[F.end_time];
+    if (hasS === hasE) return false;                         // 都有(完整)或都無(空) → 不算
+    if (hasS && !hasE && r[F.date] === today) return false;  // 今天上班中，還沒到下班 → 不算
+    return true;
+  }).map(r => ({ email: r[F.email], name: r[F.name], date: r[F.date],
+    start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+    miss: r[F.start_time] ? '下班' : '上班' }));
   return { recs, incomplete };
 }
 
@@ -1374,12 +1407,18 @@ async function getAllRecs(year, month) {
 async function getIncompleteRecs(year, month) {
   const F = CONFIG.FID.R;
   const all = await ragicGet(CONFIG.SHEETS.RECORDS);
+  const today = fmtDate(new Date());
   return all.filter(r => {
-    if (!r[F.start_time] || r[F.end_time]) return false;
     if (r[F.rec_status] === 'cancelled' || r[F.rec_status] === 'deleted') return false;
     const [y, m] = (r[F.date] || '').split('/');
-    return Number(y) === year && Number(m) === month;
-  }).map(r => ({ email: r[F.email], name: r[F.name], date: r[F.date], start_time: stripSec(r[F.start_time]) }));
+    if (Number(y) !== year || Number(m) !== month) return false;
+    const hasS = !!r[F.start_time], hasE = !!r[F.end_time];
+    if (hasS === hasE) return false;                          // 完整或空 → 不算漏打卡
+    if (hasS && !hasE && r[F.date] === today) return false;   // 今天上班中 → 不算
+    return true;
+  }).map(r => ({ email: r[F.email], name: r[F.name], date: r[F.date],
+    start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
+    miss: r[F.start_time] ? '下班' : '上班' }));
 }
 
 function chgAMonth(d) {
