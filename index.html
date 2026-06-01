@@ -184,8 +184,10 @@
     .team-life.warn{background:linear-gradient(135deg,#f59e0b,#fbbc04)}
     .team-life.dead{background:linear-gradient(135deg,#ea4335,#c5221f)}
     .tl-hearts{font-size:24px;letter-spacing:2px;white-space:nowrap}
-    .tl-info{font-size:13px;line-height:1.5}
+    .tl-info{font-size:13px;line-height:1.5;flex:1}
     .tl-info b{font-size:16px}
+    .tl-info-btn{flex-shrink:0;background:rgba(255,255,255,.25);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;font-weight:700}
+    .tl-info-btn:hover{background:rgba(255,255,255,.4)}
     /* ── KPI bar ── */
     .rpt-kpi{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
     .kpi-light,.kpi-health{font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px}
@@ -798,15 +800,19 @@ async function loadMyKPI() {
     ]);
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
-    let lateCnt = 0;
-    if (sh) myRecs.forEach(r => { if (r.start_time && toMin(r.start_time) - toMin(sh.am[0]) > 0) lateCnt++; });
+    let lateCnt = 0, earlyCnt = 0;
+    if (sh) myRecs.forEach(r => {
+      if (r.start_time && toMin(r.start_time) - toMin(sh.am[0]) > 0) lateCnt++;
+      if (r.end_time && toMin(sh.pm[1]) - toMin(r.end_time) > 0) earlyCnt++;
+    });
     const isFull = MY_WORKER?.emp_type === '正式員工';
     const appr = myLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym));
     const urgentCnt = appr.filter(isUrgentLeave).length;
+    const personalCnt = appr.filter(l => l.leave_type === '事假').length;
     const attendDays = new Set(myRecs.map(r => r.date)).size;
     const leaveDays = new Set(appr.map(l => l.start_date)).size;
     const absent = isFull ? Math.max(0, getWorkDays(year, month) - attendDays - leaveDays) : 0;
-    const kpi = calcAttendanceKPI(myInc, absent, lateCnt, urgentCnt);
+    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, earlyCnt, urgentCnt, personalCnt });
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
@@ -1495,13 +1501,16 @@ let _RPT = null;  // 月報資料快取，供明細彈窗使用
 // ─── 出勤 KPI（即時算，不另存表）────────────────────────────────────────────────
 const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
 
-// 個人全勤燈號 + 出勤健康度
-function calcAttendanceKPI(noClockOut, absent, lateCnt, urgentCnt) {
+// 個人全勤燈號 + 出勤健康度（曠職=無故未到，與請假/漏打卡分開）
+function calcAttendanceKPI(p) {
+  const { absent = 0, noClockOut = 0, lateCnt = 0, earlyCnt = 0, urgentCnt = 0, personalCnt = 0 } = p;
   let light, lightLabel;
-  if (noClockOut >= 3 || absent > 0) { light = 'red';    lightLabel = '全勤失效'; }
-  else if (noClockOut >= 1)          { light = 'yellow'; lightLabel = '留意'; }
-  else                               { light = 'green';  lightLabel = '全勤'; }
-  const health = Math.max(0, 100 - noClockOut * 10 - lateCnt * 3 - absent * 20 - urgentCnt * 3);
+  if (absent >= 1 || noClockOut >= 3) { light = 'red';    lightLabel = '全勤失效'; }
+  else if (noClockOut >= 1)           { light = 'yellow'; lightLabel = '留意'; }
+  else                                { light = 'green';  lightLabel = '全勤'; }
+  // 重罰只給曠職/漏打卡；請假類輕扣或不扣，避免驟降
+  const health = Math.max(0,
+    100 - absent * 15 - noClockOut * 5 - lateCnt * 2 - earlyCnt * 2 - urgentCnt * 3 - personalCnt * 1);
   const hColor = health >= 90 ? 'green' : health >= 80 ? 'yellow' : 'red';
   return { light, lightLabel, health, hColor };
 }
@@ -1515,7 +1524,40 @@ function teamLifeHtml(totalMiss) {
   return `<div class="team-life ${cls}">
     <div class="tl-hearts">${heartStr}</div>
     <div class="tl-info">團隊生命值　本月團隊漏打卡 <b>${totalMiss}</b> 次　${status}</div>
+    <button class="tl-info-btn" onclick="showKpiInfo()" title="KPI 計算說明">？</button>
   </div>`;
+}
+
+// KPI 計算方式說明（點開才顯示）
+function showKpiInfo() {
+  openModal(`
+    <div class="modal-title">📊 出勤 KPI 計算說明</div>
+    <div class="rd-sec"><div class="rd-title">🚦 全勤燈號</div>
+      <div class="rd-row">🟢 全勤：曠職 0、漏打卡 0</div>
+      <div class="rd-row">🟡 留意：漏打卡 1~2 次</div>
+      <div class="rd-row">🔴 失效：曠職 ≥1 天 或 漏打卡 ≥3 次</div>
+    </div>
+    <div class="rd-sec"><div class="rd-title">💯 出勤健康度（每月 100 分起）</div>
+      <div class="rd-row">曠職　　−15 分／天</div>
+      <div class="rd-row">漏打卡　−5 分／次</div>
+      <div class="rd-row">遲到　　−2 分／次　・　早退 −2 分／次</div>
+      <div class="rd-row">臨時假　−3 分／次（僅提醒）</div>
+      <div class="rd-row">事假　　−1 分／次</div>
+      <div class="rd-row">病假・特休・公假：<b>不扣分</b>（正當權利）</div>
+      <div class="rd-row" style="color:#999;margin-top:4px">90+ 🟢穩定　80~89 🟡留意　80 以下 🔴異常</div>
+    </div>
+    <div class="rd-sec"><div class="rd-title">❤️ 團隊生命值</div>
+      <div class="rd-row">每月 ❤️❤️❤️ 三顆愛心</div>
+      <div class="rd-row">每發生一次漏打卡，全隊 −1 顆</div>
+      <div class="rd-row">月底維持 3 顆，全隊才發團隊獎金</div>
+      <div class="rd-row" style="color:#999;margin-top:4px">匿名計算，不公布是誰漏打卡，避免對立</div>
+    </div>
+    <div class="rd-sec"><div class="rd-title">📌 名詞定義</div>
+      <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假、也沒補登（無故未到）</div>
+      <div class="rd-row"><b>漏打卡</b>：有來上班，但忘了打上班或下班卡</div>
+    </div>
+    <div class="modal-actions"><button class="btn" onclick="closeModal()">了解</button></div>
+  `, true);
 }
 
 // ─── Admin: 薪資月報 ───────────────────────────────────────────────────────────
@@ -1590,7 +1632,8 @@ async function viewReport() {
           .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
-      const kpi = calcAttendanceKPI(noClockOut, isFull ? absent : 0, lateCnt, urgentCnt);
+      const personalCnt = appr.filter(l => l.leave_type === '事假').length;
+      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, earlyCnt, urgentCnt, personalCnt });
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
@@ -1616,7 +1659,7 @@ async function viewReport() {
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
           ${cell('總時數', `${totH.toFixed(1)} h`)}
           ${cell('實出勤', `${attendDays} 天`)}
-          ${isFull ? cell('缺勤', `${absent} 天`, absent>0) : ''}
+          ${isFull ? cell('曠職', `${absent} 天`, absent>0) : ''}
           ${cell('漏打卡', `${noClockOut} 次`, noClockOut>0)}
           ${cell('遲到', `${lateCnt} 次 / ${lateMin} 分`, latePen>0)}
           ${cell('早退', `${earlyCnt} 次 / ${earlyMin} 分`, earlyPen>0)}
@@ -1630,7 +1673,7 @@ async function viewReport() {
         <div class="pay-box">
           <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
           <div class="pay-detail">
-            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${ot.pay?`　＋加班 $${ot.pay.toLocaleString()}`:''}${absentDeduct?`　－缺勤 $${absentDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
+            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${ot.pay?`　＋加班 $${ot.pay.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
           </div>
         </div>
       </div>`;
@@ -1725,7 +1768,7 @@ function showReportDetail(email) {
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     <div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${absentDeduct ? `　－缺勤 $${absentDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
