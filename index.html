@@ -179,6 +179,19 @@
     /* ── 補休餘額橫幅 ── */
     .ot-balance{background:linear-gradient(135deg,#9333ea,#1a73e8);color:#fff;border-radius:14px;padding:16px;font-size:15px;margin-bottom:14px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
     .ot-balance b{font-size:24px;margin:0 2px}
+    /* ── 團隊生命值 ── */
+    .team-life{background:linear-gradient(135deg,#0f9d58,#16b765);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    .team-life.warn{background:linear-gradient(135deg,#f59e0b,#fbbc04)}
+    .team-life.dead{background:linear-gradient(135deg,#ea4335,#c5221f)}
+    .tl-hearts{font-size:24px;letter-spacing:2px;white-space:nowrap}
+    .tl-info{font-size:13px;line-height:1.5}
+    .tl-info b{font-size:16px}
+    /* ── KPI bar ── */
+    .rpt-kpi{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    .kpi-light,.kpi-health{font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px}
+    .kpi-light.green,.kpi-health.green{background:#e6f4ea;color:#137333}
+    .kpi-light.yellow,.kpi-health.yellow{background:#fef7e0;color:#b06000}
+    .kpi-light.red,.kpi-health.red{background:#fce8e6;color:#c5221f}
     .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
     .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
     .btn-quick:hover{background:#d2e3fc}
@@ -768,7 +781,39 @@ async function viewPunch() {
     OPEN_REC = await getOpenRec();
     setView(buildPunchHTML());
     startTimer();
+    loadMyKPI();  // 背景載入個人 KPI + 團隊生命值（不阻塞打卡）
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// 員工端：自己的全勤燈號 + 健康度 + 團隊生命值
+async function loadMyKPI() {
+  const box = document.getElementById('my-kpi');
+  if (!box) return;
+  try {
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth() + 1;
+    const ym = `${year}/${pad(month)}`;
+    const [myRecs, allInc, myLeaves] = await Promise.all([
+      getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves()
+    ]);
+    const myInc = allInc.filter(r => r.email === ME.email).length;
+    const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
+    let lateCnt = 0;
+    if (sh) myRecs.forEach(r => { if (r.start_time && toMin(r.start_time) - toMin(sh.am[0]) > 0) lateCnt++; });
+    const isFull = MY_WORKER?.emp_type === '正式員工';
+    const appr = myLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym));
+    const urgentCnt = appr.filter(isUrgentLeave).length;
+    const attendDays = new Set(myRecs.map(r => r.date)).size;
+    const leaveDays = new Set(appr.map(l => l.start_date)).size;
+    const absent = isFull ? Math.max(0, getWorkDays(year, month) - attendDays - leaveDays) : 0;
+    const kpi = calcAttendanceKPI(myInc, absent, lateCnt, urgentCnt);
+    box.innerHTML = `
+      <div class="rpt-kpi" style="margin-bottom:10px">
+        <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
+        <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
+      </div>
+      ${teamLifeHtml(allInc.length)}`;
+  } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
 
 async function getOpenRec() {
@@ -797,7 +842,7 @@ function buildPunchHTML() {
   const s = getStatus();
   const labels = { none:'未打卡', work:'上班中', break:'休息中' };
   const cls = { none:'status-none', work:'status-work', break:'status-break' };
-  let h = '<div class="view">';
+  let h = '<div class="view"><div id="my-kpi"></div>';
 
   // Status card
   const locDisplay = OPEN_REC ? locName(OPEN_REC.location) : '';
@@ -1447,6 +1492,32 @@ function overtimeDetail(email, otAll, ym, hourly) {
 
 let _RPT = null;  // 月報資料快取，供明細彈窗使用
 
+// ─── 出勤 KPI（即時算，不另存表）────────────────────────────────────────────────
+const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
+
+// 個人全勤燈號 + 出勤健康度
+function calcAttendanceKPI(noClockOut, absent, lateCnt, urgentCnt) {
+  let light, lightLabel;
+  if (noClockOut >= 3 || absent > 0) { light = 'red';    lightLabel = '全勤失效'; }
+  else if (noClockOut >= 1)          { light = 'yellow'; lightLabel = '留意'; }
+  else                               { light = 'green';  lightLabel = '全勤'; }
+  const health = Math.max(0, 100 - noClockOut * 10 - lateCnt * 3 - absent * 20 - urgentCnt * 3);
+  const hColor = health >= 90 ? 'green' : health >= 80 ? 'yellow' : 'red';
+  return { light, lightLabel, health, hColor };
+}
+
+// 團隊生命值：每月滿 3 顆愛心，每筆漏打卡 −1，全員打卡(3顆)才發團隊獎金；匿名不點名
+function teamLifeHtml(totalMiss) {
+  const hearts = Math.max(0, 3 - totalMiss);
+  const heartStr = '❤️'.repeat(hearts) + '🤍'.repeat(3 - hearts);
+  const status = hearts === 3 ? '✅ 符合團隊獎金' : hearts > 0 ? '⚠️ 團隊獎金有風險' : '❌ 團隊獎金失效';
+  const cls = hearts === 0 ? 'dead' : hearts < 3 ? 'warn' : '';
+  return `<div class="team-life ${cls}">
+    <div class="tl-hearts">${heartStr}</div>
+    <div class="tl-info">團隊生命值　本月團隊漏打卡 <b>${totalMiss}</b> 次　${status}</div>
+  </div>`;
+}
+
 // ─── Admin: 薪資月報 ───────────────────────────────────────────────────────────
 
 async function viewReport() {
@@ -1464,6 +1535,7 @@ async function viewReport() {
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
+    h += teamLifeHtml(incomplete.length);  // 團隊生命值（全員漏打卡總數）
 
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
@@ -1518,6 +1590,7 @@ async function viewReport() {
           .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
+      const kpi = calcAttendanceKPI(noClockOut, isFull ? absent : 0, lateCnt, urgentCnt);
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
@@ -1534,6 +1607,10 @@ async function viewReport() {
             <div class="rpt-email">${w.email}</div>
           </div>
           ${isFull ? `<div class="rpt-annual"><div class="rpt-annual-lbl">特休尚餘</div><div class="rpt-annual-val">${annualRemain}/${annualTotal} 天</div></div>` : ''}
+        </div>
+        <div class="rpt-kpi">
+          <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
+          <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
         </div>
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
