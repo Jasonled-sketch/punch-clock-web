@@ -16,6 +16,7 @@
     /* ── Topbar ── */
     #topbar{background:#1a73e8;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
     #topbar .t{font-size:16px;font-weight:600}
+    #topbar .ver{font-size:10px;font-weight:400;opacity:.65;margin-left:2px}
     .btn-logout{background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 12px;border-radius:8px;cursor:pointer;font-size:13px}
     /* ── Tabs ── */
     .tab-bar{background:#fff;display:flex;border-bottom:1px solid #e0e0e0;overflow-x:auto;position:sticky;top:52px;z-index:199;scrollbar-width:none}
@@ -233,7 +234,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統</div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1685,12 +1686,12 @@ function showKpiInfo() {
 async function viewReport() {
   setView('<div class="loading">統計中…</div>');
   try {
-    WORKERS = await getAllWorkers();
-    const recs   = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
-    const leaves = await getAllLeaves();
-    const otAll  = await getAllOt();
-    const incomplete = await getIncompleteRecs(CUR_YEAR, CUR_MONTH + 1);
-    const specialDays = await getSpecialDays();
+    // 並行載入所有資料（原本 6 個串行 → 並行，大幅加速）
+    const [workers, recs, leaves, otAll, incomplete, specialDays] = await Promise.all([
+      getAllWorkers(), getAllRecs(CUR_YEAR, CUR_MONTH + 1), getAllLeaves(),
+      getAllOt(), getIncompleteRecs(CUR_YEAR, CUR_MONTH + 1), getSpecialDays()
+    ]);
+    WORKERS = workers;
     const specialSet = new Set(specialDays.map(s => s.date));
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
