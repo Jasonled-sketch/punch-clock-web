@@ -234,7 +234,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -913,7 +913,7 @@ function buildPunchHTML() {
     h += `<button class="btn btn-grey btn-full" onclick="showPunchOutModal()" style="margin-top:8px">下班打卡（上班忘打時用）</button>`;
   }
   if (s === 'missin') {
-    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>補打上班卡</button>`;
+    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="showMakeupInModal()" disabled>補打上班卡（選時間）</button>`;
   }
   if (s === 'work') {
     h += `<button class="btn btn-yellow" onclick="doPause()">開始休息 ☕</button>`;
@@ -983,6 +983,44 @@ async function doPunchIn() {
     toast('上班打卡成功！' + fmtHHMM(now) + (gps ? '　GPS ✓' : '　GPS 未取得'), 'green');
     await viewPunch();
   } catch (e) { toast('打卡失敗：' + e.message, 'red'); btn.disabled = false; btn.textContent = origLabel; }
+}
+
+// 補打上班卡：讓員工選「當天實際上班時間」（非補打當下時間）
+function showMakeupInModal() {
+  if (!SEL_LOC) { toast('請先選擇打卡地點', 'red'); return; }
+  openModal(`
+    <div class="modal-title">補打上班卡</div>
+    <div class="ff"><label>當天實際上班時間</label>
+      <input type="text" id="makeup-time" inputmode="numeric" maxlength="5" placeholder="08:30" oninput="fmtTimeInput(this)"></div>
+    <div style="font-size:12px;color:#999;margin-bottom:10px">請填你今天「實際」的上班時間（不是現在時間）。地點：${SEL_LOC.name}</div>
+    <div class="modal-actions">
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+      <button class="btn" onclick="doMakeupIn()">確認補打</button>
+    </div>`, true);
+}
+async function doMakeupIn() {
+  const t = document.getElementById('makeup-time').value;
+  if (!/^\d{2}:\d{2}$/.test(t)) { toast('請填寫上班時間，格式 08:30', 'red'); return; }
+  if (!SEL_LOC || !OPEN_REC) return;
+  try {
+    const F = CONFIG.FID.R;
+    const gps = await captureGPS();
+    const locStr = gps ? `${SEL_LOC.name} [GPS:${gps.lat},${gps.lng}]` : SEL_LOC.name;
+    const upd = { [F.start_time]: t, [F.location]: locStr };
+    // 若已有下班時間，補上班後重算時數與薪資
+    if (OPEN_REC.end_time) {
+      const startDt = parseDatetime(`${OPEN_REC.date} ${t}`);
+      const endDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.end_time}`);
+      const workMin = (endDt - startDt) / 60000 - OPEN_REC.breaks_minutes;
+      const hours = Math.max(0, Math.round(workMin / 60 * 100) / 100);
+      upd[F.hours] = String(hours);
+      upd[F.subtotal] = String(Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER)));
+    }
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, upd);
+    closeModal();
+    toast('已補打上班卡 ' + t, 'green');
+    await viewPunch();
+  } catch (e) { toast('補打失敗：' + e.message, 'red'); }
 }
 
 async function doPause() {
