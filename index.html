@@ -194,6 +194,7 @@
     .kpi-light.green,.kpi-health.green{background:#e6f4ea;color:#137333}
     .kpi-light.yellow,.kpi-health.yellow{background:#fef7e0;color:#b06000}
     .kpi-light.red,.kpi-health.red{background:#fce8e6;color:#c5221f}
+    .rpt-warn{background:#fff3e0;color:#b06000;border:1px solid #ffcc80;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-bottom:10px}
     .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
     .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
     .btn-quick:hover{background:#d2e3fc}
@@ -812,15 +813,15 @@ async function loadMyKPI() {
     const sickCnt = appr.filter(l => l.leave_type === '病假').length;
     const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
     const overdueCnt = appr.filter(isOverdueLeave).length;
-    const attendDays = new Set(myRecs.map(r => r.date)).size;
-    const leaveDays = new Set(appr.map(l => l.start_date)).size;
-    const absent = isFull ? Math.max(0, getWorkDays(year, month) - attendDays - leaveDays) : 0;
+    const ab = isFull ? analyzeAbsence(MY_WORKER, myRecs, myLeaves, year, month) : { confirmed: 0, pending: [] };
+    const absent = ab.confirmed;
     const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overdueCnt });
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
         <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
       </div>
+      ${ab.pending.length ? `<div class="rpt-warn">⚠️ 你有 ${ab.pending.length} 天缺席尚未補單，請於 72hr 內補請假，否則計曠職</div>` : ''}
       ${teamLifeHtml(allInc.length)}`;
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
@@ -1504,7 +1505,35 @@ let _RPT = null;  // 月報資料快取，供明細彈窗使用
 // ─── 出勤 KPI（即時算，不另存表）────────────────────────────────────────────────
 const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
 
-// 個人全勤燈號 + 出勤健康度（加分制：基礎 80，疏失才扣、沒請假給獎勵，避免勞資爭議）
+// 曠職分析：逐日掃應出勤工作日，缺席(無打卡無請假)且過 72hr 沒補單 → 確定曠職；未過 → 待補單(警告)
+function analyzeAbsence(worker, recs, leaves, year, month) {
+  const now = new Date();
+  const dim = new Date(year, month, 0).getDate();
+  const ym = `${year}/${pad(month)}`;
+  const attendSet = new Set(recs.filter(r => r.email === worker.email).map(r => r.date));
+  const leaveSet = new Set(
+    leaves.filter(l => l.email === worker.email && l.status === 'approved' && (l.start_date || '').startsWith(ym))
+          .map(l => l.start_date));
+  const startDate = worker.start_date ? new Date(worker.start_date.replace(/\//g, '-')) : null;
+  const sh = CONFIG.SHIFTS[worker.shift];
+  const [inH, inM] = (sh ? sh.am[0] : '09:00').split(':').map(Number);
+  let confirmed = 0;
+  const pending = [];
+  for (let d = 1; d <= dim; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    if (dow === 0 || dow === 6) continue;                              // 週末非應出勤
+    const dt = new Date(year, month - 1, d, inH, inM);                 // 該日上班時間起算
+    if (dt > now) continue;                                            // 未來
+    if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
+    const ds = `${ym}/${pad(d)}`;
+    if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有打卡或有請假
+    if ((now - dt) / 3600000 > 72) confirmed++;                        // 過 72hr 未補單 → 曠職
+    else pending.push(ds);                                             // 緩衝期內 → 待補單
+  }
+  return { confirmed, pending };
+}
+
+// 個人全勤燈號 + 出勤健康度（加分制：基礎 75，疏失才扣、沒請假給獎勵，避免勞資爭議）
 function calcAttendanceKPI(p) {
   const { absent = 0, noClockOut = 0, lateCnt = 0, earlyCnt = 0,
           sickCnt = 0, personalCnt = 0, urgentCnt = 0, otherCnt = 0, overdueCnt = 0 } = p;
@@ -1566,8 +1595,9 @@ function showKpiInfo() {
       <div class="rd-row" style="color:#999;margin-top:4px">匿名計算，不公布是誰漏打卡，避免對立</div>
     </div>
     <div class="rd-sec"><div class="rd-title">📌 名詞定義</div>
-      <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假、也沒補登（無故未到）</div>
+      <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假；缺席後給 <b>72hr 補單緩衝</b>，期間顯示「待補單」提醒，超過 72hr 仍未補請假才確定計曠職（−30）</div>
       <div class="rd-row"><b>漏打卡</b>：有來上班，但忘了打上班或下班卡</div>
+      <div class="rd-row"><b>補單逾期</b>：請假後超過 24hr 才補送假單（已補但拖延，−5）</div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">了解</button></div>
   `, true);
@@ -1585,7 +1615,7 @@ async function viewReport() {
     const incomplete = await getIncompleteRecs(CUR_YEAR, CUR_MONTH + 1);
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
-    _RPT = { recs, leaves, otAll, incomplete, ym, year: CUR_YEAR, workDays };
+    _RPT = { recs, leaves, otAll, incomplete, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays };
 
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
@@ -1622,8 +1652,10 @@ async function viewReport() {
       const urgentCnt  = appr.filter(isUrgentLeave).length;
       const pendingCnt = leaves.filter(l => l.email === w.email && l.status === 'pending' && (l.start_date || '').startsWith(ym)).length;
 
-      // 缺勤（正職）：應出勤工作日 - 實出勤 - 請假日
-      const absent = isFull ? Math.max(0, workDays - attendDays - leaveDays) : null;
+      // 曠職（正職）：逐日分析，過 72hr 未補單才算；緩衝期內列待補單
+      const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1) : { confirmed: 0, pending: [] };
+      const absent = ab.confirmed;
+      const pendingAbsent = ab.pending.length;
       // ── 勞基法薪資計算 ──
       const hourly = isFull ? Math.round(w.monthly_salary / 240) : w.weekday_rate;
       const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);
@@ -1671,6 +1703,7 @@ async function viewReport() {
           <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
           <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
         </div>
+        ${pendingAbsent ? `<div class="rpt-warn">⚠️ ${pendingAbsent} 天缺席待補單，超過 72hr 未補將計曠職</div>` : ''}
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
           ${cell('總時數', `${totH.toFixed(1)} h`)}
@@ -1703,7 +1736,7 @@ function showReportDetail(email) {
   if (!_RPT) return;
   const w = (WORKERS || []).find(x => x.email === email);
   if (!w) return;
-  const { recs, leaves, otAll, incomplete, ym, year, workDays } = _RPT;
+  const { recs, leaves, otAll, incomplete, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
   const sh = CONFIG.SHIFTS[w.shift];
   const shHours = sh ? sh.hours : 8;
@@ -1756,8 +1789,8 @@ function showReportDetail(email) {
   // 薪資彙整
   const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
   const attendDays = new Set(wr.map(r => r.date)).size;
-  const leaveDays = new Set(appr.map(l => l.start_date)).size;
-  const absent = isFull ? Math.max(0, workDays - attendDays - leaveDays) : 0;
+  const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month) : { confirmed: 0, pending: [] };
+  const absent = ab.confirmed;
   const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
   const leaveDeduct = calcLeaveDeduct(appr, hourly);
   const base = isFull ? w.monthly_salary : totP;
@@ -1780,6 +1813,7 @@ function showReportDetail(email) {
     ${section('🔄 補休', compRows, '無補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${section('⚠️ 漏打下班', noOutRows, '無')}
+    ${isFull && ab.pending.length ? section('🟠 缺席待補單（72hr 內補請假否則計曠職）', ab.pending.map(d => addDay(d)), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     <div class="pay-box" style="margin-top:14px">
