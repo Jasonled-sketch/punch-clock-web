@@ -801,9 +801,9 @@ async function loadMyKPI() {
     ]);
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
-    let lateCnt = 0, earlyCnt = 0;
+    let lateCnt = 0, lateMin = 0, earlyCnt = 0;
     if (sh) myRecs.forEach(r => {
-      if (r.start_time && toMin(r.start_time) - toMin(sh.am[0]) > 0) lateCnt++;
+      if (r.start_time) { const d = toMin(r.start_time) - toMin(sh.am[0]); if (d > 0) { lateCnt++; lateMin += d; } }
       if (r.end_time && toMin(sh.pm[1]) - toMin(r.end_time) > 0) earlyCnt++;
     });
     const isFull = MY_WORKER?.emp_type === '正式員工';
@@ -812,16 +812,16 @@ async function loadMyKPI() {
     const personalCnt = appr.filter(l => l.leave_type === '事假').length;
     const sickCnt = appr.filter(l => l.leave_type === '病假').length;
     const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
-    const overdueCnt = appr.filter(isOverdueLeave).length;
+    const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
     const ab = isFull ? analyzeAbsence(MY_WORKER, myRecs, myLeaves, year, month) : { confirmed: 0, pending: [] };
     const absent = ab.confirmed;
-    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overdueCnt });
+    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, lateMin, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
         <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
       </div>
-      ${ab.pending.length ? `<div class="rpt-warn">⚠️ 你有 ${ab.pending.length} 天缺席尚未補單，請於 72hr 內補請假，否則計曠職</div>` : ''}
+      ${ab.pending.length ? `<div class="rpt-warn">⚠️ 缺席尚未補單：${ab.pending.map(p => `${addDay(p.ds)}(剩 ${p.hoursLeft}hr)`).join('、')}，請盡快補請假否則計曠職</div>` : ''}
       ${teamLifeHtml(allInc.length)}`;
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
@@ -1527,27 +1527,33 @@ function analyzeAbsence(worker, recs, leaves, year, month) {
     if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
     const ds = `${ym}/${pad(d)}`;
     if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有打卡或有請假
-    if ((now - dt) / 3600000 > 72) confirmed++;                        // 過 72hr 未補單 → 曠職
-    else pending.push(ds);                                             // 緩衝期內 → 待補單
+    const elapsed = (now - dt) / 3600000;
+    if (elapsed > 72) confirmed++;                                     // 過 72hr 未補單 → 曠職
+    else pending.push({ ds, hoursLeft: Math.max(0, Math.round(72 - elapsed)) });  // 緩衝期 → 待補單+倒數
   }
   return { confirmed, pending };
 }
 
 // 個人全勤燈號 + 出勤健康度（加分制：基礎 75，疏失才扣、沒請假給獎勵，避免勞資爭議）
 function calcAttendanceKPI(p) {
-  const { absent = 0, noClockOut = 0, lateCnt = 0, earlyCnt = 0,
-          sickCnt = 0, personalCnt = 0, urgentCnt = 0, otherCnt = 0, overdueCnt = 0 } = p;
+  const { absent = 0, noClockOut = 0, lateCnt = 0, lateMin = 0, earlyCnt = 0,
+          sickCnt = 0, personalCnt = 0, urgentCnt = 0, otherCnt = 0, overduePenalty = 0 } = p;
+  // 全勤資格（公司結合勞基法）：曠職、漏打卡≥3、遲到累積≥15分、有事假 → 失格；病假10天內不影響
   let light, lightLabel;
-  if (absent >= 1 || noClockOut >= 3) { light = 'red';    lightLabel = '全勤失效'; }
-  else if (noClockOut >= 1)           { light = 'yellow'; lightLabel = '留意'; }
-  else                                { light = 'green';  lightLabel = '全勤'; }
-  // 基礎 75；無請假給獎勵（最高 +25 → 100）；疏失扣分（不涉勞基法權利）
+  if (absent >= 1 || noClockOut >= 3 || lateMin >= 15 || personalCnt >= 1) {
+    light = 'red'; lightLabel = '非全勤';
+  } else if (noClockOut >= 1 || lateMin > 0) {
+    light = 'yellow'; lightLabel = '留意';
+  } else {
+    light = 'green'; lightLabel = '全勤';
+  }
+  // 健康度：基礎 75；無請假給獎勵（最高 +25 → 100）；疏失扣分
   let health = 75;
   if (urgentCnt === 0)   health += 10;  // 本月無臨時假
   if (personalCnt === 0) health += 5;   // 本月無事假
   if (sickCnt === 0)     health += 5;   // 本月無病假
   if (otherCnt === 0)    health += 5;   // 本月無特休/其他假
-  health -= absent * 30 + noClockOut * 5 + overdueCnt * 5 + lateCnt * 2 + earlyCnt * 2;
+  health -= absent * 30 + noClockOut * 5 + overduePenalty * 5 + lateCnt * 2 + earlyCnt * 2;
   health = Math.max(0, Math.min(100, health));
   const hColor = health >= 90 ? 'green' : health >= 80 ? 'yellow' : 'red';
   return { light, lightLabel, health, hColor };
@@ -1570,10 +1576,11 @@ function teamLifeHtml(totalMiss) {
 function showKpiInfo() {
   openModal(`
     <div class="modal-title">📊 出勤 KPI 計算說明</div>
-    <div class="rd-sec"><div class="rd-title">🚦 全勤燈號</div>
-      <div class="rd-row">🟢 全勤：曠職 0、漏打卡 0</div>
-      <div class="rd-row">🟡 留意：漏打卡 1~2 次</div>
-      <div class="rd-row">🔴 失效：曠職 ≥1 天 或 漏打卡 ≥3 次</div>
+    <div class="rd-sec"><div class="rd-title">🚦 全勤燈號（依勞基法/公司規範）</div>
+      <div class="rd-row">🟢 全勤：無曠職、漏打卡 0、無遲到、無事假</div>
+      <div class="rd-row">🟡 留意：漏打卡 1~2 次 或 有遲到（未達 15 分）</div>
+      <div class="rd-row">🔴 非全勤（任一）：曠職、漏打卡 ≥3 次、遲到累積 ≥15 分、請事假</div>
+      <div class="rd-row" style="color:#137333;margin-top:4px">病假整年度 10 天內<b>不影響</b>全勤；特休不影響</div>
     </div>
     <div class="rd-sec"><div class="rd-title">💯 出勤健康度（基礎 75 分・加分制）</div>
       <div class="rd-row" style="color:#137333">＝ 加分（沒請假的獎勵，請假是權利不扣分）＝</div>
@@ -1584,7 +1591,7 @@ function showKpiInfo() {
       <div class="rd-row" style="color:#c5221f;margin-top:6px">＝ 扣分（紀律疏失，與請假權利無關）＝</div>
       <div class="rd-row">曠職　　　　　　−30 分／天</div>
       <div class="rd-row">漏打卡　　　　　−5 分／次</div>
-      <div class="rd-row">補單逾期（請假後超過 24hr 未補單）−5 分／次</div>
+      <div class="rd-row">補單逾期（請假後超過 12hr 才補單，每超過 12hr 再扣一次）−5 分／次</div>
       <div class="rd-row">遲到　−2 分／次　・　早退 −2 分／次</div>
       <div class="rd-row" style="color:#999;margin-top:6px">請假本身<b>不扣分</b>；90+ 🟢　80~89 🟡　80 以下 🔴</div>
     </div>
@@ -1597,7 +1604,7 @@ function showKpiInfo() {
     <div class="rd-sec"><div class="rd-title">📌 名詞定義</div>
       <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假；缺席後給 <b>72hr 補單緩衝</b>，期間顯示「待補單」提醒，超過 72hr 仍未補請假才確定計曠職（−30）</div>
       <div class="rd-row"><b>漏打卡</b>：有來上班，但忘了打上班或下班卡</div>
-      <div class="rd-row"><b>補單逾期</b>：請假後超過 24hr 才補送假單（已補但拖延，−5）</div>
+      <div class="rd-row"><b>補單逾期</b>：請假後超過 12hr 才補送假單，每超過 12hr 再扣一次（−5/次）</div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">了解</button></div>
   `, true);
@@ -1680,8 +1687,8 @@ async function viewReport() {
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
       const sickCnt = appr.filter(l => l.leave_type === '病假').length;
       const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
-      const overdueCnt = appr.filter(isOverdueLeave).length;
-      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overdueCnt });
+      const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
+      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, lateMin, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
@@ -1703,7 +1710,7 @@ async function viewReport() {
           <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
           <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
         </div>
-        ${pendingAbsent ? `<div class="rpt-warn">⚠️ ${pendingAbsent} 天缺席待補單，超過 72hr 未補將計曠職</div>` : ''}
+        ${pendingAbsent ? `<div class="rpt-warn">⚠️ 缺席待補單：${ab.pending.map(p => `${addDay(p.ds)}(剩 ${p.hoursLeft}hr)`).join('、')}　超過 72hr 未補計曠職</div>` : ''}
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
           ${cell('總時數', `${totH.toFixed(1)} h`)}
@@ -1813,7 +1820,7 @@ function showReportDetail(email) {
     ${section('🔄 補休', compRows, '無補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${section('⚠️ 漏打下班', noOutRows, '無')}
-    ${isFull && ab.pending.length ? section('🟠 缺席待補單（72hr 內補請假否則計曠職）', ab.pending.map(d => addDay(d)), '') : ''}
+    ${isFull && ab.pending.length ? section('🟠 缺席待補單（72hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     <div class="pay-box" style="margin-top:14px">
@@ -2240,13 +2247,23 @@ function isUrgentLeave(lv) {
   return (leaveDt - applyDt) / 3600000 < 72;
 }
 
-// 補單逾期：請假事由發生後，超過 24 小時才在系統補送假單（拖延補單，紀律扣分）
+// 補單逾期：請假事由發生後，超過 12 小時才補送假單
 function isOverdueLeave(lv) {
   if (!lv.start_date || !lv.apply_time) return false;
   const leaveDt = new Date(`${lv.start_date} ${lv.start_time || '00:00'}`);
   const applyDt = new Date(lv.apply_time);
   if (isNaN(leaveDt) || isNaN(applyDt)) return false;
-  return (applyDt - leaveDt) / 3600000 > 24;  // 補單時間比請假起始晚超過 24hr
+  return (applyDt - leaveDt) / 3600000 > 12;
+}
+
+// 補單逾期累進扣分次數：12hr 內準時(0)，每超過 12hr 多扣一次
+function leaveOverduePenalty(lv) {
+  if (!lv.start_date || !lv.apply_time) return 0;
+  const leaveDt = new Date(`${lv.start_date} ${lv.start_time || '00:00'}`);
+  const applyDt = new Date(lv.apply_time);
+  if (isNaN(leaveDt) || isNaN(applyDt)) return 0;
+  const delay = (applyDt - leaveDt) / 3600000;
+  return Math.max(0, Math.ceil((delay - 12) / 12));  // 13~24hr→1次、25~36hr→2次…
 }
 
 function parseLeaveRec(r) {
