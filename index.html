@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1892,10 +1892,11 @@ async function viewReport() {
       const base = isFull ? w.monthly_salary : totP;
       const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
       const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
-      // 國定假日出勤加倍：僅正職加發一日工資（時數×時薪）。工讀生已分平日/假日時薪，不重複加
+      // 國定假日 + 週日例假 出勤加倍：僅正職加發一日工資（時數×時薪）。工讀生已分平日/假日時薪不重複加
       const hrly = isFull ? Math.round(w.monthly_salary / 240) : 0;
+      const isDoublePay = ds => holidaySet.has(ds) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
       const holidayBonus = isFull
-        ? wr.filter(r => holidaySet.has(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
+        ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
         : 0;
       const net = Math.round(base + ot.pay + holidayBonus - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
       // 特休：應有 / 已用(當年度特休請假時數→天) / 剩餘
@@ -2029,7 +2030,8 @@ function showReportDetail(email) {
   const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
   const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
   const hrly = isFull ? Math.round(w.monthly_salary / 240) : 0;
-  const holidayRows = isFull ? wr.filter(r => holidaySet && holidaySet.has(r.date)) : [];
+  const isDoublePay = ds => (holidaySet && holidaySet.has(ds)) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
+  const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
   const net = Math.round(base + od.totalPay + holidayBonus - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
 
@@ -2051,7 +2053,7 @@ function showReportDetail(email) {
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
-    ${holidayRows.length ? section('🎌 國定假日出勤加倍', holidayRows.map(r => `${addDay(r.date)}　${r.start_time}–${r.end_time}　加給 $${isFull ? Math.round((parseFloat(r.hours)||0)*hrly) : (Number(r.subtotal)||0)}`), '') : ''}
+    ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
     <div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
       <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
