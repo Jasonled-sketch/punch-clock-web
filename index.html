@@ -34,7 +34,7 @@
     .status-none{color:#aaa}
     .status-work{color:#34a853}
     .status-break{color:#fbbc04}
-    .status-time{font-size:13px;color:#999;margin-top:4px}
+    .status-time{font-size:12px;color:#999;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .timer{font-size:44px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums;margin-top:8px}
     /* ── Location ── */
     .loc-btn{display:flex;align-items:center;width:100%;padding:13px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;font-size:15px;margin-bottom:8px;gap:10px;transition:border-color .15s,background .15s}
@@ -181,13 +181,12 @@
     .ot-balance{background:linear-gradient(135deg,#9333ea,#1a73e8);color:#fff;border-radius:14px;padding:16px;font-size:15px;margin-bottom:14px;text-align:center;box-shadow:0 2px 12px rgba(0,0,0,.08)}
     .ot-balance b{font-size:24px;margin:0 2px}
     /* ── 團隊生命值 ── */
-    .team-life{background:linear-gradient(135deg,#0f9d58,#16b765);color:#fff;border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+    .team-life{background:linear-gradient(135deg,#0f9d58,#16b765);color:#fff;border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
     .team-life.warn{background:linear-gradient(135deg,#f59e0b,#fbbc04)}
     .team-life.dead{background:linear-gradient(135deg,#ea4335,#c5221f)}
-    .tl-hearts{font-size:24px;letter-spacing:2px;white-space:nowrap}
-    .tl-info{font-size:13px;line-height:1.5;flex:1}
-    .tl-info b{font-size:16px}
-    .tl-info-btn{flex-shrink:0;background:rgba(255,255,255,.25);border:none;color:#fff;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:14px;font-weight:700}
+    .tl-text{font-size:14px;white-space:nowrap}
+    .tl-text b{font-size:17px;margin:0 2px}
+    .tl-info-btn{flex-shrink:0;background:rgba(255,255,255,.25);border:none;color:#fff;width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:13px;font-weight:700}
     .tl-info-btn:hover{background:rgba(255,255,255,.4)}
     /* ── KPI bar ── */
     .rpt-kpi{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
@@ -234,7 +233,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v1.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -879,17 +878,17 @@ function buildPunchHTML() {
   const gpsVerified = OPEN_REC && parseGPS(OPEN_REC.location);
   let timeInfo = '';
   if (OPEN_REC) {
-    if (s === 'done')        timeInfo = `上班 ${OPEN_REC.start_time || '—'} ～ 下班 ${OPEN_REC.end_time}`;
-    else if (s === 'missin') timeInfo = `下班 ${OPEN_REC.end_time}（上班卡漏打，請補打）`;
-    else                     timeInfo = `${OPEN_REC.start_time} 上班打卡`;
+    if (s === 'done')        timeInfo = `上班 ${OPEN_REC.start_time || '—'} ・ 下班 ${OPEN_REC.end_time}`;
+    else if (s === 'missin') timeInfo = `下班 ${OPEN_REC.end_time}（上班漏打）`;
+    else                     timeInfo = `${OPEN_REC.start_time} 上班`;
   }
   h += `<div class="card" style="text-align:center">
     <div style="display:flex;justify-content:flex-end">
-      <button onclick="showPunchInfo()" style="background:none;border:1px solid #ddd;border-radius:8px;padding:3px 10px;font-size:12px;color:#888;cursor:pointer">？打卡說明</button>
+      <button onclick="showPunchInfo()" style="background:none;border:1px solid #ddd;border-radius:8px;padding:3px 10px;font-size:12px;color:#888;cursor:pointer">打卡說明</button>
     </div>
     <div class="status-lbl" style="margin-top:6px">目前狀態</div>
     <div class="status-val ${cls[s]}">${labels[s]}</div>
-    ${OPEN_REC ? `<div class="status-time">${locDisplay ? '📍 '+locDisplay+'　' : ''}${addDay(OPEN_REC.date)}　${timeInfo}</div>` : ''}
+    ${OPEN_REC ? `<div class="status-time">${locDisplay ? locDisplay+' ・ ' : ''}${addDay(OPEN_REC.date).slice(5)} ・ ${timeInfo}</div>` : ''}
     ${(s==='work'||s==='break') && gpsVerified ? `<div style="font-size:12px;color:#34a853;margin-top:4px">✅ GPS 位置已驗證</div>` : ((s==='work'||s==='break') ? `<div style="font-size:12px;color:#f9ab00;margin-top:4px">⚠️ GPS 未取得（手動確認地點）</div>` : '')}
     ${(s === 'work' || s === 'break') ? '<div class="timer" id="timer">00:00:00</div>' : ''}
   </div>`;
@@ -1726,13 +1725,10 @@ function calcAttendanceKPI(p) {
 
 // 團隊生命值：每月滿 3 顆愛心，每筆漏打卡 −1，全員打卡(3顆)才發團隊獎金；匿名不點名
 function teamLifeHtml(totalMiss) {
-  const hearts = Math.max(0, 3 - totalMiss);
-  const heartStr = '❤️'.repeat(hearts) + '🤍'.repeat(3 - hearts);
-  const status = hearts === 3 ? '✅ 符合團隊獎金' : hearts > 0 ? '⚠️ 團隊獎金有風險' : '❌ 團隊獎金失效';
-  const cls = hearts === 0 ? 'dead' : hearts < 3 ? 'warn' : '';
+  const cls = totalMiss === 0 ? '' : totalMiss < 3 ? 'warn' : 'dead';
+  const box = totalMiss === 0 ? '🎁' : totalMiss < 3 ? '📦' : '🗑️';
   return `<div class="team-life ${cls}">
-    <div class="tl-hearts">${heartStr}</div>
-    <div class="tl-info">團隊生命值　本月團隊漏打卡 <b>${totalMiss}</b> 次　${status}</div>
+    <span class="tl-text">${box} 本月團隊漏打卡 <b>${totalMiss}</b> 次</span>
     <button class="tl-info-btn" onclick="showKpiInfo()" title="KPI 計算說明">？</button>
   </div>`;
 }
