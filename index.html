@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1585,7 +1585,7 @@ function calcMonthOvertimePay(email, otAll, ym, hourly) {
   return { pay: Math.round(pay), hours: Math.round(paidHours * 100) / 100 };
 }
 
-// 請假扣薪：特休/公假不扣、病假半薪、事假/臨時假/其他全扣
+// 請假扣薪：特休不扣、病假半薪、事假/其他全扣（臨時與否不影響扣薪，僅 isUrgentLeave 標記供考核）
 function calcLeaveDeduct(apprLeaves, hourly) {
   let d = 0;
   apprLeaves.forEach(l => {
@@ -2441,7 +2441,7 @@ async function doSaveWrkr() {
 //  LEAVE REQUESTS
 // ═══════════════════════════════════════════════════════════════════════
 
-const LEAVE_TYPES = ['特休','病假','事假','臨時假','其他'];
+const LEAVE_TYPES = ['特休','病假','事假','其他'];  // 臨時假非假別，改由 isUrgentLeave(72hr) 自動標記
 const LEAVE_STATUS = { pending:'待審核', approved:'已核准', rejected:'已駁回' };
 
 function toMin(t) { const [h,m] = String(t||'').split(':').map(Number); return (h||0)*60 + (m||0); }
