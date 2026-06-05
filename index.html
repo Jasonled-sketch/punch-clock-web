@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -610,6 +610,24 @@ function addDay(s) {
   if (isNaN(dt)) return s;
   const days = ['日','一','二','三','四','五','六'];
   return `${String(s).slice(0, 10).replace(/-/g,'/')} (${days[dt.getDay()]})`;
+}
+function addDayShort(s) {  // 短日期 26/06/05(五)，手機單行用
+  if (!s) return s || '';
+  const dt = new Date(String(s).replace(/\//g, '-').slice(0, 10));
+  if (isNaN(dt)) return s;
+  const days = ['日','一','二','三','四','五','六'];
+  return `${String(s).slice(2, 10).replace(/-/g,'/')}(${days[dt.getDay()]})`;
+}
+// 扣除當日已核准請假後的「應出勤」上下班分鐘界線（修遲到/早退誤判：請假時段不算遲到早退）
+function effShiftBounds(sh, dayLeaves) {
+  let amStart = toMin(sh.am[0]), pmEnd = toMin(sh.pm[1]), fullDay = false;
+  (dayLeaves || []).forEach(l => {
+    if (!l.start_time || !l.end_time) { fullDay = true; return; }  // 整天請假 → 當日不算遲到早退
+    const ls = toMin(l.start_time), le = toMin(l.end_time);
+    if (ls <= amStart && le > amStart) amStart = Math.max(amStart, le);  // 請假涵蓋上班開頭 → 應上班後移
+    if (le >= pmEnd && ls < pmEnd) pmEnd = Math.min(pmEnd, ls);          // 請假涵蓋下班結尾 → 應下班前移
+  });
+  return { amStart, pmEnd, fullDay };
 }
 function fmtHHMM(d) {
   const dt = d instanceof Date ? d : new Date(d);
@@ -1858,15 +1876,12 @@ async function viewReport() {
       // 遲到 / 早退（依班別時段）
       let lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0;
       if (sh) {
+        const apprL = leaves.filter(l => l.email === w.email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
         wr.forEach(r => {
-          if (r.start_time) {
-            const d = toMin(r.start_time) - toMin(sh.am[0]);
-            if (d > 0) { lateCnt++; lateMin += d; }
-          }
-          if (r.end_time) {
-            const d = toMin(sh.pm[1]) - toMin(r.end_time);
-            if (d > 0) { earlyCnt++; earlyMin += d; }
-          }
+          const eff = effShiftBounds(sh, apprL.filter(l => l.start_date === r.date));  // 扣除當日請假時段
+          if (eff.fullDay) return;
+          if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateCnt++; lateMin += d; } }
+          if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
         });
       }
 
@@ -1978,12 +1993,15 @@ function showReportDetail(email) {
   const wr = recs.filter(r => r.email === email);
 
   // 遲到 / 早退逐筆
+  const apprForCalc = leaves.filter(l => l.email === email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
   const lateRows = [], earlyRows = [];
   let lateMin = 0, earlyMin = 0;
   if (sh) {
     wr.forEach(r => {
-      if (r.start_time) { const d = toMin(r.start_time) - toMin(sh.am[0]); if (d > 0) { lateMin += d; lateRows.push(`${addDay(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
-      if (r.end_time)   { const d = toMin(sh.pm[1]) - toMin(r.end_time);   if (d > 0) { earlyMin += d; earlyRows.push(`${addDay(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
+      const eff = effShiftBounds(sh, apprForCalc.filter(l => l.start_date === r.date));  // 扣除當日請假時段
+      if (eff.fullDay) return;
+      if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateMin += d; lateRows.push(`${addDayShort(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
+      if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
     });
   }
   const latePen = lateMin > 15 ? lateMin : 0, earlyPen = earlyMin > 15 ? earlyMin : 0;
@@ -2009,9 +2027,9 @@ function showReportDetail(email) {
   const appr = leaves.filter(l => l.email === email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
   const leaveRows = appr.map(l => {
     const ded = oneLeaveDeduct(l, hourly);
-    const urgent = isUrgentLeave(l) ? ' ⚡臨時' : '';
-    const tr = (l.start_time && l.end_time) ? ` ${l.start_time}–${l.end_time}` : '';
-    return `${addDay(l.start_date)}${tr}　${l.leave_type}${urgent}　${l.hours}h　扣 $${ded}`;
+    const urgent = isUrgentLeave(l) ? '⚡' : '';
+    const tr = (l.start_time && l.end_time) ? ` ${l.start_time}-${l.end_time}` : ' 全天';
+    return `<span style="white-space:nowrap">${addDayShort(l.start_date)}${tr}　${l.leave_type}${urgent} ${l.hours}h　扣$${ded}</span>`;
   });
 
   // 特休
@@ -2041,9 +2059,38 @@ function showReportDetail(email) {
     (rows.length ? rows.map(r => `<div class="rd-row">${r}</div>`).join('') : `<div class="rd-empty">${empty}</div>`) +
     `</div>`;
 
+  // 每日出缺勤（逐日彩色：綠正常/藍請假/紅異常，臨時假加⚡）+ 統計
+  const pad2 = n => String(n).padStart(2, '0');
+  const dim = new Date(year, month, 0).getDate();
+  const recByDate = {}; wr.forEach(r => recByDate[r.date] = r);
+  const lvByDate = {}; appr.forEach(l => { (lvByDate[l.start_date] = lvByDate[l.start_date] || []).push(l); });
+  const nowTw = new Date(Date.now() + 8 * 3600 * 1000);
+  const todayMs = Date.UTC(nowTw.getUTCFullYear(), nowTw.getUTCMonth(), nowTw.getUTCDate());
+  let missCnt = 0;
+  const dailyRows = [];
+  for (let d = 1; d <= dim; d++) {
+    const ds = `${year}/${pad2(month)}/${pad2(d)}`;
+    const dow = new Date(year, month - 1, d).getDay();
+    const dMs = Date.UTC(year, month - 1, d);
+    const rec = recByDate[ds], lvs = lvByDate[ds];
+    const isHol = (holidaySet && holidaySet.has(ds)) || dow === 0 || dow === 6;
+    let color, txt;
+    if (rec && rec.start_time && rec.end_time) { color = '#2e7d32'; txt = `${rec.start_time}-${rec.end_time}`; if (lvs) { color = '#1565c0'; txt += `　${lvs[0].leave_type}`; } }
+    else if (rec && rec.start_time) { color = '#c62828'; txt = `${rec.start_time}- 未打下班`; }
+    else if (lvs) { color = '#1565c0'; const l = lvs[0]; txt = (l.start_time ? `${l.start_time}-${l.end_time}` : '全天') + `　${l.leave_type}`; }
+    else if (isHol) continue;
+    else if (dMs < todayMs) { color = '#c62828'; txt = '未打卡'; missCnt++; }
+    else continue;
+    const urg = lvs && lvs.some(isUrgentLeave) ? '⚡' : '';
+    dailyRows.push(`<span style="white-space:nowrap;color:${color}">${addDayShort(ds)}　${txt}${urg}</span>`);
+  }
+  const urgentTotal = appr.filter(isUrgentLeave).length;
+
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
-    <div style="font-size:12px;color:#999;margin-bottom:12px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
+    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
+    <div style="font-size:13px;margin-bottom:12px"><b style="color:#c62828">未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${urgentTotal} 次</b></div>
+    ${section('📅 每日出缺勤（🟢正常 🔵請假 🔴異常，⚡臨時假）', dailyRows, '本月無資料')}
     ${section('🕐 遲到（月累計 >15 分才扣薪）', lateRows, '無遲到')}
     ${section('🕐 早退（月累計 >15 分才扣薪）', earlyRows, '無早退')}
     ${section('💪 加班費（補休先扣最早的加班）', otRows, '無加班')}
