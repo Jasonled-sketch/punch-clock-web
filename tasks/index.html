@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f0a500">
+<title>USLED 任務牆 · 譽昇光電</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+/* ===================================================================
+   USLED 四大任務牆  —  單檔 HTML（手機優先）
+   架構：LOCAL 模式(localStorage) / CLOUD 模式(Ragic via Worker)
+   切換：把 CONFIG.MODE 改成 'CLOUD' 即可（需先填好 Ragic 欄位 ID）
+   =================================================================== */
+:root{
+  --bg:#0a0c12; --surface:#151823; --surface2:#1e2230; --border:#2a2f3f;
+  --text:#e8eaf0; --muted:#8b90a3; --accent:#f0a500;
+  --q1:#ef4444; --q2:#f59e0b; --q3:#22c55e; --q4:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
+body{min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;font-size:15px}
+img{display:block}
+.hidden{display:none!important}
+
+/* ---------- 登入頁 ---------- */
+#loginView{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{width:100%;max-width:420px}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .brand{font-size:30px;font-weight:900;color:var(--accent)}
+.login-logo .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.user-list{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.user-row{display:flex;align-items:center;gap:14px;padding:16px;width:100%;background:none;color:var(--text);text-align:left;border-bottom:1px solid var(--border);transition:background .15s}
+.user-row:last-child{border-bottom:none}
+.user-row:active{background:var(--surface2)}
+.avatar{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;color:#000;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-info .nm{font-weight:600}
+.user-info .em{color:var(--muted);font-size:12px}
+.role-tag{font-size:12px;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)}
+.role-tag.boss{background:rgba(240,165,0,.18);color:var(--accent)}
+
+/* ---------- 頂部 bar ---------- */
+#topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
+#topbar .brand{font-weight:900;color:var(--accent);font-size:17px}
+#topbar .right{display:flex;align-items:center;gap:8px}
+.me-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border-radius:20px;padding:5px 10px 5px 5px}
+.me-chip .avatar{width:28px;height:28px;font-size:13px}
+.me-chip .nm{font-size:13px}
+.btn-logout{background:none;color:var(--muted);font-size:13px;padding:6px 8px;border-radius:8px}
+.btn-logout:active{background:var(--surface2)}
+
+/* ---------- 看板 ---------- */
+#board{padding:12px;max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:760px){#board{grid-template-columns:1fr 1fr}}
+.quadrant{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px;border-top-width:4px}
+.q-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.q-title{font-weight:800;font-size:15px}
+.q-title .sub{font-weight:400;font-size:11px;color:var(--muted);margin-left:6px}
+.q-count{font-size:12px;color:var(--muted)}
+.q-add{background:var(--surface2);color:var(--accent);width:30px;height:30px;border-radius:8px;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.q-add:active{background:var(--accent);color:#000}
+.task-list{display:flex;flex-direction:column;gap:8px}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:18px 0}
+
+/* ---------- 任務卡 ---------- */
+.task{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;border-left:3px solid var(--border)}
+.task.done{opacity:.55}
+.task .t-title{font-weight:600;font-size:15px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.task.done .t-title{text-decoration:line-through}
+.task .t-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:7px;font-size:12px;color:var(--muted);align-items:center}
+.task .t-assignee{display:inline-flex;align-items:center;gap:5px}
+.mini-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000}
+.status-badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.st-open{background:var(--surface);color:var(--muted)}
+.st-submitted{background:rgba(245,158,11,.2);color:var(--q2)}
+.st-done{background:rgba(34,197,94,.2);color:var(--q3)}
+.due-soon{color:var(--q1)!important;font-weight:600}
+.t-thumb{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.t-thumb img{width:54px;height:54px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.t-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.t-actions button{font-size:13px;padding:7px 12px;border-radius:8px;font-weight:600;flex:1;min-width:72px}
+.btn-primary{background:var(--accent);color:#000}
+.btn-soft{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-good{background:rgba(34,197,94,.2);color:var(--q3);border:1px solid rgba(34,197,94,.4)}
+.btn-warn{background:rgba(239,68,68,.15);color:var(--q1);border:1px solid rgba(239,68,68,.4)}
+
+/* ---------- Modal ---------- */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:560px){.modal-mask{align-items:center;padding:20px}}
+.modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;overflow-y:auto;padding:18px}
+@media(min-width:560px){.modal{border-radius:18px}}
+.modal h3{font-size:18px;margin-bottom:14px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:15px}
+.field textarea{min-height:64px;resize:vertical}
+.quad-pick{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.quad-opt{padding:10px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:13px;color:var(--text)}
+.quad-opt.sel{border-color:var(--accent);background:rgba(240,165,0,.12)}
+.modal-actions{display:flex;gap:9px;margin-top:18px}
+.modal-actions button{flex:1;padding:13px;border-radius:10px;font-weight:700;font-size:15px}
+.img-input-row{display:flex;gap:8px;align-items:center}
+.img-preview-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.img-preview-list .wrap{position:relative}
+.img-preview-list img{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.img-preview-list .del{position:absolute;top:-6px;right:-6px;background:var(--q1);color:#fff;width:20px;height:20px;border-radius:50%;font-size:13px;display:flex;align-items:center;justify-content:center}
+
+/* 圖片放大 */
+#imageView{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+#imageView img{max-width:100%;max-height:100%;border-radius:10px}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--accent);color:var(--accent);padding:11px 20px;border-radius:30px;z-index:300;font-size:14px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+
+/* 模式標示 */
+.mode-flag{position:fixed;bottom:8px;left:8px;font-size:10px;color:var(--muted);z-index:40;background:var(--surface);padding:3px 7px;border-radius:6px;opacity:.6}
+/* 截止快捷選單 */
+.due-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.due-quick button{flex:1;min-width:70px;padding:9px 6px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px}
+.due-quick button.sel{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent);font-weight:600}
+/* 任務卡 flex（縮圖靠右、橫排、小張） */
+.task-body{display:flex;gap:10px;align-items:flex-start}
+.task-main{flex:1;min-width:0}
+.task-thumbs{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;flex-shrink:0;max-width:128px;justify-content:flex-end}
+.task-thumbs img,.task-thumbs video{width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--border);background:#000}
+.t-countdown{color:var(--q1)!important;font-weight:700}
+/* 逾期提醒視窗（閃爍） */
+.overdue-box{border:2px solid var(--q1)!important;animation:flashRed 1.1s ease-in-out infinite}
+@keyframes flashRed{0%,100%{box-shadow:0 0 4px var(--q1)}50%{box-shadow:0 0 30px 5px var(--q1)}}
+.overdue-title{font-size:21px;font-weight:800;color:var(--q1);margin-bottom:6px;text-align:center}
+.overdue-item{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:8px;border-left:3px solid var(--q1)}
+/* 拖曳游標（主管） */
+.task{cursor:grab}
+.task:active{cursor:grabbing}
+/* 備註（條列） */
+.t-note{margin-top:7px;font-size:12px;color:var(--muted);white-space:pre-wrap;border-left:2px solid var(--border);padding-left:8px;line-height:1.6}
+/* 標題列 + 展開鈕 */
+.t-title-row{display:flex;align-items:flex-start;gap:6px}
+.t-title-row .t-title{flex:1}
+.t-expand{background:var(--surface);border:1px solid var(--border);color:var(--accent);min-width:30px;height:26px;border-radius:6px;font-size:14px;flex-shrink:0;line-height:1;font-weight:700}
+.t-expand:active{background:var(--accent);color:#000}
+/* 詳情視窗 */
+.detail-section{margin-bottom:14px}
+.detail-label{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+/* 分類勾選 */
+.cat-row{display:flex;gap:8px}
+.cat-toggle{flex:1;padding:13px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700}
+.cat-toggle.on{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent)}
+.cat-toggle .hint{display:block;font-size:11px;font-weight:400;margin-top:2px;opacity:.8}
+.img-preview-list video{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#000}
+</style>
+</head>
+<body>
+
+<!-- ============ 登入頁 ============ -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">⬡ USLED 任務牆</div>
+      <div class="sub">譽昇光電科技 · 四大任務管理</div>
+    </div>
+    <div class="user-list" id="userList"></div>
+    <div style="text-align:center;margin-top:16px;color:var(--muted);font-size:12px">點自己的名字進入 · 看你今天該做的任務</div>
+  </div>
+</div>
+
+<!-- ============ 主畫面 ============ -->
+<div id="appView" class="hidden">
+  <div id="topbar">
+    <div class="brand">⬡ 任務牆</div>
+    <div class="right">
+      <div class="me-chip">
+        <div class="avatar" id="meAvatar"></div>
+        <span class="nm" id="meName"></span>
+      </div>
+      <button class="btn-logout" onclick="logout()">登出</button>
+    </div>
+  </div>
+  <div id="board"></div>
+</div>
+
+<div class="mode-flag" id="modeFlag"></div>
+
+<script>
+/* ===================================================================
+   CONFIG —— 要改的設定都在這
+   =================================================================== */
+const CONFIG = {
+  MODE: 'CLOUD',          // 'LOCAL'=資料存本機瀏覽器（測 UX 用）/ 'CLOUD'=存 Ragic（正式上線）
+  STORAGE_KEY: 'usled_tasks_v1',
+
+  // 員工名單（跟線上打卡系統對應；之後改 Google 登入時用 email 比對）
+  USERS: [
+    { id:'u-chen',   name:'陳俊男', nick:'男', title:'經理', role:'supervisor', color:'#4fc3f7', email:'covernself@gmail.com' },
+    { id:'u-chuang', name:'莊鈺萱', nick:'萱', title:'主管', role:'supervisor', color:'#ce93d8', email:'t8562ne@gmail.com' },
+    { id:'u-yu',     name:'陳譽昇', nick:'昇', title:'助理', role:'employee',   color:'#f48fb1', email:'us104931@gmail.com' },
+  ],
+
+  // 四象限（艾森豪矩陣）
+  QUADRANTS: [
+    { id:'q1', title:'重要又緊急',   sub:'需要立刻處理', color:'#ef4444' },
+    { id:'q2', title:'重要不緊急',   sub:'要有進度執行', color:'#f59e0b' },
+    { id:'q3', title:'不重要但緊急', sub:'瑣事盡快處理', color:'#22c55e' },
+    { id:'q4', title:'不重要不緊急', sub:'利用空閒執行', color:'#3b82f6' },
+  ],
+
+  // ===== Ragic 雲端設定（CLOUD 模式用）=====
+  RAGIC: {
+    WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
+    PATH: '/check-in-system/11',
+    GOOGLE_CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+    // 欄位 ID（日期欄已確認，其餘連續推算，寫入測試後驗證）
+    FIELDS: {
+      title:1003055, quadrant:1003056, status:1003057, assignee:1003058, creator:1003059,
+      due:1003060, points:1003061, earnedPoints:1003062, note:1003063, images:1003064,
+      submittedAt:1003065, approvedAt:1003066, createdAt:1003067
+    },
+    QUAD2RAGIC: { q1:'重要又緊急', q2:'重要不緊急', q3:'不重要但緊急', q4:'不重要不緊急' },
+    STATUS2RAGIC: { open:'待處理', submitted:'待審核', done:'已完成' },
+  },
+};
+
+/* ===================================================================
+   STATE
+   =================================================================== */
+const STATE = { user:null, tasks:[] };
+
+function userById(id){ return CONFIG.USERS.find(u=>u.id===id); }
+function isSupervisor(u){ return u && (u.role==='admin'||u.role==='supervisor'); }
+
+/* ===================================================================
+   資料層（db）—— LOCAL 用 localStorage；CLOUD 預留 Ragic
+   =================================================================== */
+async function dbLoadTasks(){
+  if(CONFIG.MODE==='CLOUD'){ return await ragicLoadTasks(); }
+  const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+  if(!raw){ const seed = seedTasks(); localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(seed)); return seed; }
+  try{ return JSON.parse(raw); }catch(e){ return []; }
+}
+function dbSaveTasks(tasks){
+  if(CONFIG.MODE==='CLOUD') return;
+  localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(tasks));
+}
+/* 單筆新增/更新：LOCAL 整批存 localStorage；CLOUD 寫 Ragic 並回填 ragicId */
+async function dbUpsert(task){
+  if(CONFIG.MODE==='CLOUD'){
+    const res = await ragicSaveTask(task);
+    if(res && res.ragicId && !task.ragicId){ task.ragicId = res.ragicId; task.id = 'r'+res.ragicId; }
+    return res;
+  }
+  dbSaveTasks(STATE.tasks);
+}
+/* 刪除：CLOUD 走 Ragic DELETE */
+async function dbDelete(task){
+  if(CONFIG.MODE==='CLOUD'){
+    if(task.ragicId){ try{ await ragicFetch('/'+task.ragicId+'?api', { method:'DELETE' }); }catch(e){} }
+    return;
+  }
+  dbSaveTasks(STATE.tasks);
+}
+
+/* === CLOUD 模式：Ragic 對應 + 讀寫（透過 punch-clock-proxy）=== */
+function quadFromRagic(v){ for(const k in CONFIG.RAGIC.QUAD2RAGIC) if(CONFIG.RAGIC.QUAD2RAGIC[k]===v) return k; return 'q4'; }
+function statusFromRagic(v){ for(const k in CONFIG.RAGIC.STATUS2RAGIC) if(CONFIG.RAGIC.STATUS2RAGIC[k]===v) return k; return 'open'; }
+function isoToRagic(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function ragicToIso(s){ if(!s) return null; const d=new Date(String(s).replace(/\//g,'-').replace(' ','T')); return isNaN(d)?null:d.toISOString(); }
+function emailToUserId(email){ const u=CONFIG.USERS.find(x=>x.email===email); return u?u.id:(email||''); }
+function parseImages(s){ if(!s) return []; return String(s).split('\n').filter(x=>x.trim()).map(u=>({type:/\.(mp4|mov|webm)/i.test(u)?'video':'image', src:u.trim()})); }
+
+async function ragicFetch(suffix, opts){
+  const url = CONFIG.RAGIC.WORKER + CONFIG.RAGIC.PATH + suffix;
+  const headers = Object.assign({ 'X-Google-Token': STATE.googleToken||'' }, (opts&&opts.headers)||{});
+  return await fetch(url, Object.assign({}, opts, { headers }));
+}
+
+async function ragicLoadTasks(){
+  const r = await ragicFetch('?api', { method:'GET' });
+  const json = await r.json();
+  const tasks = [];
+  Object.keys(json).forEach(k=>{
+    const rec = json[k]; if(!rec || typeof rec!=='object' || !rec._ragicId) return;
+    tasks.push({
+      id:'r'+rec._ragicId, ragicId: rec._ragicId,
+      title: rec['任務主題']||'', quadrant: quadFromRagic(rec['象限']), status: statusFromRagic(rec['狀態']),
+      assigneeId: emailToUserId(rec['指派給']), createdById: emailToUserId(rec['建立人']),
+      dueAt: ragicToIso(rec['截止時間']), points: parseInt(rec['點數'])||0,
+      earnedPoints: rec['實得點數']? parseInt(rec['實得點數']) : null,
+      note: rec['備註步驟']||'', images: parseImages(rec['圖片網址']),
+      submittedAt: ragicToIso(rec['提交時間']), approvedAt: ragicToIso(rec['核准時間']), createdAt: ragicToIso(rec['建立時間'])
+    });
+  });
+  return tasks;
+}
+
+async function ragicSaveTask(t){
+  const F = CONFIG.RAGIC.FIELDS, fd = new FormData();
+  fd.append(F.title, t.title||'');
+  fd.append(F.quadrant, CONFIG.RAGIC.QUAD2RAGIC[t.quadrant]||'');
+  fd.append(F.status, CONFIG.RAGIC.STATUS2RAGIC[t.status]||'待處理');
+  fd.append(F.assignee, (userById(t.assigneeId)||{}).email || t.assigneeId || '');
+  fd.append(F.creator, (userById(t.createdById)||{}).email || '');
+  if(t.dueAt) fd.append(F.due, isoToRagic(t.dueAt));
+  fd.append(F.points, String(t.points||0));
+  if(t.earnedPoints!=null) fd.append(F.earnedPoints, String(t.earnedPoints));
+  fd.append(F.note, t.note||'');
+  fd.append(F.images, (t.images||[]).map(m=>typeof m==='string'?m:m.src).filter(s=>/^https?:/.test(s)).join('\n'));
+  if(t.submittedAt) fd.append(F.submittedAt, isoToRagic(t.submittedAt));
+  if(t.approvedAt) fd.append(F.approvedAt, isoToRagic(t.approvedAt));
+  if(t.createdAt) fd.append(F.createdAt, isoToRagic(t.createdAt));
+  const suffix = t.ragicId ? ('/'+t.ragicId+'?api') : '?api';
+  const r = await ragicFetch(suffix, { method:'POST', body:fd });
+  return await r.json();
+}
+
+/* 示範任務（LED 公司情境，第一次開自動帶幾筆，讓你看到四象限長怎樣） */
+function seedTasks(){
+  const now = Date.now();
+  const iso = (h)=> new Date(now + h*3600000).toISOString();
+  return [
+    { id:'t1', title:'GR-1003 客戶樣品色溫超標 0.3，需重新打樣', quadrant:'q1', status:'open', assigneeId:'u-huang', dueAt:iso(6),  points:50, images:[], createdById:'u-chen', createdAt:iso(-24) },
+    { id:'t2', title:'產線 LD-3 散熱片溫度異常，現場確認', quadrant:'q1', status:'open', assigneeId:'u-huang', dueAt:iso(3),  points:80, images:[], createdById:'u-chen', createdAt:iso(-3) },
+    { id:'t3', title:'Q3 RGB+W 五合一新品打樣里程碑', quadrant:'q2', status:'open', assigneeId:'u-huang', dueAt:iso(720), points:200, images:[], createdById:'u-jason', createdAt:iso(-168) },
+    { id:'t4', title:'CNS 15592 燈具能效認證文件整理', quadrant:'q2', status:'open', assigneeId:'u-li', dueAt:iso(240), points:120, images:[], createdById:'u-chuang', createdAt:iso(-120) },
+    { id:'t5', title:'下週展覽 LED 燈條到貨清點', quadrant:'q3', status:'open', assigneeId:'u-li', dueAt:iso(96), points:15, images:[], createdById:'u-chuang', createdAt:iso(-48) },
+    { id:'t6', title:'尾牙場地考察（板橋 / 中和）', quadrant:'q4', status:'open', assigneeId:'u-li', dueAt:iso(700), points:30, images:[], createdById:'u-chuang', createdAt:iso(-300) },
+  ];
+}
+
+/* ===================================================================
+   登入 / 登出
+   =================================================================== */
+function renderLogin(){
+  const list = document.getElementById('userList');
+  if(CONFIG.MODE==='CLOUD'){
+    list.innerHTML = '<div style="padding:26px 16px;text-align:center"><div id="gbtn" style="display:flex;justify-content:center"></div><div style="margin-top:14px;color:var(--muted);font-size:13px">請用公司 Google 帳號登入</div></div>';
+    renderGoogleButton();
+    return;
+  }
+  list.innerHTML = CONFIG.USERS.map(u=>`
+    <button class="user-row" onclick="login('${u.id}')">
+      <div class="avatar" style="background:${u.color}">${u.name.slice(-1)}</div>
+      <div class="user-info">
+        <div class="nm">${u.name}</div>
+        <div class="em">${u.title}</div>
+      </div>
+      <span class="role-tag ${isSupervisor(u)?'boss':''}">${u.title}</span>
+    </button>`).join('');
+}
+function renderGoogleButton(){
+  if(!(window.google && google.accounts && google.accounts.id)){ setTimeout(renderGoogleButton, 400); return; }
+  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:false, cancel_on_tap_outside:false });
+  const el = document.getElementById('gbtn');
+  if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
+}
+function handleGoogleSignIn(resp){
+  try{
+    STATE.googleToken = resp.credential;
+    const payload = JSON.parse(atob(resp.credential.split('.')[1]));
+    const email = (payload.email||'').toLowerCase();
+    const user = CONFIG.USERS.find(u=>(u.email||'').toLowerCase()===email);
+    if(!user){ alert('你的 Google 帳號（'+email+'）尚未開通，請聯絡管理員開通'); return; }
+    login(user.id);
+  }catch(e){ alert('登入失敗：'+e.message); }
+}
+async function login(uid){
+  STATE.user = userById(uid);
+  if(CONFIG.MODE!=='CLOUD') localStorage.setItem('usled_last_user', uid);
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+  const a = document.getElementById('meAvatar');
+  a.textContent = STATE.user.name.slice(-1); a.style.background = STATE.user.color;
+  document.getElementById('meName').textContent = STATE.user.name;
+  try{ STATE.tasks = await dbLoadTasks(); }
+  catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
+  renderBoard();
+  initDrag();
+  checkOverdue();
+}
+function logout(){
+  STATE.user = null;
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+}
+
+/* ===================================================================
+   看板渲染
+   =================================================================== */
+function renderBoard(){
+  const board = document.getElementById('board');
+  const sup = isSupervisor(STATE.user);
+  board.innerHTML = CONFIG.QUADRANTS.map(q=>{
+    const tasks = STATE.tasks.filter(t=>t.quadrant===q.id);
+    const open = tasks.filter(t=>t.status!=='done');
+    const done = tasks.filter(t=>t.status==='done');
+    const ordered = [...open, ...done];
+    return `<div class="quadrant" data-qid="${q.id}" style="border-top-color:${q.color}">
+      <div class="q-head">
+        <div class="q-title">${q.title}<span class="sub">${q.sub}</span></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="q-count">${open.length}</span>
+          ${sup?`<button class="q-add" onclick="openTaskModal(null,'${q.id}')">+</button>`:''}
+        </div>
+      </div>
+      <div class="task-list">
+        ${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（無任務）</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTaskCard(t){
+  const a = userById(t.assigneeId);
+  const sup = isSupervisor(STATE.user);
+  const mine = STATE.user.id === t.assigneeId;
+  const tl = (t.status!=='done') ? timeLeft(t.dueAt) : null;
+  const stMap = {open:['待處理','st-open'], submitted:['待主管審核','st-submitted'], done:['已完成','st-done']};
+  const st = stMap[t.status]||stMap.open;
+  // 操作按鈕
+  let actions = '';
+  if(t.status==='open' && mine){ actions += `<button class="btn-primary" onclick="submitTask('${t.id}')">✓ 提交完成</button>`; }
+  if(t.status==='submitted' && sup){ actions += `<button class="btn-good" onclick="approveTask('${t.id}')">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}')">退回</button>`; }
+  if(sup){ actions += `<button class="btn-soft" onclick="openTaskModal('${t.id}')">編輯</button>`; }
+  const media = (t.images||[]).slice(0,3);
+  const thumbs = media.length? `<div class="task-thumbs">${media.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})">`; }).join('')}</div>`:'';
+  return `<div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+    <div class="task-body">
+      <div class="task-main">
+        <div class="t-title-row">
+          <div class="t-title">${esc(t.title)}</div>
+          <button class="t-expand" onclick="showTaskDetail('${t.id}')" title="看完整內容">▾</button>
+        </div>
+        <div class="t-meta">
+          ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:'<span>未指派</span>'}
+          ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
+          ${pointsHtml(t)}
+          <span class="status-badge ${st[1]}">${st[0]}</span>
+        </div>
+        ${t.note?`<div class="t-note">${esc(t.note)}</div>`:''}
+      </div>
+      ${thumbs}
+    </div>
+    ${actions?`<div class="t-actions">${actions}</div>`:''}
+  </div>`;
+}
+
+/* ===================================================================
+   任務 CRUD
+   =================================================================== */
+let editingId = null;
+let modalImages = [];
+
+let modalImportant=true, modalUrgent=true;
+function openTaskModal(taskId, presetQuad){
+  if(!isSupervisor(STATE.user)) return;
+  editingId = taskId;
+  const t = taskId? STATE.tasks.find(x=>x.id===taskId) : null;
+  modalImages = t? [...(t.images||[])] : [];
+  const quad = t? t.quadrant : (presetQuad||'q1');
+  modalImportant = (quad==='q1'||quad==='q2');
+  modalUrgent = (quad==='q1'||quad==='q3');
+  const empOpts = CONFIG.USERS.map(u=>`<option value="${u.id}" ${t&&t.assigneeId===u.id?'selected':''}>${u.name}（${u.title}）</option>`).join('');
+  const dueVal = t&&t.dueAt? toLocalInput(t.dueAt):'';
+  const mask = document.createElement('div');
+  mask.className='modal-mask'; mask.id='taskModal';
+  mask.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
+    <h3>${t?'編輯任務':'新增任務'}</h3>
+    <div class="field"><label>任務主題（簡短，最多 30 字）</label><input type="text" id="f_title" maxlength="30" placeholder="例：GR-1003 色溫超標重打樣" value="${t?esc(t.title):''}"></div>
+    <div class="field"><label>分類（勾選 重要 / 緊急）</label>
+      <div class="cat-row">
+        <div class="cat-toggle ${modalImportant?'on':''}" id="catImp" onclick="toggleCat('important')">重要<span class="hint">不能漏掉</span></div>
+        <div class="cat-toggle ${modalUrgent?'on':''}" id="catUrg" onclick="toggleCat('urgent')">緊急<span class="hint">優先完成</span></div>
+      </div>
+    </div>
+    <div class="field"><label>指派給</label><select id="f_assignee">${empOpts}</select></div>
+    <div class="field"><label>截止時間</label>
+      <div class="due-quick" id="dueQuick"></div>
+      <input type="datetime-local" id="f_due" value="${dueVal}">
+    </div>
+    <div class="field"><label>完成點數（獎勵）</label><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
+    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
+    <div class="field"><label>附圖 / 影片（最多 3 個，記錄怎麼做的）</label>
+      <div class="img-input-row"><input type="file" accept="image/*,video/*" capture="environment" id="f_img" onchange="onPickMedia(event)"></div>
+      <div class="img-preview-list" id="imgPreview"></div>
+    </div>
+    <div class="modal-actions">
+      ${t?`<button class="btn-warn" onclick="deleteTask('${t.id}')">刪除</button>`:''}
+      <button class="btn-soft" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveTask()">${t?'儲存':'新增'}</button>
+    </div>
+  </div>`;
+  mask.onclick = closeModal;
+  document.body.appendChild(mask);
+  renderModalImages();
+  renderDueQuick();
+  if(!editingId && modalUrgent) setDueQuick('1h');
+}
+function toggleCat(which){
+  if(which==='important') modalImportant=!modalImportant; else modalUrgent=!modalUrgent;
+  const ci=document.getElementById('catImp'), cu=document.getElementById('catUrg');
+  if(ci) ci.classList.toggle('on', modalImportant);
+  if(cu) cu.classList.toggle('on', modalUrgent);
+  renderDueQuick();
+  if(which==='urgent' && modalUrgent) setDueQuick('1h');
+}
+function computeQuad(){ return modalImportant ? (modalUrgent?'q1':'q2') : (modalUrgent?'q3':'q4'); }
+function renderDueQuick(){
+  const box=document.getElementById('dueQuick'); if(!box)return;
+  const opts = modalUrgent
+    ? [['1h','1小時內'],['2h','2小時內'],['today','下班前'],['tmr','明天完成']]
+    : [['day2','後天完成'],['week','當週完成'],['nextweek','下週完成'],['none','不限時間']];
+  box.innerHTML = opts.map(o=>`<button type="button" data-k="${o[0]}" onclick="setDueQuick('${o[0]}')">${o[1]}</button>`).join('');
+}
+function setDueQuick(spec){
+  const now = new Date();
+  const at18 = (base)=>{ const x=new Date(base); x.setHours(18,0,0,0); return x; };
+  let d=null;
+  if(spec==='1h') d = new Date(now.getTime()+3600000);
+  else if(spec==='2h') d = new Date(now.getTime()+2*3600000);
+  else if(spec==='today'){ d = at18(now); if(d<=now){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); } }
+  else if(spec==='tmr'){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); }
+  else if(spec==='day2'){ const t=new Date(now); t.setDate(t.getDate()+2); d=at18(t); }
+  else if(spec==='week'){ const t=new Date(now); const add=(7-t.getDay())%7; t.setDate(t.getDate()+add); d=at18(t); }
+  else if(spec==='nextweek'){ const t=new Date(now); const add=(7-t.getDay())%7+7; t.setDate(t.getDate()+add); d=at18(t); }
+  else if(spec==='none'){ d=null; }
+  const inp = document.getElementById('f_due'); if(inp) inp.value = d? toLocalInput(d.toISOString()):'';
+  document.querySelectorAll('#dueQuick button').forEach(b=>b.classList.toggle('sel', b.dataset.k===spec));
+}
+function onPickMedia(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(modalImages.length>=3){ toast('最多 3 個'); e.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    if(file.type.startsWith('video/')){ modalImages.push({type:'video',src:reader.result}); renderModalImages(); }
+    else { compressImage(reader.result, 900, (small)=>{ modalImages.push({type:'image',src:small}); renderModalImages(); }); }
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+function renderModalImages(){
+  const box=document.getElementById('imgPreview'); if(!box)return;
+  box.innerHTML = modalImages.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return `<div class="wrap">${isVid?`<video src="${src}" muted></video>`:`<img src="${src}">`}<div class="del" onclick="modalImages.splice(${i},1);renderModalImages()">×</div></div>`; }).join('');
+}
+async function saveTask(){
+  const title = document.getElementById('f_title').value.trim();
+  if(!title){ toast('請輸入任務主題'); return; }
+  const assignee = document.getElementById('f_assignee').value;
+  const due = document.getElementById('f_due').value;
+  const points = parseInt(document.getElementById('f_points').value)||0;
+  const note = document.getElementById('f_note').value.trim();
+  const quad = computeQuad();
+  let task;
+  if(editingId){
+    task = STATE.tasks.find(x=>x.id===editingId);
+    Object.assign(task,{ title, quadrant:quad, assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, note, images:[...modalImages] });
+  }else{
+    task = { id:'t'+Date.now(), title, quadrant:quad, status:'open', assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, note, images:[...modalImages], createdById:STATE.user.id, createdAt:new Date().toISOString() };
+    STATE.tasks.unshift(task);
+  }
+  const wasEdit = !!editingId;
+  closeModal(); renderBoard();
+  try{ await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務'); }
+  catch(e){ toast('雲端寫入失敗：'+e.message); }
+}
+async function deleteTask(id){ if(!confirm('確定刪除這個任務？'))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
+async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
+async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); }
+async function rejectTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='open'; renderBoard(); await dbUpsert(t); toast('已退回，請員工繼續'); }
+function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remove(); editingId=null; }
+
+/* ===================================================================
+   媒體放大（圖片 / 影片）
+   =================================================================== */
+function showMedia(taskId,idx){
+  const t=STATE.tasks.find(x=>x.id===taskId); const m=t.images[idx]; const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video';
+  const v=document.createElement('div'); v.id='imageView';
+  v.innerHTML = isVid? `<video src="${src}" controls autoplay></video>` : `<img src="${src}">`;
+  v.onclick=(e)=>{ if(e.target.id==='imageView') v.remove(); }; document.body.appendChild(v);
+}
+
+/* ===================================================================
+   任務詳情視窗（員工點 ▾ 看完整內容）
+   =================================================================== */
+function showTaskDetail(id){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t)return;
+  const a=userById(t.assigneeId);
+  const q=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant);
+  const sup=isSupervisor(STATE.user);
+  const mine=STATE.user.id===t.assigneeId;
+  const tl=t.status!=='done'?timeLeft(t.dueAt):null;
+  const ep=effectivePoints(t);
+  const media=(t.images||[]);
+  const stMap={open:'待處理',submitted:'待主管審核',done:'已完成'};
+  let actions='';
+  if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
+  if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
+  if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
+  const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='detailModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <h3 style="margin:0;flex:1">${esc(t.title)}</h3>
+      <button class="t-expand" onclick="closeDetail()" style="font-size:18px">✕</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px">
+      <span class="status-badge" style="background:${q.color}30;color:${q.color}">${q.title}</span>
+      ${a?`<span class="status-badge" style="background:${a.color}30;color:${a.color}">指派：${a.name}</span>`:''}
+      <span class="status-badge st-${t.status}">${stMap[t.status]}</span>
+    </div>
+    <div class="detail-section">
+      <div class="detail-label">⏰ 截止 / 點數</div>
+      <div style="font-size:15px">
+        ${t.dueAt?`<span class="${tl&&tl.urgent?'t-countdown':''}">${tl?tl.text:fmtDue(t.dueAt)}</span>`:'<span style="color:var(--muted)">不限時間</span>'}
+        ${t.points?` ｜ <b style="color:${ep<t.points&&t.status!=='done'?'var(--q1)':'var(--accent)'}">＋${ptsTxt} 點</b>${ep<t.points&&t.status!=='done'?`<span style="text-decoration:line-through;opacity:.5;margin-left:4px">${t.points}</span>`:''}`:''}
+      </div>
+    </div>
+    ${t.note?`<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項</div><div class="t-note" style="border-left-color:var(--accent);font-size:14px;color:var(--text)">${esc(t.note)}</div></div>`:''}
+    ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
+    ${actions?`<div class="modal-actions">${actions}</div>`:''}
+  </div>`;
+  mask.onclick=closeDetail;
+  document.body.appendChild(mask);
+}
+function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
+function compressImage(dataUrl,maxW,cb){
+  const img=new Image();
+  img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
+  img.src=dataUrl;
+}
+
+/* ===================================================================
+   工具
+   =================================================================== */
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function timeLeft(iso){
+  if(!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  if(diff < 0){ const h=Math.ceil(-diff/3600000); return {text: h<24?('逾期 '+h+' 小時'):('逾期 '+Math.ceil(h/24)+' 天'), urgent:true}; }
+  const h = diff/3600000;
+  if(h < 1) return {text:'剩 '+Math.max(1,Math.ceil(diff/60000))+' 分', urgent:true};
+  if(h < 24) return {text:'剩 '+Math.floor(h)+' 小時', urgent:true};
+  const d=Math.floor(h/24); if(d<7) return {text:d+' 天後', urgent:false};
+  const dt=new Date(iso); return {text:(dt.getMonth()+1)+'/'+dt.getDate(), urgent:false};
+}
+/* 逾期點數打折：每逾期 2 小時 ×0.9 累計，直到 0 */
+function effectivePoints(t){
+  if(!t.points || !t.dueAt) return t.points||0;
+  const overH = (Date.now() - new Date(t.dueAt).getTime())/3600000;
+  if(overH <= 0) return t.points;
+  const steps = Math.ceil(overH/2);
+  return Math.max(0, Math.round(t.points * Math.pow(0.9, steps)));
+}
+function pointsHtml(t){
+  if(!t.points) return '';
+  if(t.status==='done') return `<span>＋${t.earnedPoints!=null?t.earnedPoints:t.points} 點</span>`;
+  const ep=effectivePoints(t);
+  if(ep<t.points) return `<span style="color:var(--q1);font-weight:600">＋${ep} 點 <span style="text-decoration:line-through;opacity:.5;font-weight:400">${t.points}</span></span>`;
+  return `<span>＋${t.points} 點</span>`;
+}
+function fmtDue(iso){ const d=new Date(iso),now=new Date(); const diff=d-now; const day=Math.round(diff/86400000);
+  if(diff<0) return '已逾期'; if(day===0){ const h=Math.round(diff/3600000); return h<=1?'1 小時內':h+' 小時內'; } if(day===1)return '明天'; if(day<7)return day+' 天後'; return (d.getMonth()+1)+'/'+d.getDate(); }
+function toLocalInput(iso){ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function toast(msg){ const old=document.getElementById('toast'); if(old)old.remove(); const t=document.createElement('div'); t.id='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+
+/* ===================================================================
+   啟動
+   =================================================================== */
+document.getElementById('modeFlag').textContent = CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式';
+renderLogin();
+/* ===================================================================
+   長按拖曳：把任務拖到其他象限改分類（主管限定）
+   =================================================================== */
+let dragCtx = null;
+function initDrag(){
+  const board = document.getElementById('board');
+  if(!board || board.__dragInit) return; board.__dragInit=true;
+  board.addEventListener('mousedown', dragStart);
+  board.addEventListener('touchstart', dragStart, {passive:false});
+  document.addEventListener('mousemove', dragMove, {passive:false});
+  document.addEventListener('touchmove', dragMove, {passive:false});
+  document.addEventListener('mouseup', dragEnd);
+  document.addEventListener('touchend', dragEnd);
+}
+function dragStart(e){
+  if(!isSupervisor(STATE.user)) return;
+  const taskEl = e.target.closest('.task'); if(!taskEl) return;
+  if(e.target.closest('button') || e.target.closest('.task-thumbs')) return;
+  const pt = e.touches? e.touches[0] : e;
+  dragCtx = { tid:taskEl.dataset.tid, taskEl, startX:pt.clientX, startY:pt.clientY, timer:null, active:false, ghost:null };
+  dragCtx.timer = setTimeout(dragActivate, 380);
+}
+function dragActivate(){
+  if(!dragCtx) return;
+  dragCtx.active = true;
+  if(navigator.vibrate) navigator.vibrate(30);
+  const el = dragCtx.taskEl;
+  const g = el.cloneNode(true);
+  g.style.cssText = 'position:fixed;z-index:500;width:'+el.offsetWidth+'px;opacity:.92;pointer-events:none;transform:scale(1.04);box-shadow:0 10px 32px rgba(0,0,0,.7);border:2px solid var(--accent)';
+  document.body.appendChild(g); dragCtx.ghost = g;
+  el.style.opacity = '.3';
+  toast('拖到其他象限改分類');
+}
+function dragMove(e){
+  if(!dragCtx) return;
+  const pt = e.touches? e.touches[0] : e;
+  if(!dragCtx.active){
+    if(Math.abs(pt.clientX-dragCtx.startX)>12 || Math.abs(pt.clientY-dragCtx.startY)>12) clearTimeout(dragCtx.timer);
+    return;
+  }
+  e.preventDefault();
+  dragCtx.ghost.style.left = (pt.clientX - dragCtx.ghost.offsetWidth/2)+'px';
+  dragCtx.ghost.style.top = (pt.clientY - 24)+'px';
+  document.querySelectorAll('.quadrant').forEach(q=>q.style.outline='');
+  const under = quadrantAt(pt.clientX, pt.clientY);
+  if(under) under.style.outline='3px solid var(--accent)';
+}
+function quadrantAt(x,y){
+  const els = document.elementsFromPoint(x,y);
+  for(const el of els){ const q = el.closest && el.closest('.quadrant'); if(q) return q; }
+  return null;
+}
+function dragEnd(e){
+  if(!dragCtx) return;
+  clearTimeout(dragCtx.timer);
+  if(dragCtx.active){
+    const pt = e.changedTouches? e.changedTouches[0] : e;
+    const q = quadrantAt(pt.clientX, pt.clientY);
+    if(q && q.dataset.qid){
+      const t = STATE.tasks.find(x=>x.id===dragCtx.tid);
+      if(t && t.quadrant!==q.dataset.qid){ t.quadrant=q.dataset.qid; dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===q.dataset.qid).title+'」'); }
+    }
+    if(dragCtx.ghost) dragCtx.ghost.remove();
+    document.querySelectorAll('.quadrant').forEach(q=>q.style.outline='');
+    renderBoard();
+  }
+  dragCtx = null;
+}
+
+/* ===================================================================
+   逾期提醒：自己被指派的任務逾期 → 跳閃爍視窗
+   =================================================================== */
+function checkOverdue(){
+  if(!STATE.user) return;
+  if(document.getElementById('overdueAlert')) return;
+  const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id && t.status!=='done' && t.dueAt && new Date(t.dueAt).getTime()<Date.now());
+  if(mine.length===0) return;
+  const el = document.createElement('div'); el.id='overdueAlert'; el.className='modal-mask';
+  el.innerHTML = `<div class="modal overdue-box" onclick="event.stopPropagation()">
+    <div class="overdue-title">⚠ 你有 ${mine.length} 個任務已逾期！</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">逾期越久、點數打折越多，請盡快完成</div>
+    ${mine.map(t=>`<div class="overdue-item"><b>${esc(t.title)}</b><div style="font-size:12px;color:var(--q1);margin-top:3px">${timeLeft(t.dueAt).text} · 點數 ${t.points} → <b>${effectivePoints(t)}</b></div></div>`).join('')}
+    <button class="btn-primary" style="width:100%;padding:14px;margin-top:14px;border-radius:10px;font-weight:700;font-size:15px" onclick="document.getElementById('overdueAlert').remove()">我知道了，馬上處理</button>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+// 每分鐘自動更新倒數 + 檢查逾期
+setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
+// 記住上次登入身份（方便 demo）
+const last = localStorage.getItem('usled_last_user');
+if(last && userById(last)) login(last);
+</script>
+</body>
+</html>
