@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -628,6 +628,15 @@ function effShiftBounds(sh, dayLeaves) {
     if (le >= pmEnd && ls < pmEnd) pmEnd = Math.min(pmEnd, ls);          // 請假涵蓋下班結尾 → 應下班前移
   });
   return { amStart, pmEnd, fullDay };
+}
+// 實際上班工時：正職扣午休（午休與打卡重疊取較大者），工讀只扣已記休息
+function realWorkHours(rec, sh, isFull) {
+  if (!rec || !rec.start_time || !rec.end_time) return Math.round((parseFloat(rec && rec.hours) || 0) * 100) / 100;
+  let mins = toMin(rec.end_time) - toMin(rec.start_time);
+  const rest = Number(rec.breaks_minutes) || 0;
+  if (isFull && sh) { const lunch = Math.max(0, Math.min(toMin(rec.end_time), toMin(sh.pm[0])) - Math.max(toMin(rec.start_time), toMin(sh.am[1]))); mins -= Math.max(rest, lunch); }
+  else mins -= rest;
+  return Math.round(Math.max(0, mins) / 60 * 100) / 100;
 }
 function fmtHHMM(d) {
   const dt = d instanceof Date ? d : new Date(d);
@@ -1869,7 +1878,7 @@ async function viewReport() {
       const isFull = w.emp_type === '正式員工';
       const sh = CONFIG.SHIFTS[w.shift];
       const wr = recs.filter(r => r.email === w.email);
-      const totH = wr.reduce((s, r) => s + (Number(r.hours) || 0), 0);
+      const totH = wr.reduce((s, r) => s + realWorkHours(r, sh, isFull), 0);  // 正職扣午休、工讀不扣
       const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
       const attendDays = new Set(wr.map(r => r.date)).size;
 
@@ -2018,7 +2027,7 @@ function exportMonthDetail() {
       dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
       rows.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
         (rec && rec.start_time) || '', (rec && rec.end_time) || '', lv.start_time || '', lv.end_time || '', lv.leave_type || '',
-        ot.start_time || '', ot.end_time || '', (rec && rec.hours) || '', late || '', early || '', addPay || '', dedPay || '']);
+        ot.start_time || '', ot.end_time || '', rec ? realWorkHours(rec, sh, isFull) : '', late || '', early || '', addPay || '', dedPay || '']);
     }
   });
   if (rows.length <= 1) { alert('本月無出勤資料可匯出'); return; }
