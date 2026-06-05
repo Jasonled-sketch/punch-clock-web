@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1964,7 +1964,7 @@ async function viewReport() {
         ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
-          ${cell('總時數', `${totH.toFixed(1)} h`)}
+          ${cell('實際工時', `${totH.toFixed(1)} h`)}
           ${cell('實出勤', `${attendDays} 天`)}
           ${isFull ? cell('曠職', `${absent} 天`, absent>0) : ''}
           ${cell('漏打卡', `${noClockOut} 次`, noClockOut>0)}
@@ -2118,45 +2118,66 @@ function showReportDetail(email) {
     (rows.length ? rows.map(r => `<div class="rd-row">${r}</div>`).join('') : `<div class="rd-empty">${empty}</div>`) +
     `</div>`;
 
-  // 每日出缺勤（逐日彩色：綠正常/藍請假/紅異常，臨時假加⚡）+ 統計
+  // 每日出缺勤（分段彩色：上班段綠/休假補休藍/遲到早退紅，臨時假⚡）+ 統計
   const pad2 = n => String(n).padStart(2, '0');
   const dim = new Date(year, month, 0).getDate();
   const recByDate = {}; wr.forEach(r => recByDate[r.date] = r);
   const lvByDate = {}; appr.forEach(l => { (lvByDate[l.start_date] = lvByDate[l.start_date] || []).push(l); });
+  const compByDate = {}; otAll.filter(o => o.email === email && o.ot_type === '補休' && o.status === 'approved').forEach(o => { (compByDate[o.date] = compByDate[o.date] || []).push({ s: o.start_time, e: o.end_time, h: parseFloat(o.hours) || 0 }); });
   const nowTw = new Date(Date.now() + 8 * 3600 * 1000);
   const todayMs = Date.UTC(nowTw.getUTCFullYear(), nowTw.getUTCMonth(), nowTw.getUTCDate());
-  let missCnt = 0;
+  let missCnt = 0, totLate = 0, totEarly = 0;
   const dailyRows = [];
   for (let d = 1; d <= dim; d++) {
     const ds = `${year}/${pad2(month)}/${pad2(d)}`;
     const dow = new Date(year, month - 1, d).getDay();
     const dMs = Date.UTC(year, month - 1, d);
-    const rec = recByDate[ds], lvs = lvByDate[ds];
+    const rec = recByDate[ds], lvs = lvByDate[ds] || [];
     const isHol = (holidaySet && holidaySet.has(ds)) || dow === 0 || dow === 6;
-    let color, txt;
-    if (rec && rec.start_time && rec.end_time) { color = '#2e7d32'; txt = `${rec.start_time}-${rec.end_time}`; if (lvs) { color = '#1565c0'; txt += `　${lvs[0].leave_type}`; } }
-    else if (rec && rec.start_time) { color = '#c62828'; txt = `${rec.start_time}- 未打下班`; }
-    else if (lvs) { color = '#1565c0'; const l = lvs[0]; txt = (l.start_time ? `${l.start_time}-${l.end_time}` : '全天') + `　${l.leave_type}`; }
+    const dayOff = [];
+    lvs.forEach(l => { if (l.start_time && l.end_time && (parseFloat(l.hours) || 0) < (sh ? sh.hours : 8)) dayOff.push({ s: l.start_time, e: l.end_time, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); else dayOff.push({ full: true, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); });
+    (compByDate[ds] || []).forEach(c => dayOff.push({ s: c.s, e: c.e, type: '補休', h: c.h }));
+    let html = `<span style="color:#777">${addDayShort(ds)} </span>`;
+    if (rec && rec.start_time && rec.end_time) {
+      const eff = effShiftBounds(sh, dayOff);
+      let lateM = 0, earlyM = 0;
+      if (sh && !eff.fullDay) { const a = toMin(rec.start_time) - eff.amStart; if (a > 0) lateM = a; const b = eff.pmEnd - toMin(rec.end_time); if (b > 0) earlyM = b; }
+      totLate += lateM; totEarly += earlyM;
+      const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
+      const wh = realWorkHours(rec, sh, isFull);
+      if (full) html += `<span style="color:#c62828">${rec.start_time}-${rec.end_time} ⚠請假卻打卡</span>`;
+      else {
+        const workSeg = mid ? `${rec.start_time}-${mid.s} ${mid.e}-${rec.end_time}` : `${rec.start_time}-${rec.end_time}`;
+        html += `<span style="color:#2e7d32">${workSeg} 實工${wh}h</span>`;
+        const l2 = [];
+        if (mid) l2.push(`<span style="color:#1565c0">${mid.s}-${mid.e} ${mid.type}${mid.h}h${mid.urg ? '⚡' : ''}</span>`);
+        if (lateM) l2.push(`<span style="color:#c62828">遲到${lateM}min</span>`);
+        if (earlyM) l2.push(`<span style="color:#c62828">早退${earlyM}min</span>`);
+        if (l2.length) html += `<br><span style="margin-left:14px">${l2.join(' ')}</span>`;
+      }
+    } else if (rec && rec.start_time) html += `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
+    else if (dayOff.length) { const o = dayOff[0]; html += `<span style="color:#1565c0">${o.full || !o.s ? '全天' : `${o.s}-${o.e}`} ${o.type}${o.h}h${o.urg ? '⚡' : ''}</span>`; }
     else if (isHol) continue;
-    else if (dMs < todayMs) { color = '#c62828'; txt = '未打卡'; missCnt++; }
+    else if (dMs < todayMs) { html += `<span style="color:#c62828">未打卡</span>`; missCnt++; }
     else continue;
-    const urg = lvs && lvs.some(isUrgentLeave) ? '⚡' : '';
-    dailyRows.push(`<span style="white-space:nowrap;color:${color}">${addDayShort(ds)}　${txt}${urg}</span>`);
+    dailyRows.push(html);
   }
   const urgentTotal = appr.filter(isUrgentLeave).length;
+  const lateEarlyTot = totLate + totEarly;
+  const lateEarlyDeduct = Math.round((lateEarlyTot > 15 ? lateEarlyTot : 0) / 60 * hourly);
+  const otcpRows = [];  // 加班(紫)+補休(藍)，補休先抵加班
+  od.rows.forEach(r => otcpRows.push(`<span style="color:#9333ea">${addDayShort(r.date)} 加班${r.orig}h${r.used ? `（補休抵${r.used}h）` : ''}${r.paid > 0 ? ` 計薪${r.paid}h $${r.pay}` : ' 補休全抵'}</span>`));
+  otAll.filter(o => o.email === email && o.ot_type === '補休' && o.status === 'approved' && (o.date || '').startsWith(ym)).forEach(o => otcpRows.push(`<span style="color:#1565c0">${addDayShort(o.date)} 補休${o.hours}h</span>`));
 
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
-    <div style="font-size:13px;margin-bottom:12px"><b style="color:#c62828">未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${urgentTotal} 次</b></div>
-    ${section('📅 每日出缺勤（🟢正常 🔵請假 🔴異常，⚡臨時假）', dailyRows, '本月無資料')}
-    ${section('🕐 遲到（月累計 >15 分才扣薪）', lateRows, '無遲到')}
-    ${section('🕐 早退（月累計 >15 分才扣薪）', earlyRows, '無早退')}
-    ${section('💪 加班費（補休先扣最早的加班）', otRows, '無加班')}
-    ${od.compTotal ? `<div class="rd-row" style="color:#9333ea;font-weight:600">本月補休共 ${od.compTotal}h，已優先抵扣最早的加班</div>` : ''}
-    ${section('🔄 補休', compRows, '無補休')}
+    <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${urgentTotal} 次</b></div>
+    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">遲到早退累計 ${lateEarlyTot} 分${lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）'}</div>
+    ${section('📅 每日出缺勤（🟢正常 🔵休假 🔴遲到/未打卡/早退，⚡臨時假）', dailyRows, '本月無資料')}
+    ${section('💪 加班/補休（加班紫 補休藍，補休先抵加班）', otcpRows, '無加班/補休')}
+    ${od.totalPay ? `<div class="rd-row" style="font-weight:600;color:#9333ea">→ 補休抵扣後，本月加班費 $${od.totalPay.toLocaleString()}</div>` : (od.compTotal ? `<div class="rd-row" style="color:#1565c0">本月補休 ${od.compTotal}h 已抵扣加班</div>` : '')}
     ${section('🌴 請假', leaveRows, '無請假')}
-    ${section('⚠️ 漏打下班', noOutRows, '無')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
