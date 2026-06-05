@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v2.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -636,8 +636,14 @@ function realWorkHours(rec, sh, isFull) {
   const rest = Number(rec.breaks_minutes) || 0;
   if (isFull && sh) { const lunch = Math.max(0, Math.min(toMin(rec.end_time), toMin(sh.pm[0])) - Math.max(toMin(rec.start_time), toMin(sh.am[1]))); mins -= Math.max(rest, lunch); }
   else mins -= rest;
-  return Math.round(Math.max(0, mins) / 60 * 100) / 100;
+  return Math.round(Math.max(0, mins) / 60 * 2) / 2;  // 以 0.5h 為單位
 }
+function splitSegs(inM, outM, dayOff) {  // 打卡時段扣掉休假時段 → 上班段們（修負時段 bug）
+  let segs = [[inM, outM]];
+  (dayOff || []).filter(o => o.s && o.e).forEach(o => { const os = toMin(o.s), oe = toMin(o.e); segs = segs.flatMap(([a, b]) => { if (oe <= a || os >= b) return [[a, b]]; const r = []; if (a < os) r.push([a, Math.min(os, b)]); if (oe < b) r.push([Math.max(oe, a), b]); return r; }); });
+  return segs.filter(([a, b]) => b > a);
+}
+function mm2hhmm(m) { return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
 function fmtHHMM(d) {
   const dt = d instanceof Date ? d : new Date(d);
   return `${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
@@ -2147,12 +2153,12 @@ function showReportDetail(email) {
       const wh = realWorkHours(rec, sh, isFull);
       if (full) html += `<span style="color:#c62828">${rec.start_time}-${rec.end_time} ⚠請假卻打卡</span>`;
       else {
-        const workSeg = mid ? `${rec.start_time}-${mid.s} ${mid.e}-${rec.end_time}` : `${rec.start_time}-${rec.end_time}`;
-        html += `<span style="color:#2e7d32">${workSeg} 實工${wh}h</span>`;
+        const segText = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff).map(([a, b]) => `${mm2hhmm(a)}-${mm2hhmm(b)}`).join(' ');
+        html += `<span style="color:#2e7d32">${segText} 實工${wh}h</span>`;
         const l2 = [];
         if (mid) l2.push(`<span style="color:#1565c0">${mid.s}-${mid.e} ${mid.type}${mid.h}h${mid.urg ? '⚡' : ''}</span>`);
-        if (lateM) l2.push(`<span style="color:#c62828">遲到${lateM}min</span>`);
-        if (earlyM) l2.push(`<span style="color:#c62828">早退${earlyM}min</span>`);
+        if (lateM) l2.push(`<span style="color:#c62828">遲到${lateM}分鐘</span>`);
+        if (earlyM) l2.push(`<span style="color:#c62828">早退${earlyM}分鐘</span>`);
         if (l2.length) html += `<br><span style="margin-left:14px">${l2.join(' ')}</span>`;
       }
     } else if (rec && rec.start_time) html += `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
