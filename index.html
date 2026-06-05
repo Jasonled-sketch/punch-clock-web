@@ -1863,7 +1863,7 @@ async function viewReport() {
     h += teamLifeHtml(incomplete.length);  // 團隊生命值（全員漏打卡總數）
     h += `<div class="lock-bar">${isLocked
       ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
-      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}</div>`;
+      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button></div>`;
 
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
@@ -1978,6 +1978,56 @@ async function viewReport() {
     });
     setView(h + '</div>');
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// 匯出本月每日出勤明細 CSV（每員工每日一筆，供月結/薪資查核）
+function exportMonthDetail() {
+  if (!_RPT) { alert('請先載入薪資月報'); return; }
+  const { recs, leaves, otAll, holidaySet, ym, year, month } = _RPT;
+  const wkd = ['日','一','二','三','四','五','六'];
+  const headers = ['姓名','Email','日期','星期','預定上班','預定下班','預定休息','實際上班','實際下班','請假開始','請假結束','假別','加班開始','加班結束','實際工時','遲到分','早退分','應加發','應扣除'];
+  const rows = [headers];
+  (WORKERS || []).filter(w => w.active !== '0').forEach(w => {
+    const sh = CONFIG.SHIFTS[w.shift];
+    const isFull = w.emp_type === '正式員工';
+    const hourly = isFull ? Math.round(w.monthly_salary / 240) : Number(w.weekday_rate) || 0;
+    const dim = new Date(year, month, 0).getDate();
+    for (let d = 1; d <= dim; d++) {
+      const ds = `${year}/${pad(month)}/${pad(d)}`;
+      const dow = new Date(year, month - 1, d).getDay();
+      const rec = recs.find(r => r.email === w.email && r.date === ds) || null;
+      const dayLv = leaves.filter(l => l.email === w.email && l.status === 'approved' && l.start_date === ds);
+      const dayOt = otAll.filter(o => o.email === w.email && o.ot_type === '加班' && o.status === 'approved' && o.date === ds);
+      if (!rec && !dayLv.length && !dayOt.length) continue;  // 該日無任何資料 → 不列
+      const lv = dayLv[0] || {}, ot = dayOt[0] || {};
+      // 遲到/早退（扣除當日請假時段）
+      let late = 0, early = 0;
+      if (sh && rec) {
+        const eff = effShiftBounds(sh, dayLv);
+        if (!eff.fullDay) {
+          if (rec.start_time) { const x = toMin(rec.start_time) - eff.amStart; if (x > 0) late = x; }
+          if (rec.end_time)   { const x = eff.pmEnd - toMin(rec.end_time);     if (x > 0) early = x; }
+        }
+      }
+      // 應加發＝當日加班費＋假日加給(正職假日出勤)；應扣除＝當日請假扣＋遲退扣(逐日估算)
+      const isWknd = [0, 6].includes(dow) || (holidaySet && holidaySet.has(ds));
+      let addPay = 0;
+      if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourly, isWknd));
+      if (isFull && rec && (holidaySet.has(ds) || dow === 0)) addPay += Math.round((parseFloat(rec.hours) || 0) * Math.round(w.monthly_salary / 240));
+      let dedPay = 0;
+      dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
+      rows.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
+        (rec && rec.start_time) || '', (rec && rec.end_time) || '', lv.start_time || '', lv.end_time || '', lv.leave_type || '',
+        ot.start_time || '', ot.end_time || '', (rec && rec.hours) || '', late || '', early || '', addPay || '', dedPay || '']);
+    }
+  });
+  if (rows.length <= 1) { alert('本月無出勤資料可匯出'); return; }
+  const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `出勤明細_${ym.replace('/', '-')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 // 點員工頭像 → 完整明細彈窗（跟員工核對用）
