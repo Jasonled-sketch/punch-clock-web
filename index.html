@@ -1809,12 +1809,13 @@ function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
 }
 
 // 天災假不支薪：政府公告天災假(颱風/豪雨等，特殊日標記「是否支薪=否」)，正職當天沒來上班 → 扣一日薪。回傳該月不支薪缺勤天數
-function disasterUnpaidDays(worker, recs, year, month, specialByDate) {
+function disasterUnpaidDays(worker, recs, leaves, year, month, specialByDate) {
   if (!specialByDate) return 0;
   const now = new Date();
   const dim = new Date(year, month, 0).getDate();
   const ym = `${year}/${pad(month)}`;
   const attendSet = new Set(recs.filter(r => r.email === worker.email).map(r => r.date));
+  const leaveSet = new Set((leaves || []).filter(l => l.email === worker.email && l.status === 'approved' && (l.start_date || '').startsWith(ym)).map(l => l.start_date));
   const startDate = worker.start_date ? new Date(worker.start_date.replace(/\//g, '-')) : null;
   let cnt = 0;
   for (let d = 1; d <= dim; d++) {
@@ -1825,7 +1826,7 @@ function disasterUnpaidDays(worker, recs, year, month, specialByDate) {
     if (!sp || sp.paid !== '否') continue;                             // 只算不支薪特殊日(天災假)
     if (new Date(year, month - 1, d) > now) continue;                  // 未來不扣
     if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
-    if (attendSet.has(ds)) continue;                                   // 有來上班 → 照計薪不扣
+    if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有來上班或已請假(由請假邏輯處理) → 不另計天災假
     cnt++;
   }
   return cnt;
@@ -2004,7 +2005,7 @@ async function viewReport() {
       const lateDeduct = Math.round((latePen + earlyPen) / 60 * hourly);
       const leaveDeduct = calcLeaveDeduct(appr, hourly);
       const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
-      const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, CUR_YEAR, CUR_MONTH + 1, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
+      const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
       const base = isFull ? w.monthly_salary : totP;
       const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
       const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
@@ -2099,7 +2100,7 @@ function exportMonthDetail() {
       const dayLv = leaves.filter(l => l.email === w.email && l.status === 'approved' && l.start_date === ds);
       const dayOt = otAll.filter(o => o.email === w.email && o.ot_type === '加班' && o.status === 'approved' && o.date === ds);
       const spc = specialByDate && specialByDate[ds];
-      const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來 → 不支薪扣一日
+      const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && !dayLv.length && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來(且未請假) → 不支薪扣一日
       if (!rec && !dayLv.length && !dayOt.length && !isDisasterAbsent) continue;  // 該日無任何資料 → 不列
       const lv = dayLv[0] || {}, ot = dayOt[0] || {};
       // 遲到/早退（扣除當日請假時段）
@@ -2197,7 +2198,7 @@ function showReportDetail(email) {
   const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month, specialSet) : { confirmed: 0, pending: [] };
   const absent = ab.confirmed;
   const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
-  const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, year, month, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
+  const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, leaves, year, month, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
   const leaveDeduct = calcLeaveDeduct(appr, hourly);
   const base = isFull ? w.monthly_salary : totP;
   const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
