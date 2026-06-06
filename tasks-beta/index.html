@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f0a500">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>USLED 任務牆 · 譽昇光電</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -307,6 +310,7 @@ img{display:block}
     <div class="login-logo">
       <div class="brand">⬡ USLED 任務牆</div>
       <div class="sub">譽昇光電科技 · 四大任務管理</div>
+      <div class="sub" id="loginVer" style="margin-top:6px;color:var(--accent);font-weight:700"></div>
     </div>
     <div class="user-list" id="userList"></div>
     <div style="text-align:center;margin-top:16px;color:var(--muted);font-size:12px">點自己的名字進入 · 看你今天該做的任務</div>
@@ -316,7 +320,7 @@ img{display:block}
 <!-- ============ 主畫面 ============ -->
 <div id="appView" class="hidden">
   <div id="topbar">
-    <div class="brand">⬡ 任務牆</div>
+    <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
@@ -1419,7 +1423,9 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-document.getElementById('modeFlag').textContent = CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式';
+const APP_VERSION = 'v0.5.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+(function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
+document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
 /* ===================================================================
    長按拖曳：把任務拖到其他象限改分類（主管限定）
