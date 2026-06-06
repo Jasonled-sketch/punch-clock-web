@@ -52,8 +52,7 @@ img{display:block}
 .btn-logout:active{background:var(--surface2)}
 
 /* ---------- 看板 ---------- */
-#board{padding:12px;max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:12px}
-@media(min-width:760px){#board{grid-template-columns:1fr 1fr}}
+#board{padding:12px;max-width:760px;margin:0 auto}
 .quadrant{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px;border-top-width:4px}
 .q-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .q-title{font-weight:800;font-size:15px}
@@ -131,9 +130,22 @@ img{display:block}
 @keyframes flashRed{0%,100%{box-shadow:0 0 4px var(--q1)}50%{box-shadow:0 0 30px 5px var(--q1)}}
 .overdue-title{font-size:21px;font-weight:800;color:var(--q1);margin-bottom:6px;text-align:center}
 .overdue-item{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:8px;border-left:3px solid var(--q1)}
-/* 拖曳游標（主管） */
-.task{cursor:grab}
-.task:active{cursor:grabbing}
+/* 任務卡可點擊進詳情 */
+.task{cursor:pointer}
+.task:active{transform:scale(0.99)}
+/* 象限分頁 */
+.quad-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+@media(min-width:600px){.quad-tabs{grid-template-columns:repeat(4,1fr)}}
+.quad-tab{padding:11px 8px;border-radius:11px;border:2px solid var(--border);background:var(--surface);text-align:center;color:var(--text);transition:all .12s}
+.quad-tab .qt-title{font-size:13px;font-weight:700;line-height:1.25}
+.quad-tab .qt-sub{font-size:17px;font-weight:800;margin-top:2px}
+.quad-tab.active{color:#fff!important}
+.quad-panel{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px}
+.qp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.qp-title{font-weight:800;font-size:16px}
+.qp-sub{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
+.t-assignee-name{font-size:13px;color:var(--text)}
+.t-expand-hint{font-size:11px;color:var(--accent);margin-left:auto}
 /* 備註（條列） */
 .t-note{margin-top:7px;font-size:12px;color:var(--muted);white-space:pre-wrap;border-left:2px solid var(--border);padding-left:8px;line-height:1.6}
 /* 標題列 + 展開鈕 */
@@ -144,6 +156,8 @@ img{display:block}
 /* 詳情視窗 */
 .detail-section{margin-bottom:14px}
 .detail-label{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.move-quad-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.move-quad-btn{padding:10px;border-radius:9px;border:2px solid;background:var(--surface2);font-size:13px;font-weight:700}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:13px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700}
@@ -226,7 +240,7 @@ const CONFIG = {
 /* ===================================================================
    STATE
    =================================================================== */
-const STATE = { user:null, tasks:[] };
+const STATE = { user:null, tasks:[], activeQuad:'q1' };
 
 function userById(id){ return CONFIG.USERS.find(u=>u.id===id); }
 function isSupervisor(u){ return u && (u.role==='admin'||u.role==='supervisor'); }
@@ -376,7 +390,6 @@ async function login(uid){
   try{ STATE.tasks = await dbLoadTasks(); }
   catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
   renderBoard();
-  initDrag();
   checkOverdue();
 }
 function logout(){
@@ -391,54 +404,51 @@ function logout(){
 function renderBoard(){
   const board = document.getElementById('board');
   const sup = isSupervisor(STATE.user);
-  board.innerHTML = CONFIG.QUADRANTS.map(q=>{
-    const tasks = STATE.tasks.filter(t=>t.quadrant===q.id);
-    const open = tasks.filter(t=>t.status!=='done');
-    const done = tasks.filter(t=>t.status==='done');
-    const ordered = [...open, ...done];
-    return `<div class="quadrant" data-qid="${q.id}" style="border-top-color:${q.color}">
-      <div class="q-head">
-        <div class="q-title">${q.title}<span class="sub">${q.sub}</span></div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <span class="q-count">${open.length}</span>
-          ${sup?`<button class="q-add" onclick="openTaskModal(null,'${q.id}')">+</button>`:''}
-        </div>
-      </div>
-      <div class="task-list">
-        ${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（無任務）</div>'}
-      </div>
-    </div>`;
+  const tabs = CONFIG.QUADRANTS.map(q=>{
+    const cnt = STATE.tasks.filter(t=>t.quadrant===q.id && t.status!=='done').length;
+    const active = STATE.activeQuad===q.id;
+    return `<button class="quad-tab${active?' active':''}" style="${active?('background:'+q.color+';border-color:'+q.color):('border-color:'+q.color+'66;color:'+q.color)}" onclick="switchQuad('${q.id}')">
+      <div class="qt-title">${q.title}</div>
+      <div class="qt-sub">${cnt}</div>
+    </button>`;
   }).join('');
+  const q = CONFIG.QUADRANTS.find(x=>x.id===STATE.activeQuad) || CONFIG.QUADRANTS[0];
+  const tasks = STATE.tasks.filter(t=>t.quadrant===STATE.activeQuad);
+  const open = tasks.filter(t=>t.status!=='done');
+  const done = tasks.filter(t=>t.status==='done');
+  const ordered = [...open, ...done];
+  board.innerHTML = `
+    <div class="quad-tabs">${tabs}</div>
+    <div class="quad-panel" style="border-top:3px solid ${q.color}">
+      <div class="qp-head">
+        <div class="qp-title" style="color:${q.color}">${q.title}<span class="qp-sub">${q.sub}</span></div>
+        ${sup?`<button class="q-add" onclick="openTaskModal(null,'${STATE.activeQuad}')">＋ 新增</button>`:''}
+      </div>
+      <div class="task-list">${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（這個分類目前沒有任務）</div>'}</div>
+    </div>`;
 }
+function switchQuad(qid){ STATE.activeQuad=qid; renderBoard(); }
 
 function renderTaskCard(t){
   const a = userById(t.assigneeId);
   const sup = isSupervisor(STATE.user);
   const mine = STATE.user.id === t.assigneeId;
-  const tl = (t.status!=='done') ? timeLeft(t.dueAt) : null;
-  const stMap = {open:['待處理','st-open'], submitted:['待主管審核','st-submitted'], done:['已完成','st-done']};
+  const stMap = {open:['待處理','st-open'], submitted:['待審核','st-submitted'], done:['已完成','st-done']};
   const st = stMap[t.status]||stMap.open;
-  // 操作按鈕
   let actions = '';
-  if(t.status==='open' && mine){ actions += `<button class="btn-primary" onclick="submitTask('${t.id}')">✓ 提交完成</button>`; }
-  if(t.status==='submitted' && sup){ actions += `<button class="btn-good" onclick="approveTask('${t.id}')">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}')">退回</button>`; }
-  if(sup){ actions += `<button class="btn-soft" onclick="openTaskModal('${t.id}')">編輯</button>`; }
+  if(t.status==='open' && mine){ actions += `<button class="btn-primary" onclick="event.stopPropagation();submitTask('${t.id}')">✓ 提交完成</button>`; }
+  if(t.status==='submitted' && sup){ actions += `<button class="btn-good" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button><button class="btn-warn" onclick="event.stopPropagation();rejectTask('${t.id}')">退回</button>`; }
   const media = (t.images||[]).slice(0,3);
-  const thumbs = media.length? `<div class="task-thumbs">${media.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})">`; }).join('')}</div>`:'';
-  return `<div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+  const thumbs = media.length? `<div class="task-thumbs">${media.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return isVid?`<video src="${src}" muted onclick="event.stopPropagation();showMedia('${t.id}',${i})"></video>`:`<img src="${src}" onclick="event.stopPropagation();showMedia('${t.id}',${i})">`; }).join('')}</div>`:'';
+  return `<div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="showTaskDetail('${t.id}')" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
     <div class="task-body">
       <div class="task-main">
-        <div class="t-title-row">
-          <div class="t-title">${esc(t.title)}</div>
-          <button class="t-expand" onclick="showTaskDetail('${t.id}')" title="看完整內容">▾</button>
-        </div>
+        <div class="t-title">${esc(t.title)}</div>
         <div class="t-meta">
-          ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:'<span>未指派</span>'}
-          ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
-          ${pointsHtml(t)}
+          ${a?`<span class="mini-avatar" style="background:${a.color}">${a.name.slice(-1)}</span><span class="t-assignee-name">${a.name}</span>`:'<span style="color:var(--muted)">未指派</span>'}
           <span class="status-badge ${st[1]}">${st[0]}</span>
+          <span class="t-expand-hint">詳情 ▾</span>
         </div>
-        ${t.note?`<div class="t-note">${esc(t.note)}</div>`:''}
       </div>
       ${thumbs}
     </div>
@@ -634,12 +644,20 @@ function showTaskDetail(id){
     </div>
     ${t.note?`<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項</div><div class="t-note" style="border-left-color:var(--accent);font-size:14px;color:var(--text)">${esc(t.note)}</div></div>`:''}
     ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
+    ${sup?`<div class="detail-section"><div class="detail-label">📂 移到其他分類</div><div class="move-quad-row">${CONFIG.QUADRANTS.map(qq=>`<button class="move-quad-btn" style="border-color:${qq.color};${qq.id===t.quadrant?'background:'+qq.color+';color:#fff':'color:'+qq.color}" onclick="moveTaskQuad('${t.id}','${qq.id}')">${qq.title}</button>`).join('')}</div></div>`:''}
     ${actions?`<div class="modal-actions">${actions}</div>`:''}
   </div>`;
   mask.onclick=closeDetail;
   document.body.appendChild(mask);
 }
 function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
+function moveTaskQuad(id, qid){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  closeDetail();
+  STATE.activeQuad=qid;
+  if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
+  else { renderBoard(); }
+}
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
   img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
