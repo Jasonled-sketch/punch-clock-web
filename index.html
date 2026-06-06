@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2167,25 +2167,25 @@ function showReportDetail(email) {
     else if (isHol) continue;
     else if (dMs < todayMs) { mainHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }
     else continue;
-    let html = `<div style="display:flex;align-items:baseline"><span style="color:#777;flex:0 0 68px">${addDayShort(ds)}</span><span style="flex:1">${mainHtml}</span>${workTxt}</div>`;
-    if (line2) html += `<div style="display:flex"><span style="flex:0 0 68px"></span><span style="flex:1">${line2}</span></div>`;
+    let html = `<div style="display:flex;align-items:baseline"><span style="color:#777;flex:0 0 88px">${addDayShort(ds)}</span><span style="flex:1">${mainHtml}</span>${workTxt}</div>`;
+    if (line2) html += `<div style="display:flex"><span style="flex:0 0 88px"></span><span style="flex:1">${line2}</span></div>`;
     dailyRows.push(html);
   }
   const urgentTotal = appr.filter(isUrgentLeave).length;
   const lateEarlyTot = totLate + totEarly;
   const lateEarlyDeduct = Math.round((lateEarlyTot > 15 ? lateEarlyTot : 0) / 60 * hourly);
-  const otcpRows = [];  // 加班(紫)+補休(藍)，補休先抵加班
-  od.rows.forEach(r => otcpRows.push(`<span style="color:#9333ea">${addDayShort(r.date)} 加班${r.orig}h${r.used ? `（補休抵${r.used}h）` : ''}${r.paid > 0 ? ` 計薪${r.paid}h $${r.pay}` : ' 補休全抵'}</span>`));
-  otAll.filter(o => o.email === email && o.ot_type === '補休' && o.status === 'approved' && (o.date || '').startsWith(ym)).forEach(o => otcpRows.push(`<span style="color:#1565c0">${addDayShort(o.date)} 補休${o.hours}h</span>`));
+  const todayStr2 = `${nowTw.getUTCFullYear()}/${pad2(nowTw.getUTCMonth() + 1)}/${pad2(nowTw.getUTCDate())}`;
+  const otcpRows = otAll.filter(o => o.email === email && (o.ot_type === '加班' || o.ot_type === '補休') && o.status === 'approved' && (o.date || '').startsWith(ym))  // 同 LINE：已核准加班(綠)/補休(藍)，已/預
+    .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+    .map(o => { const isOt = o.ot_type === '加班', h = parseFloat(o.hours) || 0, done = (o.date || '') <= todayStr2, c = isOt ? '#2e7d32' : '#1565c0'; return `<div style="display:flex"><span style="color:#777;flex:0 0 88px">${addDayShort(o.date)}</span><span style="color:${c};flex:1">${o.start_time && o.end_time ? `${o.start_time}-${o.end_time} ` : ''}${(done ? '已' : '預') + (isOt ? '加班' : '補休')}${h}h</span></div>`; });
 
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${urgentTotal} 次</b></div>
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">遲到早退累計 ${lateEarlyTot} 分${lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）'}</div>
-    ${section('📅 每日出缺勤（🟢正常 🔵休假 🔴遲到/未打卡/早退，⚡臨時假）', dailyRows, '本月無資料')}
-    ${section('💪 加班/補休（加班紫 補休藍，補休先抵加班）', otcpRows, '無加班/補休')}
-    ${od.totalPay ? `<div class="rd-row" style="font-weight:600;color:#9333ea">→ 補休抵扣後，本月加班費 $${od.totalPay.toLocaleString()}</div>` : (od.compTotal ? `<div class="rd-row" style="color:#1565c0">本月補休 ${od.compTotal}h 已抵扣加班</div>` : '')}
+    ${section('📅 每日出缺勤（🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時假）', dailyRows, '本月無資料')}
+    ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
