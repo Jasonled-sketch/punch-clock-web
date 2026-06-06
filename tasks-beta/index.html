@@ -1213,13 +1213,14 @@ async function loadGameState(){
   try{
     const r=await ragicFetchGS('?api',{method:'GET'}); const json=await r.json();
     const email=(STATE.user.email||'').toLowerCase();
-    STATE.uniqueOwners={};
-    Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||!rec._ragicId) return;
+    STATE.uniqueOwners={}; let best=null, bestTs=-1;
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||rec._ragicId==null) return;   // 注意：_ragicId 可能=0，不能用 falsy 判斷
       const recEmail=String(rec[GAME_STORE.N.email]||'').toLowerCase();
       let pst={}; try{ pst=JSON.parse(rec[GAME_STORE.N.save]||'{}'); }catch(e){}
-      if(recEmail===email){ GS=Object.assign(blankGS(), pst); GS._ragicId=rec._ragicId; }
+      if(recEmail===email){ const ts=+rec._dataTimestamp||0; if(ts>=bestTs){ bestTs=ts; best={rec,pst}; } }   // 同 email 多筆取最新
       if(pst.pets) Object.keys(pst.pets).forEach(pid=>{ const pd=petDef(pid); if(pd&&pd.unique) STATE.uniqueOwners[pid]=rec[GAME_STORE.N.name]||recEmail; });
     });
+    if(best){ GS=Object.assign(blankGS(), best.pst); GS._ragicId=best.rec._ragicId; }
   }catch(e){ /* 讀不到就用空檔，不擋使用 */ }
 }
 async function saveGameState(){
@@ -1231,8 +1232,8 @@ async function saveGameState(){
   const clean=Object.assign({},GS); delete clean._ragicId;
   fd.append(F.email, STATE.user.email||''); fd.append(F.name, STATE.user.name||'');
   fd.append(F.balance, String(coinBalance())); fd.append(F.save, JSON.stringify(clean)); fd.append(F.updated, GS.updated);
-  const suffix=GS._ragicId?('/'+GS._ragicId+'?api'):'?api';
-  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); const j=await r.json(); if(j&&j.ragicId&&!GS._ragicId) GS._ragicId=j.ragicId; }catch(e){ toast('雲端存檔失敗，稍後再試'); }
+  const suffix=(GS._ragicId!=null)?('/'+GS._ragicId+'?api'):'?api';   // _ragicId 可能=0，用 !=null
+  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); const j=await r.json(); const rid=j&&(j.ragicId!=null?j.ragicId:(j._ragicId!=null?j._ragicId:null)); if(rid!=null&&GS._ragicId==null) GS._ragicId=rid; }catch(e){ toast('雲端存檔失敗，稍後再試'); }
 }
 /* 動作 */
 function owns(id){ return GS&&GS.owned.includes(id); }
@@ -1423,7 +1424,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.5.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.5.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
