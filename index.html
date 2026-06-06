@@ -88,7 +88,7 @@
     .cal-dh{text-align:center;padding:6px 2px;font-size:12px;color:#888;font-weight:700}
     .cal-dh.sun{color:#ea4335}
     .cal-dh.sat{color:#1a73e8}
-    .cal-d{min-height:62px;padding:4px;border-radius:8px;background:#fafbfc;display:flex;flex-direction:column;gap:2px;transition:background .15s}
+    .cal-d{min-width:0;min-height:62px;padding:4px;border-radius:8px;background:#fafbfc;display:flex;flex-direction:column;gap:2px;transition:background .15s}
     .cal-d.weekend{background:#f3f5f8}
     .cal-d.other{background:transparent}
     .cal-d .dn{font-size:12px;font-weight:600;color:#444;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0}
@@ -239,7 +239,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1275,23 +1275,26 @@ function startTimer() {
 async function viewRecords() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const recs = await getMyRecs(CUR_YEAR, CUR_MONTH + 1);
+    const [recs, myLeaves, myOt] = await Promise.all([getMyRecs(CUR_YEAR, CUR_MONTH + 1), getMyLeaves(), getMyOt()]);
+    const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
+    const isFull = MY_WORKER?.emp_type === '正式員工';
     let h = `<div class="view">${monthNav(false)}`;
     if (!recs.length) {
       h += '<div class="loading">本月無打卡紀錄</div>';
     } else {
-      const totH = recs.reduce((s, r) => s + (Number(r.hours) || 0), 0);
-      const totP = recs.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
-      h += `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>時數</th><th>薪資</th></tr></thead><tbody>`;
+      let totH = 0, rows = '';
       recs.forEach(r => {
-        h += `<tr onclick='showRecDetail(${JSON.stringify(r)})'>
+        const wh = realWorkHours(r, sh, isFull, dayOffOf(ME.email, r.date, myLeaves, myOt));  // 實際工時：扣午休+補休/請假，與管理者明細一致
+        totH += wh;
+        rows += `<tr onclick='showRecDetail(${JSON.stringify({ ...r, wh })})'>
           <td>${addDay(r.date)}</td><td>${r.start_time}</td><td>${r.end_time||'—'}</td>
-          <td>${r.hours||'—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
+          <td>${wh || '—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
         </tr>`;
       });
-      h += `</tbody></table></div>
+      const totP = recs.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+      h += `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>實際工時</th><th>薪資</th></tr></thead><tbody>${rows}</tbody></table></div>
         <div class="card"><div class="sum-row">
-          <div class="sum-item"><div class="lbl">本月工時</div><div class="val">${totH.toFixed(2)}h</div></div>
+          <div class="sum-item"><div class="lbl">本月工時</div><div class="val">${totH.toFixed(1)}h</div></div>
           <div class="sum-item"><div class="lbl">本月薪資</div><div class="val">$${totP}</div></div>
         </div></div>`;
     }
@@ -1383,7 +1386,7 @@ function showRecDetail(rec) {
     <div class="modal-row"><span class="modal-lbl">上班</span><span>${rec.start_time}</span></div>
     <div class="modal-row"><span class="modal-lbl">下班</span><span>${rec.end_time||'—'}</span></div>
     <div class="modal-row"><span class="modal-lbl">休息</span><span>${rec.breaks_minutes||0} 分鐘</span></div>
-    <div class="modal-row"><span class="modal-lbl">時數</span><span>${rec.hours||'—'} h</span></div>
+    <div class="modal-row"><span class="modal-lbl">實際工時</span><span>${rec.wh != null ? rec.wh : (rec.hours||'—')} h</span></div>
     <div class="modal-row"><span class="modal-lbl">薪資</span><span>${rec.subtotal ? '$'+rec.subtotal : '—'}</span></div>
     ${gpsMapLink(rec.location)}
     <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
