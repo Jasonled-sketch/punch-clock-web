@@ -65,6 +65,7 @@
     td{padding:10px 12px;font-size:14px;border-bottom:1px solid #f0f0f0}
     tr:last-child td{border-bottom:none}
     tbody tr{cursor:pointer}
+    .tbl-compact th,.tbl-compact td{font-size:12px;padding:8px 6px;white-space:nowrap}
     tbody tr:hover td{background:#fafafa}
     /* ── Filter bar ── */
     .filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
@@ -88,16 +89,16 @@
     .cal-dh{text-align:center;padding:6px 2px;font-size:12px;color:#888;font-weight:700}
     .cal-dh.sun{color:#ea4335}
     .cal-dh.sat{color:#1a73e8}
-    .cal-d{min-width:0;min-height:62px;padding:4px;border-radius:8px;background:#fafbfc;display:flex;flex-direction:column;gap:2px;transition:background .15s}
+    .cal-d{min-width:0;min-height:66px;padding:4px;border-radius:8px;background:#fafbfc;display:flex;flex-direction:column;gap:2px;transition:background .15s}
     .cal-d.weekend{background:#f3f5f8}
     .cal-d.other{background:transparent}
     .cal-d .dn{font-size:12px;font-weight:600;color:#444;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0}
     .cal-d.sun .dn{color:#ea4335}
     .cal-d.today{background:#e8f0fe;box-shadow:inset 0 0 0 2px #1a73e8}
     .cal-d.today .dn{background:#1a73e8;color:#fff;font-weight:700}
-    .cal-ev{font-size:11px;padding:2px 5px;border-radius:4px;background:#fff;color:#222;border-left:3px solid #1a73e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500;line-height:1.5}
+    .cal-ev{font-size:12px;padding:3px 6px;border-radius:4px;background:#fff;color:#222;border-left:3px solid #1a73e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:600;line-height:1.5}
     .cal-ev:hover{background:#eef3ff}
-    .cal-sp{font-size:10px;padding:1px 4px;border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;line-height:1.4}
+    .cal-sp{font-size:11px;padding:2px 4px;border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;line-height:1.4}
     /* ── Month nav ── */
     .month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
     .month-nav strong{font-size:16px}
@@ -239,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1287,12 +1288,12 @@ async function viewRecords() {
         const wh = realWorkHours(r, sh, isFull, dayOffOf(ME.email, r.date, myLeaves, myOt));  // 實際工時：扣午休+補休/請假，與管理者明細一致
         totH += wh;
         rows += `<tr onclick='showRecDetail(${JSON.stringify({ ...r, wh })})'>
-          <td>${addDay(r.date)}</td><td>${r.start_time}</td><td>${r.end_time||'—'}</td>
-          <td>${wh || '—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
+          <td>${addDayShort(r.date)}</td><td>${r.start_time}</td><td>${r.end_time||'—'}</td>
+          <td>${wh || '—'}h</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
         </tr>`;
       });
       const totP = recs.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
-      h += `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>實際工時</th><th>薪資</th></tr></thead><tbody>${rows}</tbody></table></div>
+      h += `<div class="tbl-wrap"><table class="tbl-compact"><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>實際工時</th><th>薪資</th></tr></thead><tbody>${rows}</tbody></table></div>
         <div class="card"><div class="sum-row">
           <div class="sum-item"><div class="lbl">本月工時</div><div class="val">${totH.toFixed(1)}h</div></div>
           <div class="sum-item"><div class="lbl">本月薪資</div><div class="val">$${totP}</div></div>
@@ -1324,14 +1325,17 @@ async function getMyRecs(year, month) {
 async function viewCalendar() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const [recs, specialDays] = await Promise.all([getMyRecs(CUR_YEAR, CUR_MONTH + 1), getSpecialDays()]);
+    const [recs, specialDays, myLeaves, myOt] = await Promise.all([getMyRecs(CUR_YEAR, CUR_MONTH + 1), getSpecialDays(), getMyLeaves(), getMyOt()]);
+    const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
+    const isFull = MY_WORKER?.emp_type === '正式員工';
     const byDate = {};
     recs.forEach(r => { byDate[r.date] = r; });
     const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);
     const color = MY_WORKER?.color || '#1a73e8';
-    setView(`<div class="view">${monthNav(false)}${buildCal(byDate, rec => `
-      <div class="cal-ev" style="border-left-color:${color}" onclick='showRecDetail(${JSON.stringify(rec)})'>${rec.start_time}–${rec.end_time||'?'}</div>
-    `, specialByDate)}</div>`);
+    setView(`<div class="view">${monthNav(false)}${buildCal(byDate, rec => {
+      const wh = realWorkHours(rec, sh, isFull, dayOffOf(ME.email, rec.date, myLeaves, myOt));  // 月曆格顯示實際工時，可點開看明細
+      return `<div class="cal-ev" style="border-left-color:${color}" onclick='showRecDetail(${JSON.stringify({ ...rec, wh })})'>${rec.end_time ? wh + 'h' : '上班'}</div>`;
+    }, specialByDate)}</div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
 }
 
@@ -2813,38 +2817,35 @@ function buildLeaveCard(lv, isAdmin) {
     reason: lv.reason, apply_time: lv.apply_time, reject_note: lv.reject_note,
     urgent: isUrgentLeave(lv), onApprove: `showLeaveApproval(${lv.ragicId})`
   });
-  // 員工端三行卡：行1 假別+日期(時段)／狀態；行2 理由／操作鈕；行3 右下＝時長+臨時假+申請時間
+  // 員工端兩行卡(參考管理者格式)：行1 假別+日期+時段+時長/右編輯鈕；行2 狀態+理由/右臨時假+申請時間
   const stBadge = `<span class="b-${lv.status}">${LEAVE_STATUS[lv.status] || lv.status}</span>`;
   const rejectNote = lv.reject_note ? `<div class="leave-note">駁回原因：${escHtml(lv.reject_note)}</div>` : '';
   const dayNum  = parseFloat(lv.days) || 0;
   const hourNum = parseFloat(lv.hours) || 0;
-  const dur = dayNum >= 1
-    ? (dayNum === 1 ? '一天' : `${dayNum % 1 === 0 ? dayNum : dayNum.toFixed(1)} 天`)
-    : `${hourNum} 小時`;
+  const dur = dayNum >= 1 ? (dayNum === 1 ? '一天' : `${dayNum % 1 === 0 ? dayNum : dayNum.toFixed(1)}天`) : `${hourNum}H`;
   const timeRange = (lv.start_time && lv.end_time) ? `${lv.start_time}–${lv.end_time}` : '';
-  const urgent = isUrgentLeave(lv) ? `<span class="urgent-badge">⚡ 臨時假</span> ` : '';
+  const urgent = isUrgentLeave(lv) ? `<span class="urgent-badge">⚡臨時</span> ` : '';
   const ap = lv.apply_time || '';
-  const applyTxt = ap ? `${addDay(ap)} ${ap.slice(11,16)}` : '—';
+  const applyTxt = ap ? `${addDayShort(ap)} ${ap.slice(11,16)}` : '—';
   const ownerEdit =
     lv.status === 'pending'
-      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">編輯</button>`
+      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">編輯</button>`
       : lv.status === 'rejected'
-      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">重新申請</button>
-         <button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyLeave(${lv.ragicId})">取消</button>`
+      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">重新申請</button>
+         <button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyLeave(${lv.ragicId})">取消</button>`
       : '';
   return `
-    <div class="leave-card ${stCls}">
+    <div class="leave-card ${stCls}" style="padding:9px 12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="leave-type">${escHtml(lv.leave_type)}</span>　<span class="leave-date-main">${addDay(lv.start_date)}${timeRange ? ' '+timeRange : ''}</span></div>
-        ${stBadge}
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"><span class="leave-type">${escHtml(lv.leave_type)}</span> ${stBadge}　<span class="leave-date-main">${addDayShort(lv.start_date)}${timeRange ? ' '+timeRange : ''}</span></div>
+        <b style="color:#1a73e8;white-space:nowrap">${dur}</b>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:5px">
-        <div class="leave-reason" style="flex:1;min-width:0;margin:0">${escHtml(lv.reason) || '—'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:4px">
+        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(lv.reason) || '—'}　<span style="font-size:11px;color:#999">${urgent}申請 ${applyTxt}</span></div>
         ${ownerEdit ? `<div style="display:flex;gap:6px;white-space:nowrap">${ownerEdit}</div>` : ''}
       </div>
       ${lv.photo ? `<img class="leave-photo" src="${lv.photo}" onclick="window.open('${lv.photo}','_blank')">` : ''}
       ${rejectNote}
-      <div style="text-align:right;font-size:12px;color:#888;margin-top:5px">${urgent}<b style="color:#555">${dur}</b>　申請 ${applyTxt}</div>
     </div>`;
 }
 
@@ -3164,32 +3165,31 @@ function buildOtCard(ot, isAdmin) {
     reason: ot.reason, apply_time: ot.apply_time, reject_note: ot.reject_note,
     urgent: false, onApprove: `showOtApproval(${ot.ragicId})`
   });
-  // 員工端三行卡：行1 類型+日期(時段)／狀態；行2 理由／操作鈕；行3 右下＝時長+申請時間
+  // 員工端兩行卡(參考管理者格式)：行1 類型+日期+時段+時長/右編輯鈕；行2 狀態+理由/右申請時間
   const stBadge = `<span class="b-${ot.status}">${LEAVE_STATUS[ot.status] || ot.status}</span>`;
   const typeColor = ot.ot_type === '加班' ? '#1a73e8' : '#9333ea';
   const rejectNote = ot.reject_note ? `<div class="leave-note">駁回原因：${escHtml(ot.reject_note)}</div>` : '';
   const ownerEdit =
     ot.status === 'pending'
-      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">編輯</button>`
+      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">編輯</button>`
       : ot.status === 'rejected'
-      ? `<button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">重新申請</button>
-         <button class="btn btn-sm" style="padding:5px 12px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyOt(${ot.ragicId})">取消</button>`
+      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">重新申請</button>
+         <button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyOt(${ot.ragicId})">取消</button>`
       : '';
   const timeRange = (ot.start_time && ot.end_time) ? `${ot.start_time}–${ot.end_time}` : '';
   const ap = ot.apply_time || '';
-  const applyTxt = ap ? `${addDay(ap)} ${ap.slice(11,16)}` : '—';
+  const applyTxt = ap ? `${addDayShort(ap)} ${ap.slice(11,16)}` : '—';
   return `
-    <div class="leave-card ${stCls}">
+    <div class="leave-card ${stCls}" style="padding:9px 12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span class="leave-type" style="color:${typeColor}">${ot.ot_type}</span>　<span class="leave-date-main">${addDay(ot.date)}${timeRange ? ' '+timeRange : ''}</span></div>
-        ${stBadge}
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"><span class="leave-type" style="color:${typeColor}">${ot.ot_type}</span> ${stBadge}　<span class="leave-date-main">${addDayShort(ot.date)}${timeRange ? ' '+timeRange : ''}</span></div>
+        <b style="color:${typeColor};white-space:nowrap">${parseFloat(ot.hours)||0}H</b>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:5px">
-        <div class="leave-reason" style="flex:1;min-width:0;margin:0">${escHtml(ot.reason) || '—'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:4px">
+        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(ot.reason) || '—'}　<span style="font-size:11px;color:#999">申請 ${applyTxt}</span></div>
         ${ownerEdit ? `<div style="display:flex;gap:6px;white-space:nowrap">${ownerEdit}</div>` : ''}
       </div>
       ${rejectNote}
-      <div style="text-align:right;font-size:12px;color:#888;margin-top:5px"><b style="color:#555">${parseFloat(ot.hours)||0} 小時</b>　申請 ${applyTxt}</div>
     </div>`;
 }
 
