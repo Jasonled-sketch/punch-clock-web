@@ -239,7 +239,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -916,9 +916,10 @@ async function loadMyKPI() {
     const now = new Date();
     const year = now.getFullYear(), month = now.getMonth() + 1;
     const ym = `${year}/${pad(month)}`;
-    const [myRecs, allInc, myLeaves, specialDays] = await Promise.all([
-      getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves(), getSpecialDays()
+    const [myRecs, allInc, myLeaves, specialDays, allLeaves] = await Promise.all([
+      getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves(), getSpecialDays(), getAllLeaves()
     ]);
+    const teamUrgent = allLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
     const specialSet = new Set(specialDays.map(s => s.date));
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
@@ -943,7 +944,7 @@ async function loadMyKPI() {
         <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
       </div>
       ${ab.pending.length ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
-      ${teamLifeHtml(allInc.length)}`;
+      ${teamLifeHtml(teamUrgent)}`;
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
 
@@ -1857,12 +1858,14 @@ function calcAttendanceKPI(p) {
   return { light, lightLabel, health, hColor };
 }
 
-// 團隊生命值：每月滿 3 顆愛心，每筆漏打卡 −1，全員打卡(3顆)才發團隊獎金；匿名不點名
-function teamLifeHtml(totalMiss) {
-  const cls = totalMiss === 0 ? '' : totalMiss < 3 ? 'warn' : 'dead';
-  const box = totalMiss === 0 ? '🎁' : totalMiss < 3 ? '📦' : '🗑️';
+// 團隊生命值：每月滿 3 顆愛心，每筆臨時請假 −1，三次(0顆)就沒團隊獎金；匿名不點名
+function teamLifeHtml(urgentCount) {
+  const lost = Math.min(3, urgentCount);
+  const remain = 3 - lost;
+  const hearts = '❤️'.repeat(remain) + '🖤'.repeat(lost);
+  const cls = remain === 3 ? '' : remain > 0 ? 'warn' : 'dead';
   return `<div class="team-life ${cls}">
-    <span class="tl-text">${box} 本月團隊漏打卡 <b>${totalMiss}</b> 次</span>
+    <span class="tl-text">${hearts}　本月團隊臨時請假 <b>${urgentCount}</b> 次${remain === 0 ? '（已無團隊獎金）' : ''}</span>
     <button class="tl-info-btn" onclick="showKpiInfo()" title="KPI 計算說明">？</button>
   </div>`;
 }
@@ -1892,9 +1895,9 @@ function showKpiInfo() {
     </div>
     <div class="rd-sec"><div class="rd-title">❤️ 團隊生命值</div>
       <div class="rd-row">每月 ❤️❤️❤️ 三顆愛心</div>
-      <div class="rd-row">每發生一次漏打卡，全隊 −1 顆</div>
-      <div class="rd-row">月底維持 3 顆，全隊才發團隊獎金</div>
-      <div class="rd-row" style="color:#999;margin-top:4px">匿名計算，不公布是誰漏打卡，避免對立</div>
+      <div class="rd-row">每發生一次<b>臨時請假</b>（申請距請假未滿 72hr），全隊 −1 顆</div>
+      <div class="rd-row">滿三次臨時請假（愛心歸零）→ 全隊本月<b>無團隊獎金</b></div>
+      <div class="rd-row" style="color:#999;margin-top:4px">匿名計算，不公布是誰，避免對立；漏打卡屬個人行為不影響團隊</div>
     </div>
     <div class="rd-sec"><div class="rd-title">📌 名詞定義</div>
       <div class="rd-row"><b>曠職</b>：應上班卻沒打卡、沒請假；缺席後給 <b>30hr 補單緩衝</b>，期間顯示「待補單」提醒，超過 30hr 仍未補請假才確定計曠職（−30）</div>
@@ -1960,7 +1963,8 @@ async function viewReport() {
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
-    h += teamLifeHtml(incomplete.length);  // 團隊生命值（全員漏打卡總數）
+    const teamUrgent = leaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
+    h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
     h += `<div class="lock-bar">${isLocked
       ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
       : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button></div>`;
@@ -2780,16 +2784,20 @@ function buildApprovalCardCompact(o) {
   const ap = o.apply_time || '';
   const applyShort = ap ? `${addDayShort(ap)} ${ap.slice(11, 16)}` : '—';
   const btn = o.status === 'pending'
-    ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;margin-left:8px" onclick="${o.onApprove}">審核</button>` : '';
+    ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px" onclick="${o.onApprove}">審核</button>` : '';
   const urgent = o.urgent ? ' <span class="urgent-badge">⚡臨時</span>' : '';
   const reject = o.reject_note ? `　<span style="color:#ea4335">駁回：${escHtml(o.reject_note)}</span>` : '';
+  const range = o.timeRange ? ` ${o.timeRange}` : '';
   return `
     <div class="leave-card ${o.stCls}" style="padding:9px 12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(o.name)}　<span style="color:${o.typeColor}">${escHtml(o.typeLabel)}</span> ${icon}　<span style="color:#555;font-weight:500">${addDayShort(o.date)} ${dur}</span></div>
-        <div style="display:flex;align-items:center;white-space:nowrap"><span style="font-size:11px;color:#999">申請 ${applyShort}</span>${btn}</div>
+        <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(o.name)}　<span style="color:${o.typeColor}">${escHtml(o.typeLabel)}</span> ${icon}　<span style="color:#555;font-weight:500">${addDayShort(o.date)}${range} ${dur}</span></div>
+        ${btn ? `<div style="white-space:nowrap">${btn}</div>` : ''}
       </div>
-      <div style="font-size:13px;color:#666;margin-top:3px">${escHtml(o.reason) || '—'}${urgent}${reject}</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:3px">
+        <div style="font-size:13px;color:#666;flex:1;min-width:0">${escHtml(o.reason) || '—'}${urgent}${reject}</div>
+        <div style="font-size:11px;color:#999;white-space:nowrap">申請 ${applyShort}</div>
+      </div>
     </div>`;
 }
 
@@ -2798,6 +2806,7 @@ function buildLeaveCard(lv, isAdmin) {
   if (isAdmin) return buildApprovalCardCompact({
     stCls, status: lv.status, name: lv.name, typeLabel: lv.leave_type, typeColor: '#1a73e8',
     date: lv.start_date, dayNum: parseFloat(lv.days) || 0, hourNum: parseFloat(lv.hours) || 0,
+    timeRange: (lv.start_time && lv.end_time) ? `${lv.start_time}–${lv.end_time}` : '',
     reason: lv.reason, apply_time: lv.apply_time, reject_note: lv.reject_note,
     urgent: isUrgentLeave(lv), onApprove: `showLeaveApproval(${lv.ragicId})`
   });
@@ -3158,6 +3167,7 @@ function buildOtCard(ot, isAdmin) {
   if (isAdmin) return buildApprovalCardCompact({
     stCls, status: ot.status, name: ot.name, typeLabel: ot.ot_type, typeColor: ot.ot_type === '加班' ? '#1a73e8' : '#9333ea',
     date: ot.date, dayNum: 0, hourNum: parseFloat(ot.hours) || 0,
+    timeRange: (ot.start_time && ot.end_time) ? `${ot.start_time}–${ot.end_time}` : '',
     reason: ot.reason, apply_time: ot.apply_time, reject_note: ot.reject_note,
     urgent: false, onApprove: `showOtApproval(${ot.ragicId})`
   });
