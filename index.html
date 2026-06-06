@@ -235,7 +235,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2143,7 +2143,7 @@ function showReportDetail(email) {
     const dayOff = [];
     lvs.forEach(l => { if (l.start_time && l.end_time && (parseFloat(l.hours) || 0) < (sh ? sh.hours : 8)) dayOff.push({ s: l.start_time, e: l.end_time, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); else dayOff.push({ full: true, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); });
     (compByDate[ds] || []).forEach(c => dayOff.push({ s: c.s, e: c.e, type: '補休', h: c.h }));
-    let mainHtml = '', workTxt = '', line2 = '';
+    let segHtml = '', restHtml = '', workTxt = '', lateHtml = '';
     if (rec && rec.start_time && rec.end_time) {
       const eff = effShiftBounds(sh, dayOff);
       let lateM = 0, earlyM = 0;
@@ -2151,25 +2151,21 @@ function showReportDetail(email) {
       totLate += lateM; totEarly += earlyM;
       const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
       const wh = realWorkHours(rec, sh, isFull);
-      if (full) mainHtml = `<span style="color:#c62828">${rec.start_time}-${rec.end_time} ⚠請假卻打卡</span>`;
+      if (full) segHtml = `<span style="color:#c62828">${rec.start_time}-${rec.end_time} ⚠請假卻打卡</span>`;
       else {
         const segText = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff).map(([a, b]) => `${mm2hhmm(a)}-${mm2hhmm(b)}`).join(' ');
-        mainHtml = `<span style="color:#2e7d32">${segText}</span>`;
-        workTxt = `<span style="color:#2e7d32;white-space:nowrap;margin-left:8px">實工${wh}h</span>`;
-        const l2 = [];
-        if (mid) l2.push(`<span style="color:#1565c0">${mid.s}-${mid.e} ${mid.type}${mid.h}h</span>`);
-        if (lateM) l2.push(`<span style="color:#c62828">遲到${lateM}分鐘</span>`);
-        if (earlyM) l2.push(`<span style="color:#c62828">早退${earlyM}分鐘</span>`);
-        if (l2.length) line2 = l2.join(' ');
+        segHtml = `<span style="color:#2e7d32">${segText}</span>`;
+        workTxt = `<span style="color:#2e7d32">實工${wh}h</span>`;
+        if (mid) restHtml = `<span style="color:#1565c0">${mid.s}-${mid.e} ${mid.type}${mid.h}h</span>`;
+        const lt = []; if (lateM) lt.push(`遲到${lateM}分鐘`); if (earlyM) lt.push(`早退${earlyM}分鐘`);
+        if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
       }
-    } else if (rec && rec.start_time) mainHtml = `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
-    else if (dayOff.length) { const o = dayOff[0]; mainHtml = `<span style="color:#1565c0">${o.full || !o.s ? '全天' : `${o.s}-${o.e}`} ${o.type}${o.h}h</span>`; }
+    } else if (rec && rec.start_time) segHtml = `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
+    else if (dayOff.length) { const o = dayOff[0]; segHtml = `<span style="color:#1565c0">${o.full || !o.s ? '全天' : `${o.s}-${o.e}`} ${o.type}${o.h}h</span>`; }
     else if (isHol) continue;
-    else if (dMs < todayMs) { mainHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }
+    else if (dMs < todayMs) { restHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }  // 未打卡 → 日期下一行
     else continue;
-    let html = `<div style="display:flex;align-items:baseline"><span style="color:#777;flex:0 0 88px">${addDayShort(ds)}</span><span style="flex:1">${mainHtml}</span>${workTxt}</div>`;
-    if (line2) html += `<div style="display:flex"><span style="flex:0 0 88px"></span><span style="flex:1">${line2}</span></div>`;
-    dailyRows.push(html);
+    dailyRows.push(`<div style="display:flex"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div></div>`);
   }
   const urgentTotal = appr.filter(isUrgentLeave).length;
   const lateEarlyTot = totLate + totEarly;
