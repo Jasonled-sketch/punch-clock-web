@@ -134,11 +134,10 @@ img{display:block}
 .task{cursor:pointer}
 .task:active{transform:scale(0.99)}
 /* 象限分頁 */
-.quad-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
-@media(min-width:600px){.quad-tabs{grid-template-columns:repeat(4,1fr)}}
-.quad-tab{padding:11px 8px;border-radius:11px;border:2px solid var(--border);background:var(--surface);text-align:center;color:var(--text);transition:all .12s}
-.quad-tab .qt-title{font-size:13px;font-weight:700;line-height:1.25}
-.quad-tab .qt-sub{font-size:17px;font-weight:800;margin-top:2px}
+.quad-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px}
+.quad-tab{padding:8px 3px;border-radius:10px;border:2px solid var(--border);background:var(--surface);text-align:center;color:var(--text);transition:all .12s}
+.quad-tab .qt-title{font-size:11px;font-weight:700;line-height:1.2}
+.quad-tab .qt-sub{font-size:16px;font-weight:800;margin-top:1px}
 .quad-tab.active{color:#fff!important}
 .quad-panel{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px}
 .qp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -158,6 +157,8 @@ img{display:block}
 .detail-label{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
 .move-quad-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .move-quad-btn{padding:10px;border-radius:9px;border:2px solid;background:var(--surface2);font-size:13px;font-weight:700}
+.my-task-row{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:7px;cursor:pointer}
+.my-task-row:active{background:var(--border)}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:13px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700}
@@ -185,7 +186,7 @@ img{display:block}
   <div id="topbar">
     <div class="brand">⬡ 任務牆</div>
     <div class="right">
-      <div class="me-chip">
+      <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
         <span class="nm" id="meName"></span>
       </div>
@@ -433,6 +434,7 @@ function renderTaskCard(t){
   const a = userById(t.assigneeId);
   const sup = isSupervisor(STATE.user);
   const mine = STATE.user.id === t.assigneeId;
+  const tl = (t.status!=='done') ? timeLeft(t.dueAt) : null;
   const stMap = {open:['待處理','st-open'], submitted:['待審核','st-submitted'], done:['已完成','st-done']};
   const st = stMap[t.status]||stMap.open;
   let actions = '';
@@ -445,8 +447,9 @@ function renderTaskCard(t){
       <div class="task-main">
         <div class="t-title">${esc(t.title)}</div>
         <div class="t-meta">
-          ${a?`<span class="mini-avatar" style="background:${a.color}">${a.name.slice(-1)}</span><span class="t-assignee-name">${a.name}</span>`:'<span style="color:var(--muted)">未指派</span>'}
           <span class="status-badge ${st[1]}">${st[0]}</span>
+          ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:''}
+          ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
           <span class="t-expand-hint">詳情 ▾</span>
         </div>
       </div>
@@ -658,6 +661,35 @@ function moveTaskQuad(id, qid){
   if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
   else { renderBoard(); }
 }
+
+/* 我的任務（點頭像）— 自己被指派/接的所有任務，跨象限 */
+function showMyTasks(){
+  if(!STATE.user) return;
+  const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id);
+  const open = mine.filter(t=>t.status!=='done');
+  const done = mine.filter(t=>t.status==='done');
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='myTasksModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📋 ${STATE.user.name} 的任務（${open.length}）</h3>
+      <button class="t-expand" onclick="closeMyTasks()" style="font-size:18px">✕</button>
+    </div>
+    ${mine.length===0?'<div class="empty">目前沒有指派給你的任務</div>':''}
+    ${open.map(myTaskRow).join('')}
+    ${done.length?`<div class="detail-label" style="margin-top:14px">已完成（${done.length}）</div>${done.map(myTaskRow).join('')}`:''}
+  </div>`;
+  mask.onclick=closeMyTasks; document.body.appendChild(mask);
+}
+function myTaskRow(t){
+  const q=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant)||CONFIG.QUADRANTS[0];
+  const tl=t.status!=='done'?timeLeft(t.dueAt):null;
+  const stMap={open:'待處理',submitted:'待審核',done:'已完成'};
+  return `<div class="my-task-row" onclick="closeMyTasks();showTaskDetail('${t.id}')" style="border-left:3px solid ${q.color}">
+    <div style="font-weight:600">${esc(t.title)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px"><span style="color:${q.color}">${q.title}</span> · ${stMap[t.status]}${tl?` · <span class="${tl.urgent?'t-countdown':''}">${tl.text}</span>`:''}</div>
+  </div>`;
+}
+function closeMyTasks(){ const m=document.getElementById('myTasksModal'); if(m)m.remove(); }
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
   img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
