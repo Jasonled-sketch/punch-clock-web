@@ -238,7 +238,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -633,19 +633,26 @@ function effShiftBounds(sh, dayLeaves) {
   });
   return { amStart, pmEnd, fullDay };
 }
-// 實際上班工時：正職扣午休（午休與打卡重疊取較大者），工讀只扣已記休息
-function realWorkHours(rec, sh, isFull) {
-  if (!rec || !rec.start_time || !rec.end_time) return Math.round((parseFloat(rec && rec.hours) || 0) * 100) / 100;
-  let mins = toMin(rec.end_time) - toMin(rec.start_time);
-  const rest = Number(rec.breaks_minutes) || 0;
-  if (isFull && sh) { const lunch = Math.max(0, Math.min(toMin(rec.end_time), toMin(sh.pm[0])) - Math.max(toMin(rec.start_time), toMin(sh.am[1]))); mins -= Math.max(rest, lunch); }
-  else mins -= rest;
-  return Math.round(Math.max(0, mins) / 60 * 2) / 2;  // 以 0.5h 為單位
+// 實際上班工時：上班段(已扣當日補休/請假時段) − 午休(正職)；0.5h 單位
+function realWorkHours(rec, sh, isFull, dayOff) {
+  if (!rec || !rec.start_time || !rec.end_time) return Math.round((parseFloat(rec && rec.hours) || 0) * 2) / 2;
+  const segs = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff);
+  let mins = segs.reduce((s, [a, b]) => s + (b - a), 0);
+  if (isFull && sh) { const ls = toMin(sh.am[1]), le = toMin(sh.pm[0]); mins -= segs.reduce((s, [a, b]) => s + Math.max(0, Math.min(b, le) - Math.max(a, ls)), 0); }  // 扣午休(與上班段重疊)
+  else mins -= Number(rec.breaks_minutes) || 0;
+  return Math.round(Math.max(0, mins) / 60 * 2) / 2;
 }
-function splitSegs(inM, outM, dayOff) {  // 打卡時段扣掉休假時段 → 上班段們（修負時段 bug）
+function splitSegs(inM, outM, dayOff) {  // 打卡時段扣掉休假/補休時段 → 上班段們
   let segs = [[inM, outM]];
   (dayOff || []).filter(o => o.s && o.e).forEach(o => { const os = toMin(o.s), oe = toMin(o.e); segs = segs.flatMap(([a, b]) => { if (oe <= a || os >= b) return [[a, b]]; const r = []; if (a < os) r.push([a, Math.min(os, b)]); if (oe < b) r.push([Math.max(oe, a), b]); return r; }); });
   return segs.filter(([a, b]) => b > a);
+}
+// 某員工某日的休假時段（已核准請假＋補休），供工時扣除
+function dayOffOf(email, date, leaves, otAll) {
+  const off = [];
+  (leaves || []).filter(l => l.email === email && l.status === 'approved' && l.start_date === date).forEach(l => { if (l.start_time && l.end_time) off.push({ s: l.start_time, e: l.end_time }); else off.push({ full: true }); });
+  (otAll || []).filter(o => o.email === email && o.ot_type === '補休' && o.status === 'approved' && o.date === date).forEach(o => off.push({ s: o.start_time, e: o.end_time }));
+  return off;
 }
 function mm2hhmm(m) { return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
 function fmtHHMM(d) {
@@ -1888,7 +1895,7 @@ async function viewReport() {
       const isFull = w.emp_type === '正式員工';
       const sh = CONFIG.SHIFTS[w.shift];
       const wr = recs.filter(r => r.email === w.email);
-      const totH = wr.reduce((s, r) => s + realWorkHours(r, sh, isFull), 0);  // 正職扣午休、工讀不扣
+      const totH = wr.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOffOf(w.email, r.date, leaves, otAll)), 0);  // 扣午休+補休/請假
       const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
       const attendDays = new Set(wr.map(r => r.date)).size;
 
@@ -2037,7 +2044,7 @@ function exportMonthDetail() {
       dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
       rows.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
         (rec && rec.start_time) || '', (rec && rec.end_time) || '', lv.start_time || '', lv.end_time || '', lv.leave_type || '',
-        ot.start_time || '', ot.end_time || '', rec ? realWorkHours(rec, sh, isFull) : '', late || '', early || '', addPay || '', dedPay || '']);
+        ot.start_time || '', ot.end_time || '', rec ? realWorkHours(rec, sh, isFull, dayOffOf(w.email, ds, leaves, otAll)) : '', late || '', early || '', addPay || '', dedPay || '']);
     }
   });
   if (rows.length <= 1) { alert('本月無出勤資料可匯出'); return; }
@@ -2154,7 +2161,7 @@ function showReportDetail(email) {
       if (sh && !eff.fullDay) { const a = toMin(rec.start_time) - eff.amStart; if (a > 0) lateM = a; const b = eff.pmEnd - toMin(rec.end_time); if (b > 0) earlyM = b; }
       totLate += lateM; totEarly += earlyM;
       const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
-      const wh = realWorkHours(rec, sh, isFull);
+      const wh = realWorkHours(rec, sh, isFull, dayOff);
       if (full) segHtml = `<span style="color:#1565c0">${lvs[0] && lvs[0].start_time ? `${lvs[0].start_time}-${lvs[0].end_time}` : '08:30-18:00'} ${full.type}${full.h}h</span>`;
       else {
         const segText = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff).map(([a, b]) => `${mm2hhmm(a)}-${mm2hhmm(b)}`).join(' ');
@@ -2205,8 +2212,8 @@ async function viewARec() {
   setView('<div class="loading">載入中…</div>');
   try {
     if (!WORKERS.length) WORKERS = await getAllWorkers();
-    const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
-    _MD.arecs = recs;
+    const [recs, leaves, otAll] = await Promise.all([getAllRecs(CUR_YEAR, CUR_MONTH + 1), getAllLeaves(), getAllOt()]);
+    _MD.arecs = recs; _MD.aleaves = leaves; _MD.aot = otAll;
 
     let h = `<div class="view">${monthNav(true)}
       <div class="filter-bar">
@@ -2226,7 +2233,7 @@ function buildRecsTable(recs) {
   let h = `<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>日期</th><th>實際工時</th><th>薪資</th></tr></thead><tbody>`;
   recs.forEach(r => {
     const w = (WORKERS || []).find(x => x.email === r.email) || {};
-    const wh = realWorkHours(r, CONFIG.SHIFTS[w.shift], w.emp_type === '正式員工');  // 正職扣午休
+    const wh = realWorkHours(r, CONFIG.SHIFTS[w.shift], w.emp_type === '正式員工', dayOffOf(r.email, r.date, _MD.aleaves, _MD.aot));  // 扣午休+補休/請假
     h += `<tr onclick='showAdminRecDetail(${JSON.stringify(r)})'>
       <td>${r.name}</td><td>${addDay(r.date)}</td>
       <td>${wh || '—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
