@@ -1,0 +1,1509 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f0a500">
+<title>USLED 任務牆 · 譽昇光電</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+/* ===================================================================
+   USLED 四大任務牆  —  單檔 HTML（手機優先）
+   架構：LOCAL 模式(localStorage) / CLOUD 模式(Ragic via Worker)
+   切換：把 CONFIG.MODE 改成 'CLOUD' 即可（需先填好 Ragic 欄位 ID）
+   =================================================================== */
+:root{
+  --bg:#0a0c12; --surface:#151823; --surface2:#1e2230; --border:#2a2f3f;
+  --text:#e8eaf0; --muted:#8b90a3; --accent:#f0a500;
+  --q1:#ef4444; --q2:#f59e0b; --q3:#22c55e; --q4:#3b82f6;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
+body{min-height:100vh}
+button{font-family:inherit;cursor:pointer;border:none;font-size:15px}
+img{display:block}
+.hidden{display:none!important}
+
+/* ---------- 登入頁 ---------- */
+#loginView{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-card{width:100%;max-width:420px}
+.login-logo{text-align:center;margin-bottom:24px}
+.login-logo .brand{font-size:30px;font-weight:900;color:var(--accent)}
+.login-logo .sub{color:var(--muted);font-size:13px;margin-top:4px}
+.user-list{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.user-row{display:flex;align-items:center;gap:14px;padding:16px;width:100%;background:none;color:var(--text);text-align:left;border-bottom:1px solid var(--border);transition:background .15s}
+.user-row:last-child{border-bottom:none}
+.user-row:active{background:var(--surface2)}
+.avatar{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;color:#000;flex-shrink:0}
+.user-info{flex:1;min-width:0}
+.user-info .nm{font-weight:600}
+.user-info .em{color:var(--muted);font-size:12px}
+.role-tag{font-size:12px;padding:3px 10px;border-radius:20px;background:var(--surface2);color:var(--muted)}
+.role-tag.boss{background:rgba(240,165,0,.18);color:var(--accent)}
+
+/* ---------- 頂部 bar ---------- */
+#topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
+#topbar .brand{font-weight:900;color:var(--accent);font-size:17px}
+#topbar .right{display:flex;align-items:center;gap:8px}
+.me-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border-radius:20px;padding:5px 10px 5px 5px}
+.me-chip .avatar{width:28px;height:28px;font-size:13px}
+.me-chip .nm{font-size:13px}
+.btn-logout{background:none;color:var(--muted);font-size:13px;padding:6px 8px;border-radius:8px}
+.btn-logout:active{background:var(--surface2)}
+
+/* ---------- 看板 ---------- */
+#board{padding:12px;max-width:760px;margin:0 auto}
+.quadrant{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px;border-top-width:4px}
+.q-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.q-title{font-weight:800;font-size:15px}
+.q-title .sub{font-weight:400;font-size:11px;color:var(--muted);margin-left:6px}
+.q-count{font-size:12px;color:var(--muted)}
+.q-add{background:var(--surface2);color:var(--accent);width:30px;height:30px;border-radius:8px;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.q-add:active{background:var(--accent);color:#000}
+.task-list{display:flex;flex-direction:column;gap:8px}
+.empty{text-align:center;color:var(--muted);font-size:13px;padding:18px 0}
+
+/* ---------- 任務卡 ---------- */
+.task{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;border-left:3px solid var(--border)}
+.task.done{opacity:.55}
+.task .t-title{font-weight:600;font-size:15px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.task.done .t-title{text-decoration:line-through}
+.task .t-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:7px;font-size:12px;color:var(--muted);align-items:center}
+.task .t-assignee{display:inline-flex;align-items:center;gap:5px}
+.mini-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000}
+.status-badge{font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600}
+.st-open{background:var(--surface);color:var(--muted)}
+.st-submitted{background:rgba(245,158,11,.2);color:var(--q2)}
+.st-done{background:rgba(34,197,94,.2);color:var(--q3)}
+.due-soon{color:var(--q1)!important;font-weight:600}
+.t-thumb{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+.t-thumb img{width:54px;height:54px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.t-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.t-actions button{font-size:13px;padding:7px 12px;border-radius:8px;font-weight:600;flex:1;min-width:72px}
+.btn-primary{background:var(--accent);color:#000}
+.btn-soft{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.btn-good{background:rgba(34,197,94,.2);color:var(--q3);border:1px solid rgba(34,197,94,.4)}
+.btn-warn{background:rgba(239,68,68,.15);color:var(--q1);border:1px solid rgba(239,68,68,.4)}
+
+/* ---------- Modal ---------- */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:560px){.modal-mask{align-items:center;padding:20px}}
+.modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;overflow-y:auto;padding:18px}
+@media(min-width:560px){.modal{border-radius:18px}}
+.modal h3{font-size:18px;margin-bottom:14px}
+.field{margin-bottom:13px}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px}
+.field input,.field select,.field textarea{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:9px;padding:11px;font-size:15px}
+.field textarea{min-height:64px;resize:vertical}
+.quad-pick{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.quad-opt{padding:10px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:13px;color:var(--text)}
+.quad-opt.sel{border-color:var(--accent);background:rgba(240,165,0,.12)}
+.modal-actions{display:flex;gap:9px;margin-top:18px}
+.modal-actions button{flex:1;padding:13px;border-radius:10px;font-weight:700;font-size:15px}
+.img-input-row{display:flex;gap:8px;align-items:center}
+.img-preview-list{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.img-preview-list .wrap{position:relative}
+.img-preview-list img{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
+.img-preview-list .del{position:absolute;top:-6px;right:-6px;background:var(--q1);color:#fff;width:20px;height:20px;border-radius:50%;font-size:13px;display:flex;align-items:center;justify-content:center}
+
+/* 圖片放大 */
+#imageView{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:flex;align-items:center;justify-content:center;padding:16px}
+#imageView img{max-width:100%;max-height:100%;border-radius:10px}
+
+/* Toast */
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--accent);color:var(--accent);padding:11px 20px;border-radius:30px;z-index:300;font-size:14px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+
+/* 模式標示 */
+.mode-flag{position:fixed;bottom:8px;left:8px;font-size:10px;color:var(--muted);z-index:40;background:var(--surface);padding:3px 7px;border-radius:6px;opacity:.6}
+/* 截止快捷選單 */
+.due-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.due-quick button{flex:1;min-width:70px;padding:9px 6px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px}
+.due-quick button.sel{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent);font-weight:600}
+/* 任務卡 flex（縮圖靠右、橫排、小張） */
+.task-body{display:flex;gap:10px;align-items:flex-start}
+.task-main{flex:1;min-width:0}
+.task-thumbs{display:flex;flex-direction:row;flex-wrap:wrap;gap:4px;flex-shrink:0;max-width:128px;justify-content:flex-end}
+.task-thumbs img,.task-thumbs video{width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--border);background:#000}
+.t-countdown{color:var(--q1)!important;font-weight:700}
+/* 逾期提醒視窗（閃爍） */
+.overdue-box{border:2px solid var(--q1)!important;animation:flashRed 1.1s ease-in-out infinite}
+@keyframes flashRed{0%,100%{box-shadow:0 0 4px var(--q1)}50%{box-shadow:0 0 30px 5px var(--q1)}}
+.overdue-title{font-size:21px;font-weight:800;color:var(--q1);margin-bottom:6px;text-align:center}
+.overdue-item{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:8px;border-left:3px solid var(--q1)}
+/* 任務卡可點擊進詳情 */
+.task{cursor:pointer}
+.task:active{transform:scale(0.99)}
+/* 象限分頁 */
+.quad-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px}
+.quad-tab{padding:8px 3px;border-radius:10px;border:2px solid var(--border);background:var(--surface);text-align:center;color:var(--text);transition:all .12s}
+.quad-tab .qt-title{font-size:11px;font-weight:700;line-height:1.2}
+.quad-tab .qt-sub{font-size:16px;font-weight:800;margin-top:1px}
+.quad-tab.active{color:#fff!important}
+.quad-panel{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px}
+.qp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.qp-title{font-weight:800;font-size:16px}
+.qp-sub{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
+.t-assignee-name{font-size:13px;color:var(--text)}
+.t-expand-hint{font-size:11px;color:var(--accent);margin-left:auto}
+/* 左滑快捷 */
+.swipe-row{position:relative;overflow:hidden;border-radius:10px}
+.swipe-actions{position:absolute;top:0;right:0;height:100%;display:flex;z-index:0}
+.swipe-btn{border:none;color:#fff;font-weight:700;font-size:14px;width:75px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.swipe-btn.accept{background:#3b82f6}
+.swipe-btn.submit{background:#22c55e}
+.swipe-btn.edit{background:#6b7280}
+.swipe-row .task{transition:transform .22s cubic-bezier(.2,.8,.3,1);position:relative;z-index:1;will-change:transform}
+/* 備註（條列） */
+.t-note{margin-top:7px;font-size:12px;color:var(--muted);white-space:pre-wrap;border-left:2px solid var(--border);padding-left:8px;line-height:1.6}
+/* 標題列 + 展開鈕 */
+.t-title-row{display:flex;align-items:flex-start;gap:6px}
+.t-title-row .t-title{flex:1}
+.t-expand{background:var(--surface);border:1px solid var(--border);color:var(--accent);min-width:30px;height:26px;border-radius:6px;font-size:14px;flex-shrink:0;line-height:1;font-weight:700}
+.t-expand:active{background:var(--accent);color:#000}
+/* 詳情視窗 */
+.detail-section{margin-bottom:14px}
+.detail-label{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
+.move-quad-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.move-quad-btn{padding:10px;border-radius:9px;border:2px solid;background:var(--surface2);font-size:13px;font-weight:700}
+.my-task-row{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:7px;cursor:pointer}
+.my-task-row:active{background:var(--border)}
+/* 獎勵三點數輸入 */
+.reward-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.reward-item{display:flex;flex-direction:column;gap:4px}
+.reward-lbl{font-size:12px;font-weight:700;text-align:center}
+.reward-item input{text-align:center}
+/* 個人中心點數卡 */
+.pts-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.pts-card{border-radius:12px;padding:14px 6px;text-align:center;border:2px solid}
+.pts-card .pv{font-size:26px;font-weight:800;line-height:1}
+.pts-card .pl{font-size:12px;margin-top:5px;color:var(--text);opacity:.85}
+.game-preview{background:var(--surface2);border:1px dashed var(--border);border-radius:12px;padding:18px;text-align:center;margin-top:16px;cursor:pointer}
+/* ---------- 遊戲化：角色養成 ---------- */
+.gp-card{margin-top:16px;border-radius:14px;padding:14px;cursor:pointer;position:relative;overflow:hidden;background:var(--surface2);border:1px solid var(--border)}
+.gp-card .gp-glow{position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;filter:blur(30px);opacity:.35}
+.gp-top{display:flex;align-items:center;gap:13px;position:relative;z-index:1}
+.gp-ava{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;background:var(--surface);border:2px solid}
+.gp-meta{flex:1;min-width:0}
+.gp-rank{font-weight:800;font-size:16px;display:flex;align-items:center;gap:7px}
+.gp-lvl{font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;color:#000}
+.gp-power{font-size:12px;color:var(--muted);margin-top:2px}
+.gp-arrow{color:var(--muted);font-size:20px;align-self:center}
+.gp-bar{height:8px;border-radius:8px;background:var(--surface);margin-top:11px;overflow:hidden;position:relative;z-index:1}
+.gp-bar>i{display:block;height:100%;border-radius:8px;transition:width .5s ease}
+.gp-xptxt{font-size:11px;color:var(--muted);margin-top:5px;display:flex;justify-content:space-between;position:relative;z-index:1}
+/* 角色養成中心 modal */
+.gc-hero{text-align:center;padding:18px 10px 6px;border-radius:14px;position:relative;overflow:hidden;margin-bottom:16px}
+.gc-hero .gc-glow{position:absolute;inset:0;opacity:.18}
+.gc-ava{width:90px;height:90px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:50px;background:var(--surface);border:3px solid;position:relative;z-index:1}
+.gc-rank{font-weight:900;font-size:22px;margin-top:12px;position:relative;z-index:1}
+.gc-sub{font-size:13px;color:var(--muted);margin-top:3px;position:relative;z-index:1}
+.gc-statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 4px;position:relative;z-index:1}
+.gc-stat{background:var(--surface);border-radius:10px;padding:9px 4px}
+.gc-stat b{font-size:18px;display:block}
+.gc-stat span{font-size:11px;color:var(--muted)}
+.gc-bar{height:10px;border-radius:8px;background:var(--surface);margin-top:14px;overflow:hidden;position:relative;z-index:1}
+.gc-bar>i{display:block;height:100%;border-radius:8px}
+.ach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}
+.ach{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;position:relative}
+.ach.locked{opacity:.4;filter:grayscale(1)}
+.ach .ai{font-size:26px}
+.ach .an{font-size:11px;font-weight:700;margin-top:4px}
+.ach .ad{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.3}
+.ach .got{position:absolute;top:5px;right:6px;font-size:11px;color:var(--q3)}
+.ach-bar{height:4px;border-radius:3px;background:var(--surface);margin:6px 3px 0;overflow:hidden}
+.ach-bar>i{display:block;height:100%;background:var(--accent);opacity:.7}
+.ach-prog{font-size:9px;color:var(--muted);margin-top:2px}
+/* 成長曲線 */
+.chart-wrap{margin-top:6px}
+.chart-svg{width:100%;height:auto;display:block;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.chart-ax{fill:var(--muted);font-size:9px}
+.chart-sum{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+.chart-empty{background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:22px 12px;text-align:center;color:var(--muted);font-size:13px;margin-top:6px}
+/* 升級儀式 */
+.lvup-mask{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);animation:lvfade .3s ease;cursor:pointer}
+.lvup-flash{position:absolute;inset:0;animation:lvflash .7s ease-out;pointer-events:none}
+.lvup-card{position:relative;text-align:center;animation:lvpop .55s cubic-bezier(.2,1.5,.4,1)}
+.lvup-ava{width:112px;height:112px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;margin:0 auto;background:var(--surface)}
+.lvup-title{font-size:26px;font-weight:900;color:#fff;margin-top:14px;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.lvup-lv{font-size:20px;font-weight:800;margin-top:4px}
+.lvup-hint{font-size:12px;color:#cbd5e1;margin-top:12px;opacity:.85}
+@keyframes lvfade{from{opacity:0}to{opacity:1}}
+@keyframes lvflash{0%{opacity:0}28%{opacity:.85}100%{opacity:0}}
+@keyframes lvpop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+/* ---------- v3 商店 / 寵物 ---------- */
+.coin-pill{background:rgba(240,165,0,.15);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:3px 11px;font-size:13px;font-weight:700;white-space:nowrap}
+.coin-pill.big{font-size:14px;padding:6px 14px}
+.gc-actionrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 4px}
+.shop-open-btn{flex:1;background:linear-gradient(90deg,var(--accent),#f5b301);color:#1a1205;font-weight:800;border-radius:10px;padding:10px;font-size:14px}
+.shop-open-btn:active{opacity:.85}
+.gc-title-tag{font-size:12px;font-weight:600;color:var(--accent);margin-left:8px}
+.pet-card{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.pet-card.empty{justify-content:center;color:var(--muted);font-size:13px;border-style:dashed;cursor:pointer;text-align:center}
+.pet-emoji{width:52px;text-align:center;flex-shrink:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.pet-info{flex:1;min-width:0}
+.pet-name{font-weight:700;font-size:14px}
+.pet-stage{font-size:11px;color:var(--accent);margin-left:7px;font-weight:600}
+.pet-bar{height:7px;border-radius:7px;background:var(--surface);overflow:hidden;margin:6px 0 4px}
+.pet-bar>i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:7px;transition:width .4s}
+.pet-exp{font-size:10px;color:var(--muted)}
+.feed-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.feed-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:600}
+.feed-btn:active{background:var(--bg)}
+.feed-btn.dis{opacity:.4}
+.pet-switch{display:flex;flex-direction:column;gap:5px}
+.pet-switch button{background:var(--surface);border:1px solid var(--border);border-radius:9px;width:38px;height:38px;font-size:18px}
+.shop-tabs{display:flex;gap:6px;margin-bottom:12px}
+.shop-tab{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:8px 4px;font-size:12px;font-weight:700}
+.shop-tab.active{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
+.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.shop-item{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.shop-item.eq{border-color:var(--accent);background:rgba(240,165,0,.1)}
+.shop-item.taken{opacity:.6;filter:grayscale(.5)}
+.shop-slot-h{font-size:12px;font-weight:800;color:var(--accent);margin:12px 2px 8px}
+.si-img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.equip-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.equip-slot{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+.equip-slot img{width:42px;height:42px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.es-empty{font-size:24px;color:var(--muted);width:42px;height:42px;display:flex;align-items:center;justify-content:center}
+.es-pw{font-size:10px;color:var(--accent);font-weight:700}
+.es-name{font-size:11px;color:var(--muted)}
+.char-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:62vh;overflow:auto}
+.char-pick{position:relative;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:6px;cursor:pointer;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center}
+.char-pick img{max-width:100%;max-height:100%;object-fit:contain}
+.char-pick.on{border-color:var(--accent);background:rgba(240,165,0,.1)}
+.char-pick.lk{opacity:.5;filter:grayscale(1);cursor:not-allowed}
+.char-lk{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:10px;color:#fff;font-weight:700}
+.char-cur{position:absolute;top:5px;right:5px;font-size:9px;background:var(--accent);color:#000;border-radius:6px;padding:1px 5px;font-weight:800}
+.gc-char{position:relative;width:132px;height:150px;margin:0 auto 4px;cursor:pointer;display:flex;align-items:flex-end;justify-content:center}
+.gc-char-img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));position:relative;z-index:1}
+.gc-char-aura{position:absolute;inset:-6% -6% 6%;z-index:0;animation:auraPulse 2.6s ease-in-out infinite}
+@keyframes auraPulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:.78;transform:scale(1.06)}}
+.gc-char-edit{position:absolute;bottom:0;right:4px;z-index:2;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:3px 9px;color:var(--text)}
+.si-icon{font-size:30px;line-height:1}
+.si-name{font-size:12px;font-weight:600}
+.si-rar{font-size:10px;font-weight:700;margin-top:-3px}
+.pet-emoji.egg{animation:eggWobble 2.2s ease-in-out infinite}
+@keyframes eggWobble{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.buy-btn{background:var(--accent);color:#1a1205;font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
+.buy-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+.equip-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 0;font-size:12px;width:100%;font-weight:600}
+.equip-btn.on{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:800}
+/* 分類勾選 */
+.cat-row{display:flex;gap:8px}
+.cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
+.cat-toggle.on{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent)}
+.cat-toggle .hint{font-size:11px;font-weight:400;opacity:.75}
+.img-preview-list video{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#000}
+</style>
+</head>
+<body>
+
+<!-- ============ 登入頁 ============ -->
+<div id="loginView">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">⬡ USLED 任務牆</div>
+      <div class="sub">譽昇光電科技 · 四大任務管理</div>
+    </div>
+    <div class="user-list" id="userList"></div>
+    <div style="text-align:center;margin-top:16px;color:var(--muted);font-size:12px">點自己的名字進入 · 看你今天該做的任務</div>
+  </div>
+</div>
+
+<!-- ============ 主畫面 ============ -->
+<div id="appView" class="hidden">
+  <div id="topbar">
+    <div class="brand">⬡ 任務牆</div>
+    <div class="right">
+      <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
+        <div class="avatar" id="meAvatar"></div>
+        <span class="nm" id="meName"></span>
+      </div>
+      <button class="btn-logout" onclick="logout()">登出</button>
+    </div>
+  </div>
+  <div id="board"></div>
+</div>
+
+<div class="mode-flag" id="modeFlag"></div>
+
+<script>
+/* ===================================================================
+   CONFIG —— 要改的設定都在這
+   =================================================================== */
+const CONFIG = {
+  MODE: 'CLOUD',          // 'LOCAL'=資料存本機瀏覽器（測 UX 用）/ 'CLOUD'=存 Ragic（正式上線）
+  STORAGE_KEY: 'usled_tasks_v1',
+  IMGBB_KEY: '005bab566ba9d238607bc472d15deed6',   // 公司 usled.tw 圖床 key（任務照片）
+
+  // 員工名單（跟線上打卡系統對應；之後改 Google 登入時用 email 比對）
+  USERS: [
+    { id:'u-chen',   name:'陳俊男', nick:'男', title:'經理', role:'supervisor', color:'#4fc3f7', email:'covernself@gmail.com' },
+    { id:'u-chuang', name:'莊鈺萱', nick:'萱', title:'主管', role:'supervisor', color:'#ce93d8', email:'t8562ne@gmail.com' },
+    { id:'u-yu',     name:'陳譽昇', nick:'昇', title:'助理', role:'employee',   color:'#f48fb1', email:'us104931@gmail.com' },
+  ],
+
+  // 四象限（艾森豪矩陣）
+  QUADRANTS: [
+    { id:'q1', title:'重要又緊急',   sub:'需要立刻處理', color:'#ef4444' },
+    { id:'q2', title:'重要不緊急',   sub:'要有進度執行', color:'#f59e0b' },
+    { id:'q3', title:'不重要但緊急', sub:'瑣事盡快處理', color:'#22c55e' },
+    { id:'q4', title:'不重要不緊急', sub:'利用空閒執行', color:'#3b82f6' },
+  ],
+
+  // ===== Ragic 雲端設定（CLOUD 模式用）=====
+  RAGIC: {
+    WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
+    PATH: '/check-in-system/11',
+    GOOGLE_CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+    // 欄位 ID（日期欄已確認，其餘連續推算，寫入測試後驗證）
+    FIELDS: {
+      title:1003055, quadrant:1003056, status:1003057, assignee:1003058, creator:1003059,
+      due:1003060, points:1003061, earnedPoints:1003062, note:1003063, images:1003064,
+      submittedAt:1003065, approvedAt:1003066, createdAt:1003067,
+      contribution:1003070, favor:1003071
+    },
+    QUAD2RAGIC: { q1:'重要又緊急', q2:'重要不緊急', q3:'不重要但緊急', q4:'不重要不緊急' },
+    STATUS2RAGIC: { open:'待處理', submitted:'待審核', done:'已完成' },
+  },
+};
+
+/* ===================================================================
+   STATE
+   =================================================================== */
+const STATE = { user:null, tasks:[], activeQuad:'q1' };
+
+function userById(id){ return CONFIG.USERS.find(u=>u.id===id); }
+function isSupervisor(u){ return u && (u.role==='admin'||u.role==='supervisor'); }
+
+/* ===================================================================
+   資料層（db）—— LOCAL 用 localStorage；CLOUD 預留 Ragic
+   =================================================================== */
+async function dbLoadTasks(){
+  if(CONFIG.MODE==='CLOUD'){ return await ragicLoadTasks(); }
+  const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+  if(!raw){ const seed = seedTasks(); localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(seed)); return seed; }
+  try{ return JSON.parse(raw); }catch(e){ return []; }
+}
+function dbSaveTasks(tasks){
+  if(CONFIG.MODE==='CLOUD') return;
+  localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(tasks));
+}
+/* 單筆新增/更新：LOCAL 整批存 localStorage；CLOUD 寫 Ragic 並回填 ragicId */
+async function dbUpsert(task){
+  if(CONFIG.MODE==='CLOUD'){
+    const res = await ragicSaveTask(task);
+    if(res && res.ragicId && !task.ragicId){ task.ragicId = res.ragicId; task.id = 'r'+res.ragicId; }
+    return res;
+  }
+  dbSaveTasks(STATE.tasks);
+}
+/* 刪除：CLOUD 走 Ragic DELETE */
+async function dbDelete(task){
+  if(CONFIG.MODE==='CLOUD'){
+    if(task.ragicId){ try{ await ragicFetch('/'+task.ragicId+'?api', { method:'DELETE' }); }catch(e){} }
+    return;
+  }
+  dbSaveTasks(STATE.tasks);
+}
+
+/* === CLOUD 模式：Ragic 對應 + 讀寫（透過 punch-clock-proxy）=== */
+function quadFromRagic(v){ for(const k in CONFIG.RAGIC.QUAD2RAGIC) if(CONFIG.RAGIC.QUAD2RAGIC[k]===v) return k; return 'q4'; }
+function statusFromRagic(v){ for(const k in CONFIG.RAGIC.STATUS2RAGIC) if(CONFIG.RAGIC.STATUS2RAGIC[k]===v) return k; return 'open'; }
+function isoToRagic(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function ragicToIso(s){ if(!s) return null; const d=new Date(String(s).replace(/\//g,'-').replace(' ','T')); return isNaN(d)?null:d.toISOString(); }
+function emailToUserId(email){ const u=CONFIG.USERS.find(x=>x.email===email); return u?u.id:(email||''); }
+function parseImages(s){ if(!s) return []; return String(s).split('\n').filter(x=>x.trim()).map(u=>({type:/\.(mp4|mov|webm)/i.test(u)?'video':'image', src:u.trim()})); }
+
+async function ragicFetch(suffix, opts){
+  const url = CONFIG.RAGIC.WORKER + CONFIG.RAGIC.PATH + suffix;
+  const headers = Object.assign({ 'X-Google-Token': STATE.googleToken||'' }, (opts&&opts.headers)||{});
+  return await fetch(url, Object.assign({}, opts, { headers }));
+}
+
+async function ragicLoadTasks(){
+  const r = await ragicFetch('?api', { method:'GET' });
+  const json = await r.json();
+  const tasks = [];
+  Object.keys(json).forEach(k=>{
+    const rec = json[k]; if(!rec || typeof rec!=='object' || !rec._ragicId) return;
+    tasks.push({
+      id:'r'+rec._ragicId, ragicId: rec._ragicId,
+      title: rec['任務主題']||'', quadrant: quadFromRagic(rec['象限']), status: statusFromRagic(rec['狀態']),
+      assigneeId: emailToUserId(rec['指派給']), createdById: emailToUserId(rec['建立人']),
+      dueAt: ragicToIso(rec['截止時間']), points: parseInt(rec['點數'])||0,
+      earnedPoints: rec['實得點數']? parseInt(rec['實得點數']) : null,
+      contribution: parseInt(rec['貢獻值'])||0, favor: parseInt(rec['人情點'])||0,
+      note: rec['備註步驟']||'', images: parseImages(rec['圖片網址']),
+      submittedAt: ragicToIso(rec['提交時間']), approvedAt: ragicToIso(rec['核准時間']), createdAt: ragicToIso(rec['建立時間'])
+    });
+  });
+  return tasks;
+}
+
+async function ragicSaveTask(t){
+  const F = CONFIG.RAGIC.FIELDS, fd = new FormData();
+  fd.append(F.title, t.title||'');
+  fd.append(F.quadrant, CONFIG.RAGIC.QUAD2RAGIC[t.quadrant]||'');
+  fd.append(F.status, CONFIG.RAGIC.STATUS2RAGIC[t.status]||'待處理');
+  fd.append(F.assignee, (userById(t.assigneeId)||{}).email || t.assigneeId || '');
+  fd.append(F.creator, (userById(t.createdById)||{}).email || '');
+  if(t.dueAt) fd.append(F.due, isoToRagic(t.dueAt));
+  fd.append(F.points, String(t.points||0));
+  if(t.earnedPoints!=null) fd.append(F.earnedPoints, String(t.earnedPoints));
+  fd.append(F.contribution, String(t.contribution||0));
+  fd.append(F.favor, String(t.favor||0));
+  fd.append(F.note, t.note||'');
+  fd.append(F.images, (t.images||[]).map(m=>typeof m==='string'?m:m.src).filter(s=>/^https?:/.test(s)).join('\n'));
+  if(t.submittedAt) fd.append(F.submittedAt, isoToRagic(t.submittedAt));
+  if(t.approvedAt) fd.append(F.approvedAt, isoToRagic(t.approvedAt));
+  if(t.createdAt) fd.append(F.createdAt, isoToRagic(t.createdAt));
+  const suffix = t.ragicId ? ('/'+t.ragicId+'?api') : '?api';
+  const r = await ragicFetch(suffix, { method:'POST', body:fd });
+  return await r.json();
+}
+
+/* 示範任務（LED 公司情境，第一次開自動帶幾筆，讓你看到四象限長怎樣） */
+function seedTasks(){
+  const now = Date.now();
+  const iso = (h)=> new Date(now + h*3600000).toISOString();
+  return [
+    { id:'t1', title:'GR-1003 客戶樣品色溫超標 0.3，需重新打樣', quadrant:'q1', status:'open', assigneeId:'u-huang', dueAt:iso(6),  points:50, images:[], createdById:'u-chen', createdAt:iso(-24) },
+    { id:'t2', title:'產線 LD-3 散熱片溫度異常，現場確認', quadrant:'q1', status:'open', assigneeId:'u-huang', dueAt:iso(3),  points:80, images:[], createdById:'u-chen', createdAt:iso(-3) },
+    { id:'t3', title:'Q3 RGB+W 五合一新品打樣里程碑', quadrant:'q2', status:'open', assigneeId:'u-huang', dueAt:iso(720), points:200, images:[], createdById:'u-jason', createdAt:iso(-168) },
+    { id:'t4', title:'CNS 15592 燈具能效認證文件整理', quadrant:'q2', status:'open', assigneeId:'u-li', dueAt:iso(240), points:120, images:[], createdById:'u-chuang', createdAt:iso(-120) },
+    { id:'t5', title:'下週展覽 LED 燈條到貨清點', quadrant:'q3', status:'open', assigneeId:'u-li', dueAt:iso(96), points:15, images:[], createdById:'u-chuang', createdAt:iso(-48) },
+    { id:'t6', title:'尾牙場地考察（板橋 / 中和）', quadrant:'q4', status:'open', assigneeId:'u-li', dueAt:iso(700), points:30, images:[], createdById:'u-chuang', createdAt:iso(-300) },
+  ];
+}
+
+/* ===================================================================
+   登入 / 登出
+   =================================================================== */
+function renderLogin(){
+  const list = document.getElementById('userList');
+  if(CONFIG.MODE==='CLOUD'){
+    list.innerHTML = '<div style="padding:26px 16px;text-align:center"><div id="gbtn" style="display:flex;justify-content:center"></div><div style="margin-top:14px;color:var(--muted);font-size:13px">請用公司 Google 帳號登入</div></div>';
+    renderGoogleButton();
+    return;
+  }
+  list.innerHTML = CONFIG.USERS.map(u=>`
+    <button class="user-row" onclick="login('${u.id}')">
+      <div class="avatar" style="background:${u.color}">${u.name.slice(-1)}</div>
+      <div class="user-info">
+        <div class="nm">${u.name}</div>
+        <div class="em">${u.title}</div>
+      </div>
+      <span class="role-tag ${isSupervisor(u)?'boss':''}">${u.title}</span>
+    </button>`).join('');
+}
+function renderGoogleButton(){
+  if(!(window.google && google.accounts && google.accounts.id)){ setTimeout(renderGoogleButton, 400); return; }
+  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false });
+  const el = document.getElementById('gbtn');
+  if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
+  google.accounts.id.prompt();   // 自動以上次帳號登入（記住，不用每次點）
+}
+function handleGoogleSignIn(resp){
+  try{
+    STATE.googleToken = resp.credential;
+    const payload = JSON.parse(atob(resp.credential.split('.')[1]));
+    const email = (payload.email||'').toLowerCase();
+    const user = CONFIG.USERS.find(u=>(u.email||'').toLowerCase()===email);
+    if(!user){ alert('你的 Google 帳號（'+email+'）尚未開通，請聯絡管理員開通'); return; }
+    login(user.id);
+  }catch(e){ alert('登入失敗：'+e.message); }
+}
+async function login(uid){
+  STATE.user = userById(uid);
+  if(CONFIG.MODE!=='CLOUD') localStorage.setItem('usled_last_user', uid);
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+  const a = document.getElementById('meAvatar');
+  a.textContent = STATE.user.name.slice(-1); a.style.background = STATE.user.color;
+  document.getElementById('meName').textContent = STATE.user.name;
+  try{ STATE.tasks = await dbLoadTasks(); }
+  catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
+  renderBoard();
+  initSwipe();
+  checkOverdue();
+  await loadGameState();
+  checkLevelUp();
+}
+function logout(){
+  STATE.user = null;
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+}
+
+/* ===================================================================
+   看板渲染
+   =================================================================== */
+function renderBoard(){
+  const board = document.getElementById('board');
+  const sup = isSupervisor(STATE.user);
+  const tabs = CONFIG.QUADRANTS.map(q=>{
+    const cnt = STATE.tasks.filter(t=>t.quadrant===q.id && t.status!=='done').length;
+    const active = STATE.activeQuad===q.id;
+    return `<button class="quad-tab${active?' active':''}" style="${active?('background:'+q.color+';border-color:'+q.color):('border-color:'+q.color+'66;color:'+q.color)}" onclick="switchQuad('${q.id}')">
+      <div class="qt-title">${q.title}</div>
+      <div class="qt-sub">${cnt}</div>
+    </button>`;
+  }).join('');
+  const q = CONFIG.QUADRANTS.find(x=>x.id===STATE.activeQuad) || CONFIG.QUADRANTS[0];
+  const tasks = STATE.tasks.filter(t=>t.quadrant===STATE.activeQuad);
+  const open = tasks.filter(t=>t.status!=='done');
+  const done = tasks.filter(t=>t.status==='done');
+  const ordered = [...open, ...done];
+  board.innerHTML = `
+    <div class="quad-tabs">${tabs}</div>
+    <div class="quad-panel" style="border-top:3px solid ${q.color}">
+      <div class="qp-head">
+        <div class="qp-title" style="color:${q.color}">${q.title}<span class="qp-sub">${q.sub}</span></div>
+        ${sup?`<button class="q-add" onclick="openTaskModal(null,'${STATE.activeQuad}')">＋</button>`:''}
+      </div>
+      <div class="task-list">${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（這個分類目前沒有任務）</div>'}</div>
+    </div>`;
+}
+function switchQuad(qid){ STATE.activeQuad=qid; renderBoard(); }
+
+/* ===================================================================
+   左滑快捷（淘寶式）：左滑露出 接單/提交；點卡片進詳情
+   =================================================================== */
+let swipeCtx=null, lastSwipeEnd=0;
+function initSwipe(){
+  const board=document.getElementById('board');
+  if(!board || board.__swipeInit) return; board.__swipeInit=true;
+  board.addEventListener('touchstart', swipeStart, {passive:true});
+  board.addEventListener('touchmove', swipeMove, {passive:false});
+  board.addEventListener('touchend', swipeEnd);
+  board.addEventListener('mousedown', swipeStart);
+  board.addEventListener('mousemove', swipeMove);
+  board.addEventListener('mouseup', swipeEnd);
+}
+function _pt(e){ return e.touches&&e.touches[0] ? e.touches[0] : (e.changedTouches&&e.changedTouches[0] ? e.changedTouches[0] : e); }
+function swipeStart(e){
+  const task=e.target.closest('.task'); if(!task) return;
+  if(e.target.closest('.swipe-actions')) return;
+  if(!task.parentElement.querySelector('.swipe-actions')) return; // 無快捷的卡片不滑
+  const p=_pt(e);
+  const startTx = task.classList.contains('swiped') ? -150 : 0;
+  swipeCtx={ task, startX:p.clientX, startY:p.clientY, startTx, dx:startTx, moved:false };
+  document.querySelectorAll('.task.swiped').forEach(t=>{ if(t!==task){ t.style.transform=''; t.classList.remove('swiped'); } });
+}
+function swipeMove(e){
+  if(!swipeCtx) return;
+  const p=_pt(e); const dx=p.clientX-swipeCtx.startX, dy=p.clientY-swipeCtx.startY;
+  if(!swipeCtx.moved && Math.abs(dx)>Math.abs(dy) && Math.abs(dx)>8) swipeCtx.moved=true;
+  if(swipeCtx.moved){
+    if(e.cancelable) e.preventDefault();
+    swipeCtx.dx = Math.max(-150, Math.min(0, swipeCtx.startTx+dx));
+    swipeCtx.task.style.transform='translateX('+swipeCtx.dx+'px)';
+  }
+}
+function swipeEnd(){
+  if(!swipeCtx) return;
+  if(swipeCtx.moved){
+    lastSwipeEnd=Date.now();
+    if(swipeCtx.dx < -60){ swipeCtx.task.style.transform='translateX(-150px)'; swipeCtx.task.classList.add('swiped'); }
+    else { swipeCtx.task.style.transform=''; swipeCtx.task.classList.remove('swiped'); }
+  }
+  swipeCtx=null;
+}
+function taskCardClick(e, id){
+  if(Date.now()-lastSwipeEnd < 300) return;   // 剛滑完，不觸發詳情
+  const task=e.currentTarget;
+  if(task.classList.contains('swiped')){ task.style.transform=''; task.classList.remove('swiped'); return; }
+  showTaskDetail(id);
+}
+function acceptTask(id){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  t.assigneeId=STATE.user.id; renderBoard(); dbUpsert(t); toast('已接單，開始處理！');
+}
+
+function renderTaskCard(t){
+  const a = userById(t.assigneeId);
+  const sup = isSupervisor(STATE.user);
+  const mine = STATE.user.id === t.assigneeId;
+  const tl = (t.status!=='done') ? timeLeft(t.dueAt) : null;
+  const stMap = {open:['待處理','st-open'], submitted:['待審核','st-submitted'], done:['已完成','st-done']};
+  const st = stMap[t.status]||stMap.open;
+  const media = (t.images||[]).slice(0,3);
+  const thumbs = media.length? `<div class="task-thumbs">${media.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return isVid?`<video src="${src}" muted onclick="event.stopPropagation();showMedia('${t.id}',${i})"></video>`:`<img src="${src}" onclick="event.stopPropagation();showMedia('${t.id}',${i})">`; }).join('')}</div>`:'';
+  // 左滑快捷鈕（淘寶式）
+  let swipe='';
+  if(t.status!=='done'){
+    if(sup){
+      swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();openTaskModal('${t.id}')">編輯</button>`;
+      if(t.status==='submitted') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
+    } else {
+      if(!mine) swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
+      if(t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
+    }
+  }
+  return `<div class="swipe-row">
+    ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
+    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+      <div class="task-body">
+        <div class="task-main">
+          <div class="t-title">${esc(t.title)}</div>
+          <div class="t-meta">
+            <span class="status-badge ${st[1]}">${st[0]}</span>
+            ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:''}
+            ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
+            ${swipe?'<span class="t-expand-hint">◀ 滑動</span>':'<span class="t-expand-hint">詳情 ▾</span>'}
+          </div>
+        </div>
+        ${thumbs}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ===================================================================
+   任務 CRUD
+   =================================================================== */
+let editingId = null;
+let modalImages = [];
+
+let modalImportant=true, modalUrgent=true;
+function openTaskModal(taskId, presetQuad){
+  if(!isSupervisor(STATE.user)) return;
+  editingId = taskId;
+  const t = taskId? STATE.tasks.find(x=>x.id===taskId) : null;
+  modalImages = t? [...(t.images||[])] : [];
+  const quad = t? t.quadrant : (presetQuad||'q1');
+  modalImportant = (quad==='q1'||quad==='q2');
+  modalUrgent = (quad==='q1'||quad==='q3');
+  const empOpts = CONFIG.USERS.map(u=>`<option value="${u.id}" ${t&&t.assigneeId===u.id?'selected':''}>${u.name}（${u.title}）</option>`).join('');
+  const dueVal = t&&t.dueAt? toLocalInput(t.dueAt):'';
+  const mask = document.createElement('div');
+  mask.className='modal-mask'; mask.id='taskModal';
+  mask.innerHTML = `<div class="modal" onclick="event.stopPropagation()">
+    <h3>${t?'編輯任務':'新增任務'}</h3>
+    <div class="field"><label>任務主題（簡短，最多 30 字）</label><input type="text" id="f_title" maxlength="30" placeholder="例：GR-1003 色溫超標重打樣" value="${t?esc(t.title):''}"></div>
+    <div class="field"><label>分類（勾選 重要 / 緊急）</label>
+      <div class="cat-row">
+        <div class="cat-toggle ${modalImportant?'on':''}" id="catImp" onclick="toggleCat('important')">重要<span class="hint">不能漏掉</span></div>
+        <div class="cat-toggle ${modalUrgent?'on':''}" id="catUrg" onclick="toggleCat('urgent')">緊急<span class="hint">優先完成</span></div>
+      </div>
+    </div>
+    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
+    <div class="field"><label>指派給</label><select id="f_assignee">${empOpts}</select></div>
+    <div class="field"><label>截止時間</label>
+      <div class="due-quick" id="dueQuick"></div>
+      <input type="datetime-local" id="f_due" value="${dueVal}">
+    </div>
+    <div class="field"><label>獎勵點數（依任務性質給）</label>
+      <div class="reward-row">
+        <div class="reward-item"><span class="reward-lbl" style="color:#fbbf24">T 點</span><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
+        <div class="reward-item"><span class="reward-lbl" style="color:#22c55e">貢獻值</span><input type="number" id="f_contribution" value="${t&&t.contribution?t.contribution:0}" min="0"></div>
+        <div class="reward-item"><span class="reward-lbl" style="color:#f472b6">人情點</span><input type="number" id="f_favor" value="${t&&t.favor?t.favor:0}" min="0"></div>
+      </div>
+    </div>
+    <div class="field"><label>附圖 / 影片（最多 3 個，記錄怎麼做的）</label>
+      <div class="img-input-row"><input type="file" accept="image/*,video/*" capture="environment" id="f_img" onchange="onPickMedia(event)"></div>
+      <div class="img-preview-list" id="imgPreview"></div>
+    </div>
+    <div class="modal-actions">
+      ${t?`<button class="btn-warn" onclick="deleteTask('${t.id}')">刪除</button>`:''}
+      <button class="btn-soft" onclick="closeModal()">取消</button>
+      <button class="btn-primary" onclick="saveTask()">${t?'儲存':'新增'}</button>
+    </div>
+  </div>`;
+  mask.onclick = closeModal;
+  document.body.appendChild(mask);
+  renderModalImages();
+  renderDueQuick();
+  if(!editingId && modalUrgent) setDueQuick('1h');
+}
+function toggleCat(which){
+  if(which==='important') modalImportant=!modalImportant; else modalUrgent=!modalUrgent;
+  const ci=document.getElementById('catImp'), cu=document.getElementById('catUrg');
+  if(ci) ci.classList.toggle('on', modalImportant);
+  if(cu) cu.classList.toggle('on', modalUrgent);
+  renderDueQuick();
+  if(which==='urgent' && modalUrgent) setDueQuick('1h');
+}
+function computeQuad(){ return modalImportant ? (modalUrgent?'q1':'q2') : (modalUrgent?'q3':'q4'); }
+function renderDueQuick(){
+  const box=document.getElementById('dueQuick'); if(!box)return;
+  const opts = modalUrgent
+    ? [['1h','1小時內'],['2h','2小時內'],['today','下班前'],['tmr','明天完成']]
+    : [['day2','後天完成'],['week','當週完成'],['nextweek','下週完成'],['none','不限時間']];
+  box.innerHTML = opts.map(o=>`<button type="button" data-k="${o[0]}" onclick="setDueQuick('${o[0]}')">${o[1]}</button>`).join('');
+}
+function setDueQuick(spec){
+  const now = new Date();
+  const at18 = (base)=>{ const x=new Date(base); x.setHours(18,0,0,0); return x; };
+  let d=null;
+  if(spec==='1h') d = new Date(now.getTime()+3600000);
+  else if(spec==='2h') d = new Date(now.getTime()+2*3600000);
+  else if(spec==='today'){ d = at18(now); if(d<=now){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); } }
+  else if(spec==='tmr'){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); }
+  else if(spec==='day2'){ const t=new Date(now); t.setDate(t.getDate()+2); d=at18(t); }
+  else if(spec==='week'){ const t=new Date(now); const add=(7-t.getDay())%7; t.setDate(t.getDate()+add); d=at18(t); }
+  else if(spec==='nextweek'){ const t=new Date(now); const add=(7-t.getDay())%7+7; t.setDate(t.getDate()+add); d=at18(t); }
+  else if(spec==='none'){ d=null; }
+  const inp = document.getElementById('f_due'); if(inp) inp.value = d? toLocalInput(d.toISOString()):'';
+  document.querySelectorAll('#dueQuick button').forEach(b=>b.classList.toggle('sel', b.dataset.k===spec));
+}
+function onPickMedia(e){
+  const file = e.target.files[0]; if(!file) return;
+  if(modalImages.length>=3){ toast('最多 3 個'); e.target.value=''; return; }
+  const isVideo = file.type.startsWith('video/');
+  if(isVideo && CONFIG.MODE==='CLOUD'){ toast('影片暫不支援雲端，請改拍照'); e.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    if(isVideo){ modalImages.push({type:'video',src:reader.result}); renderModalImages(); return; }
+    compressImage(reader.result, 1200, async (small)=>{
+      if(CONFIG.MODE==='CLOUD'){
+        toast('上傳照片中…');
+        try{ const url = await uploadToImgbb(small); modalImages.push({type:'image',src:url}); renderModalImages(); toast('照片已上傳 ✓'); }
+        catch(err){ toast('上傳失敗：'+err.message); }
+      } else { modalImages.push({type:'image',src:small}); renderModalImages(); }
+    });
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+}
+async function uploadToImgbb(dataUrl){
+  const base64 = dataUrl.split(',')[1];
+  const fd = new FormData(); fd.append('image', base64);
+  const r = await fetch('https://api.imgbb.com/1/upload?key='+CONFIG.IMGBB_KEY, { method:'POST', body:fd });
+  const j = await r.json();
+  if(!j || !j.success) throw new Error((j&&j.error&&j.error.message)||'ImgBB 失敗');
+  return j.data.url;
+}
+function renderModalImages(){
+  const box=document.getElementById('imgPreview'); if(!box)return;
+  box.innerHTML = modalImages.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return `<div class="wrap">${isVid?`<video src="${src}" muted></video>`:`<img src="${src}">`}<div class="del" onclick="modalImages.splice(${i},1);renderModalImages()">×</div></div>`; }).join('');
+}
+async function saveTask(){
+  const title = document.getElementById('f_title').value.trim();
+  if(!title){ toast('請輸入任務主題'); return; }
+  const assignee = document.getElementById('f_assignee').value;
+  const due = document.getElementById('f_due').value;
+  const points = parseInt(document.getElementById('f_points').value)||0;
+  const contribution = parseInt((document.getElementById('f_contribution')||{}).value)||0;
+  const favor = parseInt((document.getElementById('f_favor')||{}).value)||0;
+  const note = document.getElementById('f_note').value.trim();
+  const quad = computeQuad();
+  let task;
+  if(editingId){
+    task = STATE.tasks.find(x=>x.id===editingId);
+    Object.assign(task,{ title, quadrant:quad, assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, images:[...modalImages] });
+  }else{
+    task = { id:'t'+Date.now(), title, quadrant:quad, status:'open', assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, images:[...modalImages], createdById:STATE.user.id, createdAt:new Date().toISOString() };
+    STATE.tasks.unshift(task);
+  }
+  const wasEdit = !!editingId;
+  closeModal(); renderBoard();
+  try{ await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務'); }
+  catch(e){ toast('雲端寫入失敗：'+e.message); }
+}
+async function deleteTask(id){ if(!confirm('確定刪除這個任務？'))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
+async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
+async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
+async function rejectTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='open'; renderBoard(); await dbUpsert(t); toast('已退回，請員工繼續'); }
+function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remove(); editingId=null; }
+
+/* ===================================================================
+   媒體放大（圖片 / 影片）
+   =================================================================== */
+function showMedia(taskId,idx){
+  const t=STATE.tasks.find(x=>x.id===taskId); const m=t.images[idx]; const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video';
+  const v=document.createElement('div'); v.id='imageView';
+  v.innerHTML = isVid? `<video src="${src}" controls autoplay></video>` : `<img src="${src}">`;
+  v.onclick=(e)=>{ if(e.target.id==='imageView') v.remove(); }; document.body.appendChild(v);
+}
+
+/* ===================================================================
+   任務詳情視窗（員工點 ▾ 看完整內容）
+   =================================================================== */
+function showTaskDetail(id){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t)return;
+  const a=userById(t.assigneeId);
+  const q=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant);
+  const sup=isSupervisor(STATE.user);
+  const mine=STATE.user.id===t.assigneeId;
+  const tl=t.status!=='done'?timeLeft(t.dueAt):null;
+  const ep=effectivePoints(t);
+  const media=(t.images||[]);
+  const stMap={open:'待處理',submitted:'待主管審核',done:'已完成'};
+  let actions='';
+  if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
+  if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
+  if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
+  const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='detailModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:12px">
+      <h3 style="margin:0;flex:1">${esc(t.title)}</h3>
+      <button class="t-expand" onclick="closeDetail()" style="font-size:18px">✕</button>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px">
+      <span class="status-badge" style="background:${q.color}30;color:${q.color}">${q.title}</span>
+      ${a?`<span class="status-badge" style="background:${a.color}30;color:${a.color}">指派：${a.name}</span>`:''}
+      <span class="status-badge st-${t.status}">${stMap[t.status]}</span>
+    </div>
+    <div class="detail-section">
+      <div class="detail-label">⏰ 截止 / 點數</div>
+      <div style="font-size:15px">
+        ${t.dueAt?`<span class="${tl&&tl.urgent?'t-countdown':''}">${tl?tl.text:fmtDue(t.dueAt)}</span>`:'<span style="color:var(--muted)">不限時間</span>'}
+        ${t.points?` ｜ <b style="color:${ep<t.points&&t.status!=='done'?'var(--q1)':'var(--accent)'}">＋${ptsTxt} 點</b>${ep<t.points&&t.status!=='done'?`<span style="text-decoration:line-through;opacity:.5;margin-left:4px">${t.points}</span>`:''}`:''}
+      </div>
+    </div>
+    ${t.note?`<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項</div><div class="t-note" style="border-left-color:var(--accent);font-size:14px;color:var(--text)">${esc(t.note)}</div></div>`:''}
+    ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
+    ${sup?`<div class="detail-section"><div class="detail-label">📂 移到其他分類</div><div class="move-quad-row">${CONFIG.QUADRANTS.map(qq=>`<button class="move-quad-btn" style="border-color:${qq.color};${qq.id===t.quadrant?'background:'+qq.color+';color:#fff':'color:'+qq.color}" onclick="moveTaskQuad('${t.id}','${qq.id}')">${qq.title}</button>`).join('')}</div></div>`:''}
+    ${actions?`<div class="modal-actions">${actions}</div>`:''}
+  </div>`;
+  mask.onclick=closeDetail;
+  document.body.appendChild(mask);
+}
+function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
+function moveTaskQuad(id, qid){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  closeDetail();
+  STATE.activeQuad=qid;
+  if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
+  else { renderBoard(); }
+}
+
+/* 我的任務（點頭像）— 自己被指派/接的所有任務，跨象限 */
+function showMyTasks(){
+  if(!STATE.user) return;
+  const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id);
+  const open = mine.filter(t=>t.status!=='done');
+  const done = mine.filter(t=>t.status==='done');
+  const sumPts = done.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sumCon = done.reduce((s,t)=>s+(t.contribution||0),0);
+  const sumFav = done.reduce((s,t)=>s+(t.favor||0),0);
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='myTasksModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">👤 ${STATE.user.name}<span style="font-size:13px;color:var(--muted);font-weight:400;margin-left:8px">${STATE.user.title}</span></h3>
+      <button class="t-expand" onclick="closeMyTasks()" style="font-size:18px">✕</button>
+    </div>
+    <div class="pts-cards">
+      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:#fbbf24">${sumPts}</div><div class="pl">T 點</div></div>
+      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:#22c55e">${sumCon}</div><div class="pl">貢獻值</div></div>
+      <div class="pts-card" style="border-color:#f472b6;background:rgba(244,114,182,.1)"><div class="pv" style="color:#f472b6">${sumFav}</div><div class="pl">人情點</div></div>
+    </div>
+    <div class="detail-label">📋 我的任務（待辦 ${open.length}）</div>
+    ${mine.length===0?'<div class="empty">目前沒有指派給你的任務</div>':''}
+    ${open.map(myTaskRow).join('')}
+    ${done.length?`<div class="detail-label" style="margin-top:12px">已完成（${done.length}）</div>${done.map(myTaskRow).join('')}`:''}
+    ${gameCardHtml(sumPts,sumCon,sumFav,done)}
+  </div>`;
+  mask.onclick=closeMyTasks; document.body.appendChild(mask);
+}
+function myTaskRow(t){
+  const q=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant)||CONFIG.QUADRANTS[0];
+  const tl=t.status!=='done'?timeLeft(t.dueAt):null;
+  const stMap={open:'待處理',submitted:'待審核',done:'已完成'};
+  return `<div class="my-task-row" onclick="closeMyTasks();showTaskDetail('${t.id}')" style="border-left:3px solid ${q.color}">
+    <div style="font-weight:600">${esc(t.title)}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px"><span style="color:${q.color}">${q.title}</span> · ${stMap[t.status]}${tl?` · <span class="${tl.urgent?'t-countdown':''}">${tl.text}</span>`:''}</div>
+  </div>`;
+}
+function closeMyTasks(){ const m=document.getElementById('myTasksModal'); if(m)m.remove(); }
+
+/* ===================================================================
+   遊戲化：角色養成（全部從三點數即時衍生，零新增儲存、自動跨裝置）
+   經驗值 = T點 + 貢獻值；戰力 = T點 + 貢獻值×2 + 人情點
+   =================================================================== */
+const RANKS = [
+  { min:1,  name:'見習生',   icon:'🐣', color:'#9ca3af' },
+  { min:5,  name:'正式員工', icon:'🧑‍💼', color:'#60a5fa' },
+  { min:10, name:'資深老手', icon:'💪', color:'#22c55e' },
+  { min:20, name:'任務達人', icon:'🔥', color:'#f59e0b' },
+  { min:35, name:'部門菁英', icon:'🌟', color:'#a855f7' },
+  { min:50, name:'譽昇傳奇', icon:'👑', color:'#f0a500' },
+];
+function levelInfo(xp){
+  let lvl=1, acc=0, need=30;
+  while(xp >= acc+need && lvl<99){ acc+=need; lvl++; need=30+(lvl-1)*20; }
+  return { level:lvl, into:xp-acc, span:need, total:xp };
+}
+function rankOf(level){ let r=RANKS[0]; for(const x of RANKS){ if(level>=x.min) r=x; } return r; }
+function gameStats(sumPts,sumCon,sumFav){
+  const xp = sumPts + sumCon;
+  const li = levelInfo(xp);
+  const rank = rankOf(li.level);
+  const power = sumPts + sumCon*2 + sumFav;
+  return { ...li, rank, power };
+}
+function achievements(done,sumPts,sumCon,sumFav){
+  const cnt=done.length;
+  const q1=done.filter(t=>t.quadrant==='q1').length;
+  const quads=new Set(done.map(t=>t.quadrant)).size;
+  const onTime=done.filter(t=>t.dueAt && (t.earnedPoints==null || t.earnedPoints>=(t.points||0))).length;
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const byMonth={}; done.forEach(t=>{const d=t.approvedAt||t.submittedAt||t.createdAt; if(d){const k=d.slice(0,7); byMonth[k]=(byMonth[k]||0)+1;}});
+  const maxMonth=Object.values(byMonth).reduce((m,v)=>Math.max(m,v),0);
+  const A=(name,desc,icon,cur,max)=>({name,desc,icon,cur:Math.min(cur,max),max,got:cur>=max});
+  return [
+    A('初試啼聲','完成 1 個任務','🌱',cnt,1),
+    A('十項全能','完成 10 個任務','🎯',cnt,10),
+    A('任務狂人','完成 50 個任務','🏆',cnt,50),
+    A('百點達標','累積 100 T 點','💯',sumPts,100),
+    A('千點俱樂部','累積 1000 T 點','👑',sumPts,1000),
+    A('急先鋒','完成 5 個重要又緊急','⚡',q1,5),
+    A('面面俱到','四象限都完成過','🧭',quads,4),
+    A('神速使者','準時零打折 5 次','🚀',onTime,5),
+    A('月度勤奮','單月完成 15 件','📅',maxMonth,15),
+    A('貢獻之星','貢獻值達 50','💎',sumCon,50),
+    A('人情練達','人情點達 20','🤝',sumFav,20),
+    A('升階達人','角色等級達 Lv.10','📈',g.level,10),
+    A('全能戰士','戰力達 500','🛡️',g.power,500),
+  ];
+}
+/* 角色頭像：分層 inline SVG，隨職階自動進化（之後商店配件可再疊層） */
+let AV_SEQ=0;
+function frameRing(frameId,u){
+  const col=(typeof FRAME_COLOR!=='undefined'&&FRAME_COLOR[frameId])||'#cbd5e1';
+  if(col==='rainbow') return `<defs><linearGradient id="rb${u}"><stop offset="0" stop-color="#f43f5e"/><stop offset=".33" stop-color="#f59e0b"/><stop offset=".66" stop-color="#22c55e"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><circle cx="50" cy="50" r="47.5" fill="none" stroke="url(#rb${u})" stroke-width="3.5"/>`;
+  return `<circle cx="50" cy="50" r="47.5" fill="none" stroke="${col}" stroke-width="3.5"/>`;
+}
+function cosIcon(id){ const it=(typeof shopItem!=='undefined')&&shopItem(id); return it?it.icon:''; }
+function avatarSvg(level,size,cos){
+  const r=rankOf(level), ti=RANKS.indexOf(r), c=r.color, u=++AV_SEQ;
+  const helmet=ti>=1, vest=ti>=2, cape=ti>=3, aura=ti>=4, crown=ti>=5;
+  const auraCol=cos&&cos.aura&&typeof AURA_COLOR!=='undefined'?AURA_COLOR[cos.aura]:null;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="display:block">
+    <defs><radialGradient id="bg${u}" cx="50%" cy="36%" r="72%"><stop offset="0" stop-color="${c}" stop-opacity=".32"/><stop offset="1" stop-color="${c}" stop-opacity=".04"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="49" fill="url(#bg${u})"/>
+    ${auraCol?`<defs><radialGradient id="ag${u}" cx="50%" cy="50%" r="52%"><stop offset="38%" stop-color="${auraCol}" stop-opacity="0"/><stop offset="76%" stop-color="${auraCol}" stop-opacity=".65"/><stop offset="100%" stop-color="${auraCol}" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="50" fill="url(#ag${u})"><animate attributeName="opacity" values=".5;1;.5" dur="2.4s" repeatCount="indefinite"/></circle><g opacity=".95">${[0,1,2,3,4,5,6,7].map(i=>`<circle cx="50" cy="6.5" r="${i%2?1.1:1.9}" fill="${auraCol}"><animateTransform attributeName="transform" type="rotate" from="${i*45} 50 50" to="${i*45+360} 50 50" dur="${7+ (i%2?3:0)}s" repeatCount="indefinite"/></circle>`).join('')}</g>`:''}
+    ${aura?`<circle cx="50" cy="50" r="45" fill="none" stroke="${c}" stroke-width="2.5" opacity=".7"><animate attributeName="opacity" values=".25;.9;.25" dur="2.2s" repeatCount="indefinite"/></circle>`:''}
+    ${cape?`<path d="M34 64 L19 95 L40 86 Z" fill="${c}" opacity=".85"/><path d="M66 64 L81 95 L60 86 Z" fill="${c}" opacity=".85"/>`:''}
+    <path d="M30 93 L33 67 Q50 59 67 67 L70 93 Z" fill="${vest?'#f59e0b':'#7c8499'}"/>
+    ${vest?`<rect x="44" y="62" width="3" height="31" fill="#e5e7eb" opacity=".85"/><rect x="53" y="62" width="3" height="31" fill="#e5e7eb" opacity=".85"/>`:''}
+    <circle cx="50" cy="40" r="14" fill="#f0c49b"/>
+    ${!helmet?`<path d="M37 36 Q50 22 63 36 Q57 30 50 30 Q43 30 37 36 Z" fill="#5b4636"/>`:''}
+    <circle cx="45" cy="40" r="1.9" fill="#33373f"/><circle cx="55" cy="40" r="1.9" fill="#33373f"/>
+    <path d="M45 46 Q50 50 55 46" fill="none" stroke="#33373f" stroke-width="1.8" stroke-linecap="round"/>
+    ${helmet?`<rect x="31" y="30" width="38" height="4" rx="2" fill="#eab308"/><path d="M34 31 Q50 14 66 31 Z" fill="#f5b301"/><rect x="48" y="17" width="4" height="13" fill="#eab308"/>`:''}
+    ${ti>=2?`<g fill="#9aa3b2"><rect x="67.5" y="70" width="3" height="16" rx="1.5"/><rect x="63.5" y="68" width="11" height="4" rx="1.5"/></g>`:''}
+    ${crown?`<path d="M39 20 L43 11 L50 17 L57 11 L61 20 Z" fill="#ffd700" stroke="#e0a800" stroke-width="1"/><circle cx="50" cy="13" r="1.6" fill="#fff"/>`:''}
+    ${cos&&cos.hand?`<text x="74" y="86" font-size="15" text-anchor="middle">${cosIcon(cos.hand)}</text>`:''}
+    ${cos&&cos.glasses?`<text x="50" y="44" font-size="14" text-anchor="middle">${cosIcon(cos.glasses)}</text>`:''}
+    ${cos&&cos.hat?`<text x="50" y="24" font-size="20" text-anchor="middle">${cosIcon(cos.hat)}</text>`:''}
+    ${cos&&cos.frame?frameRing(cos.frame,u):''}
+  </svg>`;
+}
+/* 個人中心的即時等級卡（取代原「即將開放」） */
+function gameCardHtml(sumPts,sumCon,sumFav,done){
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const pct=Math.min(100,Math.round(g.into/g.span*100));
+  const c=g.rank.color;
+  return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
+    <div class="gp-glow" style="background:${c}"></div>
+    <div class="gp-top">
+      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${avatarSvg(g.level,44,GS&&GS.equipped)}</div>
+      <div class="gp-meta">
+        <div class="gp-rank">${g.rank.name}<span class="gp-lvl" style="background:${c}">Lv.${g.level}</span></div>
+        <div class="gp-power">⚔️ 戰力 ${g.power+gearPower()}</div>
+      </div>
+      <div class="gp-arrow">›</div>
+    </div>
+    <div class="gp-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
+    <div class="gp-xptxt"><span>經驗值 ${g.total}</span><span>距下一級 ${g.span-g.into} XP</span></div>
+  </div>`;
+}
+/* 角色養成中心 */
+function showGameCenter(){
+  if(!STATE.user) return;
+  const mine=STATE.tasks.filter(t=>t.assigneeId===STATE.user.id && t.status==='done');
+  const sumPts=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sumCon=mine.reduce((s,t)=>s+(t.contribution||0),0);
+  const sumFav=mine.reduce((s,t)=>s+(t.favor||0),0);
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const c=g.rank.color;
+  const pct=Math.min(100,Math.round(g.into/g.span*100));
+  const next=RANKS.find(r=>r.min>g.level);
+  const achs=achievements(mine,sumPts,sumCon,sumFav);
+  const gotN=achs.filter(a=>a.got).length;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='gameModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🎮 角色養成中心</h3>
+      <button class="t-expand" onclick="closeGameCenter()" style="font-size:18px">✕</button>
+    </div>
+    <div class="gc-hero" style="background:${c}1a">
+      <div class="gc-glow" style="background:radial-gradient(circle at 50% 30%,${c},transparent 70%)"></div>
+      ${charHeroHtml()}
+      <div class="gc-rank" style="color:${c}">${g.rank.name}${GS&&GS.title?`<span class="gc-title-tag">「${(shopItem(GS.title)||{}).name||''}」</span>`:''}</div>
+      <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power+gearPower()}</div>
+      <div class="gc-statrow">
+        <div class="gc-stat"><b style="color:#fbbf24">${sumPts}</b><span>T 點</span></div>
+        <div class="gc-stat"><b style="color:#22c55e">${sumCon}</b><span>貢獻值</span></div>
+        <div class="gc-stat"><b style="color:#f472b6">${sumFav}</b><span>人情點</span></div>
+      </div>
+      <div class="gc-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
+      <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
+    </div>
+    <div class="gc-actionrow">
+      <span class="coin-pill big">🪙 ${coinBalance()} 獎勵幣</span>
+      <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
+    </div>
+    <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
+    ${equipPanelHtml()}
+    <div class="detail-label">🐾 我的夥伴</div>
+    ${petCardHtml()}
+    <div class="detail-label">📈 成長曲線</div>
+    ${growthChartSvg(mine)}
+    <div class="detail-label" style="margin-top:14px">🏅 成就徽章（${gotN}/${achs.length}）</div>
+    <div class="ach-grid">
+      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div>${!a.got&&a.max>1?`<div class="ach-bar"><i style="width:${Math.round(a.cur/a.max*100)}%"></i></div><div class="ach-prog">${a.cur} / ${a.max}</div>`:''}</div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">完成任務累積 T 點與貢獻值即可升級 ✨<br>🪙 獎勵幣商店（換頭像裝飾）即將開放</div>
+  </div>`;
+  mask.onclick=closeGameCenter; document.body.appendChild(mask);
+}
+function closeGameCenter(){ const m=document.getElementById('gameModal'); if(m)m.remove(); }
+/* 成長曲線：累積點數 vs 時間（inline SVG，純衍生） */
+function growthChartSvg(done){
+  const pts=done.map(t=>({d:t.approvedAt||t.submittedAt||t.createdAt, p:(t.earnedPoints!=null?t.earnedPoints:(t.points||0))}))
+    .filter(x=>x.d).map(x=>({t:new Date(x.d).getTime(),p:x.p})).filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+  if(pts.length<2) return `<div class="chart-empty">完成 2 個以上任務，這裡就會長出你的成長曲線 📈</div>`;
+  let cum=0; const series=pts.map(x=>({t:x.t,c:(cum+=x.p)}));
+  const t0=series[0].t, t1=series[series.length-1].t, span=Math.max(1,t1-t0), maxC=series[series.length-1].c||1;
+  const W=320,H=150,pL=8,pR=10,pT=14,pB=20;
+  const X=t=>(pL+(t-t0)/span*(W-pL-pR)), Y=c=>(H-pB-(c/maxC)*(H-pT-pB));
+  const line=series.map((s,i)=>(i?'L':'M')+X(s.t).toFixed(1)+' '+Y(s.c).toFixed(1)).join(' ');
+  const area=line+` L ${X(t1).toFixed(1)} ${H-pB} L ${X(t0).toFixed(1)} ${H-pB} Z`;
+  const fmt=ts=>{const d=new Date(ts);return (d.getMonth()+1)+'/'+d.getDate();};
+  const d30=Date.now()-30*86400000, recent=pts.filter(p=>p.t>=d30);
+  const rCnt=recent.length, rPts=recent.reduce((s,p)=>s+p.p,0);
+  return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" class="chart-svg" preserveAspectRatio="none">
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#cg)"/>
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${series.map(s=>`<circle cx="${X(s.t).toFixed(1)}" cy="${Y(s.c).toFixed(1)}" r="2.3" fill="var(--accent)"/>`).join('')}
+    <text x="${pL}" y="${H-6}" class="chart-ax">${fmt(t0)}</text>
+    <text x="${W-pR}" y="${H-6}" class="chart-ax" text-anchor="end">${fmt(t1)}</text>
+    <text x="${W-pR}" y="${pT}" class="chart-ax" text-anchor="end">累積 ${maxC} 點</text>
+  </svg><div class="chart-sum">近 30 天完成 <b>${rCnt}</b> 件 · 賺 <b>${rPts}</b> 點</div></div>`;
+}
+/* 升級儀式：只在真實完成工作、跨過等級門檻時觸發（非每日登入） */
+function sfxLevelUp(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+    const ac=new AC(), now=ac.currentTime;
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=f;
+      o.connect(g); g.connect(ac.destination); const t=now+i*0.12;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+      o.start(t); o.stop(t+0.34);
+    });
+  }catch(e){}
+}
+function playLevelUpCeremony(level){
+  const r=rankOf(level), c=r.color;
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='lvupMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
+    <div class="lvup-card">
+      <div class="lvup-ava" style="border-color:${c};box-shadow:0 0 30px ${c}">${avatarSvg(level,104,GS&&GS.equipped)}</div>
+      <div class="lvup-title">LEVEL UP!</div>
+      <div class="lvup-lv" style="color:${c}">Lv.${level}　${r.name}</div>
+      <div class="lvup-hint">你的付出，又前進了一步 ✨（點一下關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
+  setTimeout(()=>{const m=document.getElementById('lvupMask'); if(m)m.remove();},5500);
+}
+function userGameLevel(uid){
+  const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
+  const sp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sc=mine.reduce((s,t)=>s+(t.contribution||0),0);
+  return levelInfo(sp+sc).level;
+}
+function checkLevelUp(){
+  if(!STATE.user) return;
+  const lvl=userGameLevel(STATE.user.id), key='usled_seen_level_'+STATE.user.id;
+  const prev=parseInt(localStorage.getItem(key));
+  if(isNaN(prev)){ localStorage.setItem(key,String(lvl)); return; }   // 第一次只記錄不慶祝
+  if(lvl!==prev) localStorage.setItem(key,String(lvl));
+  if(lvl>prev) playLevelUpCeremony(lvl);
+}
+
+/* ===================================================================
+   遊戲化 v3：獎勵幣商店 + 寵物養成（純外觀，疊在等級頭像上）
+   - 獎勵幣「賺」從完成任務衍生(跨裝置)；「花費/持有/寵物」存玩家狀態表
+   - 寵物只成長不退化、不挨餓、無冷卻 → 非時間黑洞
+   =================================================================== */
+const COIN_PER_TPTS = 10;          // 每 10 點實得 T 點 = 1 獎勵幣
+// 外觀（光環 SVG glow + 稱號，疊在頭像）
+const SHOP = {
+  aura:[
+    {id:'au_flame',name:'烈焰光環',icon:'🔥',price:14}, {id:'au_ice',name:'冰晶光環',icon:'❄️',price:14}, {id:'au_jade',name:'翡翠光環',icon:'🍀',price:16},
+    {id:'au_rose',name:'玫瑰光環',icon:'🌸',price:18}, {id:'au_star',name:'星輝光環',icon:'🌟',price:22}, {id:'au_holy',name:'黃金聖光',icon:'☀️',price:35}],
+  title:[ {id:'ti_diligent',name:'勤奮之星',icon:'⭐',price:8}, {id:'ti_earlybird',name:'早起鳥',icon:'🌅',price:8}, {id:'ti_coffee',name:'咖啡成癮',icon:'☕',price:8}, {id:'ti_lucky',name:'錦鯉附身',icon:'🍀',price:10}, {id:'ti_boss',name:'老闆愛將',icon:'💼',price:15}, {id:'ti_ace',name:'譽昇王牌',icon:'👑',price:30}],
+};
+const AURA_COLOR  = {au_flame:'#ff6b35', au_ice:'#38bdf8', au_jade:'#34d399', au_rose:'#f472b6', au_star:'#a855f7', au_holy:'#fbbf24'};
+// 角色（17 隻 y708；高等級解鎖更帥的）
+const CHARS=[]; for(let _i=1;_i<=17;_i++) CHARS.push({id:'c'+_i, file:'character_'+String(_i).padStart(2,'0')+'.png', minLevel:_i<=10?1:(_i<=14?5:10)});
+function charFile(id){ const c=CHARS.find(x=>x.id===id)||CHARS[0]; return 'assets/game/char/'+c.file; }
+// 裝備 6 部位（y708 圖示，帶戰力；史詩/傳說需等級解鎖＝白帽成就＋黑帽稀缺）
+const EQUIP_SLOTS=[
+  {slot:'weapon',name:'武器',base:10,n:12,pad:2}, {slot:'hat',name:'頭盔',base:7,n:12,pad:2},
+  {slot:'shirt',name:'護甲',base:8,n:12,pad:2},  {slot:'shoes',name:'鞋子',base:5,n:12,pad:2},
+  {slot:'necklace',name:'項鍊',base:6,n:9,pad:1},{slot:'ring',name:'戒指',base:5,n:9,pad:1},
+];
+const SLOTNAME={}; EQUIP_SLOTS.forEach(s=>SLOTNAME[s.slot]=s.name);
+const EQUIP={};
+EQUIP_SLOTS.forEach(s=>{ EQUIP[s.slot]=[]; for(let i=1;i<=s.n;i++){ const r=Math.min(5,Math.floor((i-1)/(s.n/5))+1); const num=s.pad===2?String(i).padStart(2,'0'):String(i); EQUIP[s.slot].push({id:s.slot+'_'+i, slot:s.slot, file:'icon_128_equip_'+s.slot+'_'+num+'.png', r, power:r*s.base, price:[0,8,18,40,80,150][r], minLevel:[0,1,1,1,10,20][r]}); } });
+function equipItem(id){ for(const k in EQUIP){ const it=EQUIP[k].find(x=>x.id===id); if(it) return it; } return null; }
+function equipFile(id){ const it=equipItem(id); return it?'assets/game/equip/'+it.file:''; }
+function gearPower(){ if(!GS||!GS.gear) return 0; let s=0; for(const k in GS.gear){ const it=GS.gear[k]&&equipItem(GS.gear[k]); if(it) s+=it.power; } return s; }
+const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
+const PETS = [
+  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:14}, {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:16},
+  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:18}, {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:18},
+  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:28}, {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:30}, {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:32},
+  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:44}, {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:46},
+  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:60}, {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:66}, {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:72},
+  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:100,unique:true}, {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:110,unique:true},
+];
+const FEED = [
+  {id:'feed_s',name:'小食',icon:'🍎',price:5,exp:8}, {id:'feed_m',name:'中食',icon:'🍖',price:12,exp:20}, {id:'feed_l',name:'大餐',icon:'🍱',price:25,exp:45},
+];
+// 進化階級（參考 speed-training-base：4 階 EXP 30/80/200/480，前面加「蛋」階段，買來孵化）
+const PET_STAGES = [ {min:0,name:'蛋',scale:0.85,egg:true}, {min:30,name:'幼體',scale:1.0}, {min:80,name:'成長期',scale:1.25}, {min:200,name:'成熟期',scale:1.55}, {min:480,name:'完全體',scale:1.9} ];
+function petEmoji(id,exp){ return petStage(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
+const SLOTS = ['hat','glasses','hand','frame','aura'];
+function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return PETS.find(x=>x.id===id)||FEED.find(x=>x.id===id)||null; }
+function petDef(id){ return PETS.find(x=>x.id===id); }
+function petStage(exp){ let s=PET_STAGES[0],i=0; PET_STAGES.forEach((x,ix)=>{ if(exp>=x.min){s=x;i=ix;} }); const next=PET_STAGES[i+1]; return {...s, idx:i, next, toNext: next?next.min-exp:0, span: next?next.min-s.min:1, into: exp-s.min }; }
+
+/* 玩家狀態：賺=衍生，花費/持有/寵物=存檔 */
+const GAME_STORE = {
+  PATH: '/check-in-system/__SHEET_TBD__',   // ← Jason 建表後填 sheet 號
+  F: { email:0, name:0, balance:0, save:0, updated:0 },   // ← probe 後填寫入欄位 ID
+  N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
+};
+let GS = null;
+function blankGS(){ return {spent:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null}; }
+function userEarnedCoins(uid){
+  const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
+  const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  return Math.floor(tp/COIN_PER_TPTS);
+}
+function coinBalance(){ return userEarnedCoins(STATE.user.id) - (GS?GS.spent||0:0); }
+async function ragicFetchGS(suffix, opts){
+  const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
+  const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
+  return await fetch(url, Object.assign({},opts,{headers}));
+}
+async function loadGameState(){
+  GS=blankGS();
+  if(!STATE.user) return;
+  if(CONFIG.MODE!=='CLOUD'){ try{ const v=localStorage.getItem('usled_gs_'+STATE.user.id); if(v) GS=Object.assign(blankGS(),JSON.parse(v)); }catch(e){} return; }
+  try{
+    const r=await ragicFetchGS('?api',{method:'GET'}); const json=await r.json();
+    const email=(STATE.user.email||'').toLowerCase();
+    STATE.uniqueOwners={};
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||!rec._ragicId) return;
+      const recEmail=String(rec[GAME_STORE.N.email]||'').toLowerCase();
+      let pst={}; try{ pst=JSON.parse(rec[GAME_STORE.N.save]||'{}'); }catch(e){}
+      if(recEmail===email){ GS=Object.assign(blankGS(), pst); GS._ragicId=rec._ragicId; }
+      if(pst.pets) Object.keys(pst.pets).forEach(pid=>{ const pd=petDef(pid); if(pd&&pd.unique) STATE.uniqueOwners[pid]=rec[GAME_STORE.N.name]||recEmail; });
+    });
+  }catch(e){ /* 讀不到就用空檔，不擋使用 */ }
+}
+async function saveGameState(){
+  if(!STATE.user||!GS) return;
+  GS.updated = isoToRagic(new Date().toISOString());
+  if(CONFIG.MODE!=='CLOUD'){ localStorage.setItem('usled_gs_'+STATE.user.id, JSON.stringify(GS)); return; }
+  if(!GAME_STORE.F.save){ return; }   // 欄位 ID 未設定前不寫雲端（避免空寫）
+  const F=GAME_STORE.F, fd=new FormData();
+  const clean=Object.assign({},GS); delete clean._ragicId;
+  fd.append(F.email, STATE.user.email||''); fd.append(F.name, STATE.user.name||'');
+  fd.append(F.balance, String(coinBalance())); fd.append(F.save, JSON.stringify(clean)); fd.append(F.updated, GS.updated);
+  const suffix=GS._ragicId?('/'+GS._ragicId+'?api'):'?api';
+  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); const j=await r.json(); if(j&&j.ragicId&&!GS._ragicId) GS._ragicId=j.ragicId; }catch(e){ toast('雲端存檔失敗，稍後再試'); }
+}
+/* 動作 */
+function owns(id){ return GS&&GS.owned.includes(id); }
+async function buyItem(id){
+  const it=shopItem(id); if(!it||owns(id)) return;
+  const eq=equipItem(id);
+  if(eq && it.minLevel && userGameLevel(STATE.user.id) < it.minLevel){ toast('需 Lv.'+it.minLevel+' 才能入手「'+PET_RARITY[it.r].name+SLOTNAME[it.slot]+'」🔒'); return; }
+  if(coinBalance()<it.price){ toast('獎勵幣不足 🪙'); return; }
+  GS.owned.push(id); GS.spent+=it.price;
+  if(eq){ GS.gear=GS.gear||{}; GS.gear[it.slot]=id; }              // 裝備買了自動裝上
+  else if(it.slot==='title'){ GS.title=id; }
+  else { GS.equipped[it.slot]=id; }                                // 光環
+  await saveGameState(); toast('已入手 '+(eq?(PET_RARITY[it.r].name+SLOTNAME[it.slot]):it.name)+' ✓'); refreshGameUI();
+}
+async function buyPet(id){
+  const p=petDef(id); if(!p||(GS.pets&&GS.pets[id])) return;
+  if(p.unique && STATE.uniqueOwners && STATE.uniqueOwners[id]){ toast('這是公司唯一，已被 '+STATE.uniqueOwners[id]+' 領養了 🔒'); return; }
+  if(coinBalance()<p.price){ toast('獎勵幣不足 🪙'); return; }
+  GS.pets=GS.pets||{}; GS.pets[id]={exp:0}; GS.spent+=p.price;
+  if(!GS.activePet) GS.activePet=id;
+  if(p.unique){ STATE.uniqueOwners=STATE.uniqueOwners||{}; STATE.uniqueOwners[id]=STATE.user.name; }  // 樂觀鎖定（領養不可取消）
+  await saveGameState(); toast('帶回了 '+(p.unique?'公司唯一的 ':'')+p.name+' 的蛋 🥚 — 餵食孵化吧！'); refreshGameUI();
+}
+async function feedActivePet(feedId){
+  if(!GS.activePet||!GS.pets[GS.activePet]){ toast('先到商店帶一隻寵物 🐾'); return; }
+  const f=FEED.find(x=>x.id===feedId); if(!f) return;
+  if(coinBalance()<f.price){ toast('獎勵幣不足 🪙'); return; }
+  const name=petDef(GS.activePet).name, b=petStage(GS.pets[GS.activePet].exp);
+  GS.pets[GS.activePet].exp+=f.exp; GS.spent+=f.price;
+  const a=petStage(GS.pets[GS.activePet].exp);
+  await saveGameState();
+  if(b.egg && !a.egg) toast('🐣 孵化了！'+name+' 誕生 ✨');
+  else if(a.idx>b.idx) toast('🎉 '+name+' 進化到「'+a.name+'」！');
+  else toast(name+(b.egg?' 的蛋':'')+' 吃了 '+f.name+'，+'+f.exp+' 經驗 '+f.icon);
+  refreshGameUI();
+}
+async function toggleEquip(id){
+  const it=shopItem(id); if(!it||!owns(id)) return;
+  if(equipItem(id)){ GS.gear=GS.gear||{}; GS.gear[it.slot] = GS.gear[it.slot]===id?null:id; }
+  else if(it.slot==='title'){ GS.title = GS.title===id?null:id; }
+  else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
+  await saveGameState(); refreshGameUI();
+}
+function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return; if(userGameLevel(STATE.user.id)<c.minLevel){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; } GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
+function showCharPick(){
+  const lvl=userGameLevel(STATE.user.id), cur=(GS&&GS.charId)||'c1';
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
+    <div class="char-grid">${CHARS.map(c=>{ const lk=lvl<c.minLevel; return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
+  </div>`;
+  mask.onclick=closeCharPick; document.body.appendChild(mask);
+}
+function closeCharPick(){ const m=document.getElementById('charPickModal'); if(m)m.remove(); }
+function charHeroHtml(){
+  const cid=(GS&&GS.charId)||'c1';
+  const auraId=GS&&GS.equipped&&GS.equipped.aura, auraCol=auraId&&AURA_COLOR[auraId];
+  return `<div class="gc-char" onclick="showCharPick()">
+    ${auraCol?`<div class="gc-char-aura" style="background:radial-gradient(circle,${auraCol},transparent 62%)"></div>`:''}
+    <img src="${charFile(cid)}" class="gc-char-img" alt="">
+    <span class="gc-char-edit">🦸 換角色</span>
+  </div>`;
+}
+function equipPanelHtml(){
+  return `<div class="equip-panel">${EQUIP_SLOTS.map(s=>{ const id=GS&&GS.gear&&GS.gear[s.slot], it=id&&equipItem(id); const rc=it?PET_RARITY[it.r].color:'var(--border)';
+    return `<div class="equip-slot" style="border-color:${rc}" onclick="showShop('eq_${s.slot}')">${it?`<img src="${equipFile(id)}"><span class="es-pw">⚔️${it.power}</span>`:`<span class="es-empty">＋</span>`}<span class="es-name">${s.name}</span></div>`;
+  }).join('')}</div>`;
+}
+function equipCard(it){
+  const owned=owns(it.id), equipped=GS.gear&&GS.gear[it.slot]===it.id, bal=coinBalance(), rc=PET_RARITY[it.r].color;
+  const locked=it.minLevel&&userGameLevel(STATE.user.id)<it.minLevel;
+  let action;
+  if(equipped) action=`<button class="equip-btn on" onclick="toggleEquip('${it.id}')">裝備中 ✓</button>`;
+  else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button>`;
+  else if(locked) action=`<button class="buy-btn dis" disabled>🔒 Lv.${it.minLevel}</button>`;
+  else action=`<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')">🪙 ${it.price}</button>`;
+  return `<div class="shop-item${equipped?' eq':''}" style="border-color:${rc}66"><img class="si-img" src="${equipFile(it.id)}" loading="lazy"><div class="si-name" style="color:${rc}">${PET_RARITY[it.r].name}</div><div class="si-rar">⚔️ ${it.power}</div>${action}</div>`;
+}
+async function setActivePet(id){ if(GS.pets&&GS.pets[id]){ GS.activePet=id; await saveGameState(); refreshGameUI(); } }
+function refreshGameUI(){ const g=document.getElementById('gameModal'); if(g){ closeGameCenter(); showGameCenter(); } const s=document.getElementById('shopModal'); if(s){ closeShop(); showShop(); } }
+/* 寵物卡（角色養成中心；只成長、可餵食、可切換夥伴） */
+function petCardHtml(){
+  if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet])
+    return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`;
+  const id=GS.activePet, p=petDef(id), st=GS.pets[id], stg=petStage(st.exp);
+  const pct=stg.next?Math.round(stg.into/stg.span*100):100;
+  const others=Object.keys(GS.pets).filter(x=>x!==id);
+  const bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const expTxt = stg.egg ? ('孵化倒數：再餵 '+stg.toNext+' 經驗就破殼 🥚')
+    : (stg.next?('經驗 '+st.exp+'｜距「'+stg.next.name+'」還差 '+stg.toNext):('已完全體 ✨ 經驗 '+st.exp));
+  return `<div class="pet-card">
+    <div class="pet-emoji${stg.egg?' egg':''}" style="font-size:${Math.round(30*stg.scale)}px">${petEmoji(id,st.exp)}</div>
+    <div class="pet-info">
+      <div class="pet-name">${stg.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${PET_RARITY[p.r].name}${stg.egg?'':'·'+stg.name}</span></div>
+      <div class="pet-bar"><i style="width:${pct}%;background:${stg.egg?'linear-gradient(90deg,#f0a500,#fbbf24)':''}"></i></div>
+      <div class="pet-exp">${expTxt}</div>
+      <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·🪙${f.price}</button>`).join('')}</div>
+    </div>
+    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
+  </div>`;
+}
+/* 商店 */
+function shopCosCard(it){
+  const owned=owns(it.id);
+  const equipped = it.slot==='title' ? GS.title===it.id : GS.equipped[it.slot]===it.id;
+  const bal=coinBalance();
+  const action = !owned
+    ? `<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')">🪙 ${it.price}</button>`
+    : `<button class="equip-btn${equipped?' on':''}" onclick="toggleEquip('${it.id}')">${equipped?(it.slot==='title'?'使用中 ✓':'裝備中 ✓'):'點我裝備'}</button>`;
+  return `<div class="shop-item${equipped?' eq':''}"><div class="si-icon">${it.icon}</div><div class="si-name">${it.name}</div>${action}</div>`;
+}
+function shopPetCard(p){
+  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const owners=STATE.uniqueOwners||{}, takenByOther = p.unique && owners[p.id] && !owned;
+  let action;
+  if(owned) action=`<button class="equip-btn${active?' on':''}" onclick="setActivePet('${p.id}')">${active?'夥伴中 ✓':'設為夥伴'}</button>`;
+  else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
+  else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')">🪙 ${p.price}</button>`;
+  const rar = p.unique ? `${PET_RARITY[p.r].name} · ${takenByOther?('👑'+owners[p.id]):'👑唯一'}` : PET_RARITY[p.r].name;
+  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}66"><div class="si-icon">${p.icon}</div><div class="si-name">${p.name}蛋</div><div class="si-rar" style="color:${rc}">${rar}</div>${action}</div>`;
+}
+function showShop(tab){
+  if(!STATE.user) return;
+  STATE.shopTab = tab || STATE.shopTab || 'acc';
+  const t=STATE.shopTab, bal=coinBalance();
+  const tabBtn=(id,label)=>`<button class="shop-tab${t===id?' active':''}" onclick="showShop('${id}')">${label}</button>`;
+  let body;
+  if(t==='eq') body=EQUIP_SLOTS.map(s=>`<div class="shop-slot-h">${s.name}</div><div class="shop-grid">${EQUIP[s.slot].map(equipCard).join('')}</div>`).join('');
+  else if(t==='deco') body=`<div class="shop-grid">${[...SHOP.aura,...SHOP.title].map(x=>shopCosCard({...x,slot:shopItem(x.id).slot})).join('')}</div>`;
+  else body=`<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`;
+  const old=document.getElementById('shopModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='shopModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🛒 獎勵幣商店</h3>
+      <div style="display:flex;align-items:center;gap:10px"><span class="coin-pill">🪙 ${bal}</span><button class="t-expand" onclick="closeShop()" style="font-size:18px">✕</button></div>
+    </div>
+    <div class="shop-tabs">${tabBtn('eq','⚔️ 裝備')}${tabBtn('deco','✨ 光環/稱號')}${tabBtn('pet','🐾 寵物')}</div>
+    ${body}
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">獎勵幣＝完成任務賺的（每 ${COIN_PER_TPTS} 點實得 T 點換 1 🪙）。裝備加戰力、史詩/傳說需等級解鎖；三點數不會被扣 ✨</div>
+  </div>`;
+  mask.onclick=closeShop; document.body.appendChild(mask);
+}
+function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remove(); }
+function compressImage(dataUrl,maxW,cb){
+  const img=new Image();
+  img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
+  img.src=dataUrl;
+}
+
+/* ===================================================================
+   工具
+   =================================================================== */
+function esc(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function timeLeft(iso){
+  if(!iso) return null;
+  const diff = new Date(iso).getTime() - Date.now();
+  if(diff < 0){ const h=Math.ceil(-diff/3600000); return {text: h<24?('逾期 '+h+' 小時'):('逾期 '+Math.ceil(h/24)+' 天'), urgent:true}; }
+  const h = diff/3600000;
+  if(h < 1) return {text:'剩 '+Math.max(1,Math.ceil(diff/60000))+' 分', urgent:true};
+  if(h < 24) return {text:'剩 '+Math.floor(h)+' 小時', urgent:true};
+  const d=Math.floor(h/24); if(d<7) return {text:d+' 天後', urgent:false};
+  const dt=new Date(iso); return {text:(dt.getMonth()+1)+'/'+dt.getDate(), urgent:false};
+}
+/* 逾期點數打折：每逾期 2 小時 ×0.9 累計，直到 0 */
+function effectivePoints(t){
+  if(!t.points || !t.dueAt) return t.points||0;
+  const overH = (Date.now() - new Date(t.dueAt).getTime())/3600000;
+  if(overH <= 0) return t.points;
+  const steps = Math.ceil(overH/2);
+  return Math.max(0, Math.round(t.points * Math.pow(0.9, steps)));
+}
+function pointsHtml(t){
+  if(!t.points) return '';
+  if(t.status==='done') return `<span>＋${t.earnedPoints!=null?t.earnedPoints:t.points} 點</span>`;
+  const ep=effectivePoints(t);
+  if(ep<t.points) return `<span style="color:var(--q1);font-weight:600">＋${ep} 點 <span style="text-decoration:line-through;opacity:.5;font-weight:400">${t.points}</span></span>`;
+  return `<span>＋${t.points} 點</span>`;
+}
+function fmtDue(iso){ const d=new Date(iso),now=new Date(); const diff=d-now; const day=Math.round(diff/86400000);
+  if(diff<0) return '已逾期'; if(day===0){ const h=Math.round(diff/3600000); return h<=1?'1 小時內':h+' 小時內'; } if(day===1)return '明天'; if(day<7)return day+' 天後'; return (d.getMonth()+1)+'/'+d.getDate(); }
+function toLocalInput(iso){ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function toast(msg){ const old=document.getElementById('toast'); if(old)old.remove(); const t=document.createElement('div'); t.id='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+
+/* ===================================================================
+   啟動
+   =================================================================== */
+document.getElementById('modeFlag').textContent = CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式';
+renderLogin();
+/* ===================================================================
+   長按拖曳：把任務拖到其他象限改分類（主管限定）
+   =================================================================== */
+let dragCtx = null;
+function initDrag(){
+  const board = document.getElementById('board');
+  if(!board || board.__dragInit) return; board.__dragInit=true;
+  board.addEventListener('mousedown', dragStart);
+  board.addEventListener('touchstart', dragStart, {passive:false});
+  document.addEventListener('mousemove', dragMove, {passive:false});
+  document.addEventListener('touchmove', dragMove, {passive:false});
+  document.addEventListener('mouseup', dragEnd);
+  document.addEventListener('touchend', dragEnd);
+}
+function dragStart(e){
+  if(!isSupervisor(STATE.user)) return;
+  const taskEl = e.target.closest('.task'); if(!taskEl) return;
+  if(e.target.closest('button') || e.target.closest('.task-thumbs')) return;
+  const pt = e.touches? e.touches[0] : e;
+  dragCtx = { tid:taskEl.dataset.tid, taskEl, startX:pt.clientX, startY:pt.clientY, timer:null, active:false, ghost:null };
+  dragCtx.timer = setTimeout(dragActivate, 380);
+}
+function dragActivate(){
+  if(!dragCtx) return;
+  dragCtx.active = true;
+  if(navigator.vibrate) navigator.vibrate(30);
+  const el = dragCtx.taskEl;
+  const g = el.cloneNode(true);
+  g.style.cssText = 'position:fixed;z-index:500;width:'+el.offsetWidth+'px;opacity:.92;pointer-events:none;transform:scale(1.04);box-shadow:0 10px 32px rgba(0,0,0,.7);border:2px solid var(--accent)';
+  document.body.appendChild(g); dragCtx.ghost = g;
+  el.style.opacity = '.3';
+  toast('拖到其他象限改分類');
+}
+function dragMove(e){
+  if(!dragCtx) return;
+  const pt = e.touches? e.touches[0] : e;
+  if(!dragCtx.active){
+    if(Math.abs(pt.clientX-dragCtx.startX)>12 || Math.abs(pt.clientY-dragCtx.startY)>12) clearTimeout(dragCtx.timer);
+    return;
+  }
+  e.preventDefault();
+  dragCtx.ghost.style.left = (pt.clientX - dragCtx.ghost.offsetWidth/2)+'px';
+  dragCtx.ghost.style.top = (pt.clientY - 24)+'px';
+  document.querySelectorAll('.quadrant').forEach(q=>q.style.outline='');
+  const under = quadrantAt(pt.clientX, pt.clientY);
+  if(under) under.style.outline='3px solid var(--accent)';
+}
+function quadrantAt(x,y){
+  const els = document.elementsFromPoint(x,y);
+  for(const el of els){ const q = el.closest && el.closest('.quadrant'); if(q) return q; }
+  return null;
+}
+function dragEnd(e){
+  if(!dragCtx) return;
+  clearTimeout(dragCtx.timer);
+  if(dragCtx.active){
+    const pt = e.changedTouches? e.changedTouches[0] : e;
+    const q = quadrantAt(pt.clientX, pt.clientY);
+    if(q && q.dataset.qid){
+      const t = STATE.tasks.find(x=>x.id===dragCtx.tid);
+      if(t && t.quadrant!==q.dataset.qid){ t.quadrant=q.dataset.qid; dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===q.dataset.qid).title+'」'); }
+    }
+    if(dragCtx.ghost) dragCtx.ghost.remove();
+    document.querySelectorAll('.quadrant').forEach(q=>q.style.outline='');
+    renderBoard();
+  }
+  dragCtx = null;
+}
+
+/* ===================================================================
+   逾期提醒：自己被指派的任務逾期 → 跳閃爍視窗
+   =================================================================== */
+function checkOverdue(){
+  if(!STATE.user) return;
+  if(document.getElementById('overdueAlert')) return;
+  const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id && t.status!=='done' && t.dueAt && new Date(t.dueAt).getTime()<Date.now());
+  if(mine.length===0) return;
+  const el = document.createElement('div'); el.id='overdueAlert'; el.className='modal-mask';
+  el.innerHTML = `<div class="modal overdue-box" onclick="event.stopPropagation()">
+    <div class="overdue-title">⚠ 你有 ${mine.length} 個任務已逾期！</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">逾期越久、點數打折越多，請盡快完成</div>
+    ${mine.map(t=>`<div class="overdue-item"><b>${esc(t.title)}</b><div style="font-size:12px;color:var(--q1);margin-top:3px">${timeLeft(t.dueAt).text} · 點數 ${t.points} → <b>${effectivePoints(t)}</b></div></div>`).join('')}
+    <button class="btn-primary" style="width:100%;padding:14px;margin-top:14px;border-radius:10px;font-weight:700;font-size:15px" onclick="document.getElementById('overdueAlert').remove()">我知道了，馬上處理</button>
+  </div>`;
+  document.body.appendChild(el);
+}
+
+// 每分鐘自動更新倒數 + 檢查逾期
+setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
+// 記住上次登入身份（方便 demo）
+const last = localStorage.getItem('usled_last_user');
+if(last && userById(last)) login(last);
+</script>
+</body>
+</html>
