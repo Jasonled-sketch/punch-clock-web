@@ -145,6 +145,14 @@ img{display:block}
 .qp-sub{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
 .t-assignee-name{font-size:13px;color:var(--text)}
 .t-expand-hint{font-size:11px;color:var(--accent);margin-left:auto}
+/* 左滑快捷 */
+.swipe-row{position:relative;overflow:hidden;border-radius:10px}
+.swipe-actions{position:absolute;top:0;right:0;height:100%;display:flex;z-index:0}
+.swipe-btn{border:none;color:#fff;font-weight:700;font-size:14px;width:75px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.swipe-btn.accept{background:#3b82f6}
+.swipe-btn.submit{background:#22c55e}
+.swipe-btn.edit{background:#6b7280}
+.swipe-row .task{transition:transform .22s cubic-bezier(.2,.8,.3,1);position:relative;z-index:1;will-change:transform}
 /* 備註（條列） */
 .t-note{margin-top:7px;font-size:12px;color:var(--muted);white-space:pre-wrap;border-left:2px solid var(--border);padding-left:8px;line-height:1.6}
 /* 標題列 + 展開鈕 */
@@ -391,6 +399,7 @@ async function login(uid){
   try{ STATE.tasks = await dbLoadTasks(); }
   catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
   renderBoard();
+  initSwipe();
   checkOverdue();
 }
 function logout(){
@@ -430,6 +439,60 @@ function renderBoard(){
 }
 function switchQuad(qid){ STATE.activeQuad=qid; renderBoard(); }
 
+/* ===================================================================
+   左滑快捷（淘寶式）：左滑露出 接單/提交；點卡片進詳情
+   =================================================================== */
+let swipeCtx=null, lastSwipeEnd=0;
+function initSwipe(){
+  const board=document.getElementById('board');
+  if(!board || board.__swipeInit) return; board.__swipeInit=true;
+  board.addEventListener('touchstart', swipeStart, {passive:true});
+  board.addEventListener('touchmove', swipeMove, {passive:false});
+  board.addEventListener('touchend', swipeEnd);
+  board.addEventListener('mousedown', swipeStart);
+  board.addEventListener('mousemove', swipeMove);
+  board.addEventListener('mouseup', swipeEnd);
+}
+function _pt(e){ return e.touches&&e.touches[0] ? e.touches[0] : (e.changedTouches&&e.changedTouches[0] ? e.changedTouches[0] : e); }
+function swipeStart(e){
+  const task=e.target.closest('.task'); if(!task) return;
+  if(e.target.closest('.swipe-actions')) return;
+  if(!task.parentElement.querySelector('.swipe-actions')) return; // 無快捷的卡片不滑
+  const p=_pt(e);
+  const startTx = task.classList.contains('swiped') ? -150 : 0;
+  swipeCtx={ task, startX:p.clientX, startY:p.clientY, startTx, dx:startTx, moved:false };
+  document.querySelectorAll('.task.swiped').forEach(t=>{ if(t!==task){ t.style.transform=''; t.classList.remove('swiped'); } });
+}
+function swipeMove(e){
+  if(!swipeCtx) return;
+  const p=_pt(e); const dx=p.clientX-swipeCtx.startX, dy=p.clientY-swipeCtx.startY;
+  if(!swipeCtx.moved && Math.abs(dx)>Math.abs(dy) && Math.abs(dx)>8) swipeCtx.moved=true;
+  if(swipeCtx.moved){
+    if(e.cancelable) e.preventDefault();
+    swipeCtx.dx = Math.max(-150, Math.min(0, swipeCtx.startTx+dx));
+    swipeCtx.task.style.transform='translateX('+swipeCtx.dx+'px)';
+  }
+}
+function swipeEnd(){
+  if(!swipeCtx) return;
+  if(swipeCtx.moved){
+    lastSwipeEnd=Date.now();
+    if(swipeCtx.dx < -60){ swipeCtx.task.style.transform='translateX(-150px)'; swipeCtx.task.classList.add('swiped'); }
+    else { swipeCtx.task.style.transform=''; swipeCtx.task.classList.remove('swiped'); }
+  }
+  swipeCtx=null;
+}
+function taskCardClick(e, id){
+  if(Date.now()-lastSwipeEnd < 300) return;   // 剛滑完，不觸發詳情
+  const task=e.currentTarget;
+  if(task.classList.contains('swiped')){ task.style.transform=''; task.classList.remove('swiped'); return; }
+  showTaskDetail(id);
+}
+function acceptTask(id){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  t.assigneeId=STATE.user.id; renderBoard(); dbUpsert(t); toast('已接單，開始處理！');
+}
+
 function renderTaskCard(t){
   const a = userById(t.assigneeId);
   const sup = isSupervisor(STATE.user);
@@ -437,25 +500,35 @@ function renderTaskCard(t){
   const tl = (t.status!=='done') ? timeLeft(t.dueAt) : null;
   const stMap = {open:['待處理','st-open'], submitted:['待審核','st-submitted'], done:['已完成','st-done']};
   const st = stMap[t.status]||stMap.open;
-  let actions = '';
-  if(t.status==='open' && mine){ actions += `<button class="btn-primary" onclick="event.stopPropagation();submitTask('${t.id}')">✓ 提交完成</button>`; }
-  if(t.status==='submitted' && sup){ actions += `<button class="btn-good" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button><button class="btn-warn" onclick="event.stopPropagation();rejectTask('${t.id}')">退回</button>`; }
   const media = (t.images||[]).slice(0,3);
   const thumbs = media.length? `<div class="task-thumbs">${media.map((m,i)=>{ const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video'; return isVid?`<video src="${src}" muted onclick="event.stopPropagation();showMedia('${t.id}',${i})"></video>`:`<img src="${src}" onclick="event.stopPropagation();showMedia('${t.id}',${i})">`; }).join('')}</div>`:'';
-  return `<div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="showTaskDetail('${t.id}')" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
-    <div class="task-body">
-      <div class="task-main">
-        <div class="t-title">${esc(t.title)}</div>
-        <div class="t-meta">
-          <span class="status-badge ${st[1]}">${st[0]}</span>
-          ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:''}
-          ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
-          <span class="t-expand-hint">詳情 ▾</span>
+  // 左滑快捷鈕（淘寶式）
+  let swipe='';
+  if(t.status!=='done'){
+    if(sup){
+      swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();openTaskModal('${t.id}')">編輯</button>`;
+      if(t.status==='submitted') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
+    } else {
+      if(!mine) swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
+      if(t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
+    }
+  }
+  return `<div class="swipe-row">
+    ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
+    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+      <div class="task-body">
+        <div class="task-main">
+          <div class="t-title">${esc(t.title)}</div>
+          <div class="t-meta">
+            <span class="status-badge ${st[1]}">${st[0]}</span>
+            ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:''}
+            ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
+            ${swipe?'<span class="t-expand-hint">◀ 滑動</span>':'<span class="t-expand-hint">詳情 ▾</span>'}
+          </div>
         </div>
+        ${thumbs}
       </div>
-      ${thumbs}
     </div>
-    ${actions?`<div class="t-actions">${actions}</div>`:''}
   </div>`;
 }
 
