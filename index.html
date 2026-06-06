@@ -238,7 +238,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -625,10 +625,11 @@ function addDayShort(s) {  // 短日期 26/06/05(五)，手機單行用
 function effShiftBounds(sh, dayLeaves) {
   let amStart = toMin(sh.am[0]), pmEnd = toMin(sh.pm[1]), fullDay = false;
   (dayLeaves || []).forEach(l => {
-    if (!l.start_time || !l.end_time) { fullDay = true; return; }  // 整天請假 → 當日不算遲到早退
-    const ls = toMin(l.start_time), le = toMin(l.end_time);
-    if (ls <= amStart && le > amStart) amStart = Math.max(amStart, le);  // 請假涵蓋上班開頭 → 應上班後移
-    if (le >= pmEnd && ls < pmEnd) pmEnd = Math.min(pmEnd, ls);          // 請假涵蓋下班結尾 → 應下班前移
+    const s = l.s || l.start_time, e = l.e || l.end_time;       // 兼容 {s,e}(補休/dayOff) 與 {start_time,end_time}(請假)
+    if (l.full || !s || !e) { fullDay = true; return; }          // 整天 → 當日不算遲到早退
+    const ls = toMin(s), le = toMin(e);
+    if (ls <= amStart && le > amStart) amStart = Math.max(amStart, le);  // 涵蓋上班開頭 → 應上班後移
+    if (le >= pmEnd && ls < pmEnd) pmEnd = Math.min(pmEnd, ls);          // 涵蓋下班結尾 → 應下班前移
   });
   return { amStart, pmEnd, fullDay };
 }
@@ -2154,7 +2155,7 @@ function showReportDetail(email) {
       totLate += lateM; totEarly += earlyM;
       const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
       const wh = realWorkHours(rec, sh, isFull);
-      if (full) segHtml = `<span style="color:#c62828">${rec.start_time}-${rec.end_time} ⚠請假卻打卡</span>`;
+      if (full) segHtml = `<span style="color:#1565c0">${lvs[0] && lvs[0].start_time ? `${lvs[0].start_time}-${lvs[0].end_time}` : '08:30-18:00'} ${full.type}${full.h}h</span>`;
       else {
         const segText = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff).map(([a, b]) => `${mm2hhmm(a)}-${mm2hhmm(b)}`).join(' ');
         segHtml = `<span style="color:#2e7d32">${segText}</span>`;
