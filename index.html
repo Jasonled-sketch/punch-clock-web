@@ -2837,12 +2837,12 @@ function buildLeaveCard(lv, isAdmin) {
   return `
     <div class="leave-card ${stCls}" style="padding:9px 12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"><span class="leave-type">${escHtml(lv.leave_type)}</span> ${stBadge}　<span class="leave-date-main">${addDayShort(lv.start_date)}${timeRange ? ' '+timeRange : ''}</span></div>
-        <b style="color:#1a73e8;white-space:nowrap">${dur}</b>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0"><span class="leave-type">${escHtml(lv.leave_type)}</span>${stBadge}${ownerEdit}</div>
+        <div style="white-space:nowrap;flex-shrink:0"><span class="leave-date-main" style="margin:0;font-weight:600">${addDayShort(lv.start_date)}${timeRange ? ' '+timeRange : ''}</span>&nbsp;&nbsp;&nbsp;<b style="color:#1a73e8">${dur}</b></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:4px">
-        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(lv.reason) || '—'}　<span style="font-size:11px;color:#999">${urgent}申請 ${applyTxt}</span></div>
-        ${ownerEdit ? `<div style="display:flex;gap:6px;white-space:nowrap">${ownerEdit}</div>` : ''}
+        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(lv.reason) || '—'}</div>
+        <div style="font-size:11px;color:#999;white-space:nowrap">${urgent}申請 ${applyTxt}</div>
       </div>
       ${lv.photo ? `<img class="leave-photo" src="${lv.photo}" onclick="window.open('${lv.photo}','_blank')">` : ''}
       ${rejectNote}
@@ -3182,12 +3182,12 @@ function buildOtCard(ot, isAdmin) {
   return `
     <div class="leave-card ${stCls}" style="padding:9px 12px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0"><span class="leave-type" style="color:${typeColor}">${ot.ot_type}</span> ${stBadge}　<span class="leave-date-main">${addDayShort(ot.date)}${timeRange ? ' '+timeRange : ''}</span></div>
-        <b style="color:${typeColor};white-space:nowrap">${parseFloat(ot.hours)||0}H</b>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0"><span class="leave-type" style="color:${typeColor}">${ot.ot_type}</span>${stBadge}${ownerEdit}</div>
+        <div style="white-space:nowrap;flex-shrink:0"><span class="leave-date-main" style="margin:0;font-weight:600">${addDayShort(ot.date)}${timeRange ? ' '+timeRange : ''}</span>&nbsp;&nbsp;&nbsp;<b style="color:${typeColor}">${parseFloat(ot.hours)||0}H</b></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:8px;margin-top:4px">
-        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(ot.reason) || '—'}　<span style="font-size:11px;color:#999">申請 ${applyTxt}</span></div>
-        ${ownerEdit ? `<div style="display:flex;gap:6px;white-space:nowrap">${ownerEdit}</div>` : ''}
+        <div style="flex:1;min-width:0;font-size:13px;color:#666">${escHtml(ot.reason) || '—'}</div>
+        <div style="font-size:11px;color:#999;white-space:nowrap">申請 ${applyTxt}</div>
       </div>
       ${rejectNote}
     </div>`;
