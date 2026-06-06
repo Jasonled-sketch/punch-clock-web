@@ -190,6 +190,7 @@ img{display:block}
 const CONFIG = {
   MODE: 'CLOUD',          // 'LOCAL'=資料存本機瀏覽器（測 UX 用）/ 'CLOUD'=存 Ragic（正式上線）
   STORAGE_KEY: 'usled_tasks_v1',
+  IMGBB_KEY: '005bab566ba9d238607bc472d15deed6',   // 公司 usled.tw 圖床 key（任務照片）
 
   // 員工名單（跟線上打卡系統對應；之後改 Google 登入時用 email 比對）
   USERS: [
@@ -530,13 +531,29 @@ function setDueQuick(spec){
 function onPickMedia(e){
   const file = e.target.files[0]; if(!file) return;
   if(modalImages.length>=3){ toast('最多 3 個'); e.target.value=''; return; }
+  const isVideo = file.type.startsWith('video/');
+  if(isVideo && CONFIG.MODE==='CLOUD'){ toast('影片暫不支援雲端，請改拍照'); e.target.value=''; return; }
   const reader = new FileReader();
   reader.onload = ()=>{
-    if(file.type.startsWith('video/')){ modalImages.push({type:'video',src:reader.result}); renderModalImages(); }
-    else { compressImage(reader.result, 900, (small)=>{ modalImages.push({type:'image',src:small}); renderModalImages(); }); }
+    if(isVideo){ modalImages.push({type:'video',src:reader.result}); renderModalImages(); return; }
+    compressImage(reader.result, 1200, async (small)=>{
+      if(CONFIG.MODE==='CLOUD'){
+        toast('上傳照片中…');
+        try{ const url = await uploadToImgbb(small); modalImages.push({type:'image',src:url}); renderModalImages(); toast('照片已上傳 ✓'); }
+        catch(err){ toast('上傳失敗：'+err.message); }
+      } else { modalImages.push({type:'image',src:small}); renderModalImages(); }
+    });
   };
   reader.readAsDataURL(file);
   e.target.value='';
+}
+async function uploadToImgbb(dataUrl){
+  const base64 = dataUrl.split(',')[1];
+  const fd = new FormData(); fd.append('image', base64);
+  const r = await fetch('https://api.imgbb.com/1/upload?key='+CONFIG.IMGBB_KEY, { method:'POST', body:fd });
+  const j = await r.json();
+  if(!j || !j.success) throw new Error((j&&j.error&&j.error.message)||'ImgBB 失敗');
+  return j.data.url;
 }
 function renderModalImages(){
   const box=document.getElementById('imgPreview'); if(!box)return;
