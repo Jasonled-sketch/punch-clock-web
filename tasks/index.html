@@ -210,6 +210,26 @@ img{display:block}
 .ach .an{font-size:11px;font-weight:700;margin-top:4px}
 .ach .ad{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.3}
 .ach .got{position:absolute;top:5px;right:6px;font-size:11px;color:var(--q3)}
+.ach-bar{height:4px;border-radius:3px;background:var(--surface);margin:6px 3px 0;overflow:hidden}
+.ach-bar>i{display:block;height:100%;background:var(--accent);opacity:.7}
+.ach-prog{font-size:9px;color:var(--muted);margin-top:2px}
+/* 成長曲線 */
+.chart-wrap{margin-top:6px}
+.chart-svg{width:100%;height:auto;display:block;background:var(--surface2);border:1px solid var(--border);border-radius:10px}
+.chart-ax{fill:var(--muted);font-size:9px}
+.chart-sum{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+.chart-empty{background:var(--surface2);border:1px dashed var(--border);border-radius:10px;padding:22px 12px;text-align:center;color:var(--muted);font-size:13px;margin-top:6px}
+/* 升級儀式 */
+.lvup-mask{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);animation:lvfade .3s ease;cursor:pointer}
+.lvup-flash{position:absolute;inset:0;animation:lvflash .7s ease-out;pointer-events:none}
+.lvup-card{position:relative;text-align:center;animation:lvpop .55s cubic-bezier(.2,1.5,.4,1)}
+.lvup-ava{width:112px;height:112px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;margin:0 auto;background:var(--surface)}
+.lvup-title{font-size:26px;font-weight:900;color:#fff;margin-top:14px;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+.lvup-lv{font-size:20px;font-weight:800;margin-top:4px}
+.lvup-hint{font-size:12px;color:#cbd5e1;margin-top:12px;opacity:.85}
+@keyframes lvfade{from{opacity:0}to{opacity:1}}
+@keyframes lvflash{0%{opacity:0}28%{opacity:.85}100%{opacity:0}}
+@keyframes lvpop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
@@ -449,6 +469,7 @@ async function login(uid){
   renderBoard();
   initSwipe();
   checkOverdue();
+  checkLevelUp();
 }
 function logout(){
   STATE.user = null;
@@ -724,7 +745,7 @@ async function saveTask(){
 }
 async function deleteTask(id){ if(!confirm('確定刪除這個任務？'))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
-async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); }
+async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
 async function rejectTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='open'; renderBoard(); await dbUpsert(t); toast('已退回，請員工繼續'); }
 function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remove(); editingId=null; }
 
@@ -858,19 +879,48 @@ function gameStats(sumPts,sumCon,sumFav){
 function achievements(done,sumPts,sumCon,sumFav){
   const cnt=done.length;
   const q1=done.filter(t=>t.quadrant==='q1').length;
-  const quads=new Set(done.map(t=>t.quadrant));
+  const quads=new Set(done.map(t=>t.quadrant)).size;
   const onTime=done.filter(t=>t.dueAt && (t.earnedPoints==null || t.earnedPoints>=(t.points||0))).length;
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const byMonth={}; done.forEach(t=>{const d=t.approvedAt||t.submittedAt||t.createdAt; if(d){const k=d.slice(0,7); byMonth[k]=(byMonth[k]||0)+1;}});
+  const maxMonth=Object.values(byMonth).reduce((m,v)=>Math.max(m,v),0);
+  const A=(name,desc,icon,cur,max)=>({name,desc,icon,cur:Math.min(cur,max),max,got:cur>=max});
   return [
-    {name:'初試啼聲', desc:'完成 1 個任務',      icon:'🌱', got:cnt>=1},
-    {name:'十項全能', desc:'完成 10 個任務',     icon:'🎯', got:cnt>=10},
-    {name:'任務狂人', desc:'完成 50 個任務',     icon:'🏆', got:cnt>=50},
-    {name:'百點達標', desc:'累積 100 T 點',      icon:'💯', got:sumPts>=100},
-    {name:'急先鋒',   desc:'完成 5 個重要又緊急', icon:'⚡', got:q1>=5},
-    {name:'面面俱到', desc:'四象限都完成過',     icon:'🧭', got:quads.size>=4},
-    {name:'神速使者', desc:'準時零打折 5 次',    icon:'🚀', got:onTime>=5},
-    {name:'貢獻之星', desc:'貢獻值達 50',        icon:'💎', got:sumCon>=50},
-    {name:'人情練達', desc:'人情點達 20',        icon:'🤝', got:sumFav>=20},
+    A('初試啼聲','完成 1 個任務','🌱',cnt,1),
+    A('十項全能','完成 10 個任務','🎯',cnt,10),
+    A('任務狂人','完成 50 個任務','🏆',cnt,50),
+    A('百點達標','累積 100 T 點','💯',sumPts,100),
+    A('千點俱樂部','累積 1000 T 點','👑',sumPts,1000),
+    A('急先鋒','完成 5 個重要又緊急','⚡',q1,5),
+    A('面面俱到','四象限都完成過','🧭',quads,4),
+    A('神速使者','準時零打折 5 次','🚀',onTime,5),
+    A('月度勤奮','單月完成 15 件','📅',maxMonth,15),
+    A('貢獻之星','貢獻值達 50','💎',sumCon,50),
+    A('人情練達','人情點達 20','🤝',sumFav,20),
+    A('升階達人','角色等級達 Lv.10','📈',g.level,10),
+    A('全能戰士','戰力達 500','🛡️',g.power,500),
   ];
+}
+/* 角色頭像：分層 inline SVG，隨職階自動進化（之後商店配件可再疊層） */
+let AV_SEQ=0;
+function avatarSvg(level,size){
+  const r=rankOf(level), ti=RANKS.indexOf(r), c=r.color, u=++AV_SEQ;
+  const helmet=ti>=1, vest=ti>=2, cape=ti>=3, aura=ti>=4, crown=ti>=5;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="display:block">
+    <defs><radialGradient id="bg${u}" cx="50%" cy="36%" r="72%"><stop offset="0" stop-color="${c}" stop-opacity=".32"/><stop offset="1" stop-color="${c}" stop-opacity=".04"/></radialGradient></defs>
+    <circle cx="50" cy="50" r="49" fill="url(#bg${u})"/>
+    ${aura?`<circle cx="50" cy="50" r="45" fill="none" stroke="${c}" stroke-width="2.5" opacity=".7"><animate attributeName="opacity" values=".25;.9;.25" dur="2.2s" repeatCount="indefinite"/></circle>`:''}
+    ${cape?`<path d="M34 64 L19 95 L40 86 Z" fill="${c}" opacity=".85"/><path d="M66 64 L81 95 L60 86 Z" fill="${c}" opacity=".85"/>`:''}
+    <path d="M30 93 L33 67 Q50 59 67 67 L70 93 Z" fill="${vest?'#f59e0b':'#7c8499'}"/>
+    ${vest?`<rect x="44" y="62" width="3" height="31" fill="#e5e7eb" opacity=".85"/><rect x="53" y="62" width="3" height="31" fill="#e5e7eb" opacity=".85"/>`:''}
+    <circle cx="50" cy="40" r="14" fill="#f0c49b"/>
+    ${!helmet?`<path d="M37 36 Q50 22 63 36 Q57 30 50 30 Q43 30 37 36 Z" fill="#5b4636"/>`:''}
+    <circle cx="45" cy="40" r="1.9" fill="#33373f"/><circle cx="55" cy="40" r="1.9" fill="#33373f"/>
+    <path d="M45 46 Q50 50 55 46" fill="none" stroke="#33373f" stroke-width="1.8" stroke-linecap="round"/>
+    ${helmet?`<rect x="31" y="30" width="38" height="4" rx="2" fill="#eab308"/><path d="M34 31 Q50 14 66 31 Z" fill="#f5b301"/><rect x="48" y="17" width="4" height="13" fill="#eab308"/>`:''}
+    ${ti>=2?`<g fill="#9aa3b2"><rect x="67.5" y="70" width="3" height="16" rx="1.5"/><rect x="63.5" y="68" width="11" height="4" rx="1.5"/></g>`:''}
+    ${crown?`<path d="M39 20 L43 11 L50 17 L57 11 L61 20 Z" fill="#ffd700" stroke="#e0a800" stroke-width="1"/><circle cx="50" cy="13" r="1.6" fill="#fff"/>`:''}
+  </svg>`;
 }
 /* 個人中心的即時等級卡（取代原「即將開放」） */
 function gameCardHtml(sumPts,sumCon,sumFav,done){
@@ -880,7 +930,7 @@ function gameCardHtml(sumPts,sumCon,sumFav,done){
   return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
     <div class="gp-glow" style="background:${c}"></div>
     <div class="gp-top">
-      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${g.rank.icon}</div>
+      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${avatarSvg(g.level,44)}</div>
       <div class="gp-meta">
         <div class="gp-rank">${g.rank.name}<span class="gp-lvl" style="background:${c}">Lv.${g.level}</span></div>
         <div class="gp-power">⚔️ 戰力 ${g.power}</div>
@@ -912,7 +962,7 @@ function showGameCenter(){
     </div>
     <div class="gc-hero" style="background:${c}1a">
       <div class="gc-glow" style="background:radial-gradient(circle at 50% 30%,${c},transparent 70%)"></div>
-      <div class="gc-ava" style="border-color:${c};box-shadow:0 0 24px ${c}66">${g.rank.icon}</div>
+      <div class="gc-ava" style="border-color:${c};box-shadow:0 0 24px ${c}66">${avatarSvg(g.level,84)}</div>
       <div class="gc-rank" style="color:${c}">${g.rank.name}</div>
       <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power}</div>
       <div class="gc-statrow">
@@ -923,15 +973,81 @@ function showGameCenter(){
       <div class="gc-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
       <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
     </div>
-    <div class="detail-label">🏅 成就徽章（${gotN}/${achs.length}）</div>
+    <div class="detail-label">📈 成長曲線</div>
+    ${growthChartSvg(mine)}
+    <div class="detail-label" style="margin-top:14px">🏅 成就徽章（${gotN}/${achs.length}）</div>
     <div class="ach-grid">
-      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div>`).join('')}
+      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div>${!a.got&&a.max>1?`<div class="ach-bar"><i style="width:${Math.round(a.cur/a.max*100)}%"></i></div><div class="ach-prog">${a.cur} / ${a.max}</div>`:''}</div>`).join('')}
     </div>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">完成任務累積 T 點與貢獻值即可升級 ✨<br>用 T 點兌換裝備 / 寵物 即將開放</div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">完成任務累積 T 點與貢獻值即可升級 ✨<br>🪙 獎勵幣商店（換頭像裝飾）即將開放</div>
   </div>`;
   mask.onclick=closeGameCenter; document.body.appendChild(mask);
 }
 function closeGameCenter(){ const m=document.getElementById('gameModal'); if(m)m.remove(); }
+/* 成長曲線：累積點數 vs 時間（inline SVG，純衍生） */
+function growthChartSvg(done){
+  const pts=done.map(t=>({d:t.approvedAt||t.submittedAt||t.createdAt, p:(t.earnedPoints!=null?t.earnedPoints:(t.points||0))}))
+    .filter(x=>x.d).map(x=>({t:new Date(x.d).getTime(),p:x.p})).filter(x=>!isNaN(x.t)).sort((a,b)=>a.t-b.t);
+  if(pts.length<2) return `<div class="chart-empty">完成 2 個以上任務，這裡就會長出你的成長曲線 📈</div>`;
+  let cum=0; const series=pts.map(x=>({t:x.t,c:(cum+=x.p)}));
+  const t0=series[0].t, t1=series[series.length-1].t, span=Math.max(1,t1-t0), maxC=series[series.length-1].c||1;
+  const W=320,H=150,pL=8,pR=10,pT=14,pB=20;
+  const X=t=>(pL+(t-t0)/span*(W-pL-pR)), Y=c=>(H-pB-(c/maxC)*(H-pT-pB));
+  const line=series.map((s,i)=>(i?'L':'M')+X(s.t).toFixed(1)+' '+Y(s.c).toFixed(1)).join(' ');
+  const area=line+` L ${X(t1).toFixed(1)} ${H-pB} L ${X(t0).toFixed(1)} ${H-pB} Z`;
+  const fmt=ts=>{const d=new Date(ts);return (d.getMonth()+1)+'/'+d.getDate();};
+  const d30=Date.now()-30*86400000, recent=pts.filter(p=>p.t>=d30);
+  const rCnt=recent.length, rPts=recent.reduce((s,p)=>s+p.p,0);
+  return `<div class="chart-wrap"><svg viewBox="0 0 ${W} ${H}" class="chart-svg" preserveAspectRatio="none">
+    <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#cg)"/>
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${series.map(s=>`<circle cx="${X(s.t).toFixed(1)}" cy="${Y(s.c).toFixed(1)}" r="2.3" fill="var(--accent)"/>`).join('')}
+    <text x="${pL}" y="${H-6}" class="chart-ax">${fmt(t0)}</text>
+    <text x="${W-pR}" y="${H-6}" class="chart-ax" text-anchor="end">${fmt(t1)}</text>
+    <text x="${W-pR}" y="${pT}" class="chart-ax" text-anchor="end">累積 ${maxC} 點</text>
+  </svg><div class="chart-sum">近 30 天完成 <b>${rCnt}</b> 件 · 賺 <b>${rPts}</b> 點</div></div>`;
+}
+/* 升級儀式：只在真實完成工作、跨過等級門檻時觸發（非每日登入） */
+function sfxLevelUp(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+    const ac=new AC(), now=ac.currentTime;
+    [523.25,659.25,783.99,1046.5].forEach((f,i)=>{
+      const o=ac.createOscillator(), g=ac.createGain(); o.type='triangle'; o.frequency.value=f;
+      o.connect(g); g.connect(ac.destination); const t=now+i*0.12;
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.32);
+      o.start(t); o.stop(t+0.34);
+    });
+  }catch(e){}
+}
+function playLevelUpCeremony(level){
+  const r=rankOf(level), c=r.color;
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='lvupMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
+    <div class="lvup-card">
+      <div class="lvup-ava" style="border-color:${c};box-shadow:0 0 30px ${c}">${avatarSvg(level,104)}</div>
+      <div class="lvup-title">LEVEL UP!</div>
+      <div class="lvup-lv" style="color:${c}">Lv.${level}　${r.name}</div>
+      <div class="lvup-hint">你的付出，又前進了一步 ✨（點一下關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
+  setTimeout(()=>{const m=document.getElementById('lvupMask'); if(m)m.remove();},5500);
+}
+function userGameLevel(uid){
+  const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
+  const sp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sc=mine.reduce((s,t)=>s+(t.contribution||0),0);
+  return levelInfo(sp+sc).level;
+}
+function checkLevelUp(){
+  if(!STATE.user) return;
+  const lvl=userGameLevel(STATE.user.id), key='usled_seen_level_'+STATE.user.id;
+  const prev=parseInt(localStorage.getItem(key));
+  if(isNaN(prev)){ localStorage.setItem(key,String(lvl)); return; }   // 第一次只記錄不慶祝
+  if(lvl!==prev) localStorage.setItem(key,String(lvl));
+  if(lvl>prev) playLevelUpCeremony(lvl);
+}
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
   img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
