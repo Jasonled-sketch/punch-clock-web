@@ -1182,8 +1182,8 @@ function petStage(exp){ let s=PET_STAGES[0],i=0; PET_STAGES.forEach((x,ix)=>{ if
 
 /* 玩家狀態：賺=衍生，花費/持有/寵物=存檔 */
 const GAME_STORE = {
-  PATH: '/check-in-system/__SHEET_TBD__',   // ← Jason 建表後填 sheet 號
-  F: { email:0, name:0, balance:0, save:0, updated:0 },   // ← probe 後填寫入欄位 ID
+  PATH: '/check-in-system/12',   // 遊戲狀態表（Jason 2026-06-06 建）
+  F: { email:1003072, name:1003073, balance:1003074, save:1003075, updated:1003076 },   // 遊戲狀態表欄位 ID（已驗證）
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
 };
 let GS = null;
