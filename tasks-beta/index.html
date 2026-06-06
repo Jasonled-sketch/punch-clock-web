@@ -1050,6 +1050,7 @@ function showGameCenter(){
     <div class="gc-actionrow">
       <span class="coin-pill big">🪙 ${coinBalance()} 獎勵幣</span>
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
+      ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -1146,7 +1147,7 @@ const SHOP = {
 };
 const AURA_COLOR  = {au_flame:'#ff6b35', au_ice:'#38bdf8', au_jade:'#34d399', au_rose:'#f472b6', au_star:'#a855f7', au_holy:'#fbbf24'};
 // 角色（17 隻 y708；高等級解鎖更帥的）
-const CHARS=[]; for(let _i=1;_i<=17;_i++) CHARS.push({id:'c'+_i, file:'character_'+String(_i).padStart(2,'0')+'.png', minLevel:_i<=10?1:(_i<=14?5:10)});
+const CHARS=[]; for(let _i=1;_i<=17;_i++){ if(_i===7) continue; CHARS.push({id:'c'+_i, file:'character_'+String(_i).padStart(2,'0')+'.png', minLevel:_i<=10?1:(_i<=14?5:10)}); }   // #7 蝙蝠款與 #8 重複，移除
 function charFile(id){ const c=CHARS.find(x=>x.id===id)||CHARS[0]; return 'assets/game/char/'+c.file; }
 // 裝備 6 部位（y708 圖示，帶戰力；史詩/傳說需等級解鎖＝白帽成就＋黑帽稀缺）
 const EQUIP_SLOTS=[
@@ -1193,7 +1194,9 @@ function userEarnedCoins(uid){
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   return Math.floor(tp/COIN_PER_TPTS);
 }
-function coinBalance(){ return userEarnedCoins(STATE.user.id) - (GS?GS.spent||0:0); }
+function coinBalance(){ return userEarnedCoins(STATE.user.id) + ((GS&&GS.bonus)||0) - (GS?GS.spent||0:0); }
+function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
+async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 獎勵幣'); refreshGameUI(); }
 async function ragicFetchGS(suffix, opts){
   const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
   const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
