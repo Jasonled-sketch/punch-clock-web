@@ -178,6 +178,38 @@ img{display:block}
 .pts-card .pv{font-size:26px;font-weight:800;line-height:1}
 .pts-card .pl{font-size:12px;margin-top:5px;color:var(--text);opacity:.85}
 .game-preview{background:var(--surface2);border:1px dashed var(--border);border-radius:12px;padding:18px;text-align:center;margin-top:16px;cursor:pointer}
+/* ---------- 遊戲化：角色養成 ---------- */
+.gp-card{margin-top:16px;border-radius:14px;padding:14px;cursor:pointer;position:relative;overflow:hidden;background:var(--surface2);border:1px solid var(--border)}
+.gp-card .gp-glow{position:absolute;top:-40px;right:-40px;width:120px;height:120px;border-radius:50%;filter:blur(30px);opacity:.35}
+.gp-top{display:flex;align-items:center;gap:13px;position:relative;z-index:1}
+.gp-ava{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;flex-shrink:0;background:var(--surface);border:2px solid}
+.gp-meta{flex:1;min-width:0}
+.gp-rank{font-weight:800;font-size:16px;display:flex;align-items:center;gap:7px}
+.gp-lvl{font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px;color:#000}
+.gp-power{font-size:12px;color:var(--muted);margin-top:2px}
+.gp-arrow{color:var(--muted);font-size:20px;align-self:center}
+.gp-bar{height:8px;border-radius:8px;background:var(--surface);margin-top:11px;overflow:hidden;position:relative;z-index:1}
+.gp-bar>i{display:block;height:100%;border-radius:8px;transition:width .5s ease}
+.gp-xptxt{font-size:11px;color:var(--muted);margin-top:5px;display:flex;justify-content:space-between;position:relative;z-index:1}
+/* 角色養成中心 modal */
+.gc-hero{text-align:center;padding:18px 10px 6px;border-radius:14px;position:relative;overflow:hidden;margin-bottom:16px}
+.gc-hero .gc-glow{position:absolute;inset:0;opacity:.18}
+.gc-ava{width:90px;height:90px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:50px;background:var(--surface);border:3px solid;position:relative;z-index:1}
+.gc-rank{font-weight:900;font-size:22px;margin-top:12px;position:relative;z-index:1}
+.gc-sub{font-size:13px;color:var(--muted);margin-top:3px;position:relative;z-index:1}
+.gc-statrow{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 4px;position:relative;z-index:1}
+.gc-stat{background:var(--surface);border-radius:10px;padding:9px 4px}
+.gc-stat b{font-size:18px;display:block}
+.gc-stat span{font-size:11px;color:var(--muted)}
+.gc-bar{height:10px;border-radius:8px;background:var(--surface);margin-top:14px;overflow:hidden;position:relative;z-index:1}
+.gc-bar>i{display:block;height:100%;border-radius:8px}
+.ach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:10px}
+.ach{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;position:relative}
+.ach.locked{opacity:.4;filter:grayscale(1)}
+.ach .ai{font-size:26px}
+.ach .an{font-size:11px;font-weight:700;margin-top:4px}
+.ach .ad{font-size:10px;color:var(--muted);margin-top:2px;line-height:1.3}
+.ach .got{position:absolute;top:5px;right:6px;font-size:11px;color:var(--q3)}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
@@ -783,11 +815,7 @@ function showMyTasks(){
     ${mine.length===0?'<div class="empty">目前沒有指派給你的任務</div>':''}
     ${open.map(myTaskRow).join('')}
     ${done.length?`<div class="detail-label" style="margin-top:12px">已完成（${done.length}）</div>${done.map(myTaskRow).join('')}`:''}
-    <div class="game-preview" onclick="toast('遊戲化即將開放 ✨')">
-      <div style="font-size:30px">🎮</div>
-      <div style="font-weight:700;margin-top:6px">遊戲化角色養成</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">用 T 點換裝備、養寵物、打 Boss<br>即將開放，敬請期待 ✨</div>
-    </div>
+    ${gameCardHtml(sumPts,sumCon,sumFav,done)}
   </div>`;
   mask.onclick=closeMyTasks; document.body.appendChild(mask);
 }
@@ -801,6 +829,109 @@ function myTaskRow(t){
   </div>`;
 }
 function closeMyTasks(){ const m=document.getElementById('myTasksModal'); if(m)m.remove(); }
+
+/* ===================================================================
+   遊戲化：角色養成（全部從三點數即時衍生，零新增儲存、自動跨裝置）
+   經驗值 = T點 + 貢獻值；戰力 = T點 + 貢獻值×2 + 人情點
+   =================================================================== */
+const RANKS = [
+  { min:1,  name:'見習生',   icon:'🐣', color:'#9ca3af' },
+  { min:5,  name:'正式員工', icon:'🧑‍💼', color:'#60a5fa' },
+  { min:10, name:'資深老手', icon:'💪', color:'#22c55e' },
+  { min:20, name:'任務達人', icon:'🔥', color:'#f59e0b' },
+  { min:35, name:'部門菁英', icon:'🌟', color:'#a855f7' },
+  { min:50, name:'譽昇傳奇', icon:'👑', color:'#f0a500' },
+];
+function levelInfo(xp){
+  let lvl=1, acc=0, need=30;
+  while(xp >= acc+need && lvl<99){ acc+=need; lvl++; need=30+(lvl-1)*20; }
+  return { level:lvl, into:xp-acc, span:need, total:xp };
+}
+function rankOf(level){ let r=RANKS[0]; for(const x of RANKS){ if(level>=x.min) r=x; } return r; }
+function gameStats(sumPts,sumCon,sumFav){
+  const xp = sumPts + sumCon;
+  const li = levelInfo(xp);
+  const rank = rankOf(li.level);
+  const power = sumPts + sumCon*2 + sumFav;
+  return { ...li, rank, power };
+}
+function achievements(done,sumPts,sumCon,sumFav){
+  const cnt=done.length;
+  const q1=done.filter(t=>t.quadrant==='q1').length;
+  const quads=new Set(done.map(t=>t.quadrant));
+  const onTime=done.filter(t=>t.dueAt && (t.earnedPoints==null || t.earnedPoints>=(t.points||0))).length;
+  return [
+    {name:'初試啼聲', desc:'完成 1 個任務',      icon:'🌱', got:cnt>=1},
+    {name:'十項全能', desc:'完成 10 個任務',     icon:'🎯', got:cnt>=10},
+    {name:'任務狂人', desc:'完成 50 個任務',     icon:'🏆', got:cnt>=50},
+    {name:'百點達標', desc:'累積 100 T 點',      icon:'💯', got:sumPts>=100},
+    {name:'急先鋒',   desc:'完成 5 個重要又緊急', icon:'⚡', got:q1>=5},
+    {name:'面面俱到', desc:'四象限都完成過',     icon:'🧭', got:quads.size>=4},
+    {name:'神速使者', desc:'準時零打折 5 次',    icon:'🚀', got:onTime>=5},
+    {name:'貢獻之星', desc:'貢獻值達 50',        icon:'💎', got:sumCon>=50},
+    {name:'人情練達', desc:'人情點達 20',        icon:'🤝', got:sumFav>=20},
+  ];
+}
+/* 個人中心的即時等級卡（取代原「即將開放」） */
+function gameCardHtml(sumPts,sumCon,sumFav,done){
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const pct=Math.min(100,Math.round(g.into/g.span*100));
+  const c=g.rank.color;
+  return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
+    <div class="gp-glow" style="background:${c}"></div>
+    <div class="gp-top">
+      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${g.rank.icon}</div>
+      <div class="gp-meta">
+        <div class="gp-rank">${g.rank.name}<span class="gp-lvl" style="background:${c}">Lv.${g.level}</span></div>
+        <div class="gp-power">⚔️ 戰力 ${g.power}</div>
+      </div>
+      <div class="gp-arrow">›</div>
+    </div>
+    <div class="gp-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
+    <div class="gp-xptxt"><span>經驗值 ${g.total}</span><span>距下一級 ${g.span-g.into} XP</span></div>
+  </div>`;
+}
+/* 角色養成中心 */
+function showGameCenter(){
+  if(!STATE.user) return;
+  const mine=STATE.tasks.filter(t=>t.assigneeId===STATE.user.id && t.status==='done');
+  const sumPts=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sumCon=mine.reduce((s,t)=>s+(t.contribution||0),0);
+  const sumFav=mine.reduce((s,t)=>s+(t.favor||0),0);
+  const g=gameStats(sumPts,sumCon,sumFav);
+  const c=g.rank.color;
+  const pct=Math.min(100,Math.round(g.into/g.span*100));
+  const next=RANKS.find(r=>r.min>g.level);
+  const achs=achievements(mine,sumPts,sumCon,sumFav);
+  const gotN=achs.filter(a=>a.got).length;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='gameModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🎮 角色養成中心</h3>
+      <button class="t-expand" onclick="closeGameCenter()" style="font-size:18px">✕</button>
+    </div>
+    <div class="gc-hero" style="background:${c}1a">
+      <div class="gc-glow" style="background:radial-gradient(circle at 50% 30%,${c},transparent 70%)"></div>
+      <div class="gc-ava" style="border-color:${c};box-shadow:0 0 24px ${c}66">${g.rank.icon}</div>
+      <div class="gc-rank" style="color:${c}">${g.rank.name}</div>
+      <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power}</div>
+      <div class="gc-statrow">
+        <div class="gc-stat"><b style="color:#fbbf24">${sumPts}</b><span>T 點</span></div>
+        <div class="gc-stat"><b style="color:#22c55e">${sumCon}</b><span>貢獻值</span></div>
+        <div class="gc-stat"><b style="color:#f472b6">${sumFav}</b><span>人情點</span></div>
+      </div>
+      <div class="gc-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
+      <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
+    </div>
+    <div class="detail-label">🏅 成就徽章（${gotN}/${achs.length}）</div>
+    <div class="ach-grid">
+      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">完成任務累積 T 點與貢獻值即可升級 ✨<br>用 T 點兌換裝備 / 寵物 即將開放</div>
+  </div>`;
+  mask.onclick=closeGameCenter; document.body.appendChild(mask);
+}
+function closeGameCenter(){ const m=document.getElementById('gameModal'); if(m)m.remove(); }
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
   img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
