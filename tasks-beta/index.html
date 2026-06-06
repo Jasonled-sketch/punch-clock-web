@@ -255,6 +255,9 @@ img{display:block}
 .shop-tabs{display:flex;gap:6px;margin-bottom:12px}
 .shop-tab{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:8px 4px;font-size:12px;font-weight:700}
 .shop-tab.active{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
+.slot-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.slot-chip{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:700}
+.slot-chip.on{background:var(--accent);color:#1a1205;border-color:var(--accent)}
 .shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .shop-item{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
 .shop-item.eq{border-color:var(--accent);background:rgba(240,165,0,.1)}
@@ -268,8 +271,8 @@ img{display:block}
 .es-pw{font-size:10px;color:var(--accent);font-weight:700}
 .es-name{font-size:11px;color:var(--muted)}
 .char-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:62vh;overflow:auto}
-.char-pick{position:relative;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:6px;cursor:pointer;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center}
-.char-pick img{max-width:100%;max-height:100%;object-fit:contain}
+.char-pick{position:relative;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:6px;cursor:pointer;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.char-pick img{height:86%;width:auto;max-width:130%;object-fit:contain;object-position:center}
 .char-pick.on{border-color:var(--accent);background:rgba(240,165,0,.1)}
 .char-pick.lk{opacity:.5;filter:grayscale(1);cursor:not-allowed}
 .char-lk{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:10px;color:#fff;font-weight:700}
@@ -1346,11 +1349,14 @@ function shopPetCard(p){
 }
 function showShop(tab){
   if(!STATE.user) return;
-  STATE.shopTab = tab || STATE.shopTab || 'acc';
+  if(tab&&tab.indexOf('eq_')===0){ STATE.shopSlot=tab.slice(3); tab='eq'; }
+  STATE.shopTab = tab || STATE.shopTab || 'eq';
+  STATE.shopSlot = STATE.shopSlot || 'weapon';
   const t=STATE.shopTab, bal=coinBalance();
   const tabBtn=(id,label)=>`<button class="shop-tab${t===id?' active':''}" onclick="showShop('${id}')">${label}</button>`;
   let body;
-  if(t==='eq') body=EQUIP_SLOTS.map(s=>`<div class="shop-slot-h">${s.name}</div><div class="shop-grid">${EQUIP[s.slot].map(equipCard).join('')}</div>`).join('');
+  if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
+    body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
   else if(t==='deco') body=`<div class="shop-grid">${[...SHOP.aura,...SHOP.title].map(x=>shopCosCard({...x,slot:shopItem(x.id).slot})).join('')}</div>`;
   else body=`<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`;
   const old=document.getElementById('shopModal'); if(old) old.remove();
