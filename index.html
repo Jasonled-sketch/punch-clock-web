@@ -238,7 +238,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -461,12 +461,22 @@ function normalizeRec(sheet, r) {
 
 const TOKEN_HDR = () => ({ 'X-Google-Token': ID_TOKEN });
 
+// Worker 請求統一入口：自動帶 Google token；遇 401(token 過期)靜默續期後重試一次，仍失敗才登出
+async function authedFetch(url, opts = {}) {
+  const build = () => ({ ...opts, headers: { ...(opts.headers || {}), ...TOKEN_HDR() } });
+  let res = await fetch(url, build());
+  if (res.status === 401) {
+    try { await refreshToken(); } catch (e) { logout(); throw new Error('登入已逾期，請重新登入'); }
+    res = await fetch(url, build());
+  }
+  return res;
+}
+
 async function ragicGet(sheet, extra = {}) {
   const u = new URL(ragicUrl(sheet));
   u.searchParams.set('api', '');
   for (const [k, v] of Object.entries(extra)) u.searchParams.set(k, v);
-  const res = await fetch(u.toString(), { headers: TOKEN_HDR() });
-  if (res.status === 401) throw new Error('登入逾期，請重新整理頁面登入');
+  const res = await authedFetch(u.toString());
   if (!res.ok) throw new Error(`Ragic GET 失敗 ${res.status}`);
   const data = await res.json();
   return Object.values(data)
@@ -480,8 +490,7 @@ async function ragicPost(sheet, fields) {
   for (const [k, v] of Object.entries(fields)) {
     if (v !== undefined && v !== null) fd.append(String(k), String(v));
   }
-  const res = await fetch(url, { method:'POST', body:fd, headers: TOKEN_HDR() });
-  if (res.status === 401) throw new Error('登入逾期，請重新整理頁面登入');
+  const res = await authedFetch(url, { method:'POST', body:fd });
   if (!res.ok) throw new Error(`Ragic POST 失敗 ${res.status}`);
   const data = await res.json();
   if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
@@ -494,8 +503,7 @@ async function ragicUpdate(sheet, id, fields) {
   for (const [k, v] of Object.entries(fields)) {
     if (v !== undefined && v !== null) fd.append(String(k), String(v));
   }
-  const res = await fetch(url, { method:'POST', body:fd, headers: TOKEN_HDR() });
-  if (res.status === 401) throw new Error('登入逾期，請重新整理頁面登入');
+  const res = await authedFetch(url, { method:'POST', body:fd });
   if (!res.ok) throw new Error(`Ragic UPDATE 失敗 ${res.status}`);
   const data = await res.json();
   if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
@@ -566,7 +574,7 @@ async function uploadWorkerPhoto(ragicId, file) {
   const url = `${ragicUrl(CONFIG.SHEETS.WORKERS)}/${ragicId}?api`;
   const fd = new FormData();
   fd.append(String(CONFIG.FID.W.photo), file);
-  const res = await fetch(url, { method: 'POST', body: fd, headers: TOKEN_HDR() });
+  const res = await authedFetch(url, { method: 'POST', body: fd });
   if (!res.ok) throw new Error('圖片上傳失敗 ' + res.status);
   const data = await res.json();
   return data;
@@ -668,28 +676,52 @@ function parseDatetime(s) {
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 let ME = null;
+let APP_INITED = false;               // 避免重複初始化（還原登入＋背景續期可能各觸發一次）
+const AUTH_KEY = 'pc_auth_v1';        // localStorage 帳號持久化
+let _tokenWaiters = [];               // 等待 token 續期的 resolver
 
-function handleGoogleSignIn(resp) {
-  ID_TOKEN = resp.credential;  // 給 Worker 驗證用
-  const pl = JSON.parse(atob(resp.credential.split('.')[1]));
-  const email = pl.email.toLowerCase();
-  ME = {
-    email,
-    name: pl.name || email,
-    picture: pl.picture || '',
-    isAdmin: CONFIG.ADMIN_EMAILS.includes(email)
-  };
+function parseJwt(t) { try { return JSON.parse(atob(String(t).split('.')[1])); } catch (e) { return null; } }
+function tokenAlive(tok) { const p = parseJwt(tok); return !!(p && p.exp && p.exp * 1000 > Date.now() + 60000); }  // 還有 >60 秒才算有效
+
+function saveAuth() { try { localStorage.setItem(AUTH_KEY, JSON.stringify({ token: ID_TOKEN, email: ME.email, name: ME.name, picture: ME.picture })); } catch (e) {} }
+function loadAuth() { try { return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); } catch (e) { return null; } }
+
+function applyIdentity(token) {
+  ID_TOKEN = token;
+  const pl = parseJwt(token) || {};
+  const email = (pl.email || '').toLowerCase();
+  ME = { email, name: pl.name || email, picture: pl.picture || '', isAdmin: CONFIG.ADMIN_EMAILS.includes(email) };
+}
+
+function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('tb-user').textContent = ME.name;
-  initApp();
+  if (!APP_INITED) { APP_INITED = true; initApp(); }
+}
+
+function handleGoogleSignIn(resp) {
+  applyIdentity(resp.credential);
+  saveAuth();                                       // 記住帳號（含最新 token）
+  _tokenWaiters.splice(0).forEach(f => f(resp.credential));  // 喚醒等待續期的請求
+  showApp();
+}
+
+// 靜默向 Google 要新 token：auto_select 下若 Google session 還在會自動回傳（免點擊）。回傳 Promise<token>
+function refreshToken(timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    _tokenWaiters.push(resolve);
+    try { google.accounts.id.prompt(); } catch (e) {}
+    setTimeout(() => { const i = _tokenWaiters.indexOf(resolve); if (i >= 0) { _tokenWaiters.splice(i, 1); reject(new Error('續期逾時')); } }, timeoutMs);
+  });
 }
 
 function logout() {
-  ME = null;
+  ME = null; ID_TOKEN = ''; APP_INITED = false;
+  try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
+  try { google.accounts.id.disableAutoSelect(); } catch (e) {}   // 停用自動登入，下次需手動選帳號
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
-  google.accounts.id.disableAutoSelect();
 }
 
 function gsiReady() {
@@ -702,7 +734,20 @@ function gsiReady() {
   google.accounts.id.renderButton(document.getElementById('g-btn'), {
     theme:'outline', size:'large', width:280
   });
+
+  // ① 有存檔且 token 未過期 → 立刻進 App（免等 Google、免點擊）
+  const saved = loadAuth();
+  if (saved && tokenAlive(saved.token)) { applyIdentity(saved.token); showApp(); }
+
+  // ② 一律靜默續期（更新 token；若還沒進 App，這步成功就會自動登入）
   google.accounts.id.prompt();
+
+  // ③ 長時間開著 → 每 5 分鐘檢查，token 剩不到 15 分鐘才靜默續期（避免 1 小時過期被擋，也不無謂跳 One-Tap）
+  setInterval(() => {
+    if (!ME) return;
+    const p = parseJwt(ID_TOKEN), msLeft = p && p.exp ? p.exp * 1000 - Date.now() : 0;
+    if (msLeft < 15 * 60 * 1000) { try { google.accounts.id.prompt(); } catch (e) {} }
+  }, 5 * 60 * 1000);
 }
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -2673,7 +2718,7 @@ async function uploadLeavePhoto(ragicId, file) {
   const url = `${ragicUrl(CONFIG.SHEETS.LEAVES)}/${ragicId}?api`;
   const fd = new FormData();
   fd.append(String(CONFIG.FID.L.photo), file);
-  const res = await fetch(url, { method:'POST', body:fd, headers: TOKEN_HDR() });
+  const res = await authedFetch(url, { method:'POST', body:fd });
   if (!res.ok) throw new Error('照片上傳失敗 ' + res.status);
 }
 
@@ -3355,7 +3400,7 @@ async function markAnnouncementRead(ragicId, btn) {
   btn.textContent = '處理中…';
   try {
     const F = CONFIG.FID.A;
-    const res = await fetch(`${ragicUrl(CONFIG.SHEETS.ANNOUNCE)}/${ragicId}?api`, { headers: TOKEN_HDR() });
+    const res = await authedFetch(`${ragicUrl(CONFIG.SHEETS.ANNOUNCE)}/${ragicId}?api`);
     const data = await res.json();
     const rec = Object.values(data).find(r => r && r._ragicId == ragicId);
     const cur = (rec?.['已閱覽名單'] || '').trim();
