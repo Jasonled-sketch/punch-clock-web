@@ -239,7 +239,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1808,6 +1808,29 @@ function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
   return { confirmed, pending };
 }
 
+// 天災假不支薪：政府公告天災假(颱風/豪雨等，特殊日標記「是否支薪=否」)，正職當天沒來上班 → 扣一日薪。回傳該月不支薪缺勤天數
+function disasterUnpaidDays(worker, recs, year, month, specialByDate) {
+  if (!specialByDate) return 0;
+  const now = new Date();
+  const dim = new Date(year, month, 0).getDate();
+  const ym = `${year}/${pad(month)}`;
+  const attendSet = new Set(recs.filter(r => r.email === worker.email).map(r => r.date));
+  const startDate = worker.start_date ? new Date(worker.start_date.replace(/\//g, '-')) : null;
+  let cnt = 0;
+  for (let d = 1; d <= dim; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    if (dow === 0 || dow === 6) continue;                              // 週末本就不上班，不扣
+    const ds = `${ym}/${pad(d)}`;
+    const sp = specialByDate[ds];
+    if (!sp || sp.paid !== '否') continue;                             // 只算不支薪特殊日(天災假)
+    if (new Date(year, month - 1, d) > now) continue;                  // 未來不扣
+    if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
+    if (attendSet.has(ds)) continue;                                   // 有來上班 → 照計薪不扣
+    cnt++;
+  }
+  return cnt;
+}
+
 // 個人全勤燈號 + 出勤健康度（加分制：基礎 75，疏失才扣、沒請假給獎勵，避免勞資爭議）
 function calcAttendanceKPI(p) {
   const { absent = 0, noClockOut = 0, lateCnt = 0, lateMin = 0, earlyCnt = 0,
@@ -1981,6 +2004,7 @@ async function viewReport() {
       const lateDeduct = Math.round((latePen + earlyPen) / 60 * hourly);
       const leaveDeduct = calcLeaveDeduct(appr, hourly);
       const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
+      const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, CUR_YEAR, CUR_MONTH + 1, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
       const base = isFull ? w.monthly_salary : totP;
       const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
       const healthIns = isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0;
@@ -1990,7 +2014,7 @@ async function viewReport() {
       const holidayBonus = isFull
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
         : 0;
-      const net = Math.round(base + ot.pay + holidayBonus - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+      const net = Math.round(base + ot.pay + holidayBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
       // 特休：應有 / 已用(當年度特休請假時數→天) / 剩餘
       const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
       const shHours = sh ? sh.hours : 8;
@@ -2000,7 +2024,7 @@ async function viewReport() {
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const compRemain = calcOtBalance(otAll.filter(o => o.email === w.email));
-      payrollRows.push({ email: w.email, name: w.name, base, ot: ot.pay, absentd: absentDeduct,
+      payrollRows.push({ email: w.email, name: w.name, base, ot: ot.pay, absentd: absentDeduct + disasterDeduct,  // 天災假不支薪併入缺勤扣(快照無獨立欄)
         lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain });
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
       const sickCnt = appr.filter(l => l.leave_type === '病假').length;
@@ -2047,7 +2071,7 @@ async function viewReport() {
         <div class="pay-box">
           <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
           <div class="pay-detail">
-            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${ot.pay?`　＋加班 $${ot.pay.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
+            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${ot.pay?`　＋加班 $${ot.pay.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
           </div>
         </div>
       </div>`;
@@ -2059,7 +2083,7 @@ async function viewReport() {
 // 匯出本月每日出勤明細 CSV（每員工每日一筆，供月結/薪資查核）
 function exportMonthDetail() {
   if (!_RPT) { alert('請先載入薪資月報'); return; }
-  const { recs, leaves, otAll, holidaySet, ym, year, month } = _RPT;
+  const { recs, leaves, otAll, holidaySet, specialByDate, ym, year, month } = _RPT;
   const wkd = ['日','一','二','三','四','五','六'];
   const headers = ['姓名','Email','日期','星期','預定上班','預定下班','預定休息','實際上班','實際下班','請假開始','請假結束','假別','加班開始','加班結束','實際工時','遲到分','早退分','應加發','應扣除'];
   const rows = [headers];
@@ -2074,7 +2098,9 @@ function exportMonthDetail() {
       const rec = recs.find(r => r.email === w.email && r.date === ds) || null;
       const dayLv = leaves.filter(l => l.email === w.email && l.status === 'approved' && l.start_date === ds);
       const dayOt = otAll.filter(o => o.email === w.email && o.ot_type === '加班' && o.status === 'approved' && o.date === ds);
-      if (!rec && !dayLv.length && !dayOt.length) continue;  // 該日無任何資料 → 不列
+      const spc = specialByDate && specialByDate[ds];
+      const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來 → 不支薪扣一日
+      if (!rec && !dayLv.length && !dayOt.length && !isDisasterAbsent) continue;  // 該日無任何資料 → 不列
       const lv = dayLv[0] || {}, ot = dayOt[0] || {};
       // 遲到/早退（扣除當日請假時段）
       let late = 0, early = 0;
@@ -2092,8 +2118,9 @@ function exportMonthDetail() {
       if (isFull && rec && (holidaySet.has(ds) || dow === 0)) addPay += Math.round((parseFloat(rec.hours) || 0) * Math.round(w.monthly_salary / 240));
       let dedPay = 0;
       dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
+      if (isDisasterAbsent) dedPay += Math.round(w.monthly_salary / 30);  // 天災假不支薪扣一日
       rows.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
-        (rec && rec.start_time) || '', (rec && rec.end_time) || '', lv.start_time || '', lv.end_time || '', lv.leave_type || '',
+        (rec && rec.start_time) || '', (rec && rec.end_time) || '', lv.start_time || '', lv.end_time || '', lv.leave_type || (isDisasterAbsent ? `${spc.type}(不支薪)` : ''),
         ot.start_time || '', ot.end_time || '', rec ? realWorkHours(rec, sh, isFull, dayOffOf(w.email, ds, leaves, otAll)) : '', late || '', early || '', addPay || '', dedPay || '']);
     }
   });
@@ -2170,6 +2197,7 @@ function showReportDetail(email) {
   const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month, specialSet) : { confirmed: 0, pending: [] };
   const absent = ab.confirmed;
   const absentDeduct = isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0;
+  const disasterDeduct = isFull ? Math.round(disasterUnpaidDays(w, recs, year, month, specialByDate) * (w.monthly_salary / 30)) : 0;  // 天災假不支薪
   const leaveDeduct = calcLeaveDeduct(appr, hourly);
   const base = isFull ? w.monthly_salary : totP;
   const laborIns  = isFull ? laborInsuranceEE(w.monthly_salary) : 0;
@@ -2178,7 +2206,7 @@ function showReportDetail(email) {
   const isDoublePay = ds => (holidaySet && holidaySet.has(ds)) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
   const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
-  const net = Math.round(base + od.totalPay + holidayBonus - absentDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+  const net = Math.round(base + od.totalPay + holidayBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
 
   const section = (title, rows, empty) =>
     `<div class="rd-sec"><div class="rd-title">${title}</div>` +
@@ -2255,7 +2283,7 @@ function showReportDetail(email) {
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
     <div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${od.totalPay ? `　＋加班 $${od.totalPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
     </div>
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
@@ -2744,8 +2772,34 @@ async function getAllLeaves() {
   return all.map(parseLeaveRec).filter(l => l.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
 }
 
+// 管理者審核卡（緊湊兩行）：行1＝姓名+類型+狀態符號(✅核准/❌駁回/🟡待審)+日期+時長(5H)…右側申請時間+審核鈕；行2＝理由
+function buildApprovalCardCompact(o) {
+  const icon = { approved:'✅', rejected:'❌', pending:'🟡' }[o.status] || '';
+  const dur = o.dayNum >= 1 ? `${o.dayNum % 1 === 0 ? o.dayNum : o.dayNum.toFixed(1)}天` : `${o.hourNum}H`;
+  const ap = o.apply_time || '';
+  const applyShort = ap ? `${addDayShort(ap)} ${ap.slice(11, 16)}` : '—';
+  const btn = o.status === 'pending'
+    ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;margin-left:8px" onclick="${o.onApprove}">審核</button>` : '';
+  const urgent = o.urgent ? ' <span class="urgent-badge">⚡臨時</span>' : '';
+  const reject = o.reject_note ? `　<span style="color:#ea4335">駁回：${escHtml(o.reject_note)}</span>` : '';
+  return `
+    <div class="leave-card ${o.stCls}" style="padding:9px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <div style="font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(o.name)}　<span style="color:${o.typeColor}">${escHtml(o.typeLabel)}</span> ${icon}　<span style="color:#555;font-weight:500">${addDayShort(o.date)} ${dur}</span></div>
+        <div style="display:flex;align-items:center;white-space:nowrap"><span style="font-size:11px;color:#999">申請 ${applyShort}</span>${btn}</div>
+      </div>
+      <div style="font-size:13px;color:#666;margin-top:3px">${escHtml(o.reason) || '—'}${urgent}${reject}</div>
+    </div>`;
+}
+
 function buildLeaveCard(lv, isAdmin) {
   const stCls = { pending:'st-pending', approved:'st-approved', rejected:'st-rejected' }[lv.status] || '';
+  if (isAdmin) return buildApprovalCardCompact({
+    stCls, status: lv.status, name: lv.name, typeLabel: lv.leave_type, typeColor: '#1a73e8',
+    date: lv.start_date, dayNum: parseFloat(lv.days) || 0, hourNum: parseFloat(lv.hours) || 0,
+    reason: lv.reason, apply_time: lv.apply_time, reject_note: lv.reject_note,
+    urgent: isUrgentLeave(lv), onApprove: `showLeaveApproval(${lv.ragicId})`
+  });
   const stLabel = LEAVE_STATUS[lv.status] || lv.status;
   const stBadge = `<span class="b-${lv.status}">${stLabel}</span>`;
   const nameTag = isAdmin ? `<span class="leave-name">${escHtml(lv.name)}</span>` : '';
@@ -3100,6 +3154,12 @@ function calcOtBalance(records) {
 
 function buildOtCard(ot, isAdmin) {
   const stCls = { pending:'st-pending', approved:'st-approved', rejected:'st-rejected' }[ot.status] || '';
+  if (isAdmin) return buildApprovalCardCompact({
+    stCls, status: ot.status, name: ot.name, typeLabel: ot.ot_type, typeColor: ot.ot_type === '加班' ? '#1a73e8' : '#9333ea',
+    date: ot.date, dayNum: 0, hourNum: parseFloat(ot.hours) || 0,
+    reason: ot.reason, apply_time: ot.apply_time, reject_note: ot.reject_note,
+    urgent: false, onApprove: `showOtApproval(${ot.ragicId})`
+  });
   const stBadge = `<span class="b-${ot.status}">${LEAVE_STATUS[ot.status] || ot.status}</span>`;
   const nameTag = isAdmin ? `<span class="leave-name">${escHtml(ot.name)}</span>` : '';
   const typeColor = ot.ot_type === '加班' ? '#1a73e8' : '#9333ea';
