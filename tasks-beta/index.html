@@ -285,6 +285,26 @@ img{display:block}
 .gc-char-aura{position:absolute;inset:-6% -6% 6%;z-index:0;animation:auraPulse 2.6s ease-in-out infinite}
 @keyframes auraPulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:.78;transform:scale(1.06)}}
 .gc-char-edit{position:absolute;bottom:0;right:4px;z-index:2;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:3px 9px;color:var(--text)}
+/* 副本 / 戰鬥 / 答題 */
+.dungeon-btn{width:100%;margin-top:14px;background:linear-gradient(90deg,#ef4444,#f59e0b);color:#fff;font-weight:800;border-radius:12px;padding:13px;font-size:15px}
+.dungeon-btn:active{opacity:.88}
+.boss-row{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:9px}
+.boss-row.lk{opacity:.55}
+.boss-img{width:50px;height:50px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.boss-lk{font-size:12px;color:var(--muted);font-weight:700}
+.battle-boss{width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));animation:bossFloat 2.5s ease-in-out infinite}
+@keyframes bossFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.hp-bar{height:18px;border-radius:10px;background:var(--surface);overflow:hidden;position:relative;margin-top:8px}
+.hp-bar>i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:10px;transition:width .4s}
+.hp-bar>span{position:absolute;inset:0;text-align:center;font-size:11px;font-weight:700;line-height:18px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.battle-msg{font-size:13px;font-weight:600;margin-top:10px;min-height:20px;color:var(--accent)}
+.quiz-cat{display:inline-block;font-size:11px;background:var(--surface2);color:var(--muted);border-radius:10px;padding:2px 10px;margin:16px 0 8px}
+.quiz-q{font-size:16px;font-weight:700;line-height:1.5;margin-bottom:14px}
+.quiz-opts{display:grid;gap:9px}
+.quiz-opt{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:13px;font-size:15px;text-align:left}
+.quiz-opt:active{background:var(--accent);color:#1a1205}
+.drop-box{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:10px;margin-top:10px}
+.drop-box img{width:44px;height:44px;object-fit:contain}
 .si-icon{font-size:30px;line-height:1}
 .si-name{font-size:12px;font-weight:600}
 .si-rar{font-size:10px;font-weight:700;margin-top:-3px}
@@ -1058,6 +1078,7 @@ function showGameCenter(){
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
+    <button class="dungeon-btn" onclick="showDungeon()">⚔️ 副本闖關 · 答題打 Boss（今日剩 ${dungeonLeft()} 次）</button>
     <div class="detail-label">🐾 我的夥伴</div>
     ${petCardHtml()}
     <div class="detail-label">📈 成長曲線</div>
@@ -1192,13 +1213,13 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
 };
 let GS = null;
-function blankGS(){ return {spent:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null}; }
 function userEarnedCoins(uid){
   const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   return Math.floor(tp/COIN_PER_TPTS);
 }
-function coinBalance(){ return userEarnedCoins(STATE.user.id) + ((GS&&GS.bonus)||0) - (GS?GS.spent||0:0); }
+function coinBalance(){ return userEarnedCoins(STATE.user.id) + ((GS&&GS.bonus)||0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
 async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 獎勵幣'); refreshGameUI(); }
 async function ragicFetchGS(suffix, opts){
@@ -1381,6 +1402,126 @@ function showShop(tab){
   mask.onclick=closeShop; document.body.appendChild(mask);
 }
 function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remove(); }
+/* ===================================================================
+   Stage 2 副本闖關：答題(知識+智力) → 答對發動攻擊 → 攻擊力吃裝備加成
+   每日限次(防掛機)；贏了掉獎勵幣+裝備。白帽：邊玩邊長知識
+   =================================================================== */
+const DUNGEON_DAILY = 5;                  // 每日挑戰次數
+const BOSSES = [
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:60,  reward:30,  dropR:2, minLevel:1},
+  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, reward:55,  dropR:3, minLevel:5},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:240, reward:90,  dropR:4, minLevel:10},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:400, reward:150, dropR:5, minLevel:18},
+];
+const QUIZ = [
+  // 智力測驗
+  {q:'數列 2, 4, 8, 16, ？',a:['24','30','32','64'],c:2,cat:'智力'},
+  {q:'下列何者是質數？',a:['9','15','17','21'],c:2,cat:'智力'},
+  {q:'100 的 15% 是多少？',a:['10','15','20','150'],c:1,cat:'智力'},
+  {q:'直角是幾度？',a:['45','60','90','180'],c:2,cat:'智力'},
+  {q:'下列分數何者最大？',a:['1/2','1/3','1/4','1/5'],c:0,cat:'智力'},
+  {q:'一年中有幾個月有 31 天？',a:['4','5','7','12'],c:2,cat:'智力'},
+  {q:'若 3 個工人 3 天做 3 張桌子，9 個工人 9 天做幾張？',a:['9','27','3','81'],c:1,cat:'智力'},
+  // 常識
+  {q:'一打（dozen）是幾個？',a:['10','12','16','24'],c:1,cat:'常識'},
+  {q:'一公里等於幾公尺？',a:['100','500','1000','10000'],c:2,cat:'常識'},
+  {q:'台灣最高的山是？',a:['玉山','雪山','合歡山','阿里山'],c:0,cat:'常識'},
+  {q:'圓周率 π 約等於？',a:['2.14','3.14','4.13','3.41'],c:1,cat:'常識'},
+  {q:'「事半功倍」是什麼意思？',a:['效率很高','非常辛苦','一定失敗','需要加班'],c:0,cat:'常識'},
+  {q:'紅綠燈哪個顏色可以通行？',a:['紅','黃','綠','都可以'],c:2,cat:'常識'},
+  // 職場
+  {q:'滅火器口訣「拉、瞄、壓、掃」第一步是？',a:['壓把手','拉插銷','瞄火源','掃射'],c:1,cat:'職場'},
+  {q:'收到客訴，最好的第一步是？',a:['先辯解','先傾聽了解','已讀不回','推給別人'],c:1,cat:'職場'},
+  {q:'工作交接最重要的是？',a:['口頭帶過','留下清楚記錄','不用交接','只告訴朋友'],c:1,cat:'職場'},
+  {q:'開會不小心遲到，較得體的做法？',a:['安靜入座、事後致歉','大聲解釋原因','乾脆不參加','責怪塞車'],c:0,cat:'職場'},
+  // 產品（LED／字幕機）
+  {q:'LED 顯示螢幕規格「P10」的 P 代表什麼？',a:['亮度','點間距(mm)','功率','總畫素'],c:1,cat:'產品'},
+  {q:'全彩 LED 的三原色是？',a:['紅綠藍(RGB)','紅黃藍','青洋紅黃','黑白灰'],c:0,cat:'產品'},
+  {q:'戶外 LED 看板防水等級通常至少要求？',a:['IP20','IP44','IP65','不需防水'],c:2,cat:'產品'},
+  {q:'LED 點間距越小代表？',a:['畫面越細緻','越便宜','越省電','字越大'],c:0,cat:'產品'},
+  {q:'下列何者「不是」字幕機控制卡常見的傳輸方式？',a:['網路 TCP','RS485','USB','藍牙煮飯'],c:3,cat:'產品'},
+  {q:'LED 模組「16×16」通常是指？',a:['16列×16行像素','16 公分','16 瓦','16 種顏色'],c:0,cat:'產品'},
+  {q:'譽昇光電(USLED)主要產品領域是？',a:['LED 字幕機/顯示看板','賣咖啡','旅遊業','服飾'],c:0,cat:'產品'},
+];
+function dungeonDay(){ return new Date().toISOString().slice(0,10); }
+function dungeonLeft(){ if(!GS) return DUNGEON_DAILY; const d=GS.dungeon; if(!d||d.day!==dungeonDay()) return DUNGEON_DAILY; return Math.max(0,DUNGEON_DAILY-(d.used||0)); }
+function attackPower(){ return 10 + gearPower(); }
+function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>{ if(it.r<=maxR && !(GS.owned||[]).includes(it.id)) pool.push(it); }); return pool.length?pool[Math.floor(Math.random()*pool.length)]:null; }
+function showDungeon(){
+  if(!STATE.user) return;
+  const lvl=userGameLevel(STATE.user.id), left=dungeonLeft();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='dungeonModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對知識/智力題就攻擊，攻擊力＝10＋裝備戰力。今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
+    ${BOSSES.map(b=>{ const lk=lvl<b.minLevel; return `<div class="boss-row${lk?' lk':''}">
+      <img src="assets/game/mob/${b.file}" class="boss-img">
+      <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 🪙${b.reward}＋掉寶</div></div>
+      ${lk?`<span class="boss-lk">🔒Lv.${b.minLevel}</span>`:`<button class="buy-btn" style="width:auto;padding:6px 14px" ${left<=0?'disabled':''} onclick="startBattle('${b.id}')">${left<=0?'次數用完':'挑戰'}</button>`}
+    </div>`; }).join('')}
+  </div>`;
+  mask.onclick=closeDungeon; document.body.appendChild(mask);
+}
+function closeDungeon(){ const m=document.getElementById('dungeonModal'); if(m)m.remove(); }
+function startBattle(bossId){
+  const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
+  if(userGameLevel(STATE.user.id)<b.minLevel){ toast('需 Lv.'+b.minLevel); return; }
+  if(dungeonLeft()<=0){ toast('今天挑戰次數用完了，明天再來 💪'); return; }
+  if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
+  GS.dungeon.used++; saveGameState();
+  const order=QUIZ.map((_,i)=>i); for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
+  STATE.battle={boss:b, hp:b.hp, mistakes:0, order, qi:0, msg:'答對題目就能攻擊！'};
+  closeDungeon(); renderBattle();
+}
+function renderBattle(){
+  const bt=STATE.battle; if(!bt) return; const b=bt.boss, q=QUIZ[bt.order[bt.qi]];
+  const hpPct=Math.max(0,Math.round(bt.hp/b.hp*100));
+  const old=document.getElementById('battleModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="text-align:center">
+      <img src="assets/game/mob/${b.file}" class="battle-boss">
+      <div style="font-weight:800;margin-top:4px">${b.name}</div>
+      <div class="hp-bar"><i style="width:${hpPct}%"></i><span>${Math.max(0,bt.hp)} / ${b.hp}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 你的攻擊力 ${attackPower()}　｜　❤️ 失誤 ${bt.mistakes}/3</div>
+      <div class="battle-msg">${bt.msg}</div>
+    </div>
+    <div class="quiz-cat">${q.cat}題</div>
+    <div class="quiz-q">${q.q}</div>
+    <div class="quiz-opts">${q.a.map((opt,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${opt}</button>`).join('')}</div>
+    <button class="t-expand" onclick="quitBattle()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">放棄離開</button>
+  </div>`;
+  document.body.appendChild(mask);
+}
+function answerQuiz(idx){
+  const bt=STATE.battle; if(!bt) return; const q=QUIZ[bt.order[bt.qi]];
+  if(idx===q.c){ const crit=Math.random()<0.25; const dmg=attackPower()*(crit?2:1); bt.hp-=dmg; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害'; if(bt.hp<=0) return endBattle(true); }
+  else { bt.mistakes++; bt.msg='✗ 答錯（正解：'+q.a[q.c]+'）失誤 '+bt.mistakes+'/3'; if(bt.mistakes>=3) return endBattle(false); }
+  bt.qi=(bt.qi+1)%bt.order.length; renderBattle();
+}
+function quitBattle(){ STATE.battle=null; const m=document.getElementById('battleModal'); if(m)m.remove(); showDungeon(); }
+async function endBattle(win){
+  const bt=STATE.battle, b=bt.boss; STATE.battle=null;
+  let drop=null;
+  if(win){ GS.won=(GS.won||0)+b.reward; if(Math.random()<0.6){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); } }
+  saveGameState();   // 背景存檔，不擋結算畫面
+  const m=document.getElementById('battleModal'); if(m) m.remove();
+  const left=dungeonLeft();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+    <div style="font-size:46px">${win?'🏆':'💀'}</div>
+    <h3 style="margin:6px 0">${win?'闖關成功！':'戰敗了…'}</h3>
+    ${win?`<div style="color:var(--accent);font-weight:800;font-size:18px">＋${b.reward} 獎勵幣 🪙</div>
+      ${drop?`<div class="drop-box"><img src="${equipFile(drop.id)}"><div>掉落：<b style="color:${PET_RARITY[drop.r].color}">${PET_RARITY[drop.r].name}${SLOTNAME[drop.slot]}</b>（⚔️${drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`
+      :`<div style="font-size:13px;color:var(--muted)">失誤 3 次了。裝備越好攻擊越高、答題更穩就能贏 💪</div>`}
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">今日剩 ${left}/${DUNGEON_DAILY} 次</div>
+    <div class="modal-actions" style="margin-top:14px">
+      ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
+      <button class="equip-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();refreshGameUI()">關閉</button>
+    </div>
+  </div>`;
+  document.body.appendChild(mask);
+}
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
   img.onload=()=>{ const s=Math.min(1,maxW/img.width); const c=document.createElement('canvas'); c.width=img.width*s; c.height=img.height*s; c.getContext('2d').drawImage(img,0,0,c.width,c.height); cb(c.toDataURL('image/jpeg',0.7)); };
@@ -1424,7 +1565,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.5.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.6.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
