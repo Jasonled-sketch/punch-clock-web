@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>USLED 工務行程日誌</title>
+<meta name="theme-color" content="#0ea5e9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="工務日誌">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230ea5e9'/%3E%3Cpath d='M28 30h44v8H28zm0 16h44v8H28zm0 16h30v8H28z' fill='white'/%3E%3C/svg%3E">
+<link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22USLED%E5%B7%A5%E5%8B%99%E8%A1%8C%E7%A8%8B%E6%97%A5%E8%AA%8C%22%2C%22short_name%22%3A%22%E5%B7%A5%E5%8B%99%E6%97%A5%E8%AA%8C%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f1f5f9%22%2C%22theme_color%22%3A%22%230ea5e9%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520100%2520100%2527%253E%253Crect%2520width%253D%2527100%2527%2520height%253D%2527100%2527%2520rx%253D%252722%2527%2520fill%253D%2527%25230ea5e9%2527%252F%253E%253Cpath%2520d%253D%2527M28%252030h44v8H28zm0%252016h44v8H28zm0%252016h30v8H28z%2527%2520fill%253D%2527white%2527%252F%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22100x100%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{
+    --sky:#0ea5e9; --sky-d:#0284c7; --ink:#0f172a; --muted:#64748b;
+    --line:#e2e8f0; --bg:#f1f5f9; --card:#fff; --ok:#16a34a; --warn:#f59e0b; --bad:#ef4444;
+    --shadow:0 1px 3px rgba(15,23,42,.08),0 1px 2px rgba(15,23,42,.04);
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;
+    padding-bottom:env(safe-area-inset-bottom)}
+  .hidden{display:none!important}
+
+  /* ===== 登入頁 ===== */
+  #loginView{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:32px 24px;text-align:center;background:linear-gradient(160deg,#0ea5e9,#0369a1)}
+  #loginView .logo{width:84px;height:84px;border-radius:24px;background:rgba(255,255,255,.16);
+    display:flex;align-items:center;justify-content:center;margin-bottom:22px;backdrop-filter:blur(6px)}
+  #loginView .logo svg{width:48px;height:48px}
+  #loginView h1{color:#fff;font-size:25px;font-weight:800;letter-spacing:.5px}
+  #loginView p{color:#e0f2fe;margin:10px 0 34px;font-size:15px}
+  #gbtn{display:flex;justify-content:center;min-height:44px}
+  #loginHint{color:#bae6fd;font-size:13px;margin-top:22px;max-width:300px;line-height:1.7}
+
+  /* ===== 頂列 ===== */
+  header{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+    display:flex;align-items:center;gap:10px}
+  header .ht{font-weight:800;font-size:17px;flex:1;display:flex;align-items:center;gap:8px}
+  header .ht svg{width:22px;height:22px;color:var(--sky)}
+  .me{display:flex;align-items:center;gap:8px}
+  .me .av{width:34px;height:34px;border-radius:50%;background:var(--sky);color:#fff;font-weight:700;
+    display:flex;align-items:center;justify-content:center;font-size:15px;overflow:hidden}
+  .me .av img{width:100%;height:100%;object-fit:cover}
+  .me button{border:none;background:#f1f5f9;color:var(--muted);font-size:12px;padding:6px 10px;border-radius:8px;font-weight:600}
+
+  /* ===== 內容 ===== */
+  main{padding:14px 14px 120px;max-width:560px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .sec-t{font-size:13px;font-weight:800;color:var(--sky-d);letter-spacing:1px;margin-bottom:14px;
+    display:flex;align-items:center;gap:7px}
+  .sec-t .n{width:22px;height:22px;border-radius:7px;background:var(--sky);color:#fff;display:flex;
+    align-items:center;justify-content:center;font-size:12px}
+  .field{margin-bottom:15px}
+  .field:last-child{margin-bottom:0}
+  label.lb{display:block;font-size:14px;font-weight:700;margin-bottom:7px;color:#334155}
+  label.lb .req{color:var(--bad);margin-left:3px}
+  label.lb .opt{color:var(--muted);font-weight:500;font-size:12px;margin-left:5px}
+  input,select,textarea{width:100%;font-size:16px;font-family:inherit;color:var(--ink);
+    border:1.5px solid var(--line);border-radius:11px;padding:12px 13px;background:#fff;transition:border-color .15s}
+  input:focus,select,textarea:focus{outline:none;border-color:var(--sky)}
+  textarea{resize:vertical;min-height:84px;line-height:1.6}
+  textarea.big{min-height:128px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .hint{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* 分段控制 */
+  .seg{display:flex;gap:8px;flex-wrap:wrap}
+  .seg button{flex:1;min-width:fit-content;border:1.5px solid var(--line);background:#fff;color:#475569;
+    border-radius:11px;padding:11px 8px;font-size:15px;font-weight:600;font-family:inherit}
+  .seg button.on{background:var(--sky);border-color:var(--sky);color:#fff;box-shadow:0 2px 8px rgba(14,165,233,.3)}
+
+  /* 協做員 chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chips .chip{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:20px;
+    padding:8px 15px;font-size:14px;font-weight:600;font-family:inherit}
+  .chips .chip.on{background:#0ea5e91a;border-color:var(--sky);color:var(--sky-d)}
+  .chips .chip.add{border-style:dashed;color:var(--sky)}
+
+  /* Yes/No 開關列 */
+  .chk{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f1f5f9}
+  .chk:last-child{border-bottom:none}
+  .chk .lbl{font-size:15px;font-weight:600;color:#334155}
+  .tog{position:relative;width:108px;height:38px;border-radius:20px;background:#f1f5f9;border:1.5px solid var(--line);
+    display:flex;cursor:pointer;flex:none}
+  .tog span{flex:1;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--muted);z-index:2}
+  .tog .knob{position:absolute;top:2px;left:2px;width:calc(50% - 2px);height:calc(100% - 6px);border-radius:18px;
+    background:#fff;box-shadow:var(--shadow);transition:transform .2s}
+  .tog[data-v="Yes"]{background:#fef2f2;border-color:#fecaca}
+  .tog[data-v="Yes"] .knob{transform:translateX(100%);background:var(--bad)}
+  .tog[data-v="Yes"] .y{color:#fff}
+  .tog[data-v="No"] .n{color:var(--ok)}
+
+  /* 照片 */
+  .photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:9px}
+  .ph{position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;border:1px solid var(--line)}
+  .ph img{width:100%;height:100%;object-fit:cover}
+  .ph .x{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);
+    color:#fff;border:none;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center}
+  .ph-add{aspect-ratio:1;border:2px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;color:var(--sky);background:#f8fafc;font-size:13px;gap:4px;font-weight:600}
+  .ph-add svg{width:26px;height:26px}
+
+  /* 送出列 */
+  .submitbar{position:fixed;left:0;right:0;bottom:0;z-index:30;padding:12px 14px calc(env(safe-area-inset-bottom) + 12px);
+    background:linear-gradient(transparent,#f1f5f9 22%);max-width:560px;margin:0 auto}
+  .submitbar button{width:100%;border:none;background:var(--sky);color:#fff;font-size:17px;font-weight:800;
+    padding:16px;border-radius:14px;font-family:inherit;box-shadow:0 6px 18px rgba(14,165,233,.4)}
+  .submitbar button:active{transform:scale(.99)}
+  .submitbar button:disabled{background:#94a3b8;box-shadow:none}
+
+  /* 近期 */
+  .recent .it{display:flex;gap:11px;padding:11px 0;border-bottom:1px solid #f1f5f9;align-items:flex-start}
+  .recent .it:last-child{border-bottom:none}
+  .recent .dt{font-size:12px;color:var(--muted);font-weight:700;min-width:46px;line-height:1.3}
+  .recent .ti{flex:1;font-size:14px;font-weight:600}
+  .recent .ti small{display:block;color:var(--muted);font-weight:500;margin-top:2px}
+  .recent .tag{font-size:11px;background:#0ea5e91a;color:var(--sky-d);padding:3px 8px;border-radius:7px;font-weight:700;white-space:nowrap}
+
+  /* toast / loading */
+  #toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);z-index:60;opacity:0;
+    background:#0f172a;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;
+    transition:.3s;pointer-events:none;max-width:88%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  #toast.ok{background:#16a34a}#toast.bad{background:#dc2626}
+  #loading{position:fixed;inset:0;z-index:70;background:rgba(241,245,249,.75);backdrop-filter:blur(3px);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+  .spin{width:44px;height:44px;border:4px solid #cbd5e1;border-top-color:var(--sky);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loading .lt{font-weight:700;color:var(--sky-d)}
+
+  /* 成功畫面 */
+  #doneView{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+  #doneView .ic{width:96px;height:96px;border-radius:50%;background:#dcfce7;display:flex;align-items:center;justify-content:center;margin-bottom:20px;animation:pop .4s}
+  #doneView .ic svg{width:52px;height:52px;color:var(--ok)}
+  @keyframes pop{0%{transform:scale(.5);opacity:0}100%{transform:scale(1);opacity:1}}
+  #doneView h2{font-size:23px;font-weight:800}
+  #doneView .sn{font-size:15px;color:var(--muted);margin:8px 0 30px}
+  #doneView .sn b{color:var(--sky-d);font-size:18px}
+  #doneView .acts{display:flex;flex-direction:column;gap:11px;width:100%;max-width:300px}
+  #doneView button{border:none;padding:15px;border-radius:13px;font-size:16px;font-weight:700;font-family:inherit}
+  #doneView .pri{background:var(--sky);color:#fff}
+  #doneView .sec{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ===== 登入 ===== -->
+<div id="loginView">
+  <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div>
+  <h1>工務行程日誌</h1>
+  <p>USLED 譽昇光電 · 工程師每日登打</p>
+  <div id="gbtn"></div>
+  <div id="loginHint">請用公司核可的 Google 帳號登入<br>登入後即可在手機上直接登打今日工務</div>
+</div>
+
+<!-- ===== App ===== -->
+<div id="appView" class="hidden">
+  <header>
+    <div class="ht"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>工務日誌</div>
+    <div class="me">
+      <div class="av" id="meAv"></div>
+      <button onclick="logout()">登出</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- A 基本 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">1</span>基本資訊</div>
+      <div class="row2">
+        <div class="field">
+          <label class="lb">執行日期<span class="req">*</span></label>
+          <input type="date" id="f_date">
+        </div>
+        <div class="field">
+          <label class="lb">負責主任<span class="req">*</span></label>
+          <input list="staffList" id="f_lead" placeholder="選擇或輸入" autocomplete="off">
+          <datalist id="staffList"></datalist>
+        </div>
+      </div>
+      <div class="field">
+        <label class="lb">協做參與員<span class="opt">可複選</span></label>
+        <div class="chips" id="coChips"></div>
+      </div>
+      <div class="field">
+        <label class="lb">工務內外</label>
+        <div class="seg" id="seg_io" data-fid="io"></div>
+      </div>
+    </div>
+
+    <!-- B 案場 / 時間 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">2</span>案場與時間</div>
+      <div class="field">
+        <label class="lb">施工主題（客戶／案場）<span class="req">*</span></label>
+        <input type="text" id="f_subject" placeholder="例：岡山壽天宮 電視牆維修" autocomplete="off">
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="lb">抵達現場時間</label>
+          <input type="time" id="f_arrive">
+        </div>
+        <div class="field">
+          <label class="lb">完工返程時間</label>
+          <input type="time" id="f_leave">
+        </div>
+      </div>
+    </div>
+
+    <!-- C 分類 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">3</span>工務分類</div>
+      <div class="field">
+        <label class="lb">工務主類別</label>
+        <input list="mainList" id="f_main" placeholder="選擇或輸入" autocomplete="off">
+        <datalist id="mainList"></datalist>
+      </div>
+      <div class="field">
+        <label class="lb">工務次類別</label>
+        <input list="subList" id="f_sub" placeholder="選擇或輸入" autocomplete="off">
+        <datalist id="subList"></datalist>
+      </div>
+      <div class="field">
+        <label class="lb">施作項目名稱</label>
+        <input list="itemList" id="f_item" placeholder="選擇或輸入" autocomplete="off">
+        <datalist id="itemList"></datalist>
+      </div>
+    </div>
+
+    <!-- D 現場狀況 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">4</span>現場狀況</div>
+      <div class="field">
+        <label class="lb">設備使用電壓</label>
+        <div class="seg" id="seg_volt" data-fid="volt"></div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label class="lb">現場最高點<span class="opt">米</span></label>
+          <input type="number" id="f_height" inputmode="decimal" placeholder="例：3.5">
+        </div>
+        <div class="field">
+          <label class="lb">是否收款</label>
+          <div class="seg" id="seg_pay" data-fid="pay"></div>
+        </div>
+      </div>
+      <div class="field" id="payNoteWrap" style="display:none">
+        <label class="lb">收款／款項說明<span class="opt">選填</span></label>
+        <input type="text" id="f_payNote" placeholder="例：1600 現金 / 待匯款" autocomplete="off">
+      </div>
+      <div class="field">
+        <label class="lb">使用梯子</label>
+        <input list="ladderList" id="f_ladder" placeholder="選擇或輸入" autocomplete="off">
+        <datalist id="ladderList"></datalist>
+      </div>
+      <div class="field">
+        <label class="lb">現場備註<span class="opt">選填</span></label>
+        <textarea id="f_siteNote" placeholder="現場環境、配線、特殊狀況…"></textarea>
+      </div>
+    </div>
+
+    <!-- E 紀錄 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">5</span>工作紀錄</div>
+      <div class="field">
+        <label class="lb">過程紀錄<span class="opt">建議詳填</span></label>
+        <textarea id="f_process" class="big" placeholder="施工步驟、用料、工法、配置…（可分行）"></textarea>
+      </div>
+      <div class="field">
+        <label class="lb">覆盤 AAR<span class="opt">檢討／學習，選填</span></label>
+        <textarea id="f_aar" placeholder="這次學到什麼？下次怎麼更好？有無待辦二次工…"></textarea>
+      </div>
+      <div class="field">
+        <label class="lb">現場照片<span class="opt">可多張</span></label>
+        <div class="photos" id="photoGrid"></div>
+        <input type="file" id="photoInput" accept="image/*" multiple capture="environment" class="hidden">
+        <div class="hint">拍照或從相簿選取，系統會自動壓縮後上傳</div>
+      </div>
+    </div>
+
+    <!-- F 檢核 -->
+    <div class="card">
+      <div class="sec-t"><span class="n">6</span>自我檢核</div>
+      <div id="checks"></div>
+    </div>
+
+    <!-- 近期 -->
+    <div class="card recent">
+      <div class="sec-t"><span class="n">★</span>我的近期日誌</div>
+      <div id="recentList"><div class="hint">載入中…</div></div>
+    </div>
+  </main>
+
+  <div class="submitbar">
+    <button id="submitBtn" onclick="submitLog()">送出今日工務日誌</button>
+  </div>
+</div>
+
+<!-- ===== 成功 ===== -->
+<div id="doneView" class="hidden">
+  <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
+  <h2>日誌已送出！</h2>
+  <div class="sn">流水序號 <b id="doneSn">—</b></div>
+  <div class="acts">
+    <button class="pri" onclick="newLog()">再登打一筆</button>
+    <button class="sec" onclick="backToForm()">返回查看</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="loading" class="hidden"><div class="spin"></div><div class="lt" id="loadingTxt">處理中…</div></div>
+
+<script>
+/* ====================================================================
+   USLED 工務行程日誌 — 單檔 PWA
+   寫入 Ragic Fan28/forms2/18 (工務行程日誌)，經 punch-clock-proxy 代理
+   欄位 ID 與選項皆經 API 實測驗證 (2026-06-06)
+   ==================================================================== */
+const CFG = {
+  WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
+  PATH: '/forms2/18',
+  CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+  // 已驗證的欄位 ID
+  F: {
+    status:1002784, execDate:1002615, execDate2:1002585, logTime:1002578,
+    lead:1002620, coworkers:1002619, io:1002592, subject:1002618,
+    arrive:1002616, leave:1002617, main:1002582, sub:1002583, item:1002621,
+    volt:1002790, height:1002791, ladder:1002789, pay:1002785,
+    siteNote:1002590, process:1002788, aar:1002778, photo:1002622,
+    toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643
+  },
+  // 下拉預設選項（皆可自由加打，已實測允許自由輸入）
+  STAFF: ['偉智','俊男'],
+  OPT: {
+    io:   ['🌄外務','🏠內務'],
+    volt: ['AC 110V','AC 220V','暫時未知'],
+    pay:  ['無','有'],
+    main: ['安裝','維修','丈量','拆除','保養','調整'],
+    sub:  ['🖼️大條屏','⭐中條屏','💡照明燈具','更換控制卡','更換電源器','更換模組、光源','檢查迴路','以上其它皆有'],
+    item: ['現場-丈量/安裝','現場-維修/補強'],
+    ladder:['1.0–1.8m（無）','3.0–3.5m（7尺梯）','3.5–3.9m（8尺梯）','4.8–5.3m（長拉梯）']
+  },
+  CHECKS: [
+    {k:'toolMiss', t:'是否有缺帶工具？'},
+    {k:'delay',    t:'行程是否延誤？'},
+    {k:'dispute',  t:'是否有糾紛？'},
+    {k:'suggest',  t:'是否有精進建議？'}
+  ],
+  // Google email → 中文名（自動帶入負責主任；可自由改）
+  EMAIL2NAME: { 'amaze2349@gmail.com':'偉智' }
+};
+
+const S = { token:null, tokenAt:0, user:null, myName:'', coworkers:[], photos:[], seg:{}, checks:{} };
+
+/* ---------- 小工具 ---------- */
+const $ = id => document.getElementById(id);
+function pad(n){ return String(n).padStart(2,'0'); }
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function nowRagic(){ const d=new Date(); return d.getFullYear()+'/'+pad(d.getMonth()+1)+'/'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()); }
+function dateToRagic(v){ return v? v.replace(/-/g,'/') : ''; }            // 2026-06-06 -> 2026/06/06
+function timeToRagic(v){ return v? (v.length===5? v+':00' : v) : ''; }    // 14:00 -> 14:00:00
+function toast(msg, kind){ const t=$('toast'); t.textContent=msg; t.className='show'+(kind?(' '+kind):''); clearTimeout(t._h); t._h=setTimeout(()=>t.className='',2600); }
+function showLoad(txt){ $('loadingTxt').textContent=txt||'處理中…'; $('loading').classList.remove('hidden'); }
+function hideLoad(){ $('loading').classList.add('hidden'); }
+
+/* ---------- Google 登入 ---------- */
+function initGoogle(){
+  if(!(window.google && google.accounts && google.accounts.id)){ return setTimeout(initGoogle, 300); }
+  google.accounts.id.initialize({ client_id: CFG.CLIENT_ID, callback: onSignIn, auto_select:true, cancel_on_tap_outside:false });
+  const el=$('gbtn'); if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
+  google.accounts.id.prompt();
+}
+function onSignIn(resp){
+  try{
+    S.token = resp.credential; S.tokenAt = Date.now();
+    const p = JSON.parse(atob(resp.credential.split('.')[1]));
+    S.user = { email:(p.email||'').toLowerCase(), name:p.name||'', picture:p.picture||'' };
+    enterApp();
+  }catch(e){ toast('登入失敗：'+e.message,'bad'); }
+}
+function logout(){
+  try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+  S.token=null; S.user=null;
+  $('appView').classList.add('hidden'); $('doneView').classList.add('hidden'); $('loginView').classList.remove('hidden');
+}
+
+/* ---------- 進入 App ---------- */
+function enterApp(){
+  $('loginView').classList.add('hidden'); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden');
+  // 頭像
+  const av=$('meAv');
+  if(S.user.picture){ av.innerHTML='<img src="'+S.user.picture+'" referrerpolicy="no-referrer">'; }
+  else { av.textContent=(S.user.name||S.user.email||'?').slice(0,1).toUpperCase(); }
+  // 我的名字：記住的 > email 對照 > 空
+  S.myName = localStorage.getItem('wl_myname') || CFG.EMAIL2NAME[S.user.email] || '';
+  buildForm();
+  loadRecent();
+}
+
+/* ---------- 建立表單控件 ---------- */
+function fillDatalist(id, arr){ $(id).innerHTML = arr.map(v=>'<option value="'+v.replace(/"/g,'&quot;')+'">').join(''); }
+function buildSeg(wrapId, key, arr, def){
+  const w=$(wrapId); w.innerHTML='';
+  S.seg[key] = def!==undefined? def : arr[0];
+  arr.forEach(v=>{
+    const b=document.createElement('button'); b.type='button'; b.textContent=v;
+    if(v===S.seg[key]) b.classList.add('on');
+    b.onclick=()=>{ S.seg[key]=v; [...w.children].forEach(c=>c.classList.toggle('on', c.textContent===v)); if(key==='pay') $('payNoteWrap').style.display=(v==='有'?'block':'none'); };
+    w.appendChild(b);
+  });
+}
+function buildCoChips(){
+  const w=$('coChips'); w.innerHTML=''; S.coworkers=[];
+  CFG.STAFF.forEach(n=>{
+    const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=n;
+    c.onclick=()=>{ c.classList.toggle('on'); const i=S.coworkers.indexOf(n); if(i<0&&c.classList.contains('on'))S.coworkers.push(n); else if(i>=0)S.coworkers.splice(i,1); };
+    w.appendChild(c);
+  });
+  const add=document.createElement('button'); add.type='button'; add.className='chip add'; add.textContent='＋ 其他';
+  add.onclick=()=>{ const n=(prompt('輸入協做員姓名')||'').trim(); if(!n)return; if(!S.coworkers.includes(n)){ S.coworkers.push(n); const c=document.createElement('button'); c.type='button'; c.className='chip on'; c.textContent=n; c.onclick=()=>{ c.classList.toggle('on'); const i=S.coworkers.indexOf(n); if(i<0&&c.classList.contains('on'))S.coworkers.push(n); else if(i>=0)S.coworkers.splice(i,1); }; w.insertBefore(c, add); } };
+  w.appendChild(add);
+}
+function buildChecks(){
+  const w=$('checks'); w.innerHTML='';
+  CFG.CHECKS.forEach(c=>{
+    S.checks[c.k]='No';
+    const row=document.createElement('div'); row.className='chk';
+    row.innerHTML='<div class="lbl">'+c.t+'</div><div class="tog" data-v="No"><span class="n">否</span><span class="y">是</span><div class="knob"></div></div>';
+    const tog=row.querySelector('.tog');
+    tog.onclick=()=>{ const nv=tog.getAttribute('data-v')==='No'?'Yes':'No'; tog.setAttribute('data-v',nv); S.checks[c.k]=nv; };
+    w.appendChild(row);
+  });
+}
+function buildForm(){
+  $('f_date').value = todayStr();
+  fillDatalist('staffList', CFG.STAFF);
+  fillDatalist('mainList', CFG.OPT.main);
+  fillDatalist('subList', CFG.OPT.sub);
+  fillDatalist('itemList', CFG.OPT.item);
+  fillDatalist('ladderList', CFG.OPT.ladder);
+  $('f_lead').value = S.myName;
+  buildSeg('seg_io','io',CFG.OPT.io,'🌄外務');
+  buildSeg('seg_volt','volt',CFG.OPT.volt,'AC 110V');
+  buildSeg('seg_pay','pay',CFG.OPT.pay,'無');
+  $('payNoteWrap').style.display='none';
+  buildCoChips();
+  buildChecks();
+  S.photos=[]; renderPhotos();
+}
+
+/* ---------- 照片 ---------- */
+$('photoInput') && ($('photoInput').onchange = async e=>{
+  const files=[...e.target.files]; e.target.value='';
+  for(const f of files){ if(!f.type.startsWith('image/'))continue; try{ const c=await compress(f); S.photos.push(c); }catch(err){ toast('照片處理失敗','bad'); } }
+  renderPhotos();
+});
+function compress(file){
+  return new Promise((res,rej)=>{
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const max=1280; let {width:w,height:h}=img;
+      if(w>max||h>max){ if(w>h){ h=Math.round(h*max/w); w=max; } else { w=Math.round(w*max/h); h=max; } }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      cv.toBlob(b=>{ if(!b)return rej(new Error('blob')); res({ blob:b, url:cv.toDataURL('image/jpeg',0.5) }); }, 'image/jpeg', 0.7);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error('img')); };
+    img.src=url;
+  });
+}
+function renderPhotos(){
+  const g=$('photoGrid'); g.innerHTML='';
+  S.photos.forEach((p,i)=>{ const d=document.createElement('div'); d.className='ph'; d.innerHTML='<img src="'+p.url+'"><button class="x" onclick="rmPhoto('+i+')">×</button>'; g.appendChild(d); });
+  const add=document.createElement('div'); add.className='ph-add'; add.onclick=()=>$('photoInput').click();
+  add.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg><span>加照片</span>';
+  g.appendChild(add);
+}
+function rmPhoto(i){ S.photos.splice(i,1); renderPhotos(); }
+
+/* ---------- 呼叫 Worker ---------- */
+async function callRagic(suffix, opts){
+  const headers = Object.assign({ 'X-Google-Token': S.token||'' }, (opts&&opts.headers)||{});
+  return fetch(CFG.WORKER + CFG.PATH + suffix, Object.assign({}, opts, { headers }));
+}
+
+/* ---------- 送出 ---------- */
+async function submitLog(){
+  const date=$('f_date').value, lead=$('f_lead').value.trim(), subject=$('f_subject').value.trim();
+  if(!date){ toast('請選擇執行日期','bad'); return; }
+  if(!lead){ toast('請填寫負責主任','bad'); $('f_lead').focus(); return; }
+  if(!subject){ toast('請填寫施工主題','bad'); $('f_subject').focus(); return; }
+
+  // 收款值
+  let payVal=S.seg.pay; const payNote=$('f_payNote').value.trim();
+  if(payVal==='有') payVal = payNote? ('有 '+payNote) : '有';
+
+  const fd=new FormData(); const F=CFG.F;
+  fd.append(F.execDate, dateToRagic(date));
+  fd.append(F.execDate2, dateToRagic(date));
+  fd.append(F.logTime, nowRagic());
+  fd.append(F.lead, lead);
+  S.coworkers.forEach(n=>fd.append(F.coworkers, n));
+  fd.append(F.io, S.seg.io);
+  fd.append(F.subject, subject);
+  if($('f_arrive').value) fd.append(F.arrive, timeToRagic($('f_arrive').value));
+  if($('f_leave').value)  fd.append(F.leave, timeToRagic($('f_leave').value));
+  if($('f_main').value.trim()) fd.append(F.main, $('f_main').value.trim());
+  if($('f_sub').value.trim())  fd.append(F.sub, $('f_sub').value.trim());
+  if($('f_item').value.trim()) fd.append(F.item, $('f_item').value.trim());
+  fd.append(F.volt, S.seg.volt);
+  if($('f_height').value.trim()) fd.append(F.height, $('f_height').value.trim());
+  if($('f_ladder').value.trim()) fd.append(F.ladder, $('f_ladder').value.trim());
+  fd.append(F.pay, payVal);
+  if($('f_siteNote').value.trim()) fd.append(F.siteNote, $('f_siteNote').value.trim());
+  if($('f_process').value.trim()) fd.append(F.process, $('f_process').value.trim());
+  if($('f_aar').value.trim())     fd.append(F.aar, $('f_aar').value.trim());
+  CFG.CHECKS.forEach(c=>fd.append(F[c.k], S.checks[c.k]));
+  // 照片
+  S.photos.forEach((p,i)=>fd.append(F.photo, p.blob, 'wl_'+Date.now()+'_'+i+'.jpg'));
+
+  $('submitBtn').disabled=true; showLoad(S.photos.length? '上傳照片與日誌…':'送出日誌…');
+  try{
+    const r=await callRagic('?api&doFormula=true', { method:'POST', body:fd });
+    if(r.status===401){ hideLoad(); $('submitBtn').disabled=false; toast('登入逾時，請重新登入','bad'); google.accounts.id.prompt(); return; }
+    const data=await r.json();
+    if(data && data.status==='SUCCESS'){
+      localStorage.setItem('wl_myname', lead);
+      const sn = (data.data && (data.data['1002584']||data.data['序列號'])) || ('#'+data.ragicId);
+      hideLoad(); showDone(sn);
+    }else{
+      hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+((data&&data.msg)||r.status),'bad');
+    }
+  }catch(e){ hideLoad(); $('submitBtn').disabled=false; toast('網路錯誤：'+e.message,'bad'); }
+}
+
+function showDone(sn){
+  $('doneSn').textContent=sn;
+  $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden');
+  $('submitBtn').disabled=false;
+}
+function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); $('f_subject').focus(); }
+function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); }
+
+/* ---------- 近期日誌 ---------- */
+async function loadRecent(){
+  const box=$('recentList'); box.innerHTML='<div class="hint">載入中…</div>';
+  try{
+    const r=await callRagic('?api', { method:'GET' });
+    const json=await r.json();
+    const me=($('f_lead').value||S.myName||'').trim();
+    let recs=[];
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) recs.push(rec); });
+    recs = recs.filter(x=> !me || (x['負責主任']||'')===me );
+    recs.sort((a,b)=> String(b['登打日期']||'').localeCompare(String(a['登打日期']||'')) );
+    recs=recs.slice(0,8);
+    if(!recs.length){ box.innerHTML='<div class="hint">'+(me?('「'+me+'」'):'')+'目前沒有日誌紀錄</div>'; return; }
+    box.innerHTML=recs.map(x=>{
+      const d=(x['執行日期']||'').slice(5).replace('/','/')||'—';
+      const subj=x['施工主題']||'(未填主題)';
+      const main=x['工務主類別']||''; const item=x['施作項目名稱']||'';
+      const sn=x['序列號']||'';
+      return '<div class="it"><div class="dt">'+d+'<br><span style="color:#94a3b8;font-size:11px">'+sn+'</span></div>'+
+        '<div class="ti">'+esc(subj)+'<small>'+esc([main,item].filter(Boolean).join(' · '))+'</small></div>'+
+        (main?'<div class="tag">'+esc(main)+'</div>':'')+'</div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="hint">近期紀錄載入失敗</div>'; }
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ---------- 啟動 ---------- */
+window.onload=initGoogle;
+</script>
+</body>
+</html>
