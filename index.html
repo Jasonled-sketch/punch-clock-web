@@ -97,6 +97,7 @@
     .cal-d.today .dn{background:#1a73e8;color:#fff;font-weight:700}
     .cal-ev{font-size:11px;padding:2px 5px;border-radius:4px;background:#fff;color:#222;border-left:3px solid #1a73e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500;line-height:1.5}
     .cal-ev:hover{background:#eef3ff}
+    .cal-sp{font-size:10px;padding:1px 4px;border-radius:4px;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;line-height:1.4}
     /* ── Month nav ── */
     .month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
     .month-nav strong{font-size:16px}
@@ -238,7 +239,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v3.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1319,17 +1320,18 @@ async function getMyRecs(year, month) {
 async function viewCalendar() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const recs = await getMyRecs(CUR_YEAR, CUR_MONTH + 1);
+    const [recs, specialDays] = await Promise.all([getMyRecs(CUR_YEAR, CUR_MONTH + 1), getSpecialDays()]);
     const byDate = {};
     recs.forEach(r => { byDate[r.date] = r; });
+    const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);
     const color = MY_WORKER?.color || '#1a73e8';
     setView(`<div class="view">${monthNav(false)}${buildCal(byDate, rec => `
       <div class="cal-ev" style="border-left-color:${color}" onclick='showRecDetail(${JSON.stringify(rec)})'>${rec.start_time}–${rec.end_time||'?'}</div>
-    `)}</div>`);
+    `, specialByDate)}</div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
 }
 
-function buildCal(byDate, renderRec) {
+function buildCal(byDate, renderRec, specialByDate) {
   const firstDay = new Date(CUR_YEAR, CUR_MONTH, 1).getDay();
   const days = new Date(CUR_YEAR, CUR_MONTH + 1, 0).getDate();
   const todayStr = fmtDate(new Date());
@@ -1346,6 +1348,8 @@ function buildCal(byDate, renderRec) {
     const recs = Array.isArray(byDate[ds]) ? byDate[ds] : (byDate[ds] ? [byDate[ds]] : []);
     const cls = [isToday ? 'today' : '', dow === 0 ? 'sun' : '', (dow === 0 || dow === 6) ? 'weekend' : ''].filter(Boolean).join(' ');
     h += `<div class="cal-d${cls ? ' ' + cls : ''}"><div class="dn">${d}</div>`;
+    const sp = specialByDate && specialByDate[ds];                       // 特殊日標籤（國定假/颱風/全特休）
+    if (sp) { const unpaid = sp.paid === '否'; h += `<div class="cal-sp" style="background:${unpaid ? '#fde7d9' : '#e8f0fe'};color:${unpaid ? '#e65100' : '#1565c0'}" title="${escHtml(sp.note || '')}">${sp.type === '颱風假' ? '🌀' : sp.type === '全體特休' ? '🌴' : '🎌'}${escHtml(sp.note || sp.type)}${unpaid ? '(不支薪)' : ''}</div>`; }
     recs.forEach(r => { h += renderRec(r); });
     h += '</div>';
   }
@@ -1921,12 +1925,13 @@ async function viewReport() {
     const incomplete = recBundle.incomplete;
     const specialSet = new Set(specialDays.map(s => s.date));
     const holidaySet = new Set(specialDays.filter(s => s.type === '國定假日').map(s => s.date));  // 國定假日(出勤加倍)
+    const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);  // 全部特殊日(含颱風/全特休)供明細顯示
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
     const payrollLocks = await getPayrollLocks(ym);
     const isLocked = payrollLocks.length > 0;
     const payrollRows = [];
-    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
+    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
 
     let h = `<div class="view">${monthNav(true)}`;
     const actives = WORKERS.filter(w => w.active !== '0');
@@ -2106,7 +2111,7 @@ function showReportDetail(email) {
   if (!_RPT) return;
   const w = (WORKERS || []).find(x => x.email === email);
   if (!w) return;
-  const { recs, leaves, otAll, incomplete, specialSet, holidaySet, ym, year, month, workDays } = _RPT;
+  const { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
   const sh = CONFIG.SHIFTS[w.shift];
   const shHours = sh ? sh.hours : 8;
@@ -2218,7 +2223,12 @@ function showReportDetail(email) {
       }
     } else if (rec && rec.start_time) segHtml = `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
     else if (dayOff.length) { const o = dayOff[0]; segHtml = `<span style="color:#1565c0">${o.full || !o.s ? '全天' : `${o.s}-${o.e}`} ${o.type}${o.h}h</span>`; }
-    else if (isHol) continue;
+    else if (specialByDate && specialByDate[ds]) {            // 特殊日(國定假/颱風/全特休)沒打卡 → 顯示放假狀態，不計未打卡、不算遲到
+      const sp = specialByDate[ds], unpaid = sp.paid === '否';
+      const icon = sp.type === '颱風假' ? '🌀' : sp.type === '全體特休' ? '🌴' : '🎌';
+      restHtml = `<span style="color:${unpaid ? '#e65100' : '#1565c0'}">${icon}${sp.note || sp.type}（${unpaid ? '放假·不支薪' : '放假'}）</span>`;
+    }
+    else if (isHol) continue;                                 // 純週末(無特殊日設定) → 不列
     else if (dMs < todayMs) { restHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }  // 未打卡 → 日期下一行
     else continue;
     dailyRows.push(`<div style="display:flex"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div></div>`);
@@ -2336,16 +2346,17 @@ async function viewACal() {
   setView('<div class="loading">載入中…</div>');
   try {
     if (!WORKERS.length) WORKERS = await getAllWorkers();
-    const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
+    const [recs, specialDays] = await Promise.all([getAllRecs(CUR_YEAR, CUR_MONTH + 1), getSpecialDays()]);
     const byDate = {};
     recs.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+    const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);
 
     setView(`<div class="view">${monthNav(true)}
       <button class="btn" style="width:100%;margin-bottom:12px;background:#f1f3f4;color:#5f6368" onclick="showSpecialDays()">📅 特殊日設定（國定假/颱風/全特休）</button>
       ${buildCal(byDate, rec => {
         const color = (WORKERS.find(w => w.email === rec.email) || {}).color || '#1a73e8';
         return `<div class="cal-ev" style="border-left-color:${color}" onclick='showAdminRecDetail(${JSON.stringify(rec)})'>${rec.name}</div>`;
-      })}</div>`);
+      }, specialByDate)}</div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
 }
 
