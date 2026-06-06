@@ -169,9 +169,9 @@ img{display:block}
 .my-task-row:active{background:var(--border)}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
-.cat-toggle{flex:1;padding:13px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700}
+.cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
 .cat-toggle.on{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent)}
-.cat-toggle .hint{display:block;font-size:11px;font-weight:400;margin-top:2px;opacity:.8}
+.cat-toggle .hint{font-size:11px;font-weight:400;opacity:.75}
 .img-preview-list video{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#000}
 </style>
 </head>
@@ -374,9 +374,10 @@ function renderLogin(){
 }
 function renderGoogleButton(){
   if(!(window.google && google.accounts && google.accounts.id)){ setTimeout(renderGoogleButton, 400); return; }
-  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:false, cancel_on_tap_outside:false });
+  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false });
   const el = document.getElementById('gbtn');
   if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
+  google.accounts.id.prompt();   // 自動以上次帳號登入（記住，不用每次點）
 }
 function handleGoogleSignIn(resp){
   try{
@@ -432,7 +433,7 @@ function renderBoard(){
     <div class="quad-panel" style="border-top:3px solid ${q.color}">
       <div class="qp-head">
         <div class="qp-title" style="color:${q.color}">${q.title}<span class="qp-sub">${q.sub}</span></div>
-        ${sup?`<button class="q-add" onclick="openTaskModal(null,'${STATE.activeQuad}')">＋ 新增</button>`:''}
+        ${sup?`<button class="q-add" onclick="openTaskModal(null,'${STATE.activeQuad}')">＋</button>`:''}
       </div>
       <div class="task-list">${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（這個分類目前沒有任務）</div>'}</div>
     </div>`;
@@ -560,13 +561,13 @@ function openTaskModal(taskId, presetQuad){
         <div class="cat-toggle ${modalUrgent?'on':''}" id="catUrg" onclick="toggleCat('urgent')">緊急<span class="hint">優先完成</span></div>
       </div>
     </div>
+    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
     <div class="field"><label>指派給</label><select id="f_assignee">${empOpts}</select></div>
     <div class="field"><label>截止時間</label>
       <div class="due-quick" id="dueQuick"></div>
       <input type="datetime-local" id="f_due" value="${dueVal}">
     </div>
     <div class="field"><label>完成點數（獎勵）</label><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
-    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
     <div class="field"><label>附圖 / 影片（最多 3 個，記錄怎麼做的）</label>
       <div class="img-input-row"><input type="file" accept="image/*,video/*" capture="environment" id="f_img" onchange="onPickMedia(event)"></div>
       <div class="img-preview-list" id="imgPreview"></div>
