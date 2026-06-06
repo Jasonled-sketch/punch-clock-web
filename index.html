@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2829,10 +2829,10 @@ function buildLeaveCard(lv, isAdmin) {
   const applyTxt = ap ? `${addDayShort(ap)} ${ap.slice(11,16)}` : '—';
   const ownerEdit =
     lv.status === 'pending'
-      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">編輯</button>`
+      ? `<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:7px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">編輯</button>`
       : lv.status === 'rejected'
-      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">重新申請</button>
-         <button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyLeave(${lv.ragicId})">取消</button>`
+      ? `<button class="btn btn-sm" title="重新申請" style="padding:2px 7px;font-size:13px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:7px;cursor:pointer" onclick="editMyLeave(${lv.ragicId})">🔄</button>
+         <button class="btn btn-sm" title="取消申請" style="padding:2px 7px;font-size:13px;background:#fce8e6;color:#ea4335;border:none;border-radius:7px;cursor:pointer" onclick="cancelMyLeave(${lv.ragicId})">🗑️</button>`
       : '';
   return `
     <div class="leave-card ${stCls}" style="padding:9px 12px">
@@ -3171,10 +3171,10 @@ function buildOtCard(ot, isAdmin) {
   const rejectNote = ot.reject_note ? `<div class="leave-note">駁回原因：${escHtml(ot.reject_note)}</div>` : '';
   const ownerEdit =
     ot.status === 'pending'
-      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">編輯</button>`
+      ? `<button class="btn btn-sm" style="padding:2px 8px;font-size:11px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:7px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">編輯</button>`
       : ot.status === 'rejected'
-      ? `<button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:8px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">重新申請</button>
-         <button class="btn btn-sm" style="padding:4px 10px;font-size:12px;background:#fce8e6;color:#ea4335;border:none;border-radius:8px;cursor:pointer" onclick="cancelMyOt(${ot.ragicId})">取消</button>`
+      ? `<button class="btn btn-sm" title="重新申請" style="padding:2px 7px;font-size:13px;background:#e8f0fe;color:#1a73e8;border:none;border-radius:7px;cursor:pointer" onclick="editMyOt(${ot.ragicId})">🔄</button>
+         <button class="btn btn-sm" title="取消申請" style="padding:2px 7px;font-size:13px;background:#fce8e6;color:#ea4335;border:none;border-radius:7px;cursor:pointer" onclick="cancelMyOt(${ot.ragicId})">🗑️</button>`
       : '';
   const timeRange = (ot.start_time && ot.end_time) ? `${ot.start_time}–${ot.end_time}` : '';
   const ap = ot.apply_time || '';
