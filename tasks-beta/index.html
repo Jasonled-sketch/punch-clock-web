@@ -1101,7 +1101,7 @@ function showGameCenter(){
     <div class="gc-actionrow">
       <span class="coin-pill big">🪙 ${coinBalance()} 獎勵幣</span>
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
-      ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button>`:''}
+      ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -1290,6 +1290,13 @@ function userEarnedCoins(uid){
 function coinBalance(){ return userEarnedCoins(STATE.user.id) + ((GS&&GS.bonus)||0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
 async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 獎勵幣'); refreshGameUI(); }
+async function resetGame(){
+  if(!confirm('確定重置你的遊戲存檔？裝備/寵物/獎勵幣/進度全部歸零（無法復原）')) return;
+  const rid=GS&&GS._ragicId; GS=blankGS(); if(rid!=null) GS._ragicId=rid;   // 保留同一筆覆蓋(不新增重複)
+  STATE.uniqueOwners=STATE.uniqueOwners||{};
+  await saveGameState(); toast('🧹 已重置存檔'); refreshGameUI();
+}
+function lvOK(min){ return isBeta() || userGameLevel(STATE.user.id) >= (min||0); }   // beta 全解鎖
 async function ragicFetchGS(suffix, opts){
   const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
   const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
@@ -1329,7 +1336,7 @@ function owns(id){ return GS&&GS.owned.includes(id); }
 async function buyItem(id){
   const it=shopItem(id); if(!it||owns(id)) return;
   const eq=equipItem(id);
-  if(eq && it.minLevel && userGameLevel(STATE.user.id) < it.minLevel){ toast('需 Lv.'+it.minLevel+' 才能入手「'+PET_RARITY[it.r].name+SLOTNAME[it.slot]+'」🔒'); return; }
+  if(eq && it.minLevel && !lvOK(it.minLevel)){ toast('需 Lv.'+it.minLevel+' 才能入手「'+PET_RARITY[it.r].name+SLOTNAME[it.slot]+'」🔒'); return; }
   if(coinBalance()<it.price){ toast('獎勵幣不足 🪙'); return; }
   GS.owned.push(id); GS.spent+=it.price;
   if(eq){ GS.gear=GS.gear||{}; GS.gear[it.slot]=id; }              // 裝備買了自動裝上
@@ -1380,13 +1387,13 @@ async function toggleEquip(id){
   else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
   await saveGameState(); refreshGameUI();
 }
-function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return; if(userGameLevel(STATE.user.id)<c.minLevel){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; } GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
+function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return; if(!lvOK(c.minLevel)){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; } GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
 function showCharPick(){
   const lvl=userGameLevel(STATE.user.id), cur=(GS&&GS.charId)||'c1';
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
-    <div class="char-grid">${CHARS.map(c=>{ const lk=lvl<c.minLevel; return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
+    <div class="char-grid">${CHARS.map(c=>{ const lk=!lvOK(c.minLevel); return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
   </div>`;
   mask.onclick=closeCharPick; document.body.appendChild(mask);
 }
@@ -1407,7 +1414,7 @@ function equipPanelHtml(){
 }
 function equipCard(it){
   const owned=owns(it.id), equipped=GS.gear&&GS.gear[it.slot]===it.id, bal=coinBalance(), rc=PET_RARITY[it.r].color;
-  const locked=it.minLevel&&userGameLevel(STATE.user.id)<it.minLevel;
+  const locked=it.minLevel&&!lvOK(it.minLevel);
   let action;
   if(equipped) action=`<button class="equip-btn on" onclick="toggleEquip('${it.id}')">裝備中 ✓</button>`;
   else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button>`;
@@ -1557,7 +1564,7 @@ function showDungeon(){
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對知識/智力題就攻擊，攻擊力＝10＋裝備戰力。今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
-    ${BOSSES.map(b=>{ const lk=lvl<b.minLevel; return `<div class="boss-row${lk?' lk':''}">
+    ${BOSSES.map(b=>{ const lk=!lvOK(b.minLevel); return `<div class="boss-row${lk?' lk':''}">
       <img src="assets/game/mob/${b.file}" class="boss-img">
       <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 🪙${b.reward}＋掉寶</div></div>
       ${lk?`<span class="boss-lk">🔒Lv.${b.minLevel}</span>`:`<button class="buy-btn" style="width:auto;padding:6px 14px" ${left<=0?'disabled':''} onclick="startBattle('${b.id}')">${left<=0?'次數用完':'挑戰'}</button>`}
@@ -1619,7 +1626,7 @@ function openChest(){
 }
 function startBattle(bossId){
   const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
-  if(userGameLevel(STATE.user.id)<b.minLevel){ toast('需 Lv.'+b.minLevel); return; }
+  if(!lvOK(b.minLevel)){ toast('需 Lv.'+b.minLevel); return; }
   if(dungeonLeft()<=0){ toast('今天挑戰次數用完了，明天再來 💪'); return; }
   if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
   GS.dungeon.used++; saveGameState();
@@ -1731,7 +1738,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.7.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.7.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
