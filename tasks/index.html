@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f0a500">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>USLED 任務牆 · 譽昇光電</title>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
@@ -230,6 +233,87 @@ img{display:block}
 @keyframes lvfade{from{opacity:0}to{opacity:1}}
 @keyframes lvflash{0%{opacity:0}28%{opacity:.85}100%{opacity:0}}
 @keyframes lvpop{0%{transform:scale(.5);opacity:0}60%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+/* ---------- v3 商店 / 寵物 ---------- */
+.coin-pill{background:rgba(240,165,0,.15);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:3px 11px;font-size:13px;font-weight:700;white-space:nowrap}
+.coin-pill.big{font-size:14px;padding:6px 14px}
+.gc-actionrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 4px}
+.shop-open-btn{flex:1;background:linear-gradient(90deg,var(--accent),#f5b301);color:#1a1205;font-weight:800;border-radius:10px;padding:10px;font-size:14px}
+.shop-open-btn:active{opacity:.85}
+.gc-title-tag{font-size:12px;font-weight:600;color:var(--accent);margin-left:8px}
+.pet-card{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.pet-card.empty{justify-content:center;color:var(--muted);font-size:13px;border-style:dashed;cursor:pointer;text-align:center}
+.pet-emoji{width:52px;text-align:center;flex-shrink:0;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.pet-info{flex:1;min-width:0}
+.pet-name{font-weight:700;font-size:14px}
+.pet-stage{font-size:11px;color:var(--accent);margin-left:7px;font-weight:600}
+.pet-bar{height:7px;border-radius:7px;background:var(--surface);overflow:hidden;margin:6px 0 4px}
+.pet-bar>i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#4ade80);border-radius:7px;transition:width .4s}
+.pet-exp{font-size:10px;color:var(--muted)}
+.feed-row{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.feed-btn{background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:600}
+.feed-btn:active{background:var(--bg)}
+.feed-btn.dis{opacity:.4}
+.pet-switch{display:flex;flex-direction:column;gap:5px}
+.pet-switch button{background:var(--surface);border:1px solid var(--border);border-radius:9px;width:38px;height:38px;font-size:18px}
+.shop-tabs{display:flex;gap:6px;margin-bottom:12px}
+.shop-tab{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:9px;padding:8px 4px;font-size:12px;font-weight:700}
+.shop-tab.active{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
+.slot-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.slot-chip{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:700}
+.slot-chip.on{background:var(--accent);color:#1a1205;border-color:var(--accent)}
+.shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.shop-item{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
+.shop-item.eq{border-color:var(--accent);background:rgba(240,165,0,.1)}
+.shop-item.taken{opacity:.6;filter:grayscale(.5)}
+.shop-slot-h{font-size:12px;font-weight:800;color:var(--accent);margin:12px 2px 8px}
+.si-img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.equip-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.equip-slot{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
+.equip-slot img{width:42px;height:42px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
+.es-empty{font-size:24px;color:var(--muted);width:42px;height:42px;display:flex;align-items:center;justify-content:center}
+.es-pw{font-size:10px;color:var(--accent);font-weight:700}
+.es-name{font-size:11px;color:var(--muted)}
+.char-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:62vh;overflow:auto}
+.char-pick{position:relative;background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:6px;cursor:pointer;aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.char-pick img{height:86%;width:auto;max-width:130%;object-fit:contain;object-position:center}
+.char-pick.on{border-color:var(--accent);background:rgba(240,165,0,.1)}
+.char-pick.lk{opacity:.5;filter:grayscale(1);cursor:not-allowed}
+.char-lk{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:10px;color:#fff;font-weight:700}
+.char-cur{position:absolute;top:5px;right:5px;font-size:9px;background:var(--accent);color:#000;border-radius:6px;padding:1px 5px;font-weight:800}
+.gc-char{position:relative;width:132px;height:150px;margin:0 auto 4px;cursor:pointer;display:flex;align-items:flex-end;justify-content:center}
+.gc-char-img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));position:relative;z-index:1}
+.gc-char-aura{position:absolute;inset:-6% -6% 6%;z-index:0;animation:auraPulse 2.6s ease-in-out infinite}
+@keyframes auraPulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:.78;transform:scale(1.06)}}
+.gc-char-edit{position:absolute;bottom:0;right:4px;z-index:2;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:3px 9px;color:var(--text)}
+/* 副本 / 戰鬥 / 答題 */
+.dungeon-btn{width:100%;margin-top:14px;background:linear-gradient(90deg,#ef4444,#f59e0b);color:#fff;font-weight:800;border-radius:12px;padding:13px;font-size:15px}
+.dungeon-btn:active{opacity:.88}
+.boss-row{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px;margin-bottom:9px}
+.boss-row.lk{opacity:.55}
+.boss-img{width:50px;height:50px;object-fit:contain;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.boss-lk{font-size:12px;color:var(--muted);font-weight:700}
+.battle-boss{width:120px;height:120px;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));animation:bossFloat 2.5s ease-in-out infinite}
+@keyframes bossFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.hp-bar{height:18px;border-radius:10px;background:var(--surface);overflow:hidden;position:relative;margin-top:8px}
+.hp-bar>i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f87171);border-radius:10px;transition:width .4s}
+.hp-bar>span{position:absolute;inset:0;text-align:center;font-size:11px;font-weight:700;line-height:18px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.battle-msg{font-size:13px;font-weight:600;margin-top:10px;min-height:20px;color:var(--accent)}
+.quiz-cat{display:inline-block;font-size:11px;background:var(--surface2);color:var(--muted);border-radius:10px;padding:2px 10px;margin:16px 0 8px}
+.quiz-q{font-size:16px;font-weight:700;line-height:1.5;margin-bottom:14px}
+.quiz-opts{display:grid;gap:9px}
+.quiz-opt{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:13px;font-size:15px;text-align:left}
+.quiz-opt:active{background:var(--accent);color:#1a1205}
+.drop-box{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:10px;margin-top:10px}
+.drop-box img{width:44px;height:44px;object-fit:contain}
+.si-icon{font-size:30px;line-height:1}
+.si-name{font-size:12px;font-weight:600}
+.si-rar{font-size:10px;font-weight:700;margin-top:-3px}
+.pet-emoji.egg{animation:eggWobble 2.2s ease-in-out infinite}
+@keyframes eggWobble{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.buy-btn{background:var(--accent);color:#1a1205;font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
+.buy-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+.equip-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 0;font-size:12px;width:100%;font-weight:600}
+.equip-btn.on{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:800}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
@@ -246,6 +330,7 @@ img{display:block}
     <div class="login-logo">
       <div class="brand">⬡ USLED 任務牆</div>
       <div class="sub">譽昇光電科技 · 四大任務管理</div>
+      <div class="sub" id="loginVer" style="margin-top:6px;color:var(--accent);font-weight:700"></div>
     </div>
     <div class="user-list" id="userList"></div>
     <div style="text-align:center;margin-top:16px;color:var(--muted);font-size:12px">點自己的名字進入 · 看你今天該做的任務</div>
@@ -255,7 +340,7 @@ img{display:block}
 <!-- ============ 主畫面 ============ -->
 <div id="appView" class="hidden">
   <div id="topbar">
-    <div class="brand">⬡ 任務牆</div>
+    <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
@@ -469,6 +554,7 @@ async function login(uid){
   renderBoard();
   initSwipe();
   checkOverdue();
+  await loadGameState();
   checkLevelUp();
 }
 function logout(){
@@ -903,12 +989,20 @@ function achievements(done,sumPts,sumCon,sumFav){
 }
 /* 角色頭像：分層 inline SVG，隨職階自動進化（之後商店配件可再疊層） */
 let AV_SEQ=0;
-function avatarSvg(level,size){
+function frameRing(frameId,u){
+  const col=(typeof FRAME_COLOR!=='undefined'&&FRAME_COLOR[frameId])||'#cbd5e1';
+  if(col==='rainbow') return `<defs><linearGradient id="rb${u}"><stop offset="0" stop-color="#f43f5e"/><stop offset=".33" stop-color="#f59e0b"/><stop offset=".66" stop-color="#22c55e"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><circle cx="50" cy="50" r="47.5" fill="none" stroke="url(#rb${u})" stroke-width="3.5"/>`;
+  return `<circle cx="50" cy="50" r="47.5" fill="none" stroke="${col}" stroke-width="3.5"/>`;
+}
+function cosIcon(id){ const it=(typeof shopItem!=='undefined')&&shopItem(id); return it?it.icon:''; }
+function avatarSvg(level,size,cos){
   const r=rankOf(level), ti=RANKS.indexOf(r), c=r.color, u=++AV_SEQ;
   const helmet=ti>=1, vest=ti>=2, cape=ti>=3, aura=ti>=4, crown=ti>=5;
+  const auraCol=cos&&cos.aura&&typeof AURA_COLOR!=='undefined'?AURA_COLOR[cos.aura]:null;
   return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" style="display:block">
     <defs><radialGradient id="bg${u}" cx="50%" cy="36%" r="72%"><stop offset="0" stop-color="${c}" stop-opacity=".32"/><stop offset="1" stop-color="${c}" stop-opacity=".04"/></radialGradient></defs>
     <circle cx="50" cy="50" r="49" fill="url(#bg${u})"/>
+    ${auraCol?`<defs><radialGradient id="ag${u}" cx="50%" cy="50%" r="52%"><stop offset="38%" stop-color="${auraCol}" stop-opacity="0"/><stop offset="76%" stop-color="${auraCol}" stop-opacity=".65"/><stop offset="100%" stop-color="${auraCol}" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="50" fill="url(#ag${u})"><animate attributeName="opacity" values=".5;1;.5" dur="2.4s" repeatCount="indefinite"/></circle><g opacity=".95">${[0,1,2,3,4,5,6,7].map(i=>`<circle cx="50" cy="6.5" r="${i%2?1.1:1.9}" fill="${auraCol}"><animateTransform attributeName="transform" type="rotate" from="${i*45} 50 50" to="${i*45+360} 50 50" dur="${7+ (i%2?3:0)}s" repeatCount="indefinite"/></circle>`).join('')}</g>`:''}
     ${aura?`<circle cx="50" cy="50" r="45" fill="none" stroke="${c}" stroke-width="2.5" opacity=".7"><animate attributeName="opacity" values=".25;.9;.25" dur="2.2s" repeatCount="indefinite"/></circle>`:''}
     ${cape?`<path d="M34 64 L19 95 L40 86 Z" fill="${c}" opacity=".85"/><path d="M66 64 L81 95 L60 86 Z" fill="${c}" opacity=".85"/>`:''}
     <path d="M30 93 L33 67 Q50 59 67 67 L70 93 Z" fill="${vest?'#f59e0b':'#7c8499'}"/>
@@ -920,6 +1014,10 @@ function avatarSvg(level,size){
     ${helmet?`<rect x="31" y="30" width="38" height="4" rx="2" fill="#eab308"/><path d="M34 31 Q50 14 66 31 Z" fill="#f5b301"/><rect x="48" y="17" width="4" height="13" fill="#eab308"/>`:''}
     ${ti>=2?`<g fill="#9aa3b2"><rect x="67.5" y="70" width="3" height="16" rx="1.5"/><rect x="63.5" y="68" width="11" height="4" rx="1.5"/></g>`:''}
     ${crown?`<path d="M39 20 L43 11 L50 17 L57 11 L61 20 Z" fill="#ffd700" stroke="#e0a800" stroke-width="1"/><circle cx="50" cy="13" r="1.6" fill="#fff"/>`:''}
+    ${cos&&cos.hand?`<text x="74" y="86" font-size="15" text-anchor="middle">${cosIcon(cos.hand)}</text>`:''}
+    ${cos&&cos.glasses?`<text x="50" y="44" font-size="14" text-anchor="middle">${cosIcon(cos.glasses)}</text>`:''}
+    ${cos&&cos.hat?`<text x="50" y="24" font-size="20" text-anchor="middle">${cosIcon(cos.hat)}</text>`:''}
+    ${cos&&cos.frame?frameRing(cos.frame,u):''}
   </svg>`;
 }
 /* 個人中心的即時等級卡（取代原「即將開放」） */
@@ -930,10 +1028,10 @@ function gameCardHtml(sumPts,sumCon,sumFav,done){
   return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
     <div class="gp-glow" style="background:${c}"></div>
     <div class="gp-top">
-      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${avatarSvg(g.level,44)}</div>
+      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${avatarSvg(g.level,44,GS&&GS.equipped)}</div>
       <div class="gp-meta">
         <div class="gp-rank">${g.rank.name}<span class="gp-lvl" style="background:${c}">Lv.${g.level}</span></div>
-        <div class="gp-power">⚔️ 戰力 ${g.power}</div>
+        <div class="gp-power">⚔️ 戰力 ${g.power+gearPower()}</div>
       </div>
       <div class="gp-arrow">›</div>
     </div>
@@ -962,9 +1060,9 @@ function showGameCenter(){
     </div>
     <div class="gc-hero" style="background:${c}1a">
       <div class="gc-glow" style="background:radial-gradient(circle at 50% 30%,${c},transparent 70%)"></div>
-      <div class="gc-ava" style="border-color:${c};box-shadow:0 0 24px ${c}66">${avatarSvg(g.level,84)}</div>
-      <div class="gc-rank" style="color:${c}">${g.rank.name}</div>
-      <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power}</div>
+      ${charHeroHtml()}
+      <div class="gc-rank" style="color:${c}">${g.rank.name}${GS&&GS.title?`<span class="gc-title-tag">「${(shopItem(GS.title)||{}).name||''}」</span>`:''}</div>
+      <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power+gearPower()}</div>
       <div class="gc-statrow">
         <div class="gc-stat"><b style="color:#fbbf24">${sumPts}</b><span>T 點</span></div>
         <div class="gc-stat"><b style="color:#22c55e">${sumCon}</b><span>貢獻值</span></div>
@@ -973,6 +1071,16 @@ function showGameCenter(){
       <div class="gc-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
       <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
     </div>
+    <div class="gc-actionrow">
+      <span class="coin-pill big">🪙 ${coinBalance()} 獎勵幣</span>
+      <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
+      ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button>`:''}
+    </div>
+    <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
+    ${equipPanelHtml()}
+    <button class="dungeon-btn" onclick="showDungeon()">⚔️ 副本闖關 · 答題打 Boss（今日剩 ${dungeonLeft()} 次）</button>
+    <div class="detail-label">🐾 我的夥伴</div>
+    ${petCardHtml()}
     <div class="detail-label">📈 成長曲線</div>
     ${growthChartSvg(mine)}
     <div class="detail-label" style="margin-top:14px">🏅 成就徽章（${gotN}/${achs.length}）</div>
@@ -1026,7 +1134,7 @@ function playLevelUpCeremony(level){
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='lvupMask';
   o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
     <div class="lvup-card">
-      <div class="lvup-ava" style="border-color:${c};box-shadow:0 0 30px ${c}">${avatarSvg(level,104)}</div>
+      <div class="lvup-ava" style="border-color:${c};box-shadow:0 0 30px ${c}">${avatarSvg(level,104,GS&&GS.equipped)}</div>
       <div class="lvup-title">LEVEL UP!</div>
       <div class="lvup-lv" style="color:${c}">Lv.${level}　${r.name}</div>
       <div class="lvup-hint">你的付出，又前進了一步 ✨（點一下關閉）</div>
@@ -1047,6 +1155,372 @@ function checkLevelUp(){
   if(isNaN(prev)){ localStorage.setItem(key,String(lvl)); return; }   // 第一次只記錄不慶祝
   if(lvl!==prev) localStorage.setItem(key,String(lvl));
   if(lvl>prev) playLevelUpCeremony(lvl);
+}
+
+/* ===================================================================
+   遊戲化 v3：獎勵幣商店 + 寵物養成（純外觀，疊在等級頭像上）
+   - 獎勵幣「賺」從完成任務衍生(跨裝置)；「花費/持有/寵物」存玩家狀態表
+   - 寵物只成長不退化、不挨餓、無冷卻 → 非時間黑洞
+   =================================================================== */
+const COIN_PER_TPTS = 10;          // 每 10 點實得 T 點 = 1 獎勵幣
+// 外觀（光環 SVG glow + 稱號，疊在頭像）
+const SHOP = {
+  aura:[
+    {id:'au_flame',name:'烈焰光環',icon:'🔥',price:14}, {id:'au_ice',name:'冰晶光環',icon:'❄️',price:14}, {id:'au_jade',name:'翡翠光環',icon:'🍀',price:16},
+    {id:'au_rose',name:'玫瑰光環',icon:'🌸',price:18}, {id:'au_star',name:'星輝光環',icon:'🌟',price:22}, {id:'au_holy',name:'黃金聖光',icon:'☀️',price:35}],
+  title:[ {id:'ti_diligent',name:'勤奮之星',icon:'⭐',price:8}, {id:'ti_earlybird',name:'早起鳥',icon:'🌅',price:8}, {id:'ti_coffee',name:'咖啡成癮',icon:'☕',price:8}, {id:'ti_lucky',name:'錦鯉附身',icon:'🍀',price:10}, {id:'ti_boss',name:'老闆愛將',icon:'💼',price:15}, {id:'ti_ace',name:'譽昇王牌',icon:'👑',price:30}],
+};
+const AURA_COLOR  = {au_flame:'#ff6b35', au_ice:'#38bdf8', au_jade:'#34d399', au_rose:'#f472b6', au_star:'#a855f7', au_holy:'#fbbf24'};
+// 角色（17 隻 y708；高等級解鎖更帥的）
+const CHARS=[]; for(let _i=1;_i<=17;_i++){ if(_i===7) continue; CHARS.push({id:'c'+_i, file:'character_'+String(_i).padStart(2,'0')+'.png', minLevel:_i<=10?1:(_i<=14?5:10)}); }   // #7 蝙蝠款與 #8 重複，移除
+function charFile(id){ const c=CHARS.find(x=>x.id===id)||CHARS[0]; return 'assets/game/char/'+c.file; }
+// 裝備 6 部位（y708 圖示，帶戰力；史詩/傳說需等級解鎖＝白帽成就＋黑帽稀缺）
+const EQUIP_SLOTS=[
+  {slot:'weapon',name:'武器',base:10,n:12,pad:2}, {slot:'hat',name:'頭盔',base:7,n:12,pad:2},
+  {slot:'shirt',name:'護甲',base:8,n:12,pad:2},  {slot:'shoes',name:'鞋子',base:5,n:12,pad:2},
+  {slot:'necklace',name:'項鍊',base:6,n:9,pad:1},{slot:'ring',name:'戒指',base:5,n:9,pad:1},
+];
+const SLOTNAME={}; EQUIP_SLOTS.forEach(s=>SLOTNAME[s.slot]=s.name);
+const EQUIP={};
+EQUIP_SLOTS.forEach(s=>{ EQUIP[s.slot]=[]; for(let i=1;i<=s.n;i++){ const r=Math.min(5,Math.floor((i-1)/(s.n/5))+1); const num=s.pad===2?String(i).padStart(2,'0'):String(i); EQUIP[s.slot].push({id:s.slot+'_'+i, slot:s.slot, file:'icon_128_equip_'+s.slot+'_'+num+'.png', r, power:r*s.base, price:[0,8,18,40,80,150][r], minLevel:[0,1,1,1,10,20][r]}); } });
+function equipItem(id){ for(const k in EQUIP){ const it=EQUIP[k].find(x=>x.id===id); if(it) return it; } return null; }
+function equipFile(id){ const it=equipItem(id); return it?'assets/game/equip/'+it.file:''; }
+function gearPower(){ if(!GS||!GS.gear) return 0; let s=0; for(const k in GS.gear){ const it=GS.gear[k]&&equipItem(GS.gear[k]); if(it) s+=it.power; } return s; }
+const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
+const PETS = [
+  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:14}, {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:16},
+  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:18}, {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:18},
+  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:28}, {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:30}, {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:32},
+  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:44}, {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:46},
+  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:60}, {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:66}, {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:72},
+  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:100,unique:true}, {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:110,unique:true},
+];
+const FEED = [
+  {id:'feed_s',name:'小食',icon:'🍎',price:5,exp:8}, {id:'feed_m',name:'中食',icon:'🍖',price:12,exp:20}, {id:'feed_l',name:'大餐',icon:'🍱',price:25,exp:45},
+];
+// 進化階級（參考 speed-training-base：4 階 EXP 30/80/200/480，前面加「蛋」階段，買來孵化）
+const PET_STAGES = [ {min:0,name:'蛋',scale:0.85,egg:true}, {min:30,name:'幼體',scale:1.0}, {min:80,name:'成長期',scale:1.25}, {min:200,name:'成熟期',scale:1.55}, {min:480,name:'完全體',scale:1.9} ];
+function petEmoji(id,exp){ return petStage(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
+const SLOTS = ['hat','glasses','hand','frame','aura'];
+function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return PETS.find(x=>x.id===id)||FEED.find(x=>x.id===id)||null; }
+function petDef(id){ return PETS.find(x=>x.id===id); }
+function petStage(exp){ let s=PET_STAGES[0],i=0; PET_STAGES.forEach((x,ix)=>{ if(exp>=x.min){s=x;i=ix;} }); const next=PET_STAGES[i+1]; return {...s, idx:i, next, toNext: next?next.min-exp:0, span: next?next.min-s.min:1, into: exp-s.min }; }
+
+/* 玩家狀態：賺=衍生，花費/持有/寵物=存檔 */
+const GAME_STORE = {
+  PATH: '/check-in-system/12',   // 遊戲狀態表（Jason 2026-06-06 建）
+  F: { email:1003072, name:1003073, balance:1003074, save:1003075, updated:1003076 },   // 遊戲狀態表欄位 ID（已驗證）
+  N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
+};
+let GS = null;
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null}; }
+function userEarnedCoins(uid){
+  const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
+  const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  return Math.floor(tp/COIN_PER_TPTS);
+}
+function coinBalance(){ return userEarnedCoins(STATE.user.id) + ((GS&&GS.bonus)||0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }
+function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
+async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 獎勵幣'); refreshGameUI(); }
+async function ragicFetchGS(suffix, opts){
+  const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
+  const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
+  return await fetch(url, Object.assign({},opts,{headers}));
+}
+async function loadGameState(){
+  GS=blankGS();
+  if(!STATE.user) return;
+  if(CONFIG.MODE!=='CLOUD'){ try{ const v=localStorage.getItem('usled_gs_'+STATE.user.id); if(v) GS=Object.assign(blankGS(),JSON.parse(v)); }catch(e){} return; }
+  try{
+    const r=await ragicFetchGS('?api',{method:'GET'}); const json=await r.json();
+    const email=(STATE.user.email||'').toLowerCase();
+    STATE.uniqueOwners={}; let best=null, bestTs=-1;
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||rec._ragicId==null) return;   // 注意：_ragicId 可能=0，不能用 falsy 判斷
+      const recEmail=String(rec[GAME_STORE.N.email]||'').toLowerCase();
+      let pst={}; try{ pst=JSON.parse(rec[GAME_STORE.N.save]||'{}'); }catch(e){}
+      if(recEmail===email){ const ts=+rec._dataTimestamp||0; if(ts>=bestTs){ bestTs=ts; best={rec,pst}; } }   // 同 email 多筆取最新
+      if(pst.pets) Object.keys(pst.pets).forEach(pid=>{ const pd=petDef(pid); if(pd&&pd.unique) STATE.uniqueOwners[pid]=rec[GAME_STORE.N.name]||recEmail; });
+    });
+    if(best){ GS=Object.assign(blankGS(), best.pst); GS._ragicId=best.rec._ragicId; }
+  }catch(e){ /* 讀不到就用空檔，不擋使用 */ }
+}
+async function saveGameState(){
+  if(!STATE.user||!GS) return;
+  GS.updated = isoToRagic(new Date().toISOString());
+  if(CONFIG.MODE!=='CLOUD'){ localStorage.setItem('usled_gs_'+STATE.user.id, JSON.stringify(GS)); return; }
+  if(!GAME_STORE.F.save){ return; }   // 欄位 ID 未設定前不寫雲端（避免空寫）
+  const F=GAME_STORE.F, fd=new FormData();
+  const clean=Object.assign({},GS); delete clean._ragicId;
+  fd.append(F.email, STATE.user.email||''); fd.append(F.name, STATE.user.name||'');
+  fd.append(F.balance, String(coinBalance())); fd.append(F.save, JSON.stringify(clean)); fd.append(F.updated, GS.updated);
+  const suffix=(GS._ragicId!=null)?('/'+GS._ragicId+'?api'):'?api';   // _ragicId 可能=0，用 !=null
+  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); const j=await r.json(); const rid=j&&(j.ragicId!=null?j.ragicId:(j._ragicId!=null?j._ragicId:null)); if(rid!=null&&GS._ragicId==null) GS._ragicId=rid; }catch(e){ toast('雲端存檔失敗，稍後再試'); }
+}
+/* 動作 */
+function owns(id){ return GS&&GS.owned.includes(id); }
+async function buyItem(id){
+  const it=shopItem(id); if(!it||owns(id)) return;
+  const eq=equipItem(id);
+  if(eq && it.minLevel && userGameLevel(STATE.user.id) < it.minLevel){ toast('需 Lv.'+it.minLevel+' 才能入手「'+PET_RARITY[it.r].name+SLOTNAME[it.slot]+'」🔒'); return; }
+  if(coinBalance()<it.price){ toast('獎勵幣不足 🪙'); return; }
+  GS.owned.push(id); GS.spent+=it.price;
+  if(eq){ GS.gear=GS.gear||{}; GS.gear[it.slot]=id; }              // 裝備買了自動裝上
+  else if(it.slot==='title'){ GS.title=id; }
+  else { GS.equipped[it.slot]=id; }                                // 光環
+  await saveGameState(); toast('已入手 '+(eq?(PET_RARITY[it.r].name+SLOTNAME[it.slot]):it.name)+' ✓'); refreshGameUI();
+}
+async function buyPet(id){
+  const p=petDef(id); if(!p||(GS.pets&&GS.pets[id])) return;
+  if(p.unique && STATE.uniqueOwners && STATE.uniqueOwners[id]){ toast('這是公司唯一，已被 '+STATE.uniqueOwners[id]+' 領養了 🔒'); return; }
+  if(coinBalance()<p.price){ toast('獎勵幣不足 🪙'); return; }
+  GS.pets=GS.pets||{}; GS.pets[id]={exp:0}; GS.spent+=p.price;
+  if(!GS.activePet) GS.activePet=id;
+  if(p.unique){ STATE.uniqueOwners=STATE.uniqueOwners||{}; STATE.uniqueOwners[id]=STATE.user.name; }  // 樂觀鎖定（領養不可取消）
+  await saveGameState(); toast('帶回了 '+(p.unique?'公司唯一的 ':'')+p.name+' 的蛋 🥚 — 餵食孵化吧！'); refreshGameUI();
+}
+async function feedActivePet(feedId){
+  if(!GS.activePet||!GS.pets[GS.activePet]){ toast('先到商店帶一隻寵物 🐾'); return; }
+  const f=FEED.find(x=>x.id===feedId); if(!f) return;
+  if(coinBalance()<f.price){ toast('獎勵幣不足 🪙'); return; }
+  const name=petDef(GS.activePet).name, b=petStage(GS.pets[GS.activePet].exp);
+  GS.pets[GS.activePet].exp+=f.exp; GS.spent+=f.price;
+  const a=petStage(GS.pets[GS.activePet].exp);
+  await saveGameState();
+  if(b.egg && !a.egg) toast('🐣 孵化了！'+name+' 誕生 ✨');
+  else if(a.idx>b.idx) toast('🎉 '+name+' 進化到「'+a.name+'」！');
+  else toast(name+(b.egg?' 的蛋':'')+' 吃了 '+f.name+'，+'+f.exp+' 經驗 '+f.icon);
+  refreshGameUI();
+}
+async function toggleEquip(id){
+  const it=shopItem(id); if(!it||!owns(id)) return;
+  if(equipItem(id)){ GS.gear=GS.gear||{}; GS.gear[it.slot] = GS.gear[it.slot]===id?null:id; }
+  else if(it.slot==='title'){ GS.title = GS.title===id?null:id; }
+  else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
+  await saveGameState(); refreshGameUI();
+}
+function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return; if(userGameLevel(STATE.user.id)<c.minLevel){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; } GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
+function showCharPick(){
+  const lvl=userGameLevel(STATE.user.id), cur=(GS&&GS.charId)||'c1';
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
+    <div class="char-grid">${CHARS.map(c=>{ const lk=lvl<c.minLevel; return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
+  </div>`;
+  mask.onclick=closeCharPick; document.body.appendChild(mask);
+}
+function closeCharPick(){ const m=document.getElementById('charPickModal'); if(m)m.remove(); }
+function charHeroHtml(){
+  const cid=(GS&&GS.charId)||'c1';
+  const auraId=GS&&GS.equipped&&GS.equipped.aura, auraCol=auraId&&AURA_COLOR[auraId];
+  return `<div class="gc-char" onclick="showCharPick()">
+    ${auraCol?`<div class="gc-char-aura" style="background:radial-gradient(circle,${auraCol},transparent 62%)"></div>`:''}
+    <img src="${charFile(cid)}" class="gc-char-img" alt="">
+    <span class="gc-char-edit">🦸 換角色</span>
+  </div>`;
+}
+function equipPanelHtml(){
+  return `<div class="equip-panel">${EQUIP_SLOTS.map(s=>{ const id=GS&&GS.gear&&GS.gear[s.slot], it=id&&equipItem(id); const rc=it?PET_RARITY[it.r].color:'var(--border)';
+    return `<div class="equip-slot" style="border-color:${rc}" onclick="showShop('eq_${s.slot}')">${it?`<img src="${equipFile(id)}"><span class="es-pw">⚔️${it.power}</span>`:`<span class="es-empty">＋</span>`}<span class="es-name">${s.name}</span></div>`;
+  }).join('')}</div>`;
+}
+function equipCard(it){
+  const owned=owns(it.id), equipped=GS.gear&&GS.gear[it.slot]===it.id, bal=coinBalance(), rc=PET_RARITY[it.r].color;
+  const locked=it.minLevel&&userGameLevel(STATE.user.id)<it.minLevel;
+  let action;
+  if(equipped) action=`<button class="equip-btn on" onclick="toggleEquip('${it.id}')">裝備中 ✓</button>`;
+  else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button>`;
+  else if(locked) action=`<button class="buy-btn dis" disabled>🔒 Lv.${it.minLevel}</button>`;
+  else action=`<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')">🪙 ${it.price}</button>`;
+  return `<div class="shop-item${equipped?' eq':''}" style="border-color:${rc}66"><img class="si-img" src="${equipFile(it.id)}" loading="lazy"><div class="si-name" style="color:${rc}">${PET_RARITY[it.r].name}</div><div class="si-rar">⚔️ ${it.power}</div>${action}</div>`;
+}
+async function setActivePet(id){ if(GS.pets&&GS.pets[id]){ GS.activePet=id; await saveGameState(); refreshGameUI(); } }
+function refreshGameUI(){ const g=document.getElementById('gameModal'); if(g){ closeGameCenter(); showGameCenter(); } const s=document.getElementById('shopModal'); if(s){ closeShop(); showShop(); } }
+/* 寵物卡（角色養成中心；只成長、可餵食、可切換夥伴） */
+function petCardHtml(){
+  if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet])
+    return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`;
+  const id=GS.activePet, p=petDef(id), st=GS.pets[id], stg=petStage(st.exp);
+  const pct=stg.next?Math.round(stg.into/stg.span*100):100;
+  const others=Object.keys(GS.pets).filter(x=>x!==id);
+  const bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const expTxt = stg.egg ? ('孵化倒數：再餵 '+stg.toNext+' 經驗就破殼 🥚')
+    : (stg.next?('經驗 '+st.exp+'｜距「'+stg.next.name+'」還差 '+stg.toNext):('已完全體 ✨ 經驗 '+st.exp));
+  return `<div class="pet-card">
+    <div class="pet-emoji${stg.egg?' egg':''}" style="font-size:${Math.round(30*stg.scale)}px">${petEmoji(id,st.exp)}</div>
+    <div class="pet-info">
+      <div class="pet-name">${stg.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${PET_RARITY[p.r].name}${stg.egg?'':'·'+stg.name}</span></div>
+      <div class="pet-bar"><i style="width:${pct}%;background:${stg.egg?'linear-gradient(90deg,#f0a500,#fbbf24)':''}"></i></div>
+      <div class="pet-exp">${expTxt}</div>
+      <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·🪙${f.price}</button>`).join('')}</div>
+    </div>
+    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
+  </div>`;
+}
+/* 商店 */
+function shopCosCard(it){
+  const owned=owns(it.id);
+  const equipped = it.slot==='title' ? GS.title===it.id : GS.equipped[it.slot]===it.id;
+  const bal=coinBalance();
+  const action = !owned
+    ? `<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')">🪙 ${it.price}</button>`
+    : `<button class="equip-btn${equipped?' on':''}" onclick="toggleEquip('${it.id}')">${equipped?(it.slot==='title'?'使用中 ✓':'裝備中 ✓'):'點我裝備'}</button>`;
+  return `<div class="shop-item${equipped?' eq':''}"><div class="si-icon">${it.icon}</div><div class="si-name">${it.name}</div>${action}</div>`;
+}
+function shopPetCard(p){
+  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const owners=STATE.uniqueOwners||{}, takenByOther = p.unique && owners[p.id] && !owned;
+  let action;
+  if(owned) action=`<button class="equip-btn${active?' on':''}" onclick="setActivePet('${p.id}')">${active?'夥伴中 ✓':'設為夥伴'}</button>`;
+  else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
+  else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')">🪙 ${p.price}</button>`;
+  const rar = p.unique ? `${PET_RARITY[p.r].name} · ${takenByOther?('👑'+owners[p.id]):'👑唯一'}` : PET_RARITY[p.r].name;
+  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}66"><div class="si-icon">${p.icon}</div><div class="si-name">${p.name}蛋</div><div class="si-rar" style="color:${rc}">${rar}</div>${action}</div>`;
+}
+function showShop(tab){
+  if(!STATE.user) return;
+  if(tab&&tab.indexOf('eq_')===0){ STATE.shopSlot=tab.slice(3); tab='eq'; }
+  STATE.shopTab = tab || STATE.shopTab || 'eq';
+  STATE.shopSlot = STATE.shopSlot || 'weapon';
+  const t=STATE.shopTab, bal=coinBalance();
+  const tabBtn=(id,label)=>`<button class="shop-tab${t===id?' active':''}" onclick="showShop('${id}')">${label}</button>`;
+  let body;
+  if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
+    body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
+  else if(t==='deco') body=`<div class="shop-grid">${[...SHOP.aura,...SHOP.title].map(x=>shopCosCard({...x,slot:shopItem(x.id).slot})).join('')}</div>`;
+  else body=`<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`;
+  const old=document.getElementById('shopModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='shopModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🛒 獎勵幣商店</h3>
+      <div style="display:flex;align-items:center;gap:10px"><span class="coin-pill">🪙 ${bal}</span><button class="t-expand" onclick="closeShop()" style="font-size:18px">✕</button></div>
+    </div>
+    <div class="shop-tabs">${tabBtn('eq','⚔️ 裝備')}${tabBtn('deco','✨ 光環/稱號')}${tabBtn('pet','🐾 寵物')}</div>
+    ${body}
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">獎勵幣＝完成任務賺的（每 ${COIN_PER_TPTS} 點實得 T 點換 1 🪙）。裝備加戰力、史詩/傳說需等級解鎖；三點數不會被扣 ✨</div>
+  </div>`;
+  mask.onclick=closeShop; document.body.appendChild(mask);
+}
+function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remove(); }
+/* ===================================================================
+   Stage 2 副本闖關：答題(知識+智力) → 答對發動攻擊 → 攻擊力吃裝備加成
+   每日限次(防掛機)；贏了掉獎勵幣+裝備。白帽：邊玩邊長知識
+   =================================================================== */
+const DUNGEON_DAILY = 5;                  // 每日挑戰次數
+const BOSSES = [
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:60,  reward:30,  dropR:2, minLevel:1},
+  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, reward:55,  dropR:3, minLevel:5},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:240, reward:90,  dropR:4, minLevel:10},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:400, reward:150, dropR:5, minLevel:18},
+];
+const QUIZ = [
+  // 智力測驗
+  {q:'數列 2, 4, 8, 16, ？',a:['24','30','32','64'],c:2,cat:'智力'},
+  {q:'下列何者是質數？',a:['9','15','17','21'],c:2,cat:'智力'},
+  {q:'100 的 15% 是多少？',a:['10','15','20','150'],c:1,cat:'智力'},
+  {q:'直角是幾度？',a:['45','60','90','180'],c:2,cat:'智力'},
+  {q:'下列分數何者最大？',a:['1/2','1/3','1/4','1/5'],c:0,cat:'智力'},
+  {q:'一年中有幾個月有 31 天？',a:['4','5','7','12'],c:2,cat:'智力'},
+  {q:'若 3 個工人 3 天做 3 張桌子，9 個工人 9 天做幾張？',a:['9','27','3','81'],c:1,cat:'智力'},
+  // 常識
+  {q:'一打（dozen）是幾個？',a:['10','12','16','24'],c:1,cat:'常識'},
+  {q:'一公里等於幾公尺？',a:['100','500','1000','10000'],c:2,cat:'常識'},
+  {q:'台灣最高的山是？',a:['玉山','雪山','合歡山','阿里山'],c:0,cat:'常識'},
+  {q:'圓周率 π 約等於？',a:['2.14','3.14','4.13','3.41'],c:1,cat:'常識'},
+  {q:'「事半功倍」是什麼意思？',a:['效率很高','非常辛苦','一定失敗','需要加班'],c:0,cat:'常識'},
+  {q:'紅綠燈哪個顏色可以通行？',a:['紅','黃','綠','都可以'],c:2,cat:'常識'},
+  // 職場
+  {q:'滅火器口訣「拉、瞄、壓、掃」第一步是？',a:['壓把手','拉插銷','瞄火源','掃射'],c:1,cat:'職場'},
+  {q:'收到客訴，最好的第一步是？',a:['先辯解','先傾聽了解','已讀不回','推給別人'],c:1,cat:'職場'},
+  {q:'工作交接最重要的是？',a:['口頭帶過','留下清楚記錄','不用交接','只告訴朋友'],c:1,cat:'職場'},
+  {q:'開會不小心遲到，較得體的做法？',a:['安靜入座、事後致歉','大聲解釋原因','乾脆不參加','責怪塞車'],c:0,cat:'職場'},
+  // 產品（LED／字幕機）
+  {q:'LED 顯示螢幕規格「P10」的 P 代表什麼？',a:['亮度','點間距(mm)','功率','總畫素'],c:1,cat:'產品'},
+  {q:'全彩 LED 的三原色是？',a:['紅綠藍(RGB)','紅黃藍','青洋紅黃','黑白灰'],c:0,cat:'產品'},
+  {q:'戶外 LED 看板防水等級通常至少要求？',a:['IP20','IP44','IP65','不需防水'],c:2,cat:'產品'},
+  {q:'LED 點間距越小代表？',a:['畫面越細緻','越便宜','越省電','字越大'],c:0,cat:'產品'},
+  {q:'下列何者「不是」字幕機控制卡常見的傳輸方式？',a:['網路 TCP','RS485','USB','藍牙煮飯'],c:3,cat:'產品'},
+  {q:'LED 模組「16×16」通常是指？',a:['16列×16行像素','16 公分','16 瓦','16 種顏色'],c:0,cat:'產品'},
+  {q:'譽昇光電(USLED)主要產品領域是？',a:['LED 字幕機/顯示看板','賣咖啡','旅遊業','服飾'],c:0,cat:'產品'},
+];
+function dungeonDay(){ return new Date().toISOString().slice(0,10); }
+function dungeonLeft(){ if(!GS) return DUNGEON_DAILY; const d=GS.dungeon; if(!d||d.day!==dungeonDay()) return DUNGEON_DAILY; return Math.max(0,DUNGEON_DAILY-(d.used||0)); }
+function attackPower(){ return 10 + gearPower(); }
+function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>{ if(it.r<=maxR && !(GS.owned||[]).includes(it.id)) pool.push(it); }); return pool.length?pool[Math.floor(Math.random()*pool.length)]:null; }
+function showDungeon(){
+  if(!STATE.user) return;
+  const lvl=userGameLevel(STATE.user.id), left=dungeonLeft();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='dungeonModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對知識/智力題就攻擊，攻擊力＝10＋裝備戰力。今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
+    ${BOSSES.map(b=>{ const lk=lvl<b.minLevel; return `<div class="boss-row${lk?' lk':''}">
+      <img src="assets/game/mob/${b.file}" class="boss-img">
+      <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 🪙${b.reward}＋掉寶</div></div>
+      ${lk?`<span class="boss-lk">🔒Lv.${b.minLevel}</span>`:`<button class="buy-btn" style="width:auto;padding:6px 14px" ${left<=0?'disabled':''} onclick="startBattle('${b.id}')">${left<=0?'次數用完':'挑戰'}</button>`}
+    </div>`; }).join('')}
+  </div>`;
+  mask.onclick=closeDungeon; document.body.appendChild(mask);
+}
+function closeDungeon(){ const m=document.getElementById('dungeonModal'); if(m)m.remove(); }
+function startBattle(bossId){
+  const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
+  if(userGameLevel(STATE.user.id)<b.minLevel){ toast('需 Lv.'+b.minLevel); return; }
+  if(dungeonLeft()<=0){ toast('今天挑戰次數用完了，明天再來 💪'); return; }
+  if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
+  GS.dungeon.used++; saveGameState();
+  const order=QUIZ.map((_,i)=>i); for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
+  STATE.battle={boss:b, hp:b.hp, mistakes:0, order, qi:0, msg:'答對題目就能攻擊！'};
+  closeDungeon(); renderBattle();
+}
+function renderBattle(){
+  const bt=STATE.battle; if(!bt) return; const b=bt.boss, q=QUIZ[bt.order[bt.qi]];
+  const hpPct=Math.max(0,Math.round(bt.hp/b.hp*100));
+  const old=document.getElementById('battleModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="text-align:center">
+      <img src="assets/game/mob/${b.file}" class="battle-boss">
+      <div style="font-weight:800;margin-top:4px">${b.name}</div>
+      <div class="hp-bar"><i style="width:${hpPct}%"></i><span>${Math.max(0,bt.hp)} / ${b.hp}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 你的攻擊力 ${attackPower()}　｜　❤️ 失誤 ${bt.mistakes}/3</div>
+      <div class="battle-msg">${bt.msg}</div>
+    </div>
+    <div class="quiz-cat">${q.cat}題</div>
+    <div class="quiz-q">${q.q}</div>
+    <div class="quiz-opts">${q.a.map((opt,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${opt}</button>`).join('')}</div>
+    <button class="t-expand" onclick="quitBattle()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">放棄離開</button>
+  </div>`;
+  document.body.appendChild(mask);
+}
+function answerQuiz(idx){
+  const bt=STATE.battle; if(!bt) return; const q=QUIZ[bt.order[bt.qi]];
+  if(idx===q.c){ const crit=Math.random()<0.25; const dmg=attackPower()*(crit?2:1); bt.hp-=dmg; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害'; if(bt.hp<=0) return endBattle(true); }
+  else { bt.mistakes++; bt.msg='✗ 答錯（正解：'+q.a[q.c]+'）失誤 '+bt.mistakes+'/3'; if(bt.mistakes>=3) return endBattle(false); }
+  bt.qi=(bt.qi+1)%bt.order.length; renderBattle();
+}
+function quitBattle(){ STATE.battle=null; const m=document.getElementById('battleModal'); if(m)m.remove(); showDungeon(); }
+async function endBattle(win){
+  const bt=STATE.battle, b=bt.boss; STATE.battle=null;
+  let drop=null;
+  if(win){ GS.won=(GS.won||0)+b.reward; if(Math.random()<0.6){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); } }
+  saveGameState();   // 背景存檔，不擋結算畫面
+  const m=document.getElementById('battleModal'); if(m) m.remove();
+  const left=dungeonLeft();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+    <div style="font-size:46px">${win?'🏆':'💀'}</div>
+    <h3 style="margin:6px 0">${win?'闖關成功！':'戰敗了…'}</h3>
+    ${win?`<div style="color:var(--accent);font-weight:800;font-size:18px">＋${b.reward} 獎勵幣 🪙</div>
+      ${drop?`<div class="drop-box"><img src="${equipFile(drop.id)}"><div>掉落：<b style="color:${PET_RARITY[drop.r].color}">${PET_RARITY[drop.r].name}${SLOTNAME[drop.slot]}</b>（⚔️${drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`
+      :`<div style="font-size:13px;color:var(--muted)">失誤 3 次了。裝備越好攻擊越高、答題更穩就能贏 💪</div>`}
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">今日剩 ${left}/${DUNGEON_DAILY} 次</div>
+    <div class="modal-actions" style="margin-top:14px">
+      ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
+      <button class="equip-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();refreshGameUI()">關閉</button>
+    </div>
+  </div>`;
+  document.body.appendChild(mask);
 }
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
@@ -1091,7 +1565,9 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-document.getElementById('modeFlag').textContent = CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式';
+const APP_VERSION = 'v0.6.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+(function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
+document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
 /* ===================================================================
    長按拖曳：把任務拖到其他象限改分類（主管限定）
