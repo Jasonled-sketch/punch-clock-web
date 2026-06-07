@@ -320,7 +320,18 @@ img{display:block}
 .chest-shake{animation:chestShake .7s ease-in-out}
 @keyframes chestShake{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg) scale(1.05)}30%{transform:rotate(12deg)}45%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}75%{transform:rotate(-6deg)}}
 .chest-flash{position:fixed;inset:0;z-index:210;pointer-events:none;animation:chestFlash .65s ease-out}
-@keyframes chestFlash{0%{opacity:0}35%{opacity:.9}100%{opacity:0}}
+@keyframes chestFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+.chest-box{animation:chestGlow 1.4s ease-in-out infinite}
+@keyframes chestGlow{0%,100%{filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}50%{filter:drop-shadow(0 0 22px #f0a500)}}
+.chest-pop{animation:chestPop .55s cubic-bezier(.2,1.6,.4,1)!important}
+@keyframes chestPop{0%{transform:scale(.6)}60%{transform:scale(1.35)}100%{transform:scale(1)}}
+.reward-pop{animation:rewardPop .55s cubic-bezier(.2,1.6,.4,1)}
+@keyframes rewardPop{0%{opacity:0;transform:scale(.5)}60%{transform:scale(1.2)}100%{opacity:1;transform:scale(1)}}
+.burst{position:absolute;left:50%;top:32%;width:0;height:0;z-index:6;pointer-events:none}
+.burst span{position:absolute;left:0;top:0;font-size:22px;animation:burstFly 1s ease-out forwards}
+@keyframes burstFly{0%{opacity:0;transform:rotate(var(--a)) translateY(0) scale(.4)}25%{opacity:1}100%{opacity:0;transform:rotate(var(--a)) translateY(calc(-1 * var(--d))) scale(1.3)}}
+.screen-shake{animation:screenShake .5s ease}
+@keyframes screenShake{0%,100%{transform:translate(0,0)}20%{transform:translate(-6px,3px)}40%{transform:translate(5px,-4px)}60%{transform:translate(-4px,2px)}80%{transform:translate(3px,-2px)}}
 .si-icon{font-size:30px;line-height:1}
 .si-name{font-size:12px;font-weight:600}
 .si-rar{font-size:10px;font-weight:700;margin-top:-3px}
@@ -1145,6 +1156,26 @@ function sfxLevelUp(){
     });
   }catch(e){}
 }
+/* 獲獎音效：上行琶音 → 結尾大和弦 → 高音閃爍（澎湃感） */
+function sfxVictory(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return; const ac=new AC(), t0=ac.currentTime;
+    const mas=ac.createGain(); mas.gain.value=0.32; mas.connect(ac.destination);
+    [523.25,659.25,783.99,1046.5,1318.5].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='square'; o.frequency.value=f; o.connect(g); g.connect(mas); const t=t0+i*0.11; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.5,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22); o.start(t); o.stop(t+0.24); });
+    const ct=t0+5*0.11;
+    [523.25,659.25,783.99,1046.5].forEach(f=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='triangle'; o.frequency.value=f; o.connect(g); g.connect(mas); g.gain.setValueAtTime(0.0001,ct); g.gain.exponentialRampToValueAtTime(0.45,ct+0.03); g.gain.exponentialRampToValueAtTime(0.0001,ct+1.1); o.start(ct); o.stop(ct+1.15); });
+    [1568,2093,2637].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain(); o.type='sine'; o.frequency.value=f; o.connect(g); g.connect(mas); const t=ct+0.08+i*0.07; g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.01); g.gain.exponentialRampToValueAtTime(0.0001,t+0.35); o.start(t); o.stop(t+0.37); });
+  }catch(e){}
+}
+/* 開箱音效：上升 whoosh → 頂端鈴聲 */
+function sfxChest(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return; const ac=new AC(), t0=ac.currentTime;
+    const mas=ac.createGain(); mas.gain.value=0.3; mas.connect(ac.destination);
+    const o=ac.createOscillator(),g=ac.createGain(); o.type='sawtooth'; o.frequency.setValueAtTime(180,t0); o.frequency.exponentialRampToValueAtTime(1400,t0+0.45); o.connect(g); g.connect(mas); g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(0.22,t0+0.2); g.gain.exponentialRampToValueAtTime(0.0001,t0+0.5); o.start(t0); o.stop(t0+0.52);
+    const t1=t0+0.42; [1318.5,1760,2093].forEach((f,i)=>{ const o2=ac.createOscillator(),g2=ac.createGain(); o2.type='sine'; o2.frequency.value=f; o2.connect(g2); g2.connect(mas); const t=t1+i*0.04; g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(0.3,t+0.01); g2.gain.exponentialRampToValueAtTime(0.0001,t+0.55); o2.start(t); o2.stop(t+0.57); });
+  }catch(e){}
+}
 function playLevelUpCeremony(level){
   const r=rankOf(level), c=r.color;
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='lvupMask';
@@ -1461,11 +1492,12 @@ function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remov
    每日限次(防掛機)；贏了掉獎勵幣+裝備。白帽：邊玩邊長知識
    =================================================================== */
 const DUNGEON_DAILY = 5;                  // 每日挑戰次數
+// 血量設計成「適當裝備約 3-4 題打完」(配合單次傷害上限＝血量/3)
 const BOSSES = [
-  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:60,  reward:30,  dropR:2, minLevel:1},
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  reward:30,  dropR:2, minLevel:1},
   {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, reward:55,  dropR:3, minLevel:5},
-  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:240, reward:90,  dropR:4, minLevel:10},
-  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:400, reward:150, dropR:5, minLevel:18},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, reward:90,  dropR:4, minLevel:10},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, reward:150, dropR:5, minLevel:18},
 ];
 const QUIZ = [
   // 智力測驗
@@ -1545,7 +1577,7 @@ function buildQuizOrder(){
 }
 function callConfucius(){
   const bt=STATE.battle; if(!bt||(bt.hints||0)<=0) return; bt.hints--;
-  const dmg=attackPower(); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
+  const dmg=Math.min(attackPower(), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
   if(bt.hp<=0) return endBattle(true);
   bt.qi=(bt.qi+1)%bt.order.length; renderBattle();
 }
@@ -1568,14 +1600,22 @@ function showChest(coins, drop, left){
 function openChest(){
   const ch=STATE.chest; if(!ch||ch.opened) return; ch.opened=true;
   const box=document.getElementById('chestBox'); if(box) box.classList.add('chest-shake');
-  sfxLevelUp();
+  sfxChest();
   setTimeout(()=>{
-    const fl=document.createElement('div'); fl.className='chest-flash'; fl.style.background=`radial-gradient(circle,${ch.col},transparent 70%)`; document.body.appendChild(fl); setTimeout(()=>fl.remove(),650);
-    if(box){ box.classList.remove('chest-shake'); box.textContent='✨'; }
+    // 全屏光爆(白核+稀有度色) + 螢幕震 + 獲獎音效
+    const fl=document.createElement('div'); fl.className='chest-flash'; fl.style.background=`radial-gradient(circle, #fff, ${ch.col} 42%, transparent 74%)`; document.body.appendChild(fl); setTimeout(()=>fl.remove(),780);
+    document.body.classList.add('screen-shake'); setTimeout(()=>document.body.classList.remove('screen-shake'),500);
+    sfxVictory();
+    if(box){ box.classList.remove('chest-shake'); box.textContent='🎉'; box.classList.add('chest-pop'); }
+    const modal=document.querySelector('#battleModal .modal');
+    if(modal){ const burst=document.createElement('div'); burst.className='burst';
+      for(let i=0;i<14;i++){ const s=document.createElement('span'); s.textContent=['✨','⭐','💫','🌟','🎊'][i%5]; s.style.setProperty('--a',(i*(360/14))+'deg'); s.style.setProperty('--d',(60+(i%3)*30)+'px'); burst.appendChild(s); }
+      modal.appendChild(burst); setTimeout(()=>burst.remove(),1100);
+    }
     const rw=document.getElementById('chestReward');
-    if(rw) rw.innerHTML=`<div style="color:var(--accent);font-weight:800;font-size:19px;margin-top:8px">＋${ch.coins} 獎勵幣 🪙</div>${ch.drop?`<div class="drop-box"><img src="${equipFile(ch.drop.id)}"><div>稀有掉落：<b style="color:${ch.col}">${PET_RARITY[ch.drop.r].name}${SLOTNAME[ch.drop.slot]}</b>（⚔️${ch.drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`;
+    if(rw) rw.innerHTML=`<div class="reward-pop" style="color:var(--accent);font-weight:800;font-size:22px;margin-top:8px">＋${ch.coins} 獎勵幣 🪙</div>${ch.drop?`<div class="drop-box"><img src="${equipFile(ch.drop.id)}"><div>稀有掉落：<b style="color:${ch.col}">${PET_RARITY[ch.drop.r].name}${SLOTNAME[ch.drop.slot]}</b>（⚔️${ch.drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`;
     const ac=document.getElementById('chestActions'); if(ac) ac.style.display='flex';
-  },650);
+  },700);
 }
 function startBattle(bossId){
   const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
@@ -1614,7 +1654,7 @@ function renderBattle(){
 function answerQuiz(idx){
   const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=QUIZ[qi];
   GS.quizSeen=GS.quizSeen||[]; GS.quizWrong=GS.quizWrong||[];
-  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')); const dmg=attackPower()*(crit?2:1); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
+  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
     if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi);
     if(bt.hp<=0) return endBattle(true); }
   else { bt.mistakes++; bt.hit=null; bt.msg='✗ 答錯（正解：'+q.a[q.c]+'）失誤 '+bt.mistakes+'/3';
@@ -1691,7 +1731,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.7.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.7.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
