@@ -263,7 +263,9 @@ img{display:block}
 .slot-chip.on{background:var(--accent);color:#1a1205;border-color:var(--accent)}
 .shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .shop-item{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
-.shop-item.eq{border-color:var(--accent);background:rgba(240,165,0,.1)}
+.shop-item.eq{border-color:#22c55e!important;background:rgba(34,197,94,.14);box-shadow:0 0 0 1px #22c55e inset}
+.shop-item.eq::after{content:'裝備中';position:absolute;top:6px;left:6px;font-size:9px;font-weight:800;color:#06210f;background:#22c55e;border-radius:6px;padding:1px 5px}
+.shop-item{position:relative}
 .shop-item.taken{opacity:.6;filter:grayscale(.5)}
 .shop-slot-h{font-size:12px;font-weight:800;color:var(--accent);margin:12px 2px 8px}
 .si-img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
@@ -305,6 +307,20 @@ img{display:block}
 .quiz-opt:active{background:var(--accent);color:#1a1205}
 .drop-box{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:10px;margin-top:10px}
 .drop-box img{width:44px;height:44px;object-fit:contain}
+.si-skill{font-size:10px;color:var(--accent);line-height:1.3;min-height:13px}
+.confucius-btn{width:100%;margin-top:10px;background:rgba(168,85,247,.18);border:1px solid #a855f7;color:#c4b5fd;border-radius:10px;padding:10px;font-weight:700;font-size:13px}
+.boss-wrap{position:relative;display:inline-block}
+.battle-boss.hit{animation:bossHit .4s ease}
+@keyframes bossHit{0%{transform:translateX(0)}20%{transform:translateX(-10px) rotate(-4deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}100%{transform:translateX(0)}}
+.dmg-pop{position:absolute;top:6px;left:50%;transform:translateX(-50%);font-size:24px;font-weight:900;color:#fca5a5;text-shadow:0 2px 4px rgba(0,0,0,.6);pointer-events:none;animation:dmgFloat 1s ease-out forwards}
+.dmg-pop.crit{font-size:32px;color:#fbbf24}
+@keyframes dmgFloat{0%{opacity:0;transform:translate(-50%,10px) scale(.6)}30%{opacity:1;transform:translate(-50%,-6px) scale(1.15)}100%{opacity:0;transform:translate(-50%,-40px) scale(1)}}
+.chest-box{font-size:84px;cursor:pointer;margin:16px auto 4px;display:inline-block;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
+.chest-box:active{transform:scale(.95)}
+.chest-shake{animation:chestShake .7s ease-in-out}
+@keyframes chestShake{0%,100%{transform:rotate(0)}15%{transform:rotate(-12deg) scale(1.05)}30%{transform:rotate(12deg)}45%{transform:rotate(-10deg)}60%{transform:rotate(10deg)}75%{transform:rotate(-6deg)}}
+.chest-flash{position:fixed;inset:0;z-index:210;pointer-events:none;animation:chestFlash .65s ease-out}
+@keyframes chestFlash{0%{opacity:0}35%{opacity:.9}100%{opacity:0}}
 .si-icon{font-size:30px;line-height:1}
 .si-name{font-size:12px;font-weight:600}
 .si-rar{font-size:10px;font-weight:700;margin-top:-3px}
@@ -313,7 +329,7 @@ img{display:block}
 .buy-btn{background:var(--accent);color:#1a1205;font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
 .buy-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
 .equip-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 0;font-size:12px;width:100%;font-weight:600}
-.equip-btn.on{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:800}
+.equip-btn.on{background:#22c55e;color:#06210f;border-color:#22c55e;font-weight:800}
 /* 分類勾選 */
 .cat-row{display:flex;gap:8px}
 .cat-toggle{flex:1;padding:10px 8px;border-radius:9px;border:2px solid var(--border);background:var(--surface2);text-align:center;font-size:15px;color:var(--muted);font-weight:700;display:flex;align-items:baseline;justify-content:center;gap:5px}
@@ -1187,24 +1203,45 @@ function equipItem(id){ for(const k in EQUIP){ const it=EQUIP[k].find(x=>x.id===
 function equipFile(id){ const it=equipItem(id); return it?'assets/game/equip/'+it.file:''; }
 function gearPower(){ if(!GS||!GS.gear) return 0; let s=0; for(const k in GS.gear){ const it=GS.gear[k]&&equipItem(GS.gear[k]); if(it) s+=it.power; } return s; }
 const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
+// 寵物：每隻獨特輔助技能(副本生效)，稀有度越高越強、越貴越難得
 const PETS = [
-  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:14}, {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:16},
-  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:18}, {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:18},
-  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:28}, {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:30}, {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:32},
-  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:44}, {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:46},
-  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:60}, {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:66}, {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:72},
-  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:100,unique:true}, {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:110,unique:true},
+  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:40,  skill:{t:'coin',v:0.10}},
+  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:45, skill:{t:'drop',v:0.06}},
+  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:50,  skill:{t:'crit',v:0.06}},
+  {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:55,    skill:{t:'coin',v:0.15}},
+  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:90,    skill:{t:'crit',v:0.12}},
+  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:100,skill:{t:'coin',v:0.25}},
+  {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:120,  skill:{t:'drop',v:0.15}},
+  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:200,  skill:{t:'hint',v:1}},
+  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:220, skill:{t:'atk',v:0.12}},
+  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:360, skill:{t:'crit',v:0.25}},
+  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:400, skill:{t:'coin',v:0.60}},
+  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:480,skill:{t:'drop',v:0.30}},
+  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:680,unique:true, skill:{t:'atk',v:0.30}},
+  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:800,unique:true, skill:{t:'coin',v:1.0}},
 ];
 const FEED = [
-  {id:'feed_s',name:'小食',icon:'🍎',price:5,exp:8}, {id:'feed_m',name:'中食',icon:'🍖',price:12,exp:20}, {id:'feed_l',name:'大餐',icon:'🍱',price:25,exp:45},
+  {id:'feed_s',name:'小食',icon:'🍎',price:6,exp:15}, {id:'feed_m',name:'中食',icon:'🍖',price:15,exp:45}, {id:'feed_l',name:'大餐',icon:'🍱',price:32,exp:110},
 ];
-// 進化階級（參考 speed-training-base：4 階 EXP 30/80/200/480，前面加「蛋」階段，買來孵化）
-const PET_STAGES = [ {min:0,name:'蛋',scale:0.85,egg:true}, {min:30,name:'幼體',scale:1.0}, {min:80,name:'成長期',scale:1.25}, {min:200,name:'成熟期',scale:1.55}, {min:480,name:'完全體',scale:1.9} ];
-function petEmoji(id,exp){ return petStage(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
+const SKILL_DESC={coin:'獎勵幣',crit:'爆擊率',drop:'掉寶率',atk:'攻擊力',hint:'召喚孔子'};
+function skillText(sk){ if(!sk) return '無'; if(sk.t==='hint') return '🧙 召喚孔子解答 '+sk.v+' 次/場'; return SKILL_DESC[sk.t]+' +'+Math.round(sk.v*100)+'%'; }
+// 進化 6 階：蛋→幼雛→小型→中型→大型→巨型；每階 9 級(滿級才進階)
+const PET_STG=['蛋','幼雛','小型','中型','大型','巨型'];
+function petEmoji(id,exp){ return petProgress(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
 const SLOTS = ['hat','glasses','hand','frame','aura'];
 function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return PETS.find(x=>x.id===id)||FEED.find(x=>x.id===id)||null; }
 function petDef(id){ return PETS.find(x=>x.id===id); }
-function petStage(exp){ let s=PET_STAGES[0],i=0; PET_STAGES.forEach((x,ix)=>{ if(exp>=x.min){s=x;i=ix;} }); const next=PET_STAGES[i+1]; return {...s, idx:i, next, toNext: next?next.min-exp:0, span: next?next.min-s.min:1, into: exp-s.min }; }
+function petProgress(exp){
+  const HATCH=30;
+  if(exp<HATCH) return {egg:true, stageIdx:0, stageName:'蛋', level:0, glvl:0, into:exp, span:HATCH, toNext:HATCH-exp, scale:0.8, max:false};
+  let post=exp-HATCH, glvl=1, acc=0, cost=40;
+  while(glvl<45 && post>=acc+cost){ acc+=cost; glvl++; cost=40+glvl*8; }
+  const stageIdx=Math.floor((glvl-1)/9)+1, level=((glvl-1)%9)+1, max=glvl>=45;
+  return {egg:false, stageIdx, stageName:PET_STG[stageIdx], level, glvl, into:post-acc, span:cost, toNext:max?0:(acc+cost-post), scale:0.85+stageIdx*0.2, max};
+}
+function petPower(){ if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet]) return 0; const pr=petProgress(GS.pets[GS.activePet].exp); return pr.egg?0:(pr.stageIdx*8+pr.level*2); }
+function activePetSkill(){ if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet]) return null; if(petProgress(GS.pets[GS.activePet].exp).egg) return null; const p=petDef(GS.activePet); return p?p.skill:null; }
+function petSkillVal(type){ const s=activePetSkill(); return (s&&s.t===type)?s.v:0; }
 
 /* 玩家狀態：賺=衍生，花費/持有/寵物=存檔 */
 const GAME_STORE = {
@@ -1213,7 +1250,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[]}; }
 function userEarnedCoins(uid){
   const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
@@ -1282,14 +1319,28 @@ async function feedActivePet(feedId){
   if(!GS.activePet||!GS.pets[GS.activePet]){ toast('先到商店帶一隻寵物 🐾'); return; }
   const f=FEED.find(x=>x.id===feedId); if(!f) return;
   if(coinBalance()<f.price){ toast('獎勵幣不足 🪙'); return; }
-  const name=petDef(GS.activePet).name, b=petStage(GS.pets[GS.activePet].exp);
+  const pet=petDef(GS.activePet), b=petProgress(GS.pets[GS.activePet].exp);
   GS.pets[GS.activePet].exp+=f.exp; GS.spent+=f.price;
-  const a=petStage(GS.pets[GS.activePet].exp);
-  await saveGameState();
-  if(b.egg && !a.egg) toast('🐣 孵化了！'+name+' 誕生 ✨');
-  else if(a.idx>b.idx) toast('🎉 '+name+' 進化到「'+a.name+'」！');
-  else toast(name+(b.egg?' 的蛋':'')+' 吃了 '+f.name+'，+'+f.exp+' 經驗 '+f.icon);
-  refreshGameUI();
+  const a=petProgress(GS.pets[GS.activePet].exp);
+  saveGameState();                       // 背景存檔，不卡畫面/不跳頂
+  refreshGameUI();                        // 先就地刷新(保留捲動)
+  if(b.egg && !a.egg) petEvolveCeremony(pet, a, '🐣 孵化誕生！');
+  else if(a.stageIdx>b.stageIdx) petEvolveCeremony(pet, a, '進化成「'+a.stageName+'」！');
+  else if(a.glvl>b.glvl) toast(pet.name+' 升到 '+a.stageName+' Lv.'+a.level+' 💪');
+  else toast(pet.name+(a.egg?' 的蛋':'')+' 吃了 '+f.name+'（+'+f.exp+' 經驗）');
+}
+function petEvolveCeremony(pet, prog, title){
+  const r=PET_RARITY[pet.r], c=r.color;
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='evolveMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
+    <div class="lvup-card">
+      <div style="font-size:${Math.round(72*prog.scale)}px;filter:drop-shadow(0 0 22px ${c})">${pet.icon}</div>
+      <div class="lvup-title">🎉 恭喜！</div>
+      <div class="lvup-lv" style="color:${c}">${pet.name} ${title}</div>
+      <div class="lvup-hint">${r.name} · ${prog.stageName} Lv.${prog.level}　｜　技能：${skillText(pet.skill)}<br>（點一下關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
+  setTimeout(()=>{const m=document.getElementById('evolveMask'); if(m)m.remove();},6000);
 }
 async function toggleEquip(id){
   const it=shopItem(id); if(!it||!owns(id)) return;
@@ -1334,23 +1385,26 @@ function equipCard(it){
   return `<div class="shop-item${equipped?' eq':''}" style="border-color:${rc}66"><img class="si-img" src="${equipFile(it.id)}" loading="lazy"><div class="si-name" style="color:${rc}">${PET_RARITY[it.r].name}</div><div class="si-rar">⚔️ ${it.power}</div>${action}</div>`;
 }
 async function setActivePet(id){ if(GS.pets&&GS.pets[id]){ GS.activePet=id; await saveGameState(); refreshGameUI(); } }
-function refreshGameUI(){ const g=document.getElementById('gameModal'); if(g){ closeGameCenter(); showGameCenter(); } const s=document.getElementById('shopModal'); if(s){ closeShop(); showShop(); } }
+function refreshGameUI(){
+  const g=document.getElementById('gameModal'); if(g){ const sc=g.querySelector('.modal'), top=sc?sc.scrollTop:0; closeGameCenter(); showGameCenter(); const n=document.querySelector('#gameModal .modal'); if(n) n.scrollTop=top; }
+  const s=document.getElementById('shopModal'); if(s){ const sc=s.querySelector('.modal'), top=sc?sc.scrollTop:0; closeShop(); showShop(); const n=document.querySelector('#shopModal .modal'); if(n) n.scrollTop=top; }
+}
 /* 寵物卡（角色養成中心；只成長、可餵食、可切換夥伴） */
 function petCardHtml(){
   if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet])
     return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`;
-  const id=GS.activePet, p=petDef(id), st=GS.pets[id], stg=petStage(st.exp);
-  const pct=stg.next?Math.round(stg.into/stg.span*100):100;
+  const id=GS.activePet, p=petDef(id), st=GS.pets[id], pr=petProgress(st.exp);
+  const pct=pr.max?100:Math.round(pr.into/pr.span*100);
   const others=Object.keys(GS.pets).filter(x=>x!==id);
   const bal=coinBalance(), rc=PET_RARITY[p.r].color;
-  const expTxt = stg.egg ? ('孵化倒數：再餵 '+stg.toNext+' 經驗就破殼 🥚')
-    : (stg.next?('經驗 '+st.exp+'｜距「'+stg.next.name+'」還差 '+stg.toNext):('已完全體 ✨ 經驗 '+st.exp));
+  const expTxt = pr.egg ? ('孵化倒數：再餵 '+pr.toNext+' 經驗破殼 🥚')
+    : (pr.max?'已達巔峰 巨型 Lv.9 ✨':('距升級還差 '+pr.toNext+' 經驗'));
   return `<div class="pet-card">
-    <div class="pet-emoji${stg.egg?' egg':''}" style="font-size:${Math.round(30*stg.scale)}px">${petEmoji(id,st.exp)}</div>
+    <div class="pet-emoji${pr.egg?' egg':''}" style="font-size:${Math.round(26*pr.scale)}px">${petEmoji(id,st.exp)}</div>
     <div class="pet-info">
-      <div class="pet-name">${stg.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${PET_RARITY[p.r].name}${stg.egg?'':'·'+stg.name}</span></div>
-      <div class="pet-bar"><i style="width:${pct}%;background:${stg.egg?'linear-gradient(90deg,#f0a500,#fbbf24)':''}"></i></div>
-      <div class="pet-exp">${expTxt}</div>
+      <div class="pet-name">${pr.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${PET_RARITY[p.r].name}·${pr.egg?'蛋':(pr.stageName+' Lv.'+pr.level)}</span></div>
+      <div class="pet-bar"><i style="width:${pct}%;background:${pr.egg?'linear-gradient(90deg,#f0a500,#fbbf24)':''}"></i></div>
+      <div class="pet-exp">${expTxt}${pr.egg?'':'　｜　🎁 '+skillText(p.skill)}</div>
       <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·🪙${f.price}</button>`).join('')}</div>
     </div>
     ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
@@ -1374,7 +1428,7 @@ function shopPetCard(p){
   else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
   else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')">🪙 ${p.price}</button>`;
   const rar = p.unique ? `${PET_RARITY[p.r].name} · ${takenByOther?('👑'+owners[p.id]):'👑唯一'}` : PET_RARITY[p.r].name;
-  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}66"><div class="si-icon">${p.icon}</div><div class="si-name">${p.name}蛋</div><div class="si-rar" style="color:${rc}">${rar}</div>${action}</div>`;
+  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}66"><div class="si-icon">${p.icon}</div><div class="si-name">${p.name}蛋</div><div class="si-rar" style="color:${rc}">${rar}</div><div class="si-skill">${skillText(p.skill)}</div>${action}</div>`;
 }
 function showShop(tab){
   if(!STATE.user) return;
@@ -1442,10 +1496,27 @@ const QUIZ = [
   {q:'下列何者「不是」字幕機控制卡常見的傳輸方式？',a:['網路 TCP','RS485','USB','藍牙煮飯'],c:3,cat:'產品'},
   {q:'LED 模組「16×16」通常是指？',a:['16列×16行像素','16 公分','16 瓦','16 種顏色'],c:0,cat:'產品'},
   {q:'譽昇光電(USLED)主要產品領域是？',a:['LED 字幕機/顯示看板','賣咖啡','旅遊業','服飾'],c:0,cat:'產品'},
+  // 智力（續）
+  {q:'一個正方體有幾個面？',a:['4','6','8','12'],c:1,cat:'智力'},
+  {q:'數列 5, 10, 20, 40, ？',a:['60','80','100','160'],c:1,cat:'智力'},
+  {q:'下列何者不是偶數？',a:['2','4','7','8'],c:2,cat:'智力'},
+  {q:'時鐘 3 點整，時針與分針夾角？',a:['60°','90°','120°','180°'],c:1,cat:'智力'},
+  {q:'甲比乙高、乙比丙高，誰最高？',a:['甲','乙','丙','一樣高'],c:0,cat:'智力'},
+  // 公司制度（通用，可再依實際規章調整）
+  {q:'公司內部機密文件外流，主要違反？',a:['保密原則','環保法','交通規則','勞基法'],c:0,cat:'制度'},
+  {q:'發現同事在現場受傷，第一步較妥當？',a:['先拍照上傳','先確認傷勢並通報','當作沒看到','責怪對方'],c:1,cat:'制度'},
+  {q:'需要請假時，較正確的做法？',a:['事先提出申請','直接不來','只跟同事口頭說','當天遲到再說'],c:0,cat:'制度'},
+  {q:'報帳時最該核對的是？',a:['金額與發票相符','字寫得漂亮','紙張顏色','發票紙質'],c:0,cat:'制度'},
+  // 技術（LED／字幕機，續）
+  {q:'LED 的中文全名是？',a:['發光二極體','液晶','電漿','映像管'],c:0,cat:'技術'},
+  {q:'字幕機顯示亂碼，最可能的原因？',a:['編碼/字型問題','天氣太熱','電壓太高','音量太大'],c:0,cat:'技術'},
+  {q:'控制卡 IP 設定錯誤，最常見後果？',a:['無法連線控制','畫面變亮','變省電','字變大'],c:0,cat:'技術'},
+  {q:'戶外大型 LED 若散熱不良，容易？',a:['縮短壽命/故障','更省電','畫面自動變大','完全沒影響'],c:0,cat:'技術'},
+  {q:'螢幕「亮度」常用單位是？',a:['nit(尼特, cd/m²)','公斤','公升','赫茲'],c:0,cat:'技術'},
 ];
 function dungeonDay(){ return new Date().toISOString().slice(0,10); }
 function dungeonLeft(){ if(!GS) return DUNGEON_DAILY; const d=GS.dungeon; if(!d||d.day!==dungeonDay()) return DUNGEON_DAILY; return Math.max(0,DUNGEON_DAILY-(d.used||0)); }
-function attackPower(){ return 10 + gearPower(); }
+function attackPower(){ return Math.round((10 + gearPower() + petPower()) * (1+petSkillVal('atk'))); }
 function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>{ if(it.r<=maxR && !(GS.owned||[]).includes(it.id)) pool.push(it); }); return pool.length?pool[Math.floor(Math.random()*pool.length)]:null; }
 function showDungeon(){
   if(!STATE.user) return;
@@ -1463,14 +1534,56 @@ function showDungeon(){
   mask.onclick=closeDungeon; document.body.appendChild(mask);
 }
 function closeDungeon(){ const m=document.getElementById('dungeonModal'); if(m)m.remove(); }
+/* 出題順序：答錯的先複習 → 沒出過的新題 → 其他（避免每場重複一樣） */
+function buildQuizOrder(){
+  const sh=a=>{ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;} return a; };
+  const wrong=(GS.quizWrong||[]).filter(i=>i<QUIZ.length), wset=new Set(wrong), sset=new Set(GS.quizSeen||[]);
+  const all=QUIZ.map((_,i)=>i);
+  const unseen=all.filter(i=>!sset.has(i)&&!wset.has(i));
+  const rest=all.filter(i=>sset.has(i)&&!wset.has(i));
+  return [...sh(wrong.slice()), ...sh(unseen), ...sh(rest)];
+}
+function callConfucius(){
+  const bt=STATE.battle; if(!bt||(bt.hints||0)<=0) return; bt.hints--;
+  const dmg=attackPower(); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
+  if(bt.hp<=0) return endBattle(true);
+  bt.qi=(bt.qi+1)%bt.order.length; renderBattle();
+}
+/* 寶箱開箱儀式：點擊 → 震動 → 全屏對應稀有度光色 → 揭曉 */
+function showChest(coins, drop, left){
+  const col = drop?PET_RARITY[drop.r].color:'#f0a500';
+  STATE.chest={coins,drop,col,opened:false,left};
+  const o=document.createElement('div'); o.className='modal-mask'; o.id='battleModal';
+  o.innerHTML=`<div class="modal" style="text-align:center" onclick="event.stopPropagation()">
+    <div style="font-size:22px;font-weight:800">🏆 闖關成功！</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:4px">獲得寶箱 — 點擊開啟 ✨</div>
+    <div id="chestBox" class="chest-box" onclick="openChest()">🎁</div>
+    <div id="chestReward" style="min-height:30px"></div>
+    <div class="modal-actions" id="chestActions" style="display:none">
+      ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
+      <button class="equip-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();refreshGameUI()">關閉</button>
+    </div>`;
+  document.body.appendChild(o);
+}
+function openChest(){
+  const ch=STATE.chest; if(!ch||ch.opened) return; ch.opened=true;
+  const box=document.getElementById('chestBox'); if(box) box.classList.add('chest-shake');
+  sfxLevelUp();
+  setTimeout(()=>{
+    const fl=document.createElement('div'); fl.className='chest-flash'; fl.style.background=`radial-gradient(circle,${ch.col},transparent 70%)`; document.body.appendChild(fl); setTimeout(()=>fl.remove(),650);
+    if(box){ box.classList.remove('chest-shake'); box.textContent='✨'; }
+    const rw=document.getElementById('chestReward');
+    if(rw) rw.innerHTML=`<div style="color:var(--accent);font-weight:800;font-size:19px;margin-top:8px">＋${ch.coins} 獎勵幣 🪙</div>${ch.drop?`<div class="drop-box"><img src="${equipFile(ch.drop.id)}"><div>稀有掉落：<b style="color:${ch.col}">${PET_RARITY[ch.drop.r].name}${SLOTNAME[ch.drop.slot]}</b>（⚔️${ch.drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`;
+    const ac=document.getElementById('chestActions'); if(ac) ac.style.display='flex';
+  },650);
+}
 function startBattle(bossId){
   const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
   if(userGameLevel(STATE.user.id)<b.minLevel){ toast('需 Lv.'+b.minLevel); return; }
   if(dungeonLeft()<=0){ toast('今天挑戰次數用完了，明天再來 💪'); return; }
   if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
   GS.dungeon.used++; saveGameState();
-  const order=QUIZ.map((_,i)=>i); for(let i=order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=order[i];order[i]=order[j];order[j]=t; }
-  STATE.battle={boss:b, hp:b.hp, mistakes:0, order, qi:0, msg:'答對題目就能攻擊！'};
+  STATE.battle={boss:b, hp:b.hp, mistakes:0, order:buildQuizOrder(), qi:0, msg:'答對題目就能攻擊！', hints:petSkillVal('hint')||0, hit:null};
   closeDungeon(); renderBattle();
 }
 function renderBattle(){
@@ -1480,47 +1593,60 @@ function renderBattle(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="text-align:center">
-      <img src="assets/game/mob/${b.file}" class="battle-boss">
+      <div class="boss-wrap">
+        <img src="assets/game/mob/${b.file}" class="battle-boss${bt.hit?' hit':''}">
+        ${bt.hit?`<div class="dmg-pop${bt.hit.crit?' crit':''}">-${bt.hit.dmg}${bt.hit.crit?' 爆!':''}</div>`:''}
+      </div>
       <div style="font-weight:800;margin-top:4px">${b.name}</div>
       <div class="hp-bar"><i style="width:${hpPct}%"></i><span>${Math.max(0,bt.hp)} / ${b.hp}</span></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 你的攻擊力 ${attackPower()}　｜　❤️ 失誤 ${bt.mistakes}/3</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 攻擊力 ${attackPower()}　｜　❤️ 失誤 ${bt.mistakes}/3</div>
       <div class="battle-msg">${bt.msg}</div>
     </div>
     <div class="quiz-cat">${q.cat}題</div>
     <div class="quiz-q">${q.q}</div>
     <div class="quiz-opts">${q.a.map((opt,i)=>`<button class="quiz-opt" onclick="answerQuiz(${i})">${opt}</button>`).join('')}</div>
+    ${(bt.hints||0)>0?`<button class="confucius-btn" onclick="callConfucius()">🧙 召喚孔子解答（剩 ${bt.hints}）</button>`:''}
     <button class="t-expand" onclick="quitBattle()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">放棄離開</button>
   </div>`;
   document.body.appendChild(mask);
+  if(STATE.battle) STATE.battle.hit=null;   // 特效只播一次
 }
 function answerQuiz(idx){
-  const bt=STATE.battle; if(!bt) return; const q=QUIZ[bt.order[bt.qi]];
-  if(idx===q.c){ const crit=Math.random()<0.25; const dmg=attackPower()*(crit?2:1); bt.hp-=dmg; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害'; if(bt.hp<=0) return endBattle(true); }
-  else { bt.mistakes++; bt.msg='✗ 答錯（正解：'+q.a[q.c]+'）失誤 '+bt.mistakes+'/3'; if(bt.mistakes>=3) return endBattle(false); }
+  const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=QUIZ[qi];
+  GS.quizSeen=GS.quizSeen||[]; GS.quizWrong=GS.quizWrong||[];
+  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')); const dmg=attackPower()*(crit?2:1); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
+    if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi);
+    if(bt.hp<=0) return endBattle(true); }
+  else { bt.mistakes++; bt.hit=null; bt.msg='✗ 答錯（正解：'+q.a[q.c]+'）失誤 '+bt.mistakes+'/3';
+    if(!GS.quizWrong.includes(qi)) GS.quizWrong.push(qi);
+    if(bt.mistakes>=3) return endBattle(false); }
   bt.qi=(bt.qi+1)%bt.order.length; renderBattle();
 }
 function quitBattle(){ STATE.battle=null; const m=document.getElementById('battleModal'); if(m)m.remove(); showDungeon(); }
 async function endBattle(win){
   const bt=STATE.battle, b=bt.boss; STATE.battle=null;
-  let drop=null;
-  if(win){ GS.won=(GS.won||0)+b.reward; if(Math.random()<0.6){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); } }
-  saveGameState();   // 背景存檔，不擋結算畫面
   const m=document.getElementById('battleModal'); if(m) m.remove();
   const left=dungeonLeft();
-  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
-  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
-    <div style="font-size:46px">${win?'🏆':'💀'}</div>
-    <h3 style="margin:6px 0">${win?'闖關成功！':'戰敗了…'}</h3>
-    ${win?`<div style="color:var(--accent);font-weight:800;font-size:18px">＋${b.reward} 獎勵幣 🪙</div>
-      ${drop?`<div class="drop-box"><img src="${equipFile(drop.id)}"><div>掉落：<b style="color:${PET_RARITY[drop.r].color}">${PET_RARITY[drop.r].name}${SLOTNAME[drop.slot]}</b>（⚔️${drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`
-      :`<div style="font-size:13px;color:var(--muted)">失誤 3 次了。裝備越好攻擊越高、答題更穩就能贏 💪</div>`}
-    <div style="font-size:12px;color:var(--muted);margin-top:10px">今日剩 ${left}/${DUNGEON_DAILY} 次</div>
-    <div class="modal-actions" style="margin-top:14px">
-      ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
-      <button class="equip-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();refreshGameUI()">關閉</button>
-    </div>
-  </div>`;
-  document.body.appendChild(mask);
+  if(win){
+    const coins=Math.round(b.reward*(1+petSkillVal('coin')));
+    let drop=null; if(Math.random()<(0.6+petSkillVal('drop'))){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); }
+    GS.won=(GS.won||0)+coins; saveGameState();
+    showChest(coins, drop, left);   // 寶箱開箱儀式
+  } else {
+    saveGameState();
+    const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
+    mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+      <div style="font-size:46px">💀</div>
+      <h3 style="margin:6px 0">戰敗了…</h3>
+      <div style="font-size:13px;color:var(--muted)">失誤 3 次了。裝備越好、養強寵物、答題更穩就能贏 💪</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px">今日剩 ${left}/${DUNGEON_DAILY} 次</div>
+      <div class="modal-actions" style="margin-top:14px">
+        ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
+        <button class="equip-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();refreshGameUI()">關閉</button>
+      </div>
+    </div>`;
+    document.body.appendChild(mask);
+  }
 }
 function compressImage(dataUrl,maxW,cb){
   const img=new Image();
@@ -1565,7 +1691,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.6.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.7.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
