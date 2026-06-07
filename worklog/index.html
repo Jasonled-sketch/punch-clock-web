@@ -68,10 +68,10 @@
   textarea.big{min-height:130px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
   .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
-  .hint.warn{color:#b45309;background:#fffbeb;border:1px solid #fde68a;padding:9px 11px;border-radius:9px}
 
   /* 點選式按鈕組（取代下拉）*/
   .pick{display:flex;flex-wrap:wrap;gap:9px}
+  .pick:empty::after{content:'（請先選上一層）';color:#94a3b8;font-size:13px}
   .pick button{border:1.5px solid var(--line);background:#fff;color:#334155;border-radius:12px;
     padding:12px 16px;font-size:15.5px;font-weight:600;font-family:inherit;min-height:46px;transition:.12s}
   .pick button.on{background:var(--sky);border-color:var(--sky);color:#fff;box-shadow:0 2px 10px rgba(14,165,233,.32)}
@@ -79,8 +79,8 @@
   .pick button:active{transform:scale(.97)}
 
   /* 分段（滿版二/三選一）*/
-  .seg{display:flex;gap:9px}
-  .seg button{flex:1;border:1.5px solid var(--line);background:#fff;color:#475569;
+  .seg{display:flex;gap:9px;flex-wrap:wrap}
+  .seg button{flex:1 1 28%;border:1.5px solid var(--line);background:#fff;color:#475569;
     border-radius:12px;padding:13px 8px;font-size:15.5px;font-weight:700;font-family:inherit;min-height:48px}
   .seg button.on{background:var(--sky);border-color:var(--sky);color:#fff;box-shadow:0 2px 10px rgba(14,165,233,.3)}
   .seg button:active{transform:scale(.98)}
@@ -216,7 +216,7 @@
       </div>
     </div>
 
-    <!-- 3 工務分類（外務/內務 連動）-->
+    <!-- 3 工務分類（內外 → 主類別 → 次類別 三層連動）-->
     <div class="card">
       <div class="sec-t"><span class="n">3</span>工務分類</div>
       <div class="field">
@@ -230,12 +230,12 @@
       <div class="field">
         <label class="lb">工務次類別</label>
         <div class="pick" id="pick_sub"></div>
+        <div class="hint" id="catHint" style="display:none"></div>
       </div>
       <div class="field">
-        <label class="lb">施作項目名稱</label>
+        <label class="lb">施作項目名稱<span class="opt">選填</span></label>
         <div class="pick" id="pick_item"></div>
       </div>
-      <div class="hint warn" id="catHint" style="display:none"></div>
     </div>
 
     <!-- 4 現場狀況 -->
@@ -324,8 +324,7 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA
    寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy 代理
-   欄位 ID / 選項皆經 API 實測驗證 (2026-06)
-   v2：選擇類欄位全改點選式按鈕；工務類別隨「外務/內務」連動
+   v3：三層連動（工務內外 → 主類別 → 次類別），選項取自 Ragic 表單實際設定
    ==================================================================== */
 const CFG = {
   WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
@@ -340,20 +339,36 @@ const CFG = {
     toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643
   },
   STAFF: ['偉智','俊男'],
-  IO: ['🌄外務','🏠內務'],
-  // 工務類別：隨「外務/內務」切換（外務=已知資料；內務待 Jason 提供，先空白靠＋其他）
-  CATS: {
+  IO: ['🌄外務','🏠內部'],
+  // 三層連動：工務內外 → 工務主類別 → 工務次類別（取自 Ragic 表單「選項連動」設定）
+  CASCADE: {
     '🌄外務': {
-      main: ['安裝','維修'],
-      sub:  ['🖼️大條屏','⭐中條屏','💡照明燈具','更換控制卡','更換電源器','更換模組、光源','檢查迴路','以上其它皆有'],
-      item: ['現場-丈量/安裝','現場-維修/補強']
+      main: ['安裝','維修','送貨','丈量'],
+      sub: {
+        '安裝': ['🖼️大條屏','⭐中條屏','小條屏','電視牆','特製屏','💡照明燈具','光源材料','燈飾成品','亮化加工'],
+        '維修': ['更換控制卡','更換模組、光源','更換電源器','僅教學','以上其它皆有','檢查迴路'],
+        '送貨': ['幫客戶送貨到府'],
+        '丈量': ['直接丈量及測電','下梯丈量及測電']
+      }
     },
-    '🏠內務': { main: [], sub: [], item: [] }
+    '🏠內部': {
+      main: ['寄件','進貨撿錄','內部載運','組字幕機','亮化加工','備料盤點','整理環境'],
+      sub: {
+        '寄件': ['代寄蝦皮件','代送大榮'],
+        '進貨撿錄': ['秤重檢錄','協助歸放'],
+        '內部載運': ['協助倉庫載運配件'],
+        '組字幕機': ['DART','US'],
+        '亮化加工': ['燈條焊接'],
+        '備料盤點': ['裁切鋁框','裁切ㄇ鐵'],
+        '整理環境': ['打掃廁所','倒垃圾(袋)']
+      }
+    }
   },
   OPT: {
-    volt: ['AC 110V','AC 220V','暫時未知'],
+    volt: ['AC 110V','AC 220V','DC 12V','DC 24V','DC 05V','暫時未知'],
     pay:  ['無','有'],
-    ladder:['1.0–1.8m（無）','3.0–3.5m（7尺梯）','3.5–3.9m（8尺梯）','4.8–5.3m（長拉梯）']
+    ladder:['1.0–1.8m（無）','1.8–3.0m（6尺梯）','3.0–3.5m（7尺梯）','3.5–3.9m（8尺梯）','3.9–4.3m（10尺梯）','4.3–4.8m（12尺梯）','4.8–5.3m（長拉梯）','5.3m以上（需吊車）'],
+    item: ['現場-丈量/安裝','現場-維修/補強']
   },
   CHECKS: [
     {k:'toolMiss', t:'是否有缺帶工具？'},
@@ -412,25 +427,23 @@ function enterApp(){
 }
 
 /* ---------- 通用點選元件 ---------- */
-// 單選按鈕組：S.pick[key] 存選中值；clearable=false 則不可取消
 function buildPick(wrapId, key, options, opts){
   opts = opts||{};
-  const w=$(wrapId); w.innerHTML='';
+  const w=$(wrapId); if(!w) return; w.innerHTML='';
   if(S.pick[key]===undefined) S.pick[key]= opts.def||'';
   function paint(){ [...w.querySelectorAll('button')].forEach(b=>{ if(b.dataset.add) return; b.classList.toggle('on', b.dataset.v===S.pick[key] && S.pick[key]!==''); }); }
   options.forEach(v=>{
     const b=document.createElement('button'); b.type='button'; b.dataset.v=v; b.textContent=v;
-    b.onclick=()=>{ S.pick[key]=(S.pick[key]===v && opts.clearable!==false)?'':v; paint(); };
+    b.onclick=()=>{ S.pick[key]=(S.pick[key]===v && opts.clearable!==false)?'':v; paint(); if(opts.onpick) opts.onpick(S.pick[key]); };
     w.appendChild(b);
   });
   if(opts.custom!==false){
     const add=document.createElement('button'); add.type='button'; add.className='add'; add.dataset.add='1'; add.textContent='＋ 其他';
-    add.onclick=()=>{ const n=(prompt(opts.prompt||'輸入自訂值')||'').trim(); if(!n)return; if(options.indexOf(n)<0)options.push(n); S.pick[key]=n; buildPick(wrapId,key,options,opts); };
+    add.onclick=()=>{ const n=(prompt(opts.prompt||'輸入自訂值')||'').trim(); if(!n)return; if(options.indexOf(n)<0)options.push(n); S.pick[key]=n; buildPick(wrapId,key,options,opts); if(opts.onpick) opts.onpick(S.pick[key]); };
     w.appendChild(add);
   }
   paint();
 }
-// 分段（滿版單選，必有值）：S.seg[key]
 function buildSeg(wrapId, key, arr, def, cb){
   const w=$(wrapId); w.innerHTML=''; S.seg[key] = def!==undefined? def : arr[0];
   arr.forEach(v=>{
@@ -460,18 +473,22 @@ function buildChecks(){
   });
 }
 
-/* ---------- 工務類別連動 ---------- */
-function renderCats(){
-  const c = CFG.CATS[S.mode] || {main:[],sub:[],item:[]};
-  buildPick('pick_main','main', c.main.slice(), {prompt:'輸入工務主類別'});
-  buildPick('pick_sub','sub', c.sub.slice(), {prompt:'輸入工務次類別'});
-  buildPick('pick_item','item', c.item.slice(), {prompt:'輸入施作項目'});
-  const empty = (!c.main.length && !c.sub.length && !c.item.length);
-  const h=$('catHint');
-  h.style.display = empty? 'block':'none';
-  if(empty) h.textContent='「'+S.mode+'」的工務類別選項尚未建立，可先按各欄的「＋ 其他」自填。';
+/* ---------- 工務分類三層連動：內外 → 主類別 → 次類別 ---------- */
+function renderMain(){
+  const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
+  buildPick('pick_main','main', m.main.slice(), {prompt:'輸入工務主類別', onpick:onMainPick});
+  renderSub();
 }
-function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderCats(); }
+function onMainPick(){ S.pick.sub=''; renderSub(); }
+function renderSub(){
+  const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
+  const subs = (S.pick.main && m.sub[S.pick.main]) ? m.sub[S.pick.main].slice() : [];
+  buildPick('pick_sub','sub', subs, {prompt:'輸入工務次類別'});
+  const h=$('catHint');
+  if(!S.pick.main){ h.style.display='block'; h.textContent='選好上面的「工務主類別」，這裡會自動帶出對應的次類別。'; }
+  else { h.style.display='none'; }
+}
+function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; renderMain(); }
 
 /* ---------- 建立／重置表單 ---------- */
 function buildForm(){
@@ -481,7 +498,8 @@ function buildForm(){
   buildPick('pick_lead','lead', staff, {def:S.myName, clearable:false, prompt:'輸入主任姓名'});
   buildCoChips();
   buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange);
-  renderCats();
+  renderMain();
+  buildPick('pick_item','item', CFG.OPT.item.slice(), {prompt:'輸入施作項目'});
   buildSeg('seg_volt','volt', CFG.OPT.volt, 'AC 110V');
   buildSeg('seg_pay','pay', CFG.OPT.pay, '無');
   $('payNoteWrap').style.display='none';
