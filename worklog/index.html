@@ -454,12 +454,34 @@ function buildSeg(wrapId, key, arr, def, cb){
   });
 }
 function buildCoChips(){
-  const w=$('coChips'); w.innerHTML=''; S.coworkers=[];
+  const w=$('coChips'); w.innerHTML='';
+  const sel=new Set(S.coworkers);
+  const names=CFG.STAFF.slice(); S.coworkers.forEach(n=>{ if(names.indexOf(n)<0) names.push(n); });
+  S.coworkers=[];
   function bind(c,n){ c.onclick=()=>{ c.classList.toggle('on'); const i=S.coworkers.indexOf(n); if(c.classList.contains('on')){ if(i<0)S.coworkers.push(n);} else if(i>=0)S.coworkers.splice(i,1); }; }
-  CFG.STAFF.forEach(n=>{ const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=n; bind(c,n); w.appendChild(c); });
+  names.forEach(n=>{ const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=n; if(sel.has(n)){ c.classList.add('on'); S.coworkers.push(n);} bind(c,n); w.appendChild(c); });
   const add=document.createElement('button'); add.type='button'; add.className='chip add'; add.textContent='＋ 其他';
   add.onclick=()=>{ const n=(prompt('輸入協做員姓名')||'').trim(); if(!n||S.coworkers.includes(n))return; S.coworkers.push(n); const c=document.createElement('button'); c.type='button'; c.className='chip on'; c.textContent=n; bind(c,n); w.insertBefore(c, add); };
   w.appendChild(add);
+}
+// 自動從日誌記錄長出人員名單（負責主任＋協做參與員），零維護、不碰薪資
+function syncStaff(recs){
+  const set=new Set(CFG.STAFF);
+  recs.forEach(x=>{
+    const L=x['負責主任']; if(L) set.add(String(L).trim());
+    const co=x['協做參與員'];
+    if(Array.isArray(co)) co.forEach(n=>{ if(n) set.add(String(n).trim()); });
+    else if(co) set.add(String(co).trim());
+  });
+  set.delete('');
+  const list=[...set];
+  if(list.length!==CFG.STAFF.length){
+    CFG.STAFF=list;
+    const cur=S.pick.lead;
+    const staff=CFG.STAFF.slice(); if(S.myName && staff.indexOf(S.myName)<0) staff.unshift(S.myName);
+    buildPick('pick_lead','lead', staff, {def:cur||S.myName, clearable:false, custom:false, prompt:'主任'});
+    buildCoChips();
+  }
 }
 function buildChecks(){
   const w=$('checks'); w.innerHTML='';
@@ -624,10 +646,11 @@ async function loadRecent(){
   try{
     const r=await callRagic('?api', { method:'GET' });
     const json=await r.json();
+    let all=[];
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) all.push(rec); });
+    syncStaff(all);   // 自動從記錄長出人員名單
     const me=((S.pick.lead||S.myName)||'').trim();
-    let recs=[];
-    Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) recs.push(rec); });
-    recs = recs.filter(x=> !me || (x['負責主任']||'')===me );
+    let recs = all.filter(x=> !me || (x['負責主任']||'')===me );
     recs.sort((a,b)=> String(b['登打日期']||'').localeCompare(String(a['登打日期']||'')) );
     recs=recs.slice(0,8);
     if(!recs.length){ box.innerHTML='<div class="hint">'+(me?('「'+esc(me)+'」'):'')+'目前沒有日誌紀錄</div>'; return; }
