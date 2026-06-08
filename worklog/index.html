@@ -232,14 +232,14 @@
         <div class="pick" id="pick_sub"></div>
         <div class="hint" id="catHint" style="display:none"></div>
       </div>
-      <div class="field">
-        <label class="lb">施作項目名稱<span class="opt">選填</span></label>
+      <div class="field" id="field_item">
+        <label class="lb">施作項目名稱<span class="req">*</span></label>
         <div class="pick" id="pick_item"></div>
       </div>
     </div>
 
-    <!-- 4 現場狀況 -->
-    <div class="card">
+    <!-- 4 現場狀況（內部時隱藏）-->
+    <div class="card" id="card_site">
       <div class="sec-t"><span class="n">4</span>現場狀況</div>
       <div class="field">
         <label class="lb">設備使用電壓</label>
@@ -345,7 +345,7 @@ const CFG = {
     '🌄外務': {
       main: ['安裝','維修','送貨','丈量'],
       sub: {
-        '安裝': ['🖼️大條屏','⭐中條屏','小條屏','電視牆','特製屏','💡照明燈具','光源材料','燈飾成品','亮化加工'],
+        '安裝': ['🌈小條屏','⭐中條屏','🖼️大條屏','🏞️電視牆','🛠️特製屏','💡照明燈具','🚨光源材料','🏮燈飾成品','⛑️亮化加工'],
         '維修': ['更換控制卡','更換模組、光源','更換電源器','僅教學','以上其它皆有','檢查迴路'],
         '送貨': ['幫客戶送貨到府'],
         '丈量': ['直接丈量及測電','下梯丈量及測電']
@@ -368,7 +368,7 @@ const CFG = {
     volt: ['AC 110V','AC 220V','DC 12V','DC 24V','DC 05V','暫時未知'],
     pay:  ['無','有'],
     ladder:['1.0–1.8m（無）','1.8–3.0m（6尺梯）','3.0–3.5m（7尺梯）','3.5–3.9m（8尺梯）','3.9–4.3m（10尺梯）','4.3–4.8m（12尺梯）','4.8–5.3m（長拉梯）','5.3m以上（需吊車）'],
-    item: ['現場-丈量/安裝','現場-維修/補強']
+    item: ['前置加工','現場-丈量/安裝','現場-維修/補強']
   },
   CHECKS: [
     {k:'toolMiss', t:'是否有缺帶工具？'},
@@ -488,7 +488,13 @@ function renderSub(){
   if(!S.pick.main){ h.style.display='block'; h.textContent='選好上面的「工務主類別」，這裡會自動帶出對應的次類別。'; }
   else { h.style.display='none'; }
 }
-function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; renderMain(); }
+function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; renderMain(); applyModeVis(); }
+function applyModeVis(){
+  const inner = (S.mode==='🏠內部');
+  const fi=$('field_item'), cs=$('card_site');
+  if(fi) fi.style.display = inner? 'none':'';
+  if(cs) cs.style.display = inner? 'none':'';
+}
 
 /* ---------- 建立／重置表單 ---------- */
 function buildForm(){
@@ -506,6 +512,7 @@ function buildForm(){
   buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {prompt:'輸入梯子／高度'});
   buildChecks();
   renderPhotos();
+  applyModeVis();
   ['f_subject','f_arrive','f_leave','f_height','f_payNote','f_siteNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
 }
 
@@ -551,6 +558,8 @@ async function submitLog(){
   if(!date){ toast('請選擇執行日期','bad'); return; }
   if(!lead){ toast('請選擇負責主任','bad'); return; }
   if(!subject){ toast('請填寫施工主題','bad'); $('f_subject').focus(); return; }
+  const inner = (S.mode==='🏠內部');
+  if(!inner && !S.pick.item){ toast('請選擇施作項目名稱','bad'); return; }
 
   let payVal=S.seg.pay; const payNote=$('f_payNote').value.trim();
   if(payVal==='有') payVal = payNote? ('有 '+payNote) : '有';
@@ -567,12 +576,14 @@ async function submitLog(){
   if($('f_leave').value)  fd.append(F.leave, timeToRagic($('f_leave').value));
   if(S.pick.main) fd.append(F.main, S.pick.main);
   if(S.pick.sub)  fd.append(F.sub, S.pick.sub);
-  if(S.pick.item) fd.append(F.item, S.pick.item);
-  fd.append(F.volt, S.seg.volt);
-  if($('f_height').value.trim()) fd.append(F.height, $('f_height').value.trim());
-  if(S.pick.ladder) fd.append(F.ladder, S.pick.ladder);
-  fd.append(F.pay, payVal);
-  if($('f_siteNote').value.trim()) fd.append(F.siteNote, $('f_siteNote').value.trim());
+  if(!inner){
+    if(S.pick.item) fd.append(F.item, S.pick.item);
+    fd.append(F.volt, S.seg.volt);
+    if($('f_height').value.trim()) fd.append(F.height, $('f_height').value.trim());
+    if(S.pick.ladder) fd.append(F.ladder, S.pick.ladder);
+    fd.append(F.pay, payVal);
+    if($('f_siteNote').value.trim()) fd.append(F.siteNote, $('f_siteNote').value.trim());
+  }
   if($('f_process').value.trim()) fd.append(F.process, $('f_process').value.trim());
   if($('f_aar').value.trim())     fd.append(F.aar, $('f_aar').value.trim());
   CFG.CHECKS.forEach(c=>fd.append(F[c.k], S.checks[c.k]));
