@@ -156,6 +156,13 @@
   #doneView button{border:none;padding:16px;border-radius:13px;font-size:16px;font-weight:700;font-family:inherit}
   #doneView .pri{background:var(--sky);color:#fff}
   #doneView .sec{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
+
+  #denyView{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 28px;text-align:center;background:linear-gradient(160deg,#334155,#0f172a)}
+  #denyView .deny-ic{font-size:58px;margin-bottom:12px}
+  #denyView h2{color:#fff;font-size:22px;font-weight:800}
+  #denyView .deny-em{color:#fca5a5;font-weight:700;margin:10px 0;font-size:15px;word-break:break-all}
+  #denyView p{color:#cbd5e1;font-size:14px;line-height:1.7;margin-bottom:26px}
+  #denyView button{border:none;background:#0ea5e9;color:#fff;font-size:16px;font-weight:700;padding:14px 22px;border-radius:12px;font-family:inherit}
 </style>
 </head>
 <body>
@@ -317,6 +324,15 @@
   </div>
 </div>
 
+<!-- ===== 無權限 ===== -->
+<div id="denyView" class="hidden">
+  <div class="deny-ic">⛔</div>
+  <h2>此帳號無使用權限</h2>
+  <div class="deny-em" id="denyEmail"></div>
+  <p>這個 Google 帳號尚未被授權使用工務日誌。<br>請改用公司核可的帳號,或聯絡管理員開通。</p>
+  <button onclick="denySwitch()">換其他 Google 帳號登入</button>
+</div>
+
 <div id="toast"></div>
 <div id="loading" class="hidden"><div class="spin"></div><div class="lt" id="loadingTxt">處理中…</div></div>
 
@@ -330,6 +346,8 @@ const CFG = {
   WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
   PATH: '/forms2/18',
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+  // 前端白名單：只有這些 Google 帳號登入後進得去（空陣列＝全部放行）。要加人就把 email 加進這個清單
+  ALLOWED: ['qaz0989514613@gmail.com','covernself@gmail.com'],
   F: {
     execDate:1002615, execDate2:1002585, logTime:1002578,
     lead:1002620, coworkers:1002619, io:1002592, subject:1002618,
@@ -406,9 +424,17 @@ function onSignIn(resp){
     S.token = resp.credential; S.tokenAt = Date.now();
     const p = JSON.parse(atob(resp.credential.split('.')[1]));
     S.user = { email:(p.email||'').toLowerCase(), name:p.name||'', picture:p.picture||'' };
+    if(CFG.ALLOWED.length && CFG.ALLOWED.indexOf(S.user.email)<0){ showDeny(); return; }
     enterApp();
   }catch(e){ toast('登入失敗：'+e.message,'bad'); }
 }
+function showDeny(){
+  $('loginView').classList.add('hidden'); $('appView').classList.add('hidden'); $('doneView').classList.add('hidden');
+  $('denyEmail').textContent = S.user.email || '';
+  $('denyView').classList.remove('hidden');
+  try{ google.accounts.id.disableAutoSelect(); }catch(e){}
+}
+function denySwitch(){ try{ google.accounts.id.disableAutoSelect(); }catch(e){} location.reload(); }
 function logout(){
   try{ google.accounts.id.disableAutoSelect(); }catch(e){}
   S.token=null; S.user=null;
