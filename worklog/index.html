@@ -343,7 +343,7 @@ const CFG = {
   // 三層連動：工務內外 → 工務主類別 → 工務次類別（取自 Ragic 表單「選項連動」設定）
   CASCADE: {
     '🌄外務': {
-      main: ['安裝','維修','送貨','丈量'],
+      main: ['安裝','維修','丈量','送貨'],
       sub: {
         '安裝': ['🌈小條屏','⭐中條屏','🖼️大條屏','🏞️電視牆','🛠️特製屏','💡照明燈具','🚨光源材料','🏮燈飾成品','⛑️亮化加工'],
         '維修': ['更換控制卡','更換模組、光源','更換電源器','僅教學','以上其它皆有','檢查迴路'],
@@ -473,27 +473,38 @@ function buildChecks(){
   });
 }
 
-/* ---------- 工務分類三層連動：內外 → 主類別 → 次類別 ---------- */
+/* ---------- 工務分類三層連動 + 智能顯示／預設 ---------- */
+const ITEM_DEFAULT = { '安裝':'現場-丈量/安裝', '維修':'現場-維修/補強', '丈量':'現場-丈量/安裝' };
+// 只有「外務且非送貨」才顯示 施作項目 + 現場狀況（內部、送貨皆隱藏）
+function siteShown(){ return S.mode==='🌄外務' && S.pick.main!=='送貨'; }
 function renderMain(){
   const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
   buildPick('pick_main','main', m.main.slice(), {prompt:'輸入工務主類別', onpick:onMainPick});
-  renderSub();
+  renderSub(); renderItem(); applyModeVis();
 }
-function onMainPick(){ S.pick.sub=''; renderSub(); }
+function onMainPick(){
+  S.pick.sub='';
+  S.pick.item = ITEM_DEFAULT[S.pick.main] || '';   // 智能預設施作項目
+  renderSub(); renderItem(); applyModeVis();
+}
 function renderSub(){
   const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
   const subs = (S.pick.main && m.sub[S.pick.main]) ? m.sub[S.pick.main].slice() : [];
-  buildPick('pick_sub','sub', subs, {prompt:'輸入工務次類別'});
+  if(subs.length===1) S.pick.sub = subs[0];   // 智能：單一選項自動帶入
+  buildPick('pick_sub','sub', subs, {custom:false, prompt:'工務次類別'});
   const h=$('catHint');
   if(!S.pick.main){ h.style.display='block'; h.textContent='選好上面的「工務主類別」，這裡會自動帶出對應的次類別。'; }
   else { h.style.display='none'; }
 }
-function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; renderMain(); applyModeVis(); }
+function renderItem(){
+  buildPick('pick_item','item', CFG.OPT.item.slice(), {custom:false, clearable:false, prompt:'施作項目'});
+}
+function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderMain(); }
 function applyModeVis(){
-  const inner = (S.mode==='🏠內部');
+  const show = siteShown();
   const fi=$('field_item'), cs=$('card_site');
-  if(fi) fi.style.display = inner? 'none':'';
-  if(cs) cs.style.display = inner? 'none':'';
+  if(fi) fi.style.display = show? '':'none';
+  if(cs) cs.style.display = show? '':'none';
 }
 
 /* ---------- 建立／重置表單 ---------- */
@@ -501,15 +512,14 @@ function buildForm(){
   $('f_date').value = todayStr();
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
   const staff = CFG.STAFF.slice(); if(S.myName && staff.indexOf(S.myName)<0) staff.unshift(S.myName);
-  buildPick('pick_lead','lead', staff, {def:S.myName, clearable:false, prompt:'輸入主任姓名'});
+  buildPick('pick_lead','lead', staff, {def:S.myName, clearable:false, custom:false, prompt:'輸入主任姓名'});
   buildCoChips();
   buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange);
   renderMain();
-  buildPick('pick_item','item', CFG.OPT.item.slice(), {prompt:'輸入施作項目'});
   buildSeg('seg_volt','volt', CFG.OPT.volt, 'AC 110V');
   buildSeg('seg_pay','pay', CFG.OPT.pay, '無');
   $('payNoteWrap').style.display='none';
-  buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {prompt:'輸入梯子／高度'});
+  buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {custom:false, prompt:'輸入梯子／高度'});
   buildChecks();
   renderPhotos();
   applyModeVis();
@@ -558,8 +568,8 @@ async function submitLog(){
   if(!date){ toast('請選擇執行日期','bad'); return; }
   if(!lead){ toast('請選擇負責主任','bad'); return; }
   if(!subject){ toast('請填寫施工主題','bad'); $('f_subject').focus(); return; }
-  const inner = (S.mode==='🏠內部');
-  if(!inner && !S.pick.item){ toast('請選擇施作項目名稱','bad'); return; }
+  const need = siteShown();
+  if(need && !S.pick.item){ toast('請選擇施作項目名稱','bad'); return; }
 
   let payVal=S.seg.pay; const payNote=$('f_payNote').value.trim();
   if(payVal==='有') payVal = payNote? ('有 '+payNote) : '有';
@@ -576,7 +586,7 @@ async function submitLog(){
   if($('f_leave').value)  fd.append(F.leave, timeToRagic($('f_leave').value));
   if(S.pick.main) fd.append(F.main, S.pick.main);
   if(S.pick.sub)  fd.append(F.sub, S.pick.sub);
-  if(!inner){
+  if(need){
     if(S.pick.item) fd.append(F.item, S.pick.item);
     fd.append(F.volt, S.seg.volt);
     if($('f_height').value.trim()) fd.append(F.height, $('f_height').value.trim());
