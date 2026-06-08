@@ -479,7 +479,7 @@ const ITEM_DEFAULT = { '安裝':'現場-丈量/安裝', '維修':'現場-維修/
 function siteShown(){ return S.mode==='🌄外務' && S.pick.main!=='送貨'; }
 function renderMain(){
   const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
-  buildPick('pick_main','main', m.main.slice(), {prompt:'輸入工務主類別', onpick:onMainPick});
+  buildPick('pick_main','main', m.main.slice(), {custom:false, prompt:'工務主類別', onpick:onMainPick});
   renderSub(); renderItem(); applyModeVis();
 }
 function onMainPick(){
