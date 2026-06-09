@@ -1591,7 +1591,7 @@ async function viewOverview() {
     WORKERS = await getAllWorkers();
     const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
     let h = `<div class="view">${monthNav(true)}<div class="wk-cards">`;
-    WORKERS.filter(w => w.active !== '0').forEach(w => {
+    WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
       const wr = recs.filter(r => r.email === w.email);
       const totH = wr.reduce((s, r) => s + (Number(r.hours) || 0), 0);
       const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
@@ -1968,7 +1968,7 @@ async function viewReport() {
     _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
 
     let h = `<div class="view">${monthNav(true)}`;
-    const actives = WORKERS.filter(w => w.active !== '0');
+    const actives = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者');
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
     const teamUrgent = leaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
@@ -2099,7 +2099,7 @@ function exportMonthDetail() {
   const wkd = ['日','一','二','三','四','五','六'];
   const headers = ['姓名','Email','日期','星期','預定上班','預定下班','預定休息','實際上班','實際下班','請假開始','請假結束','假別','加班開始','加班結束','實際工時','遲到分','早退分','應加發','應扣除'];
   const rows = [headers];
-  (WORKERS || []).filter(w => w.active !== '0').forEach(w => {
+  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
     const sh = CONFIG.SHIFTS[w.shift];
     const isFull = w.emp_type === '正式員工';
     const hourly = isFull ? Math.round(w.monthly_salary / 240) : Number(w.weekday_rate) || 0;
@@ -2540,6 +2540,7 @@ async function viewWrkrs() {
 function showWrkrForm(w) {
   _MD.wrkr = w;
   const isFullTime = w?.emp_type === '正式員工';
+  const isMgr = w?.emp_type === '管理者';
   const photoUrl = getPhotoUrl(w?.photo);
   openModal(`
     <div class="modal-title">${w ? '編輯員工' : '新增員工'}</div>
@@ -2557,14 +2558,15 @@ function showWrkrForm(w) {
 
     <div class="ff"><label>員工類型</label>
       <select id="wf-type" onchange="toggleEmpTypeFields(this.value)">
-        <option value="工讀生" ${!isFullTime?'selected':''}>工讀生（時薪制）</option>
+        <option value="工讀生" ${(!isFullTime&&!isMgr)?'selected':''}>工讀生（時薪制）</option>
         <option value="正式員工" ${isFullTime?'selected':''}>正式員工（月薪制）</option>
+        <option value="管理者" ${isMgr?'selected':''}>管理者（不打卡 / 不計薪 / 免提醒）</option>
       </select>
     </div>
     <div class="ff"><label>Email</label><input id="wf-email" type="email" value="${w?.email||''}" ${w?'readonly':''}></div>
     <div class="ff"><label>姓名</label><input id="wf-name" value="${w?.name||''}"></div>
 
-    <div id="wf-hourly-fields" style="${isFullTime?'display:none':''}">
+    <div id="wf-hourly-fields" style="${(isFullTime||isMgr)?'display:none':''}">
       <div class="ff"><label>平日時薪（元）</label><input id="wf-wd" type="number" value="${w?.weekday_rate||''}"></div>
       <div class="ff"><label>假日時薪（元）</label><input id="wf-we" type="number" value="${w?.weekend_rate||''}"></div>
     </div>
@@ -2612,7 +2614,8 @@ function previewWfPhoto(input) {
 
 function toggleEmpTypeFields(type) {
   const isFull = type === '正式員工';
-  document.getElementById('wf-hourly-fields').style.display = isFull ? 'none' : '';
+  const isMgr = type === '管理者';
+  document.getElementById('wf-hourly-fields').style.display = (isFull || isMgr) ? 'none' : '';
   document.getElementById('wf-monthly-fields').style.display = isFull ? '' : 'none';
 }
 
