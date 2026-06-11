@@ -55,6 +55,15 @@ img{display:block}
 .btn-logout:active{background:var(--surface2)}
 .growth-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;white-space:nowrap}
 .growth-btn:active{background:var(--bg)}
+/* Google 日曆今日行程 */
+.gcal-wrap{max-width:760px;margin:0 auto;padding:8px 12px 0}
+.gcal-bar{display:flex;align-items:center;gap:8px;overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:13px;white-space:nowrap;-webkit-overflow-scrolling:touch}
+.gcal-bar.empty,.gcal-bar.err{color:var(--muted);justify-content:center}
+.gcal-label{color:var(--accent);font-weight:700;flex-shrink:0}
+.gcal-ev{flex-shrink:0;background:var(--surface2);border-radius:8px;padding:4px 9px}
+.gcal-ev b{color:var(--accent);margin-right:3px}
+.gcal-connect{width:100%;background:rgba(240,165,0,.12);border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:9px;font-size:13px;font-weight:600}
+.gcal-connect:active{opacity:.85}
 
 /* ---------- 看板 ---------- */
 #board{padding:12px;max-width:760px;margin:0 auto}
@@ -381,6 +390,7 @@ img{display:block}
       <button class="btn-logout" onclick="logout()">登出</button>
     </div>
   </div>
+  <div id="gcalBanner" class="gcal-wrap"></div>
   <div id="board"></div>
 </div>
 
@@ -588,6 +598,7 @@ async function login(uid){
   checkOverdue();
   await loadGameState();
   checkLevelUp();
+  gcalInit(); renderGcalBanner(); connectGcal(false);   // Google 日曆今日行程（已授權則靜默載入）
 }
 function logout(){
   STATE.user = null;
@@ -1773,7 +1784,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.7.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.8.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
@@ -1867,8 +1878,44 @@ function checkOverdue(){
 }
 function ackOverdue(){ if(STATE.user) localStorage.setItem('usled_overdue_ack_'+STATE.user.id, String(Date.now())); const e=document.getElementById('overdueAlert'); if(e) e.remove(); }
 
+/* ===== Google 日曆：當天行程 banner（即時，手機在 Google 日曆改完幾分鐘自動同步）===== */
+let gcalTC=null;
+function gcalInit(){
+  if(gcalTC) return;
+  if(!(window.google&&google.accounts&&google.accounts.oauth2)) return;
+  gcalTC=google.accounts.oauth2.initTokenClient({
+    client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID,
+    scope:'https://www.googleapis.com/auth/calendar.readonly',
+    callback:(resp)=>{ if(resp&&resp.access_token){ STATE.gcalToken=resp.access_token; loadGcalToday(); } }
+  });
+}
+function connectGcal(interactive){ gcalInit(); if(!gcalTC) return; try{ gcalTC.requestAccessToken({prompt: interactive?'consent':''}); }catch(e){} }
+async function loadGcalToday(){
+  if(!STATE.gcalToken) return;
+  const s=new Date(); s.setHours(0,0,0,0); const e=new Date(); e.setHours(23,59,59,999);
+  const url='https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin='+encodeURIComponent(s.toISOString())+'&timeMax='+encodeURIComponent(e.toISOString());
+  try{
+    const r=await fetch(url,{headers:{Authorization:'Bearer '+STATE.gcalToken}});
+    if(r.status===401){ STATE.gcalToken=null; connectGcal(false); return; }
+    if(!r.ok){ STATE.gcalErr=r.status; STATE.gcalEvents=null; renderGcalBanner(); return; }
+    const j=await r.json();
+    STATE.gcalEvents=(j.items||[]).map(x=>({title:x.summary||'(無標題)', start:x.start&&(x.start.dateTime||x.start.date), allDay:!(x.start&&x.start.dateTime)}));
+    STATE.gcalErr=null; renderGcalBanner();
+  }catch(err){}
+}
+function gcalTime(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return p(d.getHours())+':'+p(d.getMinutes()); }
+function renderGcalBanner(){
+  const el=document.getElementById('gcalBanner'); if(!el) return;
+  if(!STATE.gcalToken){ el.innerHTML=`<button class="gcal-connect" onclick="connectGcal(true)">📅 連結 Google 日曆 · 看今日行程</button>`; return; }
+  if(STATE.gcalErr){ el.innerHTML=`<div class="gcal-bar err">📅 讀日曆失敗（${STATE.gcalErr}）— 若是 403 多半 Calendar API 未啟用；<a onclick="connectGcal(true)" style="cursor:pointer;text-decoration:underline">重試</a></div>`; return; }
+  const evs=STATE.gcalEvents||[];
+  if(!evs.length){ el.innerHTML=`<div class="gcal-bar empty">📅 今天沒有行程</div>`; return; }
+  el.innerHTML=`<div class="gcal-bar"><span class="gcal-label">📅 今日</span>${evs.map(e=>`<span class="gcal-ev"><b>${e.allDay?'整天':gcalTime(e.start)}</b> ${esc(e.title)}</span>`).join('')}</div>`;
+}
+
 // 每分鐘自動更新倒數 + 檢查逾期
 setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
+setInterval(()=>{ if(STATE.user && STATE.gcalToken && !document.getElementById('appView').classList.contains('hidden')) loadGcalToday(); }, 180000);   // Google 日曆每 3 分鐘刷新
 // 記住上次登入身份（方便 demo）
 const last = localStorage.getItem('usled_last_user');
 if(last && userById(last)) login(last);
