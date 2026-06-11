@@ -67,6 +67,12 @@
   textarea{resize:vertical;min-height:88px;line-height:1.6}
   textarea.big{min-height:130px}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .grade-result{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#0ea5e9,#0369a1);border-radius:14px;padding:14px 18px;margin-bottom:15px;color:#fff}
+  .grade-result .gr-lv{font-size:30px;font-weight:800;letter-spacing:.5px;line-height:1}
+  .grade-result .gr-meta{display:flex;flex-direction:column}
+  .grade-result .gr-meta span{font-size:18px;font-weight:700}
+  .grade-result .gr-meta small{font-size:11px;opacity:.85;margin-top:3px}
   .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
 
   /* 點選式按鈕組（取代下拉）*/
@@ -301,6 +307,36 @@
       <div id="checks"></div>
     </div>
 
+    <!-- 7 工務評級（外務時顯示）-->
+    <div class="card" id="card_grade">
+      <div class="sec-t"><span class="n">7</span>工務評級<span class="opt" style="margin-left:auto;font-weight:500">選填·難度評分</span></div>
+      <div class="grade-result">
+        <div class="gr-lv" id="g_lv">Lv.0</div>
+        <div class="gr-meta"><span id="g_score">0 分</span><small id="g_breakdown">距離0 高度0 材積0 固定0 難度0</small></div>
+      </div>
+      <div class="field">
+        <label class="lb">直線距離<span class="opt">km</span></label>
+        <input type="number" id="g_km" inputmode="decimal" placeholder="例：25">
+      </div>
+      <div class="field">
+        <label class="lb">施工固定難度</label>
+        <div class="seg" id="seg_fix"></div>
+      </div>
+      <div class="field">
+        <label class="lb">看板材積<span class="opt">公分·長×寬×高</span></label>
+        <div class="row3">
+          <input type="number" id="g_vl" inputmode="decimal" placeholder="長">
+          <input type="number" id="g_vw" inputmode="decimal" placeholder="寬">
+          <input type="number" id="g_vh" inputmode="decimal" placeholder="高">
+        </div>
+      </div>
+      <div class="field">
+        <label class="lb">額外狀況<span class="opt">可複選</span></label>
+        <div class="chips" id="gradeExtra"></div>
+      </div>
+      <div class="hint">高度分數自動取自上方「使用梯子」；此評級選填,僅供難度參考。</div>
+    </div>
+
     <!-- 近期 -->
     <div class="card recent">
       <div class="sec-t"><span class="n">★</span>我的近期日誌</div>
@@ -354,7 +390,8 @@ const CFG = {
     arrive:1002616, leave:1002617, main:1002582, sub:1002583, item:1002621,
     volt:1002790, height:1002791, ladder:1002789, pay:1002785,
     siteNote:1002590, process:1002788, aar:1002778, photo:1002622,
-    toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643
+    toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643,
+    workLevel:null    // 「工務等級」欄 ID：Jason 在 Ragic 加好欄位後,我探測填入即可寫入
   },
   STAFF: ['偉智','俊男'],
   IO: ['🌄外務','🏠內部'],
@@ -394,10 +431,17 @@ const CFG = {
     {k:'dispute',  t:'是否有糾紛？'},
     {k:'suggest',  t:'是否有精進建議？'}
   ],
-  EMAIL2NAME: { 'amaze2349@gmail.com':'偉智' }
+  EMAIL2NAME: { 'amaze2349@gmail.com':'偉智' },
+  // ── 工務評級（精簡版,權重取自 led-tools）──
+  GRADE: {
+    LADDER_SCORE: { '1.0–1.8m（無）':2,'1.8–3.0m（6尺梯）':5,'3.0–3.5m（7尺梯）':8,'3.5–3.9m（8尺梯）':11,'3.9–4.3m（10尺梯）':14,'4.3–4.8m（12尺梯）':17,'4.8–5.3m（長拉梯）':19,'5.3m以上（需吊車）':20 },
+    FIX: [{t:'簡單',v:0},{t:'普通',v:7},{t:'困難',v:14},{t:'極難',v:20}],
+    EXTRA: [{k:'demo',t:'拆舊機',p:5},{k:'elec',t:'電工拉電',p:4},{k:'struct',t:'結構鐵架',p:5},{k:'outdoor',t:'戶外高空',p:5},{k:'signal',t:'訊號網路',p:3}],
+    LEVELS: [[0,6],[7,14],[15,22],[23,33],[34,46],[47,56],[57,66],[67,76],[77,88],[89,999]]
+  }
 };
 
-const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{} };
+const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{}, grade:{fix:0,extra:{},score:0,lv:0} };
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -547,12 +591,37 @@ function renderSub(){
 function renderItem(){
   buildPick('pick_item','item', CFG.OPT.item.slice(), {custom:false, clearable:false, prompt:'施作項目'});
 }
+
+/* ---------- 工務評級（精簡,權重取自 led-tools）---------- */
+function getLevel(score){ const t=CFG.GRADE.LEVELS; for(let i=0;i<t.length;i++){ if(score>=t[i][0]&&score<=t[i][1]) return i; } return 9; }
+function buildGrade(){
+  S.grade={fix:0,extra:{},score:0,lv:0};
+  const w=$('seg_fix'); w.innerHTML='';
+  CFG.GRADE.FIX.forEach((o,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=o.t; if(i===0)b.classList.add('on'); b.onclick=()=>{ S.grade.fix=o.v; [...w.children].forEach(c=>c.classList.toggle('on',c===b)); calcGrade(); }; w.appendChild(b); });
+  const g=$('gradeExtra'); g.innerHTML='';
+  CFG.GRADE.EXTRA.forEach(o=>{ S.grade.extra[o.k]=false; const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=o.t+' +'+o.p; c.onclick=()=>{ S.grade.extra[o.k]=!S.grade.extra[o.k]; c.classList.toggle('on',S.grade.extra[o.k]); calcGrade(); }; g.appendChild(c); });
+  ['g_km','g_vl','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e){ e.value=''; e.oninput=calcGrade; } });
+  calcGrade();
+}
+function calcGrade(){
+  const num=id=>parseFloat(($(id)||{}).value)||0;
+  const km=num('g_km');
+  const sKm = km<=0?0: km<=15?2: km<=30?5: km<=50?8: km<=80?11: km<=120?13:15;
+  const sH = CFG.GRADE.LADDER_SCORE[S.pick.ladder]||0;
+  const vol=(num('g_vl')*num('g_vw')*num('g_vh'))/27000;
+  const sV = vol<=0?0: vol<=1?2: vol<=3?5: vol<=6?9: vol<=15?12: vol<=30?14:15;
+  const sF = S.grade.fix||0;
+  let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>30)sC=30;
+  const total=sKm+sH+sV+sF+sC;
+  S.grade.score=total; S.grade.lv=getLevel(total);
+  if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;
+  if($('g_score')) $('g_score').textContent=total+' 分';
+  if($('g_breakdown')) $('g_breakdown').textContent='距離'+sKm+' 高度'+sH+' 材積'+sV+' 固定'+sF+' 難度'+sC;
+}
 function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderMain(); }
 function applyModeVis(){
   const show = siteShown();
-  const fi=$('field_item'), cs=$('card_site');
-  if(fi) fi.style.display = show? '':'none';
-  if(cs) cs.style.display = show? '':'none';
+  ['field_item','card_site','card_grade'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
 }
 
 /* ---------- 建立／重置表單 ---------- */
@@ -567,8 +636,9 @@ function buildForm(){
   buildSeg('seg_volt','volt', CFG.OPT.volt, 'AC 110V');
   buildSeg('seg_pay','pay', CFG.OPT.pay, '無');
   $('payNoteWrap').style.display='none';
-  buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {custom:false, prompt:'輸入梯子／高度'});
+  buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {custom:false, onpick:calcGrade, prompt:'輸入梯子／高度'});
   buildChecks();
+  buildGrade();
   renderPhotos();
   applyModeVis();
   ['f_subject','f_arrive','f_leave','f_height','f_payNote','f_siteNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
@@ -641,6 +711,7 @@ async function submitLog(){
     if(S.pick.ladder) fd.append(F.ladder, S.pick.ladder);
     fd.append(F.pay, payVal);
     if($('f_siteNote').value.trim()) fd.append(F.siteNote, $('f_siteNote').value.trim());
+    if(F.workLevel && S.grade.score>0) fd.append(F.workLevel, 'Lv.'+S.grade.lv+'（'+S.grade.score+'分）');
   }
   if($('f_process').value.trim()) fd.append(F.process, $('f_process').value.trim());
   if($('f_aar').value.trim())     fd.append(F.aar, $('f_aar').value.trim());
