@@ -53,6 +53,8 @@ img{display:block}
 .me-chip .nm{font-size:13px}
 .btn-logout{background:none;color:var(--muted);font-size:13px;padding:6px 8px;border-radius:8px}
 .btn-logout:active{background:var(--surface2)}
+.growth-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:5px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.growth-btn:active{background:var(--bg)}
 
 /* ---------- 看板 ---------- */
 #board{padding:12px;max-width:760px;margin:0 auto}
@@ -367,7 +369,10 @@ img{display:block}
 <!-- ============ 主畫面 ============ -->
 <div id="appView" class="hidden">
   <div id="topbar">
-    <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
+      <button class="growth-btn" onclick="showGrowth()">📈 成長</button>
+    </div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
@@ -1119,6 +1124,36 @@ function showGameCenter(){
   mask.onclick=closeGameCenter; document.body.appendChild(mask);
 }
 function closeGameCenter(){ const m=document.getElementById('gameModal'); if(m)m.remove(); }
+/* 成長（獨立入口，非 RPG）：三點數 + 成長曲線 + 成就徽章 */
+function showGrowth(){
+  if(!STATE.user) return;
+  const mine=STATE.tasks.filter(t=>t.assigneeId===STATE.user.id && t.status==='done');
+  const sumPts=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+  const sumCon=mine.reduce((s,t)=>s+(t.contribution||0),0);
+  const sumFav=mine.reduce((s,t)=>s+(t.favor||0),0);
+  const achs=achievements(mine,sumPts,sumCon,sumFav), gotN=achs.filter(a=>a.got).length;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='growthModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📈 我的成長</h3>
+      <button class="t-expand" onclick="closeGrowth()" style="font-size:18px">✕</button>
+    </div>
+    <div class="pts-cards">
+      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:#fbbf24">${sumPts}</div><div class="pl">T 點</div></div>
+      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:#22c55e">${sumCon}</div><div class="pl">貢獻值</div></div>
+      <div class="pts-card" style="border-color:#f472b6;background:rgba(244,114,182,.1)"><div class="pv" style="color:#f472b6">${sumFav}</div><div class="pl">人情點</div></div>
+    </div>
+    <div class="detail-label">📈 成長曲線（累積點數）</div>
+    ${growthChartSvg(mine)}
+    <div class="detail-label" style="margin-top:16px">🏅 成就徽章（${gotN}/${achs.length}）</div>
+    <div class="ach-grid">
+      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div>${!a.got&&a.max>1?`<div class="ach-bar"><i style="width:${Math.round(a.cur/a.max*100)}%"></i></div><div class="ach-prog">${a.cur} / ${a.max}</div>`:''}</div>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">這是你真實付出的紀錄 ✨ 想玩角色/裝備/寵物請點頭像進「角色養成中心」</div>
+  </div>`;
+  mask.onclick=closeGrowth; document.body.appendChild(mask);
+}
+function closeGrowth(){ const m=document.getElementById('growthModal'); if(m)m.remove(); }
 /* 成長曲線：累積點數 vs 時間（inline SVG，純衍生） */
 function growthChartSvg(done){
   const pts=done.map(t=>({d:t.approvedAt||t.submittedAt||t.createdAt, p:(t.earnedPoints!=null?t.earnedPoints:(t.points||0))}))
@@ -1738,7 +1773,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.7.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.7.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
@@ -1817,6 +1852,8 @@ function dragEnd(e){
 function checkOverdue(){
   if(!STATE.user) return;
   if(document.getElementById('overdueAlert')) return;
+  const ackAt=parseInt(localStorage.getItem('usled_overdue_ack_'+STATE.user.id)||'0');
+  if(Date.now()-ackAt < 3600000) return;   // 按過「我知道了」後 1 小時內不再提醒
   const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id && t.status!=='done' && t.dueAt && new Date(t.dueAt).getTime()<Date.now());
   if(mine.length===0) return;
   const el = document.createElement('div'); el.id='overdueAlert'; el.className='modal-mask';
@@ -1824,10 +1861,11 @@ function checkOverdue(){
     <div class="overdue-title">⚠ 你有 ${mine.length} 個任務已逾期！</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">逾期越久、點數打折越多，請盡快完成</div>
     ${mine.map(t=>`<div class="overdue-item"><b>${esc(t.title)}</b><div style="font-size:12px;color:var(--q1);margin-top:3px">${timeLeft(t.dueAt).text} · 點數 ${t.points} → <b>${effectivePoints(t)}</b></div></div>`).join('')}
-    <button class="btn-primary" style="width:100%;padding:14px;margin-top:14px;border-radius:10px;font-weight:700;font-size:15px" onclick="document.getElementById('overdueAlert').remove()">我知道了，馬上處理</button>
+    <button class="btn-primary" style="width:100%;padding:14px;margin-top:14px;border-radius:10px;font-weight:700;font-size:15px" onclick="ackOverdue()">我知道了，馬上處理（1 小時後再提醒）</button>
   </div>`;
   document.body.appendChild(el);
 }
+function ackOverdue(){ if(STATE.user) localStorage.setItem('usled_overdue_ack_'+STATE.user.id, String(Date.now())); const e=document.getElementById('overdueAlert'); if(e) e.remove(); }
 
 // 每分鐘自動更新倒數 + 檢查逾期
 setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
