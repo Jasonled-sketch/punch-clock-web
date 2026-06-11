@@ -64,6 +64,25 @@ img{display:block}
 .gcal-ev b{color:var(--accent);margin-right:3px}
 .gcal-connect{width:100%;background:rgba(240,165,0,.12);border:1px dashed var(--accent);color:var(--accent);border-radius:10px;padding:9px;font-size:13px;font-weight:600}
 .gcal-connect:active{opacity:.85}
+/* 定價表 / 實體獎兌換 / 月度回顧 */
+.price-row{display:grid;grid-template-columns:76px 120px 1fr;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-bottom:7px;font-size:12px}
+.price-cat{font-weight:700}
+.price-pts{color:var(--accent);font-weight:700}
+.price-ex{color:var(--muted);line-height:1.4}
+.rw-grid{display:flex;flex-direction:column;gap:8px}
+.rw-card{display:flex;align-items:center;gap:10px;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:10px 12px}
+.rw-icon{font-size:25px;flex-shrink:0}
+.rw-name{font-weight:700;font-size:14px}
+.rw-desc{font-size:11px;color:var(--muted)}
+.rd-row{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:13px}
+.rd-row.pend{border-color:var(--accent)}
+.rd-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.rd-st{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+.mr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.mr-cell{background:rgba(255,255,255,.08);border-radius:10px;padding:10px 4px;text-align:center}
+.mr-cell b{font-size:20px;display:block;color:#fff}
+.mr-cell span{font-size:11px;color:#cbd5e1}
+.mreview-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 18px;width:min(92vw,370px)}
 
 /* ---------- 看板 ---------- */
 #board{padding:12px;max-width:760px;margin:0 auto}
@@ -598,6 +617,8 @@ async function login(uid){
   checkOverdue();
   await loadGameState();
   checkLevelUp();
+  showMonthlyReview(false);   // 每月首次登入彈上月回顧
+  if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   gcalInit(); renderGcalBanner(); connectGcal(false);   // Google 日曆今日行程（已授權則靜默載入）
 }
 function logout(){
@@ -764,7 +785,7 @@ function openTaskModal(taskId, presetQuad){
       <div class="due-quick" id="dueQuick"></div>
       <input type="datetime-local" id="f_due" value="${dueVal}">
     </div>
-    <div class="field"><label>獎勵點數（依任務性質給）</label>
+    <div class="field"><label>獎勵點數（依任務性質給）<a onclick="showPricing()" style="float:right;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline">📋 定價表</a></label>
       <div class="reward-row">
         <div class="reward-item"><span class="reward-lbl" style="color:#fbbf24">T 點</span><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
         <div class="reward-item"><span class="reward-lbl" style="color:#22c55e">貢獻值</span><input type="number" id="f_contribution" value="${t&&t.contribution?t.contribution:0}" min="0"></div>
@@ -856,7 +877,15 @@ async function saveTask(){
   const due = document.getElementById('f_due').value;
   const points = parseInt(document.getElementById('f_points').value)||0;
   const contribution = parseInt((document.getElementById('f_contribution')||{}).value)||0;
-  const favor = parseInt((document.getElementById('f_favor')||{}).value)||0;
+  let favor = parseInt((document.getElementById('f_favor')||{}).value)||0;
+  // 人情點每人每月上限 20（含本月已開出的，避免變成馬屁點）
+  if(favor>0){
+    const ms=new Date(); ms.setDate(1); ms.setHours(0,0,0,0);
+    const used=STATE.tasks.filter(x=>x.assigneeId===assignee && x.id!==editingId && (x.favor||0)>0 && new Date(x.approvedAt||x.createdAt||0).getTime()>=ms.getTime())
+      .reduce((s,x)=>s+(x.favor||0),0);
+    const room=Math.max(0, FAVOR_MONTH_CAP-used);
+    if(favor>room){ favor=room; toast('人情點本月上限 '+FAVOR_MONTH_CAP+'，'+(room>0?('已自動調為 '+room):'已用完，本筆改為 0')); }
+  }
   const note = document.getElementById('f_note').value.trim();
   const quad = computeQuad();
   let task;
@@ -1152,11 +1181,133 @@ function showGrowth(){
     <div class="ach-grid">
       ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div>${!a.got&&a.max>1?`<div class="ach-bar"><i style="width:${Math.round(a.cur/a.max*100)}%"></i></div><div class="ach-prog">${a.cur} / ${a.max}</div>`:''}</div>`).join('')}
     </div>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">這是你真實付出的紀錄 ✨ 想玩角色/裝備/寵物請點頭像進「角色養成中心」</div>
+    <div class="modal-actions" style="margin-top:14px">
+      <button class="equip-btn" onclick="closeGrowth();showMonthlyReview(true)">📅 上月回顧</button>
+      <button class="equip-btn" onclick="showPricing()">📋 點數定價表</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">這是你真實付出的紀錄 ✨ 想玩角色/裝備/寵物請點頭像進「角色養成中心」</div>
   </div>`;
   mask.onclick=closeGrowth; document.body.appendChild(mask);
 }
 function closeGrowth(){ const m=document.getElementById('growthModal'); if(m)m.remove(); }
+
+/* ===================================================================
+   制度層：點數定價表 / 人情點月上限 / 實體獎兌換 / 月度成長回顧
+   =================================================================== */
+const FAVOR_MONTH_CAP = 20;   // 人情點每人每月上限
+const PRICING = [
+  {cat:'日常雜務', pts:'10–20',  ex:'清點庫存、收發貨、跑腿送件、環境整理'},
+  {cat:'標準執行', pts:'20–50',  ex:'出貨備料、半天安裝、報價單製作、簡單維修'},
+  {cat:'較重任務', pts:'50–80',  ex:'全天安裝工程、複雜維修除錯、急件趕工'},
+  {cat:'動腦/救火', pts:'60–100', ex:'流程改善、新品打樣、難搞客訴處理'},
+  {cat:'加成',     pts:'急件×1.5 / 假日×2', ex:'主管開單時直接乘上'},
+  {cat:'貢獻值',   pts:'5–20',   ex:'補位支援、主動救火、提案被採納（為公司額外付出）'},
+  {cat:'人情點',   pts:'1–10',   ex:'幫主管私人事務；每月上限 '+FAVOR_MONTH_CAP+' 點（系統強制）'},
+];
+function showPricing(){
+  const old=document.getElementById('pricingModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='pricingModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">📋 點數定價表</h3><button class="t-expand" onclick="closePricing()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">公開標準，全員一致。規則有意見 → 開會討論調整，不私下喬。</div>
+    ${PRICING.map(p=>`<div class="price-row"><div class="price-cat">${p.cat}</div><div class="price-pts">${p.pts}</div><div class="price-ex">${p.ex}</div></div>`).join('')}
+  </div>`;
+  mask.onclick=closePricing; document.body.appendChild(mask);
+}
+function closePricing(){ const m=document.getElementById('pricingModal'); if(m)m.remove(); }
+
+/* 實體獎目錄（用獎勵幣換真的東西 — 申請 → 主管核准 → 兌現） */
+const REWARDS = [
+  {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',   price:300,   desc:'主管請，60 元內'},
+  {id:'rw_snack',  icon:'🍗', name:'下午茶點心',   price:800,   desc:'雞排＋飲料組合'},
+  {id:'rw_early30',icon:'🕔', name:'早下班 30 分', price:1000,  desc:'需提前一天告知'},
+  {id:'rw_late',   icon:'⏰', name:'遲到豁免券',   price:1500,  desc:'30 分內遲到免計 1 次'},
+  {id:'rw_early60',icon:'🏃', name:'早下班 1 小時', price:1800,  desc:'需提前一天告知'},
+  {id:'rw_lunch',  icon:'🍱', name:'午餐公司請',   price:2200,  desc:'指定一天，150 元內'},
+  {id:'rw_coupon', icon:'🎫', name:'200 元禮券',   price:2800,  desc:'全聯／超商擇一'},
+  {id:'rw_pick',   icon:'🍽️', name:'聚餐選店權',   price:4000,  desc:'下次公司聚餐你選餐廳'},
+  {id:'rw_half',   icon:'🌴', name:'半天特休',     price:6000,  desc:'4 小時，需排班允許'},
+  {id:'rw_day',    icon:'🏖️', name:'一日特休',     price:11000, desc:'需提前三天告知'},
+];
+function rewardDef(id){ return REWARDS.find(x=>x.id===id); }
+const RD_ST={pending:'⏳ 待核准', ok:'✅ 已核准', no:'❌ 已婉拒', cancel:'↩️ 已取消'};
+async function requestRedeem(rid){
+  const it=rewardDef(rid); if(!it||!GS) return;
+  if(coinBalance()<it.price){ toast('獎勵幣不足 🪙'); return; }
+  if(!confirm('用 '+it.price+' 🪙 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。')) return;
+  GS.redeem=GS.redeem||[];
+  GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
+  GS.spent+=it.price;   // 先扣住，婉拒/取消退回
+  await saveGameState(); toast('已送出兌換申請 ✓'); refreshGameUI();
+}
+async function cancelRedeem(id){
+  const r=(GS.redeem||[]).find(x=>x.id===id); if(!r||r.st!=='pending') return;
+  r.st='cancel'; GS.spent-=r.price;
+  await saveGameState(); toast('已取消，幣已退回'); refreshGameUI();
+}
+function pendingRedeems(){
+  const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.redeem||[]).forEach(r=>{ if(r.st==='pending') out.push({pi, p, r}); }); });
+  return out;
+}
+async function decideRedeem(pi, redId, ok){
+  const p=(STATE.allPlayers||[])[pi]; if(!p) return;
+  const r=(p.save.redeem||[]).find(x=>x.id===redId); if(!r||r.st!=='pending') return;
+  r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
+  if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
+  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
+  else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
+  toast(ok?'已核准 ✓ 記得兌現給員工 🎁':'已婉拒，幣已退回'); refreshGameUI();
+}
+async function writeOtherGS(p){
+  const F=GAME_STORE.F, fd=new FormData();
+  fd.append(F.email, p.email); fd.append(F.name, p.name||'');
+  const uid=emailToUserId(p.email);
+  fd.append(F.balance, String(userEarnedCoins(uid)+(p.save.won||0)+(p.save.bonus||0)-(p.save.spent||0)));
+  fd.append(F.save, JSON.stringify(p.save));
+  fd.append(F.updated, isoToRagic(new Date().toISOString()));
+  const r=await ragicFetchGS('/'+p.ragicId+'?api',{method:'POST',body:fd});
+  return await r.json();
+}
+
+/* 月度成長回顧卡：每月首次登入自動彈上月成績；成長頁可手動回看 */
+function monthStatsFor(uid,y,m){
+  const s=new Date(y,m,1).getTime(), e=new Date(y,m+1,1).getTime();
+  const tAt=t=>new Date(t.approvedAt||t.submittedAt||t.createdAt||0).getTime();
+  const all=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
+  const inM=all.filter(t=>{const d=tAt(t); return d>=s&&d<e;});
+  const pts=t=>t.earnedPoints!=null?t.earnedPoints:(t.points||0);
+  const sum=(arr,f)=>arr.reduce((a,t)=>a+f(t),0);
+  const before=all.filter(t=>tAt(t)<s), after=all.filter(t=>tAt(t)<e);
+  const xp=arr=>sum(arr,pts)+sum(arr,t=>t.contribution||0);
+  const gotN=arr=>achievements(arr,sum(arr,pts),sum(arr,t=>t.contribution||0),sum(arr,t=>t.favor||0)).filter(a=>a.got).length;
+  return {count:inM.length, pts:sum(inM,pts), con:sum(inM,t=>t.contribution||0), fav:sum(inM,t=>t.favor||0),
+          lvB:levelInfo(xp(before)).level, lvA:levelInfo(xp(after)).level, newBadges:Math.max(0,gotN(after)-gotN(before))};
+}
+function showMonthlyReview(manual){
+  if(!STATE.user) return;
+  const now=new Date(); let y=now.getFullYear(), m=now.getMonth()-1; if(m<0){m=11;y--;}
+  const key='usled_mreview_'+STATE.user.id+'_'+y+'-'+String(m+1).padStart(2,'0');
+  const st=monthStatsFor(STATE.user.id,y,m);
+  if(!manual){ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); if(st.count===0) return; }
+  const r=rankOf(st.lvA), c=r.color, up=st.lvA-st.lvB;
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='mreviewMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
+    <div class="lvup-card mreview-card" onclick="event.stopPropagation()">
+      <div style="font-size:13px;color:#cbd5e1">${y} 年 ${m+1} 月 · ${STATE.user.name}</div>
+      <div class="lvup-title" style="font-size:22px">🌟 本月成長回顧</div>
+      <div class="mr-grid">
+        <div class="mr-cell"><b>${st.count}</b><span>完成任務</span></div>
+        <div class="mr-cell"><b style="color:#fbbf24">${st.pts}</b><span>T 點</span></div>
+        <div class="mr-cell"><b style="color:#22c55e">${st.con}</b><span>貢獻值</span></div>
+        <div class="mr-cell"><b style="color:#f472b6">${st.fav}</b><span>人情點</span></div>
+        <div class="mr-cell"><b style="color:${c}">${up>0?('+'+up):'—'}</b><span>升級</span></div>
+        <div class="mr-cell"><b>${st.newBadges>0?('+'+st.newBadges):'—'}</b><span>新徽章</span></div>
+      </div>
+      <div class="lvup-lv" style="color:${c};font-size:16px;margin-top:10px">目前 Lv.${st.lvA}「${r.name}」</div>
+      <div class="lvup-hint">${st.count>0?'每一筆都是你真實的付出，繼續加油 💪':'上月沒有完成紀錄，這個月開始累積吧 💪'}<br>截圖分享到群組讓大家看到 📸（點背景關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); if(st.count>0) sfxLevelUp();
+}
 /* 成長曲線：累積點數 vs 時間（inline SVG，純衍生） */
 function growthChartSvg(done){
   const pts=done.map(t=>({d:t.approvedAt||t.submittedAt||t.createdAt, p:(t.earnedPoints!=null?t.earnedPoints:(t.points||0))}))
@@ -1343,18 +1494,23 @@ async function ragicFetchGS(suffix, opts){
 async function loadGameState(){
   GS=blankGS();
   if(!STATE.user) return;
-  if(CONFIG.MODE!=='CLOUD'){ try{ const v=localStorage.getItem('usled_gs_'+STATE.user.id); if(v) GS=Object.assign(blankGS(),JSON.parse(v)); }catch(e){} return; }
+  if(CONFIG.MODE!=='CLOUD'){ try{ const v=localStorage.getItem('usled_gs_'+STATE.user.id); if(v) GS=Object.assign(blankGS(),JSON.parse(v)); }catch(e){} STATE.allPlayers=[{ragicId:null,email:(STATE.user.email||'').toLowerCase(),name:STATE.user.name,save:GS}]; return; }
   try{
     const r=await ragicFetchGS('?api',{method:'GET'}); const json=await r.json();
     const email=(STATE.user.email||'').toLowerCase();
     STATE.uniqueOwners={}; let best=null, bestTs=-1;
+    const byEmail={};   // 每人取最新一筆，供主管核准兌換
     Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||rec._ragicId==null) return;   // 注意：_ragicId 可能=0，不能用 falsy 判斷
       const recEmail=String(rec[GAME_STORE.N.email]||'').toLowerCase();
       let pst={}; try{ pst=JSON.parse(rec[GAME_STORE.N.save]||'{}'); }catch(e){}
-      if(recEmail===email){ const ts=+rec._dataTimestamp||0; if(ts>=bestTs){ bestTs=ts; best={rec,pst}; } }   // 同 email 多筆取最新
+      const ts=+rec._dataTimestamp||0;
+      if(recEmail===email && ts>=bestTs){ bestTs=ts; best={rec,pst}; }   // 同 email 多筆取最新
+      if(!byEmail[recEmail]||ts>=byEmail[recEmail].ts) byEmail[recEmail]={ts, ragicId:rec._ragicId, email:recEmail, name:rec[GAME_STORE.N.name]||recEmail, save:pst};
       if(pst.pets) Object.keys(pst.pets).forEach(pid=>{ const pd=petDef(pid); if(pd&&pd.unique) STATE.uniqueOwners[pid]=rec[GAME_STORE.N.name]||recEmail; });
     });
     if(best){ GS=Object.assign(blankGS(), best.pst); GS._ragicId=best.rec._ragicId; }
+    STATE.allPlayers=Object.values(byEmail);
+    const me=STATE.allPlayers.find(p=>p.email===email); if(me){ me.save=GS; if(GS._ragicId!=null) me.ragicId=GS._ragicId; }
   }catch(e){ /* 讀不到就用空檔，不擋使用 */ }
 }
 async function saveGameState(){
@@ -1517,6 +1673,14 @@ function showShop(tab){
   if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
     body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
   else if(t==='deco') body=`<div class="shop-grid">${[...SHOP.aura,...SHOP.title].map(x=>shopCosCard({...x,slot:shopItem(x.id).slot})).join('')}</div>`;
+  else if(t==='gift'){
+    const myRd=(GS.redeem||[]).slice().reverse();
+    const pend=isSupervisor(STATE.user)?pendingRedeems():[];
+    body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{};return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub">🪙${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',false)">婉拒</button></div>`;}).join('')}`:''}
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">用獎勵幣換真的獎勵 — 送出申請 → 主管核准 → 兌現 🎁</div>
+    <div class="rw-grid">${REWARDS.map(it=>`<div class="rw-card"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}</div><div class="rw-desc">${it.desc}</div></div><button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')">🪙 ${it.price}</button></div>`).join('')}</div>
+    ${myRd.length?`<div class="detail-label" style="margin-top:14px">📜 我的兌換</div>${myRd.slice(0,8).map(r=>{const it=rewardDef(r.rid)||{};return `<div class="rd-row">${it.icon||''} ${it.name||r.rid} · 🪙${r.price}<span class="rd-st">${RD_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelRedeem('${r.id}')">取消</button>`:''}</div>`;}).join('')}`:''}`;
+  }
   else body=`<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`;
   const old=document.getElementById('shopModal'); if(old) old.remove();
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='shopModal';
@@ -1525,7 +1689,7 @@ function showShop(tab){
       <h3 style="margin:0">🛒 獎勵幣商店</h3>
       <div style="display:flex;align-items:center;gap:10px"><span class="coin-pill">🪙 ${bal}</span><button class="t-expand" onclick="closeShop()" style="font-size:18px">✕</button></div>
     </div>
-    <div class="shop-tabs">${tabBtn('eq','⚔️ 裝備')}${tabBtn('deco','✨ 光環/稱號')}${tabBtn('pet','🐾 寵物')}</div>
+    <div class="shop-tabs">${tabBtn('eq','⚔️ 裝備')}${tabBtn('deco','✨ 光環')}${tabBtn('pet','🐾 寵物')}${tabBtn('gift','🎁 實體獎')}</div>
     ${body}
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">獎勵幣＝完成任務賺的（每 ${COIN_PER_TPTS} 點實得 T 點換 1 🪙）。裝備加戰力、史詩/傳說需等級解鎖；三點數不會被扣 ✨</div>
   </div>`;
@@ -1776,7 +1940,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.8.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.9.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
