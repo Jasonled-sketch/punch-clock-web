@@ -1093,8 +1093,6 @@ function showGameCenter(){
   const c=g.rank.color;
   const pct=Math.min(100,Math.round(g.into/g.span*100));
   const next=RANKS.find(r=>r.min>g.level);
-  const achs=achievements(mine,sumPts,sumCon,sumFav);
-  const gotN=achs.filter(a=>a.got).length;
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='gameModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1124,13 +1122,7 @@ function showGameCenter(){
     <button class="dungeon-btn" onclick="showDungeon()">⚔️ 副本闖關 · 答題打 Boss（今日剩 ${dungeonLeft()} 次）</button>
     <div class="detail-label">🐾 我的夥伴</div>
     ${petCardHtml()}
-    <div class="detail-label">📈 成長曲線</div>
-    ${growthChartSvg(mine)}
-    <div class="detail-label" style="margin-top:14px">🏅 成就徽章（${gotN}/${achs.length}）</div>
-    <div class="ach-grid">
-      ${achs.map(a=>`<div class="ach ${a.got?'':'locked'}">${a.got?'<span class="got">✓</span>':''}<div class="ai">${a.icon}</div><div class="an">${a.name}</div><div class="ad">${a.desc}</div>${!a.got&&a.max>1?`<div class="ach-bar"><i style="width:${Math.round(a.cur/a.max*100)}%"></i></div><div class="ach-prog">${a.cur} / ${a.max}</div>`:''}</div>`).join('')}
-    </div>
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">完成任務累積 T 點與貢獻值即可升級 ✨<br>🪙 獎勵幣商店（換頭像裝飾）即將開放</div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">買裝備提升戰力、養角色寵物、打副本闖關 ⚔️<br>想看成長曲線／成就 → 點任務牆上方「📈 成長」</div>
   </div>`;
   mask.onclick=closeGameCenter; document.body.appendChild(mask);
 }
@@ -1784,7 +1776,7 @@ function toast(msg){ const old=document.getElementById('toast'); if(old)old.remo
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v0.8.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v0.8.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
