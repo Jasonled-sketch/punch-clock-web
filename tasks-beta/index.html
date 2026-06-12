@@ -391,8 +391,28 @@ img{display:block}
 .si-icon{font-size:30px;line-height:1}
 .si-name{font-size:12px;font-weight:600}
 .si-rar{font-size:10px;font-weight:700;margin-top:-3px}
+.si-line{display:flex;align-items:center;justify-content:center;gap:7px;width:100%}
+.si-line .si-name,.si-line .si-rar{margin:0}
+.si-rar.pet-below{margin-top:-2px;font-size:11px}
 .pet-emoji.egg{animation:eggWobble 2.2s ease-in-out infinite}
 @keyframes eggWobble{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.pet-emoji-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:54px}
+.pet-rbadge{font-size:9px;font-weight:800;color:#fff;border-radius:6px;padding:1px 7px;line-height:1.5;white-space:nowrap}
+.feed-btn.inv{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
+/* 質感提示詢問框 vConfirm */
+.vc-mask{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+.vc-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px 20px 18px;width:100%;max-width:340px;text-align:center;box-shadow:0 22px 64px rgba(0,0,0,.55);animation:vcPop .24s cubic-bezier(.2,1.3,.5,1)}
+.vc-ic{font-size:40px;line-height:1;margin-bottom:10px}
+.vc-title{font-weight:800;font-size:18px;margin-bottom:7px}
+.vc-msg{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:20px;white-space:pre-line}
+.vc-msg .coin-ic{vertical-align:-3px}
+.vc-actions{display:flex;gap:10px}
+.vc-actions button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:15px;border:1px solid transparent}
+.vc-cancel{background:var(--surface2);border-color:var(--border)!important;color:var(--text)}
+.vc-cancel:active{background:var(--bg)}
+.vc-ok{background:var(--accent);color:#1a1205}
+.vc-ok.danger{background:#ef4444;color:#fff}
+@keyframes vcPop{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
 .buy-btn{background:var(--accent);color:#1a1205;font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
 .buy-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
 .equip-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 0;font-size:12px;width:100%;font-weight:600}
@@ -929,7 +949,7 @@ async function saveTask(){
   try{ await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務'); }
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
-async function deleteTask(id){ if(!confirm('確定刪除這個任務？'))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
+async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
 async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
 async function rejectTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='open'; renderBoard(); await dbUpsert(t); toast('已退回，請員工繼續'); }
@@ -1170,7 +1190,7 @@ function showGameCenter(){
       <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
     </div>
     <div class="gc-actionrow">
-      <span class="coin-pill big"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${coinBalance()} 獎勵幣</span>
+      <span class="coin-pill big"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${coinBalance()} 鑽石</span>
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
       ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
     </div>
@@ -1232,7 +1252,7 @@ function kpiPoolHtml(){
     <div class="kpi-bar"><i style="width:${myPct}%"></i></div>
     <div class="kpi-row" style="margin-top:12px"><span>🔥 團隊績效池 <b style="color:${lit?'var(--accent)':'var(--muted)'}">${team.toLocaleString()}</b> / ${tk.toLocaleString()} 點</span><span>${tPctShow}%</span></div>
     <div class="kpi-bar team${lit?' lit':''}"><i style="width:${tPctShow}%"></i>${TEAM_POOL.map(t=>`<em style="left:${t.pct*100}%" title="${Math.round(t.pct*100)}%→${t.coins}幣"></em>`).join('')}</div>
-    <div class="kpi-hint">${lit?('🎉 績效池已點亮！'+(pool?('目前檔位 <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">'+pool.toLocaleString()+'，月底按貢獻比例自動入帳'):'達 60% 開始發幣')+(nextTier?('；下一檔 '+Math.round(nextTier.pct*100)+'% → <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">'+nextTier.coins.toLocaleString()):'')):'團隊達 50% 績效池點亮、60% 起送全隊金幣（1000→8000），按各自貢獻比例分 💪'}</div>
+    <div class="kpi-hint">${lit?('🎉 績效池已點亮！'+(pool?('目前檔位 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+pool.toLocaleString()+'，月底按貢獻比例自動入帳'):'達 60% 開始發幣')+(nextTier?('；下一檔 '+Math.round(nextTier.pct*100)+'% → <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+nextTier.coins.toLocaleString()):'')):'團隊達 50% 績效池點亮、60% 起送全隊鑽石（1000→8000），按各自貢獻比例分 💪'}</div>
   </div>`;
 }
 
@@ -1264,7 +1284,7 @@ function showPricing(){
 }
 function closePricing(){ const m=document.getElementById('pricingModal'); if(m)m.remove(); }
 
-/* 實體獎目錄（用獎勵幣換真的東西 — 申請 → 主管核准 → 兌現） */
+/* 實體獎目錄（用鑽石換真的東西 — 申請 → 主管核准 → 兌現） */
 /* 團隊頁：看夥伴的角色/等級/戰力/稱號/裝備/寵物/本月產值（互相提醒、互相拉抬） */
 function showTeam(){
   if(!STATE.user) return;
@@ -1306,7 +1326,7 @@ function showTeam(){
 }
 function closeTeam(){ const m=document.getElementById('teamModal'); if(m)m.remove(); }
 
-/* 實體獎（1 金幣 ≈ 1 元）。qty = 每季全公司限量，被換完下季補貨（稀缺感＋控制成本） */
+/* 實體獎（1 鑽石 ≈ 1 元）。qty = 每季全公司限量，被換完下季補貨（稀缺感＋控制成本） */
 const REWARDS = [
   {id:'rw_song',   icon:'🎵', name:'辦公室點歌權',     price:30,   desc:'指定一個下午的歌單', qty:8},
   {id:'rw_coffee', icon:'☕', name:'咖啡升級券',       price:40,   desc:'超商咖啡升大杯',     qty:6},
@@ -1358,8 +1378,8 @@ const RD_ST={pending:'⏳ 待核准', ok:'✅ 已核准', no:'❌ 已婉拒', ca
 async function requestRedeem(rid){
   const it=rewardDef(rid); if(!it||!GS) return;
   if(it.qty && soldCount(rid)>=it.qty){ toast(rid.indexOf('hw_')===0?'快閃獎已被搶走 😭':'本季已兌完，下季補貨 🔒'); return; }
-  if(coinBalance()<it.price){ toast('金幣不足'); return; }
-  if(!confirm('用 '+it.price+' <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。')) return;
+  if(coinBalance()<it.price){ toast('鑽石不足'); return; }
+  if(!await vConfirm({icon:'🎁',title:'兌換實體獎',msg:'用 '+it.price+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。',okText:'送出申請'})) return;
   GS.redeem=GS.redeem||[];
   GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
   GS.spent+=it.price;   // 先扣住，婉拒/取消退回
@@ -1519,14 +1539,14 @@ function checkLevelUp(){
 }
 
 /* ===================================================================
-   遊戲化 v3：獎勵幣商店 + 寵物養成（純外觀，疊在等級頭像上）
-   - 獎勵幣「賺」從完成任務衍生(跨裝置)；「花費/持有/寵物」存玩家狀態表
+   遊戲化 v3：鑽石商店 + 寵物養成（純外觀，疊在等級頭像上）
+   - 鑽石「賺」從完成任務衍生(跨裝置)；「花費/持有/寵物」存玩家狀態表
    - 寵物只成長不退化、不挨餓、無冷卻 → 非時間黑洞
    =================================================================== */
-/* ===== 經濟核心（1 點 = 10 元委外產值；1 金幣 ≈ 1 元）===== */
+/* ===== 經濟核心（1 點 = 10 元委外產值；1 鑽石 ≈ 1 元）===== */
 const POINT_VALUE = 10;            // 1 點 = 10 元（委外計價 ÷10 = 點數）
 const KPI_MONTH = 6500;            // 個人月 KPI 6,500 點 = 65,000 元人事成本（產值參考線）
-const TEAM_POOL = [                 // 團隊績效池：全員月點數 ÷ 團隊KPI 達標 → 送金幣按貢獻分
+const TEAM_POOL = [                 // 團隊績效池：全員月點數 ÷ 團隊KPI 達標 → 送鑽石按貢獻分
   {pct:1.00, coins:8000}, {pct:0.90, coins:4000}, {pct:0.80, coins:3000},
   {pct:0.70, coins:2000}, {pct:0.60, coins:1000},
 ];
@@ -1545,7 +1565,7 @@ function teamPoolCoins(uid){
     total+=Math.floor(pool*monthPts(uid,y,m)/team); }
   return total;
 }
-const COIN_PER_TPTS = 10;          // 每 10 點實得 T 點 = 1 獎勵幣（6500點/月 ≈ 650幣）
+const COIN_PER_TPTS = 10;          // 每 10 點實得 T 點 = 1 鑽石（6500點/月 ≈ 650幣）
 // 外觀（光環 SVG glow + 稱號，疊在頭像）
 const SHOP = {
   aura:[
@@ -1583,66 +1603,66 @@ function gearPower(){ if(!GS||!GS.gear) return 0; let s=0; for(const k in GS.gea
 const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
 // 寵物：每隻獨特輔助技能(副本生效)，稀有度越高越強、越貴越難得
 /* 寵物技能皆「幸運/輔助」類（作答節奏慢，不放攻擊加成）；技能值會隨寵物等級成長 */
+/* 寵物稀有、不易取得：一般寵物 120 起跳，越高稀有越貴 */
 const PETS = [
-  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:50,  skill:{t:'coin',v:0.12}},
-  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:55, skill:{t:'drop',v:0.10}},
-  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:60,  skill:{t:'dodge',v:0.10}},
-  {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:65,    skill:{t:'regen',v:0.30}},
-  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:110,    skill:{t:'crit',v:0.15}},
-  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:120,skill:{t:'coin',v:0.25}},
-  {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:130,  skill:{t:'drop',v:0.18}},
-  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:230,  skill:{t:'hint',v:1}},
-  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:250, skill:{t:'dodge',v:0.18}},
-  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:400, skill:{t:'crit',v:0.25}},
-  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:440, skill:{t:'coindbl',v:0.33}},
-  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:500,skill:{t:'regen',v:0.50}},
-  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:750,unique:true, skill:{t:'extrarun',v:1}},
-  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:850,unique:true, skill:{t:'coin',v:1.0}},
+  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:120, skill:{t:'coin',v:0.12}},
+  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:130,skill:{t:'drop',v:0.10}},
+  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:140, skill:{t:'dodge',v:0.10}},
+  {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:150,   skill:{t:'regen',v:0.30}},
+  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:230,    skill:{t:'crit',v:0.15}},
+  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:250,skill:{t:'coin',v:0.25}},
+  {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:280,  skill:{t:'drop',v:0.18}},
+  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:430,  skill:{t:'hint',v:1}},
+  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:480, skill:{t:'dodge',v:0.18}},
+  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:680, skill:{t:'crit',v:0.25}},
+  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:740, skill:{t:'coindbl',v:0.33}},
+  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:820,skill:{t:'regen',v:0.50}},
+  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:1200,unique:true, skill:{t:'extrarun',v:1}},
+  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:1400,unique:true, skill:{t:'coin',v:1.0}},
 ];
-/* 節慶限定寵物（固定時間出現、期間限購、BUFF 強但不 OVER）；幻彩蛋全年但貴 */
+/* 限定登場寵物（固定時間出現、期間限購、BUFF 強但不 OVER）；一律幻彩繽紛蛋、每隻顏色不同 */
 const SEASON_PETS = [
-  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:5,price:900, season:'cny',   skill:{t:'coindbl',v:0.50}},
-  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:5,price:600, season:'dragon',skill:{t:'drop',v:0.35}},
-  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:5,price:600,season:'midautumn',skill:{t:'extrarun',v:1}},
-  {id:'pet_rainbow',name:'幻彩彩色蛋',icon:'🦄',r:5,price:1200,rainbow:true,skill:{t:'coin',v:0.50,extra:{t:'dodge',v:0.15}}},
+  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:5,price:1300,season:'cny',   skill:{t:'coindbl',v:0.50}},
+  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:5,price:980, season:'dragon',skill:{t:'drop',v:0.35}},
+  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:5,price:980,season:'midautumn',skill:{t:'extrarun',v:1}},
 ];
 function inSeason(s){ const m=new Date().getMonth()+1, d=new Date().getDate();
   if(s==='cny') return (m===1&&d>=20)||(m===2&&d<=20);          // 農曆年前後（近似）
   if(s==='dragon') return m===6;                                 // 端午（六月）
   if(s==='midautumn') return m===9||(m===10&&d<=10);             // 中秋
   return false; }
-function activeSeasonPets(){ return SEASON_PETS.filter(p=>p.rainbow||inSeason(p.season)); }
+function activeSeasonPets(){ return SEASON_PETS.filter(p=>isBeta()||inSeason(p.season)); }   // beta 全顯示供驗收幻彩
 function allPets(){ return PETS.concat(activeSeasonPets()); }
 const FEED = [
   {id:'feed_s',name:'小食',icon:'🍎',price:8,exp:15}, {id:'feed_m',name:'中食',icon:'🍖',price:18,exp:45}, {id:'feed_l',name:'大餐',icon:'🍱',price:38,exp:110},
 ];
-const SKILL_DESC={coin:'獎勵幣',crit:'答對爆擊率',drop:'高級掉寶率',hint:'召喚孔子',dodge:'幸運閃避',regen:'回血速度',coindbl:'金幣翻倍機率',extrarun:'每日額外副本'};
+const SKILL_DESC={coin:'鑽石',crit:'答對爆擊率',drop:'高級掉寶率',hint:'召喚孔子',dodge:'幸運閃避',regen:'回血速度',coindbl:'鑽石翻倍機率',extrarun:'每日額外副本'};
 /* 基礎技能字串（型錄用） */
 function skillText(sk){ if(!sk) return '無'; let t = sk.t==='hint'?('🧙 召喚孔子 '+sk.v+' 次/場'):(sk.t==='extrarun'?('每日額外 '+sk.v+' 次副本'):(SKILL_DESC[sk.t]+' +'+Math.round(sk.v*100)+'%')); if(sk.extra) t+=' ＋'+skillText(sk.extra); return t; }
 /* 現役寵物「實際生效值」字串（隨等級成長後的數字） */
 function skillTextLive(){ const s=activePetSkill(); if(!s) return ''; if(s.t==='hint') return '🧙 召喚孔子 '+petSkillVal('hint')+' 次/場'; if(s.t==='extrarun') return '每日額外 '+petSkillVal('extrarun')+' 次副本'; let t=SKILL_DESC[s.t]+' +'+Math.round(petSkillVal(s.t)*100)+'%'; if(s.extra) t+='＋'+SKILL_DESC[s.extra.t]+' +'+Math.round(petSkillVal(s.extra.t)*100)+'%'; return t; }
-// 進化 6 階：蛋→幼雛→小型→中型→大型→巨型；每階 9 級(滿級才進階)
-const PET_STG=['蛋','幼雛','小型','中型','大型','巨型'];
+// 進化 6 階（蛋＝未孵化前置態，不算階）：幼雛→小型→中型→大型→巨型→究級
+const PET_STG=['幼雛','小型','中型','大型','巨型','究級'];
+const PET_EVO=[30,150,330,560,860,1250];   // 各階所需「累積經驗」門檻（達標即進化；蛋在 30 破殼成幼雛）
 function petEmoji(id,exp){ return petProgress(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
 const SLOTS = ['hat','glasses','hand','frame','aura'];
 function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return petDef(id)||FEED.find(x=>x.id===id)||null; }
 function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id); }
 function petProgress(exp){
-  const HATCH=30;
-  if(exp<HATCH) return {egg:true, stageIdx:0, stageName:'蛋', level:0, glvl:0, into:exp, span:HATCH, toNext:HATCH-exp, scale:0.8, max:false};
-  let post=exp-HATCH, glvl=1, acc=0, cost=40;
-  while(glvl<45 && post>=acc+cost){ acc+=cost; glvl++; cost=40+glvl*8; }
-  const stageIdx=Math.floor((glvl-1)/9)+1, level=((glvl-1)%9)+1, max=glvl>=45;
-  return {egg:false, stageIdx, stageName:PET_STG[stageIdx], level, glvl, into:post-acc, span:cost, toNext:max?0:(acc+cost-post), scale:0.85+stageIdx*0.2, max};
+  const T=PET_EVO;
+  if(exp<T[0]) return {egg:true, stageIdx:-1, stageName:'蛋', into:exp, span:T[0], toNext:T[0]-exp, scale:0.74, max:false};
+  let s=0; while(s<T.length-1 && exp>=T[s+1]) s++;
+  const max=s>=T.length-1, base=T[s], next=max?base:T[s+1];
+  return {egg:false, stageIdx:s, stageName:PET_STG[s], into:exp-base, span:max?1:(next-base), toNext:max?0:(next-exp), scale:0.82+s*0.12, max};
 }
-function petPower(){ if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet]) return 0; const pr=petProgress(GS.pets[GS.activePet].exp); return pr.egg?0:(pr.stageIdx*8+pr.level*2); }
+function petPower(){ if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet]) return 0; const pr=petProgress(GS.pets[GS.activePet].exp); return pr.egg?0:(pr.stageIdx+1)*9; }   // 進化才提升戰力(升級不變)
 function activePetSkill(){ if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet]) return null; if(petProgress(GS.pets[GS.activePet].exp).egg) return null; const p=petDef(GS.activePet); return p?p.skill:null; }
 function petSkillVal(type){
   const s=activePetSkill(); if(!s) return 0;
   const base = s.t===type ? s.v : (s.extra&&s.extra.t===type ? s.extra.v : 0);   // 幻彩蛋雙技能
   if(!base) return 0;
-  const pr=petProgress(GS.pets[GS.activePet].exp);
-  const f=0.5+(pr.glvl/45);   // 技能隨等級成長：幼雛 ~52% → 巨型 Lv.9 150%
+  const pr=petProgress(GS.pets[GS.activePet].exp); if(pr.egg) return 0;
+  const f=0.6+pr.stageIdx*0.12;   // 進化才提升：幼雛 60% → 究級 120%（同階升級不變）
   return (type==='hint'||type==='extrarun') ? Math.max(1,Math.round(base*f)) : base*f;
 }
 
@@ -1650,10 +1670,10 @@ function petSkillVal(type){
 const GAME_STORE = {
   PATH: '/check-in-system/12',   // 遊戲狀態表（Jason 2026-06-06 建）
   F: { email:1003072, name:1003073, balance:1003074, save:1003075, updated:1003076 },   // 遊戲狀態表欄位 ID（已驗證）
-  N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },
+  N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, redeem:[]}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[]}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -1676,12 +1696,12 @@ function itemDef(id){ return ITEMS.find(x=>x.id===id); }
 function itemCount(id){ return (GS&&GS.items&&GS.items[id])||0; }
 function itemImg(it,sz){ return `<img src="assets/game/item/${it.file}" style="width:${sz||24}px;height:${sz||24}px;object-fit:contain;vertical-align:-5px">`; }
 async function buyConsum(id){ const it=itemDef(id); if(!it) return;
-  if(coinBalance()<it.price){ toast('金幣不足'); return; }
+  if(coinBalance()<it.price){ toast('鑽石不足'); return; }
   GS.items=GS.items||{}; GS.items[id]=(GS.items[id]||0)+1; GS.spent+=it.price;
   await saveGameState(); toast('已購買 '+it.name+' ✓'); refreshGameUI(); if(STATE.battle) renderBattle(); }
 async function sellConsum(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
   const back=Math.floor(it.price*0.4); GS.items[id]--; GS.spent-=back;
-  await saveGameState(); toast('已賣出 '+it.name+' ＋'+back+' 金幣'); refreshGameUI(); }
+  await saveGameState(); toast('已賣出 '+it.name+' ＋'+back+' 鑽石'); refreshGameUI(); }
 async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
   syncHp();
   if(it.heal){ if(GS.hp>=100){ toast('血量已滿'); return; } GS.hp=Math.min(100,GS.hp+it.heal); GS.hpAt=Date.now(); GS.items[id]--; await saveGameState(); toast('❤️ 回復至 '+Math.round(GS.hp)+'%'); if(STATE.battle) renderBattle(); else refreshGameUI(); return; }
@@ -1696,9 +1716,9 @@ async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) retu
 /* 裝備可賣出（40% 回收，避免低階裝備變垃圾） */
 async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
   const back=Math.floor(it.price*0.4);
-  if(!confirm('賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）回收 '+back+' 金幣？')) return;
+  if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？',okText:'賣出'})) return;
   GS.owned=GS.owned.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
-  GS.spent-=back; await saveGameState(); toast('已賣出 ＋'+back+' 金幣'); refreshGameUI(); }
+  GS.spent-=back; await saveGameState(); toast('已賣出 ＋'+back+' 鑽石'); refreshGameUI(); }
 function userEarnedCoins(uid){
   const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
@@ -1706,9 +1726,9 @@ function userEarnedCoins(uid){
 }
 function coinBalance(){ return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.bonus)||0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
-async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 獎勵幣'); refreshGameUI(); }
+async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }
 async function resetGame(){
-  if(!confirm('確定重置你的遊戲存檔？裝備/寵物/獎勵幣/進度全部歸零（無法復原）')) return;
+  if(!await vConfirm({icon:'🧹',title:'重置遊戲存檔',msg:'確定重置你的遊戲存檔？\n裝備／寵物／鑽石／進度全部歸零（無法復原）',okText:'重置',danger:true})) return;
   const rid=GS&&GS._ragicId; GS=blankGS(); if(rid!=null) GS._ragicId=rid;   // 保留同一筆覆蓋(不新增重複)
   STATE.uniqueOwners=STATE.uniqueOwners||{};
   await saveGameState(); toast('🧹 已重置存檔'); refreshGameUI();
@@ -1759,7 +1779,7 @@ async function buyItem(id){
   const it=shopItem(id); if(!it||owns(id)) return;
   const eq=equipItem(id);
   if(eq && it.minLevel && !lvOK(it.minLevel)){ toast('需 Lv.'+it.minLevel+' 才能入手「'+PET_RARITY[it.r].name+SLOTNAME[it.slot]+'」🔒'); return; }
-  if(coinBalance()<it.price){ toast('金幣不足'); return; }
+  if(coinBalance()<it.price){ toast('鑽石不足'); return; }
   GS.owned.push(id); GS.spent+=it.price;
   if(eq){ GS.gear=GS.gear||{}; GS.gear[it.slot]=id; }              // 裝備買了自動裝上
   else if(it.slot==='title'){ GS.title=id; }
@@ -1769,25 +1789,38 @@ async function buyItem(id){
 async function buyPet(id){
   const p=petDef(id); if(!p||(GS.pets&&GS.pets[id])) return;
   if(p.unique && STATE.uniqueOwners && STATE.uniqueOwners[id]){ toast('這是公司唯一，已被 '+STATE.uniqueOwners[id]+' 領養了 🔒'); return; }
-  if(coinBalance()<p.price){ toast('金幣不足'); return; }
+  if(coinBalance()<p.price){ toast('鑽石不足'); return; }
   GS.pets=GS.pets||{}; GS.pets[id]={exp:0}; GS.spent+=p.price;
   if(!GS.activePet) GS.activePet=id;
   if(p.unique){ STATE.uniqueOwners=STATE.uniqueOwners||{}; STATE.uniqueOwners[id]=STATE.user.name; }  // 樂觀鎖定（領養不可取消）
   await saveGameState(); toast('帶回了 '+(p.unique?'公司唯一的 ':'')+p.name+' 的蛋 🥚 — 餵食孵化吧！'); refreshGameUI();
 }
+function petFeedFx(pet,b,a,f){
+  if(b.egg && !a.egg) petEvolveCeremony(pet, a, '🐣 孵化誕生！');
+  else if(a.stageIdx>b.stageIdx) petEvolveCeremony(pet, a, '進化成「'+a.stageName+'」！');
+  else toast(pet.name+(a.egg?' 的蛋':'')+' 吃了 '+f.name+'（+'+f.exp+' 經驗）');
+}
 async function feedActivePet(feedId){
   if(!GS.activePet||!GS.pets[GS.activePet]){ toast('先到商店帶一隻寵物 🐾'); return; }
   const f=FEED.find(x=>x.id===feedId); if(!f) return;
-  if(coinBalance()<f.price){ toast('金幣不足'); return; }
+  if(coinBalance()<f.price){ toast('鑽石不足'); return; }
   const pet=petDef(GS.activePet), b=petProgress(GS.pets[GS.activePet].exp);
   GS.pets[GS.activePet].exp+=f.exp; GS.spent+=f.price;
   const a=petProgress(GS.pets[GS.activePet].exp);
   saveGameState();                       // 背景存檔，不卡畫面/不跳頂
   refreshGameUI();                        // 先就地刷新(保留捲動)
-  if(b.egg && !a.egg) petEvolveCeremony(pet, a, '🐣 孵化誕生！');
-  else if(a.stageIdx>b.stageIdx) petEvolveCeremony(pet, a, '進化成「'+a.stageName+'」！');
-  else if(a.glvl>b.glvl) toast(pet.name+' 升到 '+a.stageName+' Lv.'+a.level+' 💪');
-  else toast(pet.name+(a.egg?' 的蛋':'')+' 吃了 '+f.name+'（+'+f.exp+' 經驗）');
+  petFeedFx(pet,b,a,f);
+}
+/* 用副本掉落的庫存零食餵食（免費） */
+async function feedFromInv(feedId){
+  if(!GS.activePet||!GS.pets[GS.activePet]){ toast('先到商店帶一隻寵物 🐾'); return; }
+  if(!GS.feed||!(GS.feed[feedId]>0)) return;
+  const f=FEED.find(x=>x.id===feedId); if(!f) return;
+  const pet=petDef(GS.activePet), b=petProgress(GS.pets[GS.activePet].exp);
+  GS.feed[feedId]--; GS.pets[GS.activePet].exp+=f.exp;
+  const a=petProgress(GS.pets[GS.activePet].exp);
+  saveGameState(); refreshGameUI();
+  petFeedFx(pet,b,a,f);
 }
 function petEvolveCeremony(pet, prog, title){
   const r=PET_RARITY[pet.r], c=r.color;
@@ -1797,7 +1830,7 @@ function petEvolveCeremony(pet, prog, title){
       <div style="font-size:${Math.round(72*prog.scale)}px;filter:drop-shadow(0 0 22px ${c})">${pet.icon}</div>
       <div class="lvup-title">🎉 恭喜！</div>
       <div class="lvup-lv" style="color:${c}">${pet.name} ${title}</div>
-      <div class="lvup-hint">${r.name} · ${prog.stageName} Lv.${prog.level}　｜　技能：${skillText(pet.skill)}<br>（點一下關閉）</div>
+      <div class="lvup-hint">${r.name} · ${prog.stageName}　｜　技能：${skillText(pet.skill)}<br>（點一下關閉）</div>
     </div>`;
   o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
   setTimeout(()=>{const m=document.getElementById('evolveMask'); if(m)m.remove();},6000);
@@ -1809,12 +1842,17 @@ async function toggleEquip(id){
   else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
   await saveGameState(); refreshGameUI();
 }
-function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return; if(!lvOK(c.minLevel)){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; } GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
+function canChangeChar(){ return isBeta() || new Date().getDate()===5; }   // 角色每月 5 號才能更換
+function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return;
+  if(!canChangeChar()){ toast('🗓️ 角色每月 5 號才能更換（今天 '+new Date().getDate()+' 號）'); return; }
+  if(!lvOK(c.minLevel)){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; }
+  GS.charId=id; saveGameState(); refreshGameUI(); closeCharPick(); }
 function showCharPick(){
-  const lvl=userGameLevel(STATE.user.id), cur=(GS&&GS.charId)||'c1';
+  const lvl=userGameLevel(STATE.user.id), cur=(GS&&GS.charId)||'c1', canC=canChangeChar();
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;margin-bottom:10px;padding:8px 11px;border-radius:9px;background:${canC?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${canC?'#22c55e':'var(--q1)'};font-weight:600">🗓️ 角色每月 <b>5 號</b>才能更換${canC?'　·　今天可以換！':'　·　今天 '+new Date().getDate()+' 號，僅供預覽'}</div>
     <div class="char-grid">${CHARS.map(c=>{ const lk=!lvOK(c.minLevel); return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
   </div>`;
   mask.onclick=closeCharPick; document.body.appendChild(mask);
@@ -1839,10 +1877,10 @@ function equipCard(it){
   const locked=it.minLevel&&!lvOK(it.minLevel);
   let action;
   if(equipped) action=`<button class="equip-btn on" onclick="toggleEquip('${it.id}')">裝備中 ✓</button>`;
-  else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button><button class="sell-btn" onclick="sellItem('${it.id}')">賣 <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">${Math.floor(it.price*0.4)}</button>`;
+  else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button><button class="sell-btn" onclick="sellItem('${it.id}')">賣 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${Math.floor(it.price*0.4)}</button>`;
   else if(locked) action=`<button class="buy-btn dis" disabled>🔒 Lv.${it.minLevel}</button>`;
-  else action=`<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${it.price}</button>`;
-  return `<div class="shop-item${equipped?' eq':''}" style="border-color:${rc}66"><img class="si-img" src="${equipFile(it.id)}" loading="lazy"><div class="si-name" style="color:${rc}">${PET_RARITY[it.r].name}</div><div class="si-rar">⚔️ ${it.power}</div>${action}</div>`;
+  else action=`<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`;
+  return `<div class="shop-item${equipped?' eq':''}" style="border-color:${rc}66"><img class="si-img" src="${equipFile(it.id)}" loading="lazy"><div class="si-line"><span class="si-name" style="color:${rc}">${PET_RARITY[it.r].name}</span><span class="si-rar" style="color:${rc}">⚔️${it.power}</span></div>${action}</div>`;
 }
 async function setActivePet(id){ if(GS.pets&&GS.pets[id]){ GS.activePet=id; await saveGameState(); refreshGameUI(); } }
 function refreshGameUI(){
@@ -1856,16 +1894,22 @@ function petCardHtml(){
   const id=GS.activePet, p=petDef(id), st=GS.pets[id], pr=petProgress(st.exp);
   const pct=pr.max?100:Math.round(pr.into/pr.span*100);
   const others=Object.keys(GS.pets).filter(x=>x!==id);
-  const bal=coinBalance(), rc=PET_RARITY[p.r].color;
-  const expTxt = pr.egg ? ('孵化倒數：再餵 '+pr.toNext+' 經驗破殼 🥚')
-    : (pr.max?'已達巔峰 巨型 Lv.9 ✨':('距升級還差 '+pr.toNext+' 經驗'));
+  const bal=coinBalance(), rc=PET_RARITY[p.r].color, leg=p.r>=5;
+  const nextName=pr.egg?'幼雛':(pr.max?'':PET_STG[pr.stageIdx+1]);
+  const expTxt = pr.egg ? ('破殼倒數：再餵 '+pr.toNext+' 經驗孵化 🥚')
+    : (pr.max?'已達究極形態 ✨':('距進化「'+nextName+'」還差 '+pr.toNext+' 經驗'));
+  const ownFeed=Object.keys(GS.feed||{}).filter(k=>GS.feed[k]>0);
   return `<div class="pet-card">
-    <div class="pet-emoji${pr.egg?' egg':''}" style="font-size:${Math.round(26*pr.scale)}px">${petEmoji(id,st.exp)}</div>
+    <div class="pet-emoji-col">
+      <div class="pet-emoji${pr.egg?' egg':''}" style="font-size:${Math.round(30*pr.scale)}px">${petEmoji(id,st.exp)}</div>
+      <span class="pet-rbadge" style="background:${rc}${leg?';box-shadow:0 0 9px '+rc:''}">${PET_RARITY[p.r].name}</span>
+    </div>
     <div class="pet-info">
-      <div class="pet-name">${pr.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${PET_RARITY[p.r].name}·${pr.egg?'蛋':(pr.stageName+' Lv.'+pr.level)}</span></div>
+      <div class="pet-name">${pr.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${pr.egg?'未孵化':pr.stageName}</span></div>
       <div class="pet-bar"><i style="width:${pct}%;background:${pr.egg?'linear-gradient(90deg,#f0a500,#fbbf24)':''}"></i></div>
       <div class="pet-exp">${expTxt}${pr.egg?'':'　｜　🎁 '+skillTextLive()}</div>
-      <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·<img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">${f.price}</button>`).join('')}</div>
+      <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·<img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${f.price}</button>`).join('')}</div>
+      ${ownFeed.length?`<div class="feed-row">${ownFeed.map(k=>{const f=FEED.find(x=>x.id===k);return `<button class="feed-btn inv" onclick="feedFromInv('${k}')">🎒${f.icon}${f.name}×${GS.feed[k]} 餵</button>`;}).join('')}</div>`:''}
     </div>
     ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
   </div>`;
@@ -1876,17 +1920,24 @@ function shopCosCard(it){
   const equipped = it.slot==='title' ? GS.title===it.id : GS.equipped[it.slot]===it.id;
   const bal=coinBalance();
   const action = !owned
-    ? `<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${it.price}</button>`
+    ? `<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`
     : `<button class="equip-btn${equipped?' on':''}" onclick="toggleEquip('${it.id}')">${equipped?(it.slot==='title'?'使用中 ✓':'裝備中 ✓'):'點我裝備'}</button>`;
   return `<div class="shop-item${equipped?' eq':''}"><div class="si-icon">${it.icon}</div><div class="si-name">${it.name}</div>${action}</div>`;
 }
 /* 蛋圖（依稀有度配色，幻彩=彩虹）— 商店一律顯示蛋，孵化才現原形，給期待感 */
 function eggSvg(p,size){
   const u=++AV_SEQ, rc=PET_RARITY[p.r].color, sz=size||40;
-  const fill = p.rainbow ? `url(#rb${u})` : `url(#eg${u})`;
-  const defs = p.rainbow
-    ? `<linearGradient id="rb${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f43f5e"/><stop offset=".33" stop-color="#f59e0b"/><stop offset=".66" stop-color="#22c55e"/><stop offset="1" stop-color="#6366f1"/></linearGradient>`
-    : `<radialGradient id="eg${u}" cx="38%" cy="30%" r="72%"><stop offset="0" stop-color="#ffffff" stop-opacity=".75"/><stop offset="38%" stop-color="${rc}"/><stop offset="100%" stop-color="${rc}"/></radialGradient>`;
+  const limited = !!(p.season||p.rainbow);
+  let fill, defs;
+  if(limited){
+    // 限定登場一律幻彩繽紛，每隻依 id 偏移色相 → 顏色都不一樣
+    const seed=(p.id||'').split('').reduce((a,c)=>a+c.charCodeAt(0),0), h=(seed*53)%360;
+    fill=`url(#rb${u})`;
+    defs=`<linearGradient id="rb${u}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${h},92%,63%)"/><stop offset=".33" stop-color="hsl(${(h+75)%360},90%,60%)"/><stop offset=".66" stop-color="hsl(${(h+165)%360},86%,58%)"/><stop offset="1" stop-color="hsl(${(h+255)%360},92%,62%)"/></linearGradient>`;
+  } else {
+    fill=`url(#eg${u})`;
+    defs=`<radialGradient id="eg${u}" cx="38%" cy="30%" r="72%"><stop offset="0" stop-color="#ffffff" stop-opacity=".75"/><stop offset="38%" stop-color="${rc}"/><stop offset="100%" stop-color="${rc}"/></radialGradient>`;
+  }
   return `<svg viewBox="0 0 40 50" width="${sz}" height="${Math.round(sz*1.25)}" style="display:block"><defs>${defs}</defs><ellipse cx="20" cy="29" rx="17" ry="20" fill="${fill}" stroke="rgba(0,0,0,.18)" stroke-width="1"/><ellipse cx="13.5" cy="19" rx="4.5" ry="6.5" fill="#fff" opacity=".5"/></svg>`;
 }
 function shopPetCard(p){
@@ -1896,9 +1947,10 @@ function shopPetCard(p){
   let action;
   if(owned) action=`<button class="equip-btn${active?' on':''}" onclick="setActivePet('${p.id}')">${active?'夥伴中 ✓':'設為夥伴'}</button>`;
   else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
-  else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${p.price}</button>`;
-  const tag = p.rainbow ? '🌈幻彩' : (p.season ? '✨限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑唯一') : PET_RARITY[p.r].name));
-  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}88"><div class="si-icon egg-ic">${eggSvg(p,42)}</div><div class="si-name">${p.name}${p.rainbow?'':'蛋'}</div><div class="si-rar" style="color:${rc}">${tag}</div><div class="si-skill">${skillText(p.skill)}</div>${action}</div>`;
+  else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${p.price}</button>`;
+  const limited=!!(p.season||p.rainbow), leg=p.r>=5;
+  const tag = limited ? '🌈幻彩限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑公司唯一') : PET_RARITY[p.r].name);
+  return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}88"><div class="si-icon egg-ic">${eggSvg(p,42)}</div><div class="si-rar pet-below" style="color:${rc}${leg?';font-weight:800':''}">${tag}</div><div class="si-name">${p.name}蛋</div><div class="si-skill">${skillText(p.skill)}</div>${action}</div>`;
 }
 function showShop(tab){
   if(!STATE.user) return;
@@ -1910,37 +1962,37 @@ function showShop(tab){
   let body;
   if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
     body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
-  else if(t==='item'){ syncHp(); body=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">❤️ 目前血量 ${Math.round(GS.hp)}%（每小時自然回 4%）— 道具可累積、戰鬥中可用、也能 40% 賣出</div><div class="rw-grid">${ITEMS.map(it=>{const n=itemCount(it.id); return `<div class="rw-card"><div class="rw-icon">${itemImg(it,38)}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${n>0?` <span style="color:var(--accent)">×${n}</span>`:''}</div><div class="rw-desc">${it.desc}</div></div>${n>0?`<button class="equip-btn" style="width:auto;padding:6px 9px" onclick="useItem('${it.id}')">用</button><button class="sell-btn" style="width:auto;padding:6px 8px;margin:0" onclick="sellConsum('${it.id}')">賣${Math.floor(it.price*0.4)}</button>`:''}<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 11px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="buyConsum('${it.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${it.price}</button></div>`;}).join('')}</div>`; }
+  else if(t==='item'){ syncHp(); body=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">❤️ 目前血量 ${Math.round(GS.hp)}%（每小時自然回 4%）— 道具可累積、戰鬥中可用、也能 40% 賣出</div><div class="rw-grid">${ITEMS.map(it=>{const n=itemCount(it.id); return `<div class="rw-card"><div class="rw-icon">${itemImg(it,38)}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${n>0?` <span style="color:var(--accent)">×${n}</span>`:''}</div><div class="rw-desc">${it.desc}</div></div>${n>0?`<button class="equip-btn" style="width:auto;padding:6px 9px" onclick="useItem('${it.id}')">用</button><button class="sell-btn" style="width:auto;padding:6px 8px;margin:0" onclick="sellConsum('${it.id}')">賣${Math.floor(it.price*0.4)}</button>`:''}<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 11px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="buyConsum('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button></div>`;}).join('')}</div>`; }
   else if(t==='deco') body=`<div class="shop-grid">${[...SHOP.aura,...SHOP.title].map(x=>shopCosCard({...x,slot:shopItem(x.id).slot})).join('')}</div>`;
   else if(t==='gift'){
     const myRd=(GS.redeem||[]).slice().reverse();
     const pend=isSupervisor(STATE.user)?pendingRedeems():[];
-    body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{};return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',false)">婉拒</button></div>`;}).join('')}`:''}
-    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">用獎勵幣換真的獎勵（申請→主管核准→兌現）。每季限量、換完下季補貨 🎁</div>
-    ${(()=>{const hd=todayHidden(); if(!hd) return ''; const sold=soldCount(hd.id)>=hd.qty; return `<div class="rw-card hidden-rw${sold?' out':''}"><div class="rw-icon">${hd.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${hd.name}</div><div class="rw-desc">${hd.desc} 只到 ${hd.until}、全公司限 1 個！</div></div>${sold?'<span class="rw-out">已被搶走</span>':`<button class="buy-btn${bal<hd.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<hd.price?'disabled':''} onclick="requestRedeem('${hd.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${hd.price}</button>`}</div>`;})()}
-    <div class="rw-grid">${REWARDS.map(it=>{const sold=soldCount(it.id), left=Math.max(0,(it.qty||99)-sold), out=left<=0; return `<div class="rw-card${out?' out':''}"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}</div><div class="rw-desc">${it.desc} · 本季剩 ${left}/${it.qty}</div></div>${out?'<span class="rw-out">本季完售</span>':`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${it.price}</button>`}</div>`;}).join('')}</div>
-    ${myRd.length?`<div class="detail-label" style="margin-top:14px">📜 我的兌換</div>${myRd.slice(0,8).map(r=>{const it=rewardDef(r.rid)||{};return `<div class="rd-row">${it.icon||''} ${it.name||r.rid} · <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">${r.price}<span class="rd-st">${RD_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelRedeem('${r.id}')">取消</button>`:''}</div>`;}).join('')}`:''}`;
+    body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{};return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',false)">婉拒</button></div>`;}).join('')}`:''}
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">用鑽石換真的獎勵（申請→主管核准→兌現）。每季限量、換完下季補貨 🎁</div>
+    ${(()=>{const hd=todayHidden(); if(!hd) return ''; const sold=soldCount(hd.id)>=hd.qty; return `<div class="rw-card hidden-rw${sold?' out':''}"><div class="rw-icon">${hd.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${hd.name}</div><div class="rw-desc">${hd.desc} 只到 ${hd.until}、全公司限 1 個！</div></div>${sold?'<span class="rw-out">已被搶走</span>':`<button class="buy-btn${bal<hd.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<hd.price?'disabled':''} onclick="requestRedeem('${hd.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${hd.price}</button>`}</div>`;})()}
+    <div class="rw-grid">${REWARDS.map(it=>{const sold=soldCount(it.id), left=Math.max(0,(it.qty||99)-sold), out=left<=0; return `<div class="rw-card${out?' out':''}"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}</div><div class="rw-desc">${it.desc} · 本季剩 ${left}/${it.qty}</div></div>${out?'<span class="rw-out">本季完售</span>':`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`}</div>`;}).join('')}</div>
+    ${myRd.length?`<div class="detail-label" style="margin-top:14px">📜 我的兌換</div>${myRd.slice(0,8).map(r=>{const it=rewardDef(r.rid)||{};return `<div class="rd-row">${it.icon||''} ${it.name||r.rid} · <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${r.price}<span class="rd-st">${RD_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelRedeem('${r.id}')">取消</button>`:''}</div>`;}).join('')}`:''}`;
   }
   else { const sp=activeSeasonPets(); body=`${sp.length?`<div class="shop-slot-h" style="color:var(--accent)">✨ 限定登場（期間限定）</div><div class="shop-grid">${sp.map(shopPetCard).join('')}</div><div class="shop-slot-h">一般寵物</div>`:''}<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`; }
   const old=document.getElementById('shopModal'); if(old) old.remove();
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='shopModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <h3 style="margin:0">🛒 獎勵幣商店</h3>
-      <div style="display:flex;align-items:center;gap:10px"><span class="coin-pill"><img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"> ${bal}</span><button class="t-expand" onclick="closeShop()" style="font-size:18px">✕</button></div>
+      <h3 style="margin:0">🛒 鑽石商店</h3>
+      <div style="display:flex;align-items:center;gap:10px"><span class="coin-pill"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${bal}</span><button class="t-expand" onclick="closeShop()" style="font-size:18px">✕</button></div>
     </div>
     <div class="shop-tabs">${tabBtn('eq','⚔️裝備')}${tabBtn('item','🧪道具')}${tabBtn('deco','✨光環')}${tabBtn('pet','🐾寵物')}${tabBtn('gift','🎁實體')}</div>
     ${body}
-    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">獎勵幣＝完成任務賺的（每 ${COIN_PER_TPTS} 點實得 T 點換 1 <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">）。裝備加戰力、史詩/傳說需等級解鎖；三點數不會被扣 ✨</div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">鑽石＝完成任務賺的（每 ${COIN_PER_TPTS} 點實得 T 點換 1 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">）。裝備加戰力、史詩/傳說需等級解鎖；三點數不會被扣 ✨</div>
   </div>`;
   mask.onclick=closeShop; document.body.appendChild(mask);
 }
 function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remove(); }
 /* ===================================================================
    Stage 2 副本闖關：答題(知識+智力) → 答對發動攻擊 → 攻擊力吃裝備加成
-   每日限次(防掛機)；贏了掉獎勵幣+裝備。白帽：邊玩邊長知識
+   每日限次(防掛機)；贏了掉鑽石+裝備。白帽：邊玩邊長知識
    =================================================================== */
-const DUNGEON_DAILY = 3;                  // 每日挑戰次數（金幣不能太好賺）
+const DUNGEON_DAILY = 3;                  // 每日挑戰次數（鑽石不能太好賺）
 // 血量設計成「適當裝備約 3-4 題打完」(配合單次傷害上限＝血量/3)
 const BOSSES = [
   {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:5,  dropR:2, minLevel:1},
@@ -1999,6 +2051,22 @@ function dungeonDay(){ return new Date().toISOString().slice(0,10); }
 function dungeonLeft(){ const cap=DUNGEON_DAILY+petSkillVal('extrarun'); if(!GS) return cap; const d=GS.dungeon; if(!d||d.day!==dungeonDay()) return cap; return Math.max(0,cap-(d.used||0)); }
 function attackPower(){ return Math.round(10 + gearAtk() + petPower()); }
 function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>{ if(it.r<=maxR && !(GS.owned||[]).includes(it.id)) pool.push(it); }); return pool.length?pool[Math.floor(Math.random()*pool.length)]:null; }
+/* 偶爾隨機額外掉落：寵物零食 / 戰鬥道具 / (罕見)寵物蛋 */
+function bonusDrop(){
+  if(Math.random()>=0.4) return null;   // 60% 沒有額外掉落（偶爾才有）
+  const r=Math.random();
+  if(r<0.12){   // 罕見：寵物蛋（只給沒有的、非唯一一般寵物）
+    const pool=PETS.filter(p=>!p.unique && !(GS.pets&&GS.pets[p.id]));
+    if(pool.length){ const p=pool[Math.floor(Math.random()*pool.length)]; GS.pets=GS.pets||{}; GS.pets[p.id]={exp:0}; if(!GS.activePet) GS.activePet=p.id;
+      return {rc:PET_RARITY[p.r].color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
+  }
+  if(r<0.6){   // 寵物零食（進庫存，回養成中心餵）
+    const f=FEED[Math.floor(Math.random()*FEED.length)]; GS.feed=GS.feed||{}; GS.feed[f.id]=(GS.feed[f.id]||0)+1;
+    return {rc:'#f0a500', html:`<span style="font-size:34px">${f.icon}</span>`, label:'寵物零食 — '+f.name}; }
+  // 戰鬥道具
+  const it=ITEMS[Math.floor(Math.random()*ITEMS.length)]; GS.items=GS.items||{}; GS.items[it.id]=(GS.items[it.id]||0)+1;
+  return {rc:'#38bdf8', html:itemImg(it,38), label:'道具 — '+it.name};
+}
 function showDungeon(){
   if(!STATE.user) return;
   syncHp();
@@ -2009,7 +2077,7 @@ function showDungeon(){
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對攻擊（武器/項鍊/戒指加攻）；答錯或超時被怪打（頭盔/護甲/鞋減傷）。❤️ ${Math.round(GS.hp)}%（每小時回4%）｜今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
     ${BOSSES.map(b=>{ const lk=!lvOK(b.minLevel); return `<div class="boss-row${lk?' lk':''}">
       <img src="assets/game/mob/${b.file}" class="boss-img">
-      <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣">${b.reward}＋掉寶</div></div>
+      <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${b.reward}＋掉寶</div></div>
       ${lk?`<span class="boss-lk">🔒Lv.${b.minLevel}</span>`:`<button class="buy-btn" style="width:auto;padding:6px 14px" ${left<=0?'disabled':''} onclick="startBattle('${b.id}')">${left<=0?'次數用完':'挑戰'}</button>`}
     </div>`; }).join('')}
   </div>`;
@@ -2032,9 +2100,9 @@ function callConfucius(){
   bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
 }
 /* 寶箱開箱儀式：點擊 → 震動 → 全屏對應稀有度光色 → 揭曉 */
-function showChest(coins, drop, left){
+function showChest(coins, drop, left, bonus){
   const col = drop?PET_RARITY[drop.r].color:'#f0a500';
-  STATE.chest={coins,drop,col,opened:false,left};
+  STATE.chest={coins,drop,col,opened:false,left,bonus};
   const o=document.createElement('div'); o.className='modal-mask'; o.id='battleModal';
   o.innerHTML=`<div class="modal" style="text-align:center" onclick="event.stopPropagation()">
     <div style="font-size:22px;font-weight:800">🏆 闖關成功！</div>
@@ -2063,7 +2131,7 @@ function openChest(){
       modal.appendChild(burst); setTimeout(()=>burst.remove(),1100);
     }
     const rw=document.getElementById('chestReward');
-    if(rw) rw.innerHTML=`<div class="reward-pop" style="color:var(--accent);font-weight:800;font-size:22px;margin-top:8px">＋${ch.coins} 獎勵幣 <img src="assets/game/ui/coin.png" class="coin-ic" alt="金幣"></div>${ch.drop?`<div class="drop-box"><img src="${equipFile(ch.drop.id)}"><div>稀有掉落：<b style="color:${ch.col}">${PET_RARITY[ch.drop.r].name}${SLOTNAME[ch.drop.slot]}</b>（⚔️${ch.drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}`;
+    if(rw) rw.innerHTML=`<div class="reward-pop" style="color:var(--accent);font-weight:800;font-size:22px;margin-top:8px">＋${ch.coins} 鑽石 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></div>${ch.drop?`<div class="drop-box"><img src="${equipFile(ch.drop.id)}"><div>稀有掉落：<b style="color:${ch.col}">${PET_RARITY[ch.drop.r].name}${SLOTNAME[ch.drop.slot]}</b>（⚔️${ch.drop.power}）</div></div>`:`<div style="font-size:12px;color:var(--muted);margin-top:6px">這次沒掉裝備，下次加油</div>`}${ch.bonus?`<div class="drop-box" style="border-color:${ch.bonus.rc};margin-top:8px"><div style="width:44px;display:flex;justify-content:center;align-items:center">${ch.bonus.html}</div><div>額外掉落：<b style="color:${ch.bonus.rc}">${ch.bonus.label}</b></div></div>`:''}`;
     const ac=document.getElementById('chestActions'); if(ac) ac.style.display='flex';
   },700);
 }
@@ -2149,10 +2217,11 @@ async function endBattle(win){
   const left=dungeonLeft();
   if(win){
     let coins=Math.round(b.reward*(1+petSkillVal('coin')));
-    const dbl=Math.random()<petSkillVal('coindbl'); if(dbl) coins*=2;   // 寵物金幣翻倍機率
+    const dbl=Math.random()<petSkillVal('coindbl'); if(dbl) coins*=2;   // 寵物鑽石翻倍機率
     let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0))){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); }
+    const bonus=bonusDrop();   // 偶爾隨機掉落：蛋/零食/道具
     GS.won=(GS.won||0)+coins; saveGameState();
-    showChest(coins, drop, left);   // 寶箱開箱儀式
+    showChest(coins, drop, left, bonus);   // 寶箱開箱儀式
   } else {
     saveGameState();
     const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
@@ -2208,11 +2277,31 @@ function fmtDue(iso){ const d=new Date(iso),now=new Date(); const diff=d-now; co
   if(diff<0) return '已逾期'; if(day===0){ const h=Math.round(diff/3600000); return h<=1?'1 小時內':h+' 小時內'; } if(day===1)return '明天'; if(day<7)return day+' 天後'; return (d.getMonth()+1)+'/'+d.getDate(); }
 function toLocalInput(iso){ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
 function toast(msg){ const old=document.getElementById('toast'); if(old)old.remove(); const t=document.createElement('div'); t.id='toast'; t.textContent=msg; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+/* 質感確認框（取代 native confirm；回傳 Promise<boolean>，訊息可含 HTML） */
+function vConfirm(opts){
+  opts=opts||{};
+  return new Promise(res=>{
+    const mask=document.createElement('div'); mask.className='vc-mask';
+    const done=v=>{ mask.remove(); res(v); };
+    mask.innerHTML=`<div class="vc-box" onclick="event.stopPropagation()">
+      <div class="vc-ic">${opts.icon||'❓'}</div>
+      ${opts.title?`<div class="vc-title">${opts.title}</div>`:''}
+      <div class="vc-msg">${opts.msg||''}</div>
+      <div class="vc-actions">
+        <button class="vc-cancel">${opts.cancelText||'取消'}</button>
+        <button class="vc-ok${opts.danger?' danger':''}">${opts.okText||'確定'}</button>
+      </div></div>`;
+    mask.onclick=()=>done(false);
+    mask.querySelector('.vc-cancel').onclick=()=>done(false);
+    mask.querySelector('.vc-ok').onclick=()=>done(true);
+    document.body.appendChild(mask);
+  });
+}
 
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.1.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.2.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
