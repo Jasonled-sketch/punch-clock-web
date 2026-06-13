@@ -332,6 +332,8 @@ img{display:block}
 .glow-banner b{font-size:20px;color:#38bdf8}
 .tb-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;background:linear-gradient(120deg,rgba(239,68,68,.18),rgba(168,85,247,.16));border:1px solid #ef4444;box-shadow:0 0 16px rgba(239,68,68,.22)}
 .tb-banner.won{background:linear-gradient(120deg,rgba(240,165,0,.2),rgba(34,197,94,.16));border-color:#f0a500;text-align:center;font-weight:700}
+.mm-banner{border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;background:var(--surface2);border:1px solid var(--border)}
+.mm-banner b{color:var(--accent)}
 .mch-banner{border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:12px}
 .mch-banner.off{background:var(--surface2);border:1px dashed var(--border);color:var(--muted);text-align:center}
 .mch-banner.on{background:linear-gradient(110deg,rgba(168,85,247,.22),rgba(240,165,0,.18));border:1px solid #a855f7;box-shadow:0 0 16px rgba(168,85,247,.3);animation:mchGlow 1.8s ease-in-out infinite}
@@ -702,6 +704,7 @@ async function login(uid){
   showMonthlyReview(false);   // 每月首次登入彈上月回顧
   checkFavorEarned();         // 新獲得的人情點 → 金光儀式提醒
   checkApprovals();           // 上次登入後被核准的任務 → 「付出被看見」回顧卡
+  checkKudos();               // 新收到的感謝卡 → 粉光儀式
   if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
@@ -1395,7 +1398,7 @@ function showTeam(){
         <div style="flex:1;min-width:0">
           <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span></div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
-          <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}</div>
+          <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
         </div>
         <div style="text-align:right;font-size:11px;color:var(--muted)">本月<br><b style="font-size:16px;color:var(--accent)">${Math.min(100,Math.round(mp/userKpi(u.id)*100))}%</b><br>達成</div>
       </div>
@@ -1625,10 +1628,18 @@ function showFavor(){
   const bal=favorBalance(me.id), avail=bal-favorReserved(me.id), pend=favorPendingFor(me.id);
   const mine=((GS&&GS.favorReq)||[]).slice().reverse();
   const ppl=favorListPeople();
+  const kdLeft=KUDOS_WEEK_CAP-kudosSentWeek(), kdGot=kudosReceived(me.id).slice().reverse().slice(0,6);
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='favorModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">🤝 人情</h3><button class="t-expand" onclick="closeFavor()" style="font-size:18px">✕</button></div>
     <div class="fv-bal">我的人情點 <b>${bal}</b>${avail!==bal?` <span style="font-size:11px;color:var(--muted)">（可用 ${avail}）</span>`:''}<div class="fv-sub">同事互助的心意 · 與遊戲、戰力無關</div></div>
+    <div class="detail-label" style="margin-top:14px;color:#f472b6">🙏 感謝卡 <span style="font-size:11px;color:var(--muted)">本週還可送 ${Math.max(0,kdLeft)}/${KUDOS_WEEK_CAP} 張（純心意、不給點數）</span></div>
+    <div class="fv-form">
+      <select id="kdTo" class="fv-in">${ppl.map(u=>`<option value="${u.id}">${u.name}（${u.title}）</option>`).join('')}</select>
+      <input id="kdMsg" class="fv-in" maxlength="40" placeholder="謝謝你的話，例：謝謝你週三幫我扛安裝 🙏">
+      <button class="buy-btn${kdLeft<=0?' dis':''}" style="width:100%;padding:11px" ${kdLeft<=0?'disabled':''} onclick="sendKudos()">送出感謝卡</button>
+    </div>
+    ${kdGot.length?`<div class="detail-label" style="margin-top:12px">💌 我收到的感謝（本月 ${kudosMonthCount(me.id)} 張）</div>${kdGot.map(k=>`<div class="fv-row"><div style="flex:1;min-width:0"><b style="color:#f472b6">${esc(k.fromName)}</b><div class="fv-desc">「${esc(k.msg)}」</div></div></div>`).join('')}`:''}
     ${pend.length?`<div class="detail-label" style="color:var(--accent)">📨 待你回覆（${pend.length}）</div>${pend.map(x=>{const r=x.r,isA=r.kind==='assign';return `<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(r.fromName)}</b> ${isA?'想請你幫忙、給你':'想向你借用，願付'} <b style="color:#fbbf24">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',true)">${isA?'接受':'同意'}</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',false)">拒絕</button></div>`;}).join('')}`:''}
     <div class="detail-label" style="margin-top:14px">✍️ 提出請求</div>
     <div class="fv-form">
@@ -1645,6 +1656,43 @@ function showFavor(){
 }
 function closeFavor(){ const m=document.getElementById('favorModal'); if(m) m.remove(); }
 function refreshFavorUI(){ const m=document.getElementById('favorModal'); if(m){ closeFavor(); showFavor(); } }
+/* 感謝卡（純情感水平認可，零鑽石零點數，每週限量防互刷） */
+const KUDOS_WEEK_CAP=3;
+function kudosSentWeek(){ const now=Date.now(); return ((GS&&GS.kudos)||[]).filter(k=>now-new Date(k.at).getTime()<7*86400000).length; }
+function kudosReceived(uid, sinceMs){ let list=[]; (STATE.allPlayers||[]).forEach(p=>{ (p.save.kudos||[]).forEach(k=>{ if(k.toId===uid && (!sinceMs||new Date(k.at).getTime()>=sinceMs)) list.push(Object.assign({fromName:p.name}, k)); }); }); return list; }
+function kudosMonthCount(uid){ const ms=new Date(); ms.setDate(1); ms.setHours(0,0,0,0); return kudosReceived(uid, ms.getTime()).length; }
+async function sendKudos(){
+  if(!GS) return;
+  const to=(document.getElementById('kdTo')||{}).value, msg=((document.getElementById('kdMsg')||{}).value||'').trim();
+  const me=STATE.user, target=userById(to); if(!target||to===me.id){ toast('選一個別的同事'); return; }
+  if(kudosSentWeek()>=KUDOS_WEEK_CAP){ toast('本週 '+KUDOS_WEEK_CAP+' 張感謝卡已用完，下週再謝 🙏'); return; }
+  if(!msg){ toast('寫一句感謝的話'); return; }
+  GS.kudos=GS.kudos||[]; GS.kudos.push({id:'kd'+Date.now(), toId:to, toName:target.name, msg:msg.slice(0,40), at:new Date().toISOString()});
+  await saveGameState(); toast('已送出感謝卡給 '+target.name+' 🙏'); refreshFavorUI();
+}
+function checkKudos(){
+  if(!STATE.user) return;
+  const uid=STATE.user.id, key='usled_kudos_seen_'+uid, list=kudosReceived(uid);
+  const maxAt=list.reduce((m,k)=>Math.max(m,new Date(k.at).getTime()),0);
+  const seenRaw=localStorage.getItem(key);
+  if(seenRaw===null){ localStorage.setItem(key,String(maxAt)); return; }
+  const seen=parseInt(seenRaw)||0, fresh=list.filter(k=>new Date(k.at).getTime()>seen);
+  if(fresh.length) kudosCeremony(fresh);
+  if(maxAt>seen) localStorage.setItem(key,String(maxAt));
+}
+function kudosCeremony(list){
+  const items=list.slice(0,4).map(k=>`<div style="margin-top:4px">💌 <b>${esc(k.fromName)}</b>：「${esc(k.msg||'謝謝你！')}」</div>`).join('');
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='kudosMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,#f472b6cc,transparent 70%)"></div>
+    <div class="lvup-card" style="border:2px solid #f472b6;box-shadow:0 0 40px #f472b6">
+      <div style="font-size:52px">🙏</div>
+      <div class="lvup-title" style="color:#f472b6">你收到 ${list.length} 張感謝卡！</div>
+      <div class="lvup-lv" style="color:#fbcfe8;font-size:13px">${items}</div>
+      <div class="lvup-hint">被同事看見的感覺真好（點一下關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
+  setTimeout(()=>{const m=document.getElementById('kudosMask'); if(m)m.remove();},6500);
+}
 
 /* 月度成長回顧卡：每月首次登入自動彈上月成績；成長頁可手動回看 */
 function monthStatsFor(uid,y,m){
@@ -1935,7 +1983,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[]}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -2110,7 +2158,7 @@ async function toggleEquip(id){
   else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
   await saveGameState(); refreshGameUI();
 }
-function canChangeChar(){ return isBeta() || new Date().getDate()===5; }   // 角色每月 5 號才能更換
+function canChangeChar(){ return isUpdateDay(); }   // 角色只在「月度更新日」(每月5號)才能更換
 function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return;
   if(!canChangeChar()){ toast('🗓️ 角色每月 5 號才能更換（今天 '+new Date().getDate()+' 號）'); return; }
   if(!lvOK(c.minLevel)){ toast('需 Lv.'+c.minLevel+' 解鎖此角色 🔒'); return; }
@@ -2120,7 +2168,7 @@ function showCharPick(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
-    <div style="font-size:12px;margin-bottom:10px;padding:8px 11px;border-radius:9px;background:${canC?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${canC?'#22c55e':'var(--q1)'};font-weight:600">🗓️ 角色每月 <b>5 號</b>才能更換${canC?'　·　今天可以換！':'　·　今天 '+new Date().getDate()+' 號，僅供預覽'}</div>
+    <div style="font-size:12px;margin-bottom:10px;padding:8px 11px;border-radius:9px;background:${canC?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${canC?'#22c55e':'var(--q1)'};font-weight:600">🗓️ 角色只在<b>月度更新日（每月 5 號）</b>才能更換${canC?'　·　今天可以換！':'　·　今天 '+new Date().getDate()+' 號，僅供預覽'}</div>
     <div class="char-grid">${CHARS.map(c=>{ const lk=!lvOK(c.minLevel); return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
   </div>`;
   mask.onclick=closeCharPick; document.body.appendChild(mask);
@@ -2383,19 +2431,19 @@ function doTeamBossAttack(){
   const ev=teamBossEvent(); if(!ev){ toast('大 Boss 還沒出現'); return; }
   if(!GS.teamBoss || GS.teamBoss.ev!==ev.id) GS.teamBoss={ev:ev.id, days:[], claimed:false};
   if(GS.teamBoss.days.indexOf(tbDay())>=0){ toast('今天你已經出力過了，明天再來補刀 💪'); return; }
-  const qi=Math.floor(Math.random()*QUIZ.length), q=QUIZ[qi];
+  const _pool=quizPool(), qi=Math.floor(Math.random()*_pool.length), q=_pool[qi];
   const order=q.a.map((_,i)=>i); for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=order[i];order[i]=order[j];order[j]=t;}
   const o=document.createElement('div'); o.className='modal-mask'; o.id='tbAtkModal';
   o.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
     <div style="font-size:40px">🐲</div><h3 style="margin:6px 0">今日出力 · 答對即攻擊</h3>
-    <div class="quiz-cat">${q.cat}題</div><div class="quiz-q">${q.q}</div>
+    <div class="quiz-cat">${q.cat}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div><div class="quiz-q">${q.q}</div>
     <div class="quiz-opts">${order.map(oi=>`<button class="quiz-opt" onclick="answerTeamBoss(${qi},${oi})">${q.a[oi]}</button>`).join('')}</div>
     <button class="t-expand" onclick="document.getElementById('tbAtkModal').remove()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">先不打</button>
   </div>`;
   document.body.appendChild(o);
 }
 async function answerTeamBoss(qi,idx){
-  const q=QUIZ[qi], m=document.getElementById('tbAtkModal');
+  const q=quizPool()[qi], m=document.getElementById('tbAtkModal');
   if(idx!==q.c){ if(m){ const ob=m.querySelector('.quiz-opts'); if(ob&&!m.querySelector('.tb-wrong')) ob.insertAdjacentHTML('afterend','<div class="tb-wrong" style="color:var(--q1);font-size:12px;margin-top:8px">答錯了，再選一次（答對才出力成功）</div>'); } return; }
   if(m) m.remove();
   const ev=teamBossEvent(); if(!ev) return;
@@ -2427,15 +2475,61 @@ function teamBossWinFx(){
   o.onclick=()=>o.remove(); document.body.appendChild(o); if(typeof sfxVictory==='function') sfxVictory();
   setTimeout(()=>{const x=document.getElementById('tbWinMask'); if(x)x.remove();},6000);
 }
+/* 員工出題進題庫：出題→主管採納→進動態題庫(掛名)+出題者得鑽石（補題庫枯竭、UGC+教育訓練） */
+const QUIZ_REWARD=30;
+function showQuizSubmit(){
+  const cats=['智力','常識','職場','產品','制度','技術'], mine=((GS&&GS.quizSub)||[]).slice().reverse();
+  const o=document.createElement('div'); o.className='modal-mask'; o.id='quizSubModal';
+  o.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">✍️ 我來出題</h3><button class="t-expand" onclick="closeQuizSubmit()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">出一題（填選項、點左邊圓鈕標正解），主管採納後進題庫、掛你的名，並 +${QUIZ_REWARD} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></div>
+    <div class="fv-form">
+      <select id="qsCat" class="fv-in">${cats.map(c=>`<option value="${c}">${c}題</option>`).join('')}</select>
+      <textarea id="qsQ" class="fv-in" rows="2" placeholder="題目，例：戶外 LED 看板防水等級通常至少要求？"></textarea>
+      ${[0,1,2,3].map(i=>`<div style="display:flex;align-items:center;gap:8px"><input type="radio" name="qsC" value="${i}" ${i===0?'checked':''} title="正解" style="flex-shrink:0;width:18px;height:18px"><input id="qsA${i}" class="fv-in" style="margin:0" placeholder="選項 ${i+1}${i===0?'（預設正解）':''}"></div>`).join('')}
+      <button class="buy-btn" style="width:100%;padding:11px" onclick="submitQuiz()">送出給主管採納</button>
+    </div>
+    ${mine.length?`<div class="detail-label" style="margin-top:12px">📜 我出的題</div>${mine.map(s=>`<div class="fv-row"><div style="flex:1;min-width:0"><div class="fv-desc" style="color:var(--text)">${esc(s.q)}</div></div><span class="rd-st">${FV_ST[s.st]||s.st}</span></div>`).join('')}`:''}
+  </div>`;
+  document.body.appendChild(o);
+}
+function closeQuizSubmit(){ const m=document.getElementById('quizSubModal'); if(m)m.remove(); }
+async function submitQuiz(){
+  if(!GS) return;
+  const cat=(document.getElementById('qsCat')||{}).value||'同事出題';
+  const q=((document.getElementById('qsQ')||{}).value||'').trim();
+  const raw=[0,1,2,3].map(i=>((document.getElementById('qsA'+i)||{}).value||'').trim());
+  const ci=parseInt((document.querySelector('input[name=qsC]:checked')||{}).value);
+  if(!q){ toast('寫個題目'); return; }
+  if(raw.filter(x=>x).length<2){ toast('至少要 2 個選項'); return; }
+  if(isNaN(ci)||!raw[ci]){ toast('標出正解（正解那欄不能空白）'); return; }
+  const opts=raw.filter(x=>x), cc=raw.slice(0,ci).filter(x=>x).length;   // 去空白後正解的新索引
+  GS.quizSub=GS.quizSub||[]; GS.quizSub.push({id:'qz'+Date.now(), q, a:opts, c:cc, cat, st:'pending', at:new Date().toISOString()});
+  await saveGameState(); toast('已送出，等主管採納 ✍️'); closeQuizSubmit(); showQuizSubmit();
+}
+function quizSubPending(){ const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.quizSub||[]).forEach(s=>{ if(s.st==='pending') out.push({pi,p,s}); }); }); return out; }
+async function decideQuiz(pi, id, ok){
+  const p=(STATE.allPlayers||[])[pi]; if(!p) return;
+  const s=(p.save.quizSub||[]).find(x=>x.id===id); if(!s||s.st!=='pending') return;
+  s.st=ok?'ok':'no'; s.decidedAt=new Date().toISOString();
+  if(ok) p.save.won=(p.save.won||0)+QUIZ_REWARD;   // 出題者得鑽石
+  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
+  else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
+  toast(ok?('已採納 ✓ 進題庫並給 '+esc(p.name)+' +'+QUIZ_REWARD+' 鑽'):'已婉拒');
+  const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); }
+}
 function showDungeon(){
   if(!STATE.user) return;
   syncHp();
   const lvl=userGameLevel(STATE.user.id), left=dungeonLeft();
+  const mm=monthMod(), qsPend=isSupervisor(STATE.user)?quizSubPending():[];
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='dungeonModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
     ${teamBossBannerHtml()}
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對攻擊（武器/項鍊/戒指加攻）；答錯或超時被怪打（頭盔/護甲/鞋減傷）。❤️ ${Math.round(GS.hp)}%（每小時回4%）｜今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
+    <div class="mm-banner">📅 本月詞綴 · <b>${mm.name}</b>　<span style="color:var(--muted)">${mm.desc}</span>${isUpdateDay()?'　<span style="color:#22c55e">· 今天是月度更新日！</span>':''}</div>
+    ${qsPend.length?`<div class="detail-label" style="color:var(--accent)">✍️ 待採納的員工出題（${qsPend.length}）</div>${qsPend.map(x=>`<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name)}</b> 出題<div class="fv-desc" style="color:var(--text)">${esc(x.s.q)}<br><span style="color:var(--muted)">正解：${esc((x.s.a||[])[x.s.c]||'')}</span></div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideQuiz(${x.pi},'${x.s.id}',true)">採納</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideQuiz(${x.pi},'${x.s.id}',false)">婉拒</button></div>`).join('')}`:''}
+    <div style="font-size:12px;color:var(--muted);margin:10px 0 12px">答對攻擊（武器/項鍊/戒指加攻）；答錯或超時被怪打（頭盔/護甲/鞋減傷）。❤️ ${Math.round(GS.hp)}%（每小時回4%）｜今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次　<a onclick="showQuizSubmit()" style="color:var(--accent);cursor:pointer;text-decoration:underline">✍️ 我來出題</a></div>
     ${BOSSES.map(b=>{ const lk=!lvOK(b.minLevel); return `<div class="boss-row${lk?' lk':''}">
       <img src="assets/game/mob/${b.file}" class="boss-img">
       <div style="flex:1;min-width:0"><div style="font-weight:700">${b.name}</div><div style="font-size:11px;color:var(--muted)">血量 ${b.hp}｜獎勵 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${b.reward}＋掉寶</div></div>
@@ -2446,10 +2540,18 @@ function showDungeon(){
 }
 function closeDungeon(){ const m=document.getElementById('dungeonModal'); if(m)m.remove(); }
 /* 出題順序：答錯的先複習 → 沒出過的新題 → 其他（避免每場重複一樣） */
-function buildQuizOrder(){
+/* 動態題庫＝固定 QUIZ ＋ 全員「已核准」的員工出題(掛名)。QUIZ 為穩定前綴(索引0~N不變)，員工題接在後面 */
+function quizPool(){
+  const subs=[];
+  (STATE.allPlayers||[]).forEach(p=>{ (p.save.quizSub||[]).forEach(s=>{ if(s.st==='ok' && s.q && Array.isArray(s.a) && s.a.length>=2 && s.c!=null) subs.push({q:s.q, a:s.a, c:s.c, cat:(s.cat||'同事出題'), by:p.name}); }); });
+  subs.sort((a,b)=>(a.q<b.q?-1:(a.q>b.q?1:0)));   // 用題幹穩定排序，跨載入索引一致
+  return QUIZ.concat(subs);
+}
+function buildQuizOrder(pool){
+  pool=pool||quizPool();
   const sh=a=>{ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;} return a; };
-  const wrong=(GS.quizWrong||[]).filter(i=>i<QUIZ.length), wset=new Set(wrong), sset=new Set(GS.quizSeen||[]);
-  const all=QUIZ.map((_,i)=>i);
+  const wrong=(GS.quizWrong||[]).filter(i=>i<pool.length), wset=new Set(wrong), sset=new Set(GS.quizSeen||[]);
+  const all=pool.map((_,i)=>i);
   const unseen=all.filter(i=>!sset.has(i)&&!wset.has(i));
   const rest=all.filter(i=>sset.has(i)&&!wset.has(i));
   return [...sh(wrong.slice()), ...sh(unseen), ...sh(rest)];
@@ -2504,11 +2606,12 @@ function startBattle(bossId){
   GS.dungeon.used++; saveGameState();
   syncHp();
   if(GS.hp<=10){ toast('❤️ 血量太低（'+Math.round(GS.hp)+'%），先用補劑或等自然回復'); return; }
-  STATE.battle={boss:b, hp:b.hp, order:buildQuizOrder(), qi:0, msg:'答對攻擊；答錯或超時會被怪攻擊！', hints:petSkillVal('hint')||0, hit:null, shield:false, deadline:Date.now()+QUIZ_TIME*1000};
+  const pool=quizPool();
+  STATE.battle={boss:b, hp:b.hp, pool, order:buildQuizOrder(pool), qi:0, msg:'答對攻擊；答錯或超時會被怪攻擊！', hints:petSkillVal('hint')||0, hit:null, shield:false, deadline:Date.now()+QUIZ_TIME*1000};
   closeDungeon(); renderBattle(); startQuizTimer();
 }
 function renderBattle(){
-  const bt=STATE.battle; if(!bt) return; const b=bt.boss, q=QUIZ[bt.order[bt.qi]];
+  const bt=STATE.battle; if(!bt) return; const b=bt.boss, pool=bt.pool||QUIZ, q=pool[bt.order[bt.qi]];
   if(bt.optQi!==bt.qi){ bt.opt=q.a.map((_,i)=>i); for(let i=bt.opt.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); const tmp=bt.opt[i]; bt.opt[i]=bt.opt[j]; bt.opt[j]=tmp;} bt.optQi=bt.qi; }   // 每題選項洗牌(防背位置),同題重繪不重洗
   const hpPct=Math.max(0,Math.round(bt.hp/b.hp*100));
   const old=document.getElementById('battleModal'); if(old) old.remove();
@@ -2525,7 +2628,7 @@ function renderBattle(){
       <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 攻擊 ${attackPower()}　🛡️ 防禦 ${gearDef()}　⏳ <b id="qTimer" style="color:var(--accent)">${Math.max(0,Math.ceil((bt.deadline-Date.now())/1000))}</b> 秒</div>
       <div class="battle-msg">${bt.msg}</div>
     </div>
-    <div class="quiz-cat">${q.cat}題</div>
+    <div class="quiz-cat">${q.cat}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div>
     <div class="quiz-q">${q.q}</div>
     <div class="quiz-opts">${bt.opt.map(oi=>`<button class="quiz-opt" onclick="answerQuiz(${oi})">${q.a[oi]}</button>`).join('')}</div>
     <div class="battle-items">
@@ -2538,6 +2641,15 @@ function renderBattle(){
   if(STATE.battle) STATE.battle.hit=null;   // 特效只播一次
 }
 const QUIZ_TIME=12;   // 每題秒數，超時=被怪攻擊
+/* 月度更新日（每月 5 號）的「本月詞綴」：每月輪一個副本加成，給運營節奏與期待感 */
+const MONTH_MODS=[
+  {key:'reward', name:'💰 獎勵月', desc:'本月副本鑽石 ×1.5', coinMul:1.5},
+  {key:'harvest',name:'🍀 豐收月', desc:'本月掉寶率 +15%',   dropAdd:0.15},
+  {key:'crit',   name:'🎯 精準月', desc:'本月答對爆擊率 +15%', critAdd:0.15},
+  {key:'double', name:'⚡ 雙倍月', desc:'本月副本鑽石 ×1.3',  coinMul:1.3},
+];
+function monthMod(){ return MONTH_MODS[new Date().getMonth()%MONTH_MODS.length]; }
+function isUpdateDay(){ return isBeta() || new Date().getDate()===5; }   // 月度更新日
 function startQuizTimer(){
   stopQuizTimer();
   STATE.qTimer=setInterval(()=>{
@@ -2562,9 +2674,9 @@ function takeDamage(prefix){
   bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
 }
 function answerQuiz(idx){
-  const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=QUIZ[qi];
+  const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=(bt.pool||QUIZ)[qi];
   GS.quizSeen=GS.quizSeen||[]; GS.quizWrong=GS.quizWrong||[];
-  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
+  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')+(monthMod().critAdd||0)); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
     if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi);
     if(bt.hp<=0) return endBattle(true);
     bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle(); }
@@ -2578,9 +2690,10 @@ async function endBattle(win){
   const m=document.getElementById('battleModal'); if(m) m.remove();
   const left=dungeonLeft();
   if(win){
-    let coins=Math.round(b.reward*(1+petSkillVal('coin')));
+    const mm=monthMod();
+    let coins=Math.round(b.reward*(1+petSkillVal('coin'))*(mm.coinMul||1));   // 本月詞綴鑽石加成
     const dbl=Math.random()<petSkillVal('coindbl'); if(dbl) coins*=2;   // 寵物鑽石翻倍機率
-    let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0))){ drop=randomDrop(b.dropR); if(drop){ GS.owned.push(drop.id); GS.dropped=GS.dropped||[]; GS.dropped.push(drop.id); } }
+    let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0)+(mm.dropAdd||0))){ drop=randomDrop(b.dropR); if(drop){ GS.owned.push(drop.id); GS.dropped=GS.dropped||[]; GS.dropped.push(drop.id); } }
     const bonus=bonusDrop();   // 偶爾隨機掉落：蛋/零食/道具
     GS.won=(GS.won||0)+coins; GS.clears=(GS.clears||0)+1; saveGameState();
     showChest(coins, drop, left, bonus);   // 寶箱開箱儀式
@@ -2698,7 +2811,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.6.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.7.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
