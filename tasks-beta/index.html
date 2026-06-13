@@ -1414,7 +1414,7 @@ async function merchantExchange(ci){
   if(!merchantState().active){ toast('🧙‍♂️ 商人已離開，下次再來'); return; }
   if(contribSpendable(STATE.user.id)<r.c){ toast('貢獻值不足（需 '+r.c+'）'); return; }
   if(!await vConfirm({icon:'🧙‍♂️',title:'神祕商人',msg:'用 '+r.c+' 點貢獻值換 '+r.d+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？\n（貢獻值花掉不影響你的等級與戰力）',okText:'兌換'})) return;
-  GS.contribSpent=(GS.contribSpent||0)+r.c; GS.bonus=(GS.bonus||0)+r.d;
+  GS.contribSpent=(GS.contribSpent||0)+r.c; GS.mchGain=(GS.mchGain||0)+r.d;   // 商人換得記 mchGain(合法,永遠計入)，與測試 bonus 分開
   await saveGameState(); toast('🪙 兌換成功！+'+r.d+' 鑽石'); refreshGameUI();
 }
 function quarterKey(d){ d=d||new Date(); return d.getFullYear()+'Q'+(Math.floor(d.getMonth()/3)+1); }
@@ -1462,7 +1462,7 @@ async function writeOtherGS(p){
   const F=GAME_STORE.F, fd=new FormData();
   fd.append(F.email, p.email); fd.append(F.name, p.name||'');
   const uid=emailToUserId(p.email);
-  fd.append(F.balance, String(userEarnedCoins(uid)+(p.save.won||0)+(p.save.bonus||0)-(p.save.spent||0)));
+  fd.append(F.balance, String(userEarnedCoins(uid)+(p.save.won||0)+(p.save.mchGain||0)+(isBeta()?(p.save.bonus||0):0)-(p.save.spent||0)));
   fd.append(F.save, JSON.stringify(p.save));
   fd.append(F.updated, isoToRagic(new Date().toISOString()));
   const r=await ragicFetchGS('/'+p.ragicId+'?api',{method:'POST',body:fd});
@@ -1890,13 +1890,14 @@ function userEarnedCoins(uid){
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   return Math.floor(tp/COIN_PER_TPTS);
 }
-function coinBalance(){ return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.bonus)||0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }
+function coinBalance(){ return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.mchGain)||0) + (isBeta()?((GS&&GS.bonus)||0):0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }   // bonus(測試)只在 beta 計入；正式站自動忽略殘留
 /* 貢獻值：earned=任務累積(終身,驅動等級)；spendable=可賣給商人換鑽石的餘額 */
 function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done').reduce((s,t)=>s+(t.contribution||0),0); }
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
-async function grantTestCoins(){ if(!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }
+async function grantTestCoins(){ if(!isBeta()||!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }   // 守衛：正式站(非beta)叫不動，防 console 自肥
 async function resetGame(){
+  if(!isBeta()) return;   // 守衛：正式站(非beta)叫不動，防 console 清檔/濫用
   if(!await vConfirm({icon:'🧹',title:'重置遊戲存檔',msg:'確定重置你的遊戲存檔？\n裝備／寵物／鑽石／進度全部歸零（無法復原）',okText:'重置',danger:true})) return;
   const rid=GS&&GS._ragicId; GS=blankGS(); if(rid!=null) GS._ragicId=rid;   // 保留同一筆覆蓋(不新增重複)
   STATE.uniqueOwners=STATE.uniqueOwners||{};
@@ -2219,7 +2220,7 @@ const QUIZ = [
   {q:'戶外大型 LED 若散熱不良，容易？',a:['縮短壽命/故障','更省電','畫面自動變大','完全沒影響'],c:0,cat:'技術'},
   {q:'螢幕「亮度」常用單位是？',a:['nit(尼特, cd/m²)','公斤','公升','赫茲'],c:0,cat:'技術'},
 ];
-function dungeonDay(){ return new Date().toISOString().slice(0,10); }
+function dungeonDay(){ return new Date(Date.now()+8*3600000).toISOString().slice(0,10); }   // 台北時區(UTC+8)計日，修「早上8點重置可連打」
 function dungeonLeft(){ const cap=DUNGEON_DAILY+petSkillVal('extrarun'); if(!GS) return cap; const d=GS.dungeon; if(!d||d.day!==dungeonDay()) return cap; return Math.max(0,cap-(d.used||0)); }
 function attackPower(){ return Math.round(10 + gearAtk() + petPower()); }
 function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>{ if(it.r<=maxR && !(GS.owned||[]).includes(it.id)) pool.push(it); }); return pool.length?pool[Math.floor(Math.random()*pool.length)]:null; }
@@ -2433,7 +2434,9 @@ function timeLeft(iso){
 /* 逾期點數打折：每逾期 2 小時 ×0.9 累計，直到 0 */
 function effectivePoints(t){
   if(!t.points || !t.dueAt) return t.points||0;
-  const overH = (Date.now() - new Date(t.dueAt).getTime())/3600000;
+  // 已提交/已完成：衰減凍結在「提交當下」，不因主管核准延遲繼續扣（修 bug：準時交卻被核准慢扣分）
+  const ref = (t.submittedAt && (t.status==='submitted'||t.status==='done')) ? new Date(t.submittedAt).getTime() : Date.now();
+  const overH = (ref - new Date(t.dueAt).getTime())/3600000;
   if(overH <= 0) return t.points;
   const steps = Math.ceil(overH/2);
   return Math.max(0, Math.round(t.points * Math.pow(0.9, steps)));
@@ -2473,7 +2476,7 @@ function vConfirm(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.3.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.3.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
