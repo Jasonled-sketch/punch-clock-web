@@ -672,9 +672,26 @@ function renderLogin(){
       <span class="role-tag ${isSupervisor(u)?'boss':''}">${u.title}</span>
     </button>`).join('');
 }
+/* 記住登入：本地存使用者身份 + 時間戳，30 天內免重登（背景靜默換新 Google token） */
+const SESSION_MAX_DAYS = 30;
+function saveSession(u){ if(CONFIG.MODE!=='CLOUD'||!u) return; try{ localStorage.setItem('usled_session', JSON.stringify({id:u.id, email:u.email, name:u.name, at:Date.now()})); }catch(e){} }
+function cachedSession(){ if(CONFIG.MODE!=='CLOUD') return null; try{ const s=JSON.parse(localStorage.getItem('usled_session')||'null'); if(s&&s.id&&userById(s.id)&&(Date.now()-(s.at||0)<SESSION_MAX_DAYS*86400000)) return s; }catch(e){} return null; }
+function clearSession(){ try{ localStorage.removeItem('usled_session'); }catch(e){} }
+/* 記住的登入：先進 app 外殼(不跳登入畫面)，背景等 Google 靜默回新 token 再載資料 */
+function enterAppShell(user){
+  if(!user) return;
+  STATE.user = user;
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+  const a=document.getElementById('meAvatar'); a.textContent=user.name.slice(-1); a.style.background=user.color;
+  document.getElementById('meName').textContent=user.name;
+  const b=document.getElementById('board');
+  if(b) b.innerHTML=`<div style="padding:54px 20px;text-align:center;color:var(--muted)"><div style="font-size:30px">⟳</div><div style="margin-top:10px">重新連線中…（已記住你的登入）</div><button class="gcal-connect" style="max-width:260px;margin:16px auto 0" onclick="forceRelogin()">沒反應？點我重新登入</button></div>`;
+}
+function forceRelogin(){ clearSession(); STATE.user=null; document.getElementById('appView').classList.add('hidden'); document.getElementById('loginView').classList.remove('hidden'); try{ google.accounts.id.disableAutoSelect(); }catch(e){} renderLogin(); try{ google.accounts.id.prompt(); }catch(e){} }
 function renderGoogleButton(){
   if(!(window.google && google.accounts && google.accounts.id)){ setTimeout(renderGoogleButton, 400); return; }
-  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false });
+  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false, use_fedcm_for_prompt:true, itp_support:true });
   const el = document.getElementById('gbtn');
   if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
   google.accounts.id.prompt();   // 自動以上次帳號登入（記住，不用每次點）
@@ -692,6 +709,7 @@ function handleGoogleSignIn(resp){
 async function login(uid){
   STATE.user = userById(uid);
   if(CONFIG.MODE!=='CLOUD') localStorage.setItem('usled_last_user', uid);
+  saveSession(STATE.user);   // 記住登入(30天免重登)
   document.getElementById('loginView').classList.add('hidden');
   document.getElementById('appView').classList.remove('hidden');
   const a = document.getElementById('meAvatar');
@@ -740,9 +758,12 @@ function checkApprovals(){
   localStorage.setItem(key,String(maxAt));
 }
 function logout(){
-  STATE.user = null;
+  STATE.user = null; STATE.googleToken=null;
+  clearSession();                                        // 清掉記住的登入
+  try{ google.accounts.id.disableAutoSelect(); }catch(e){}   // 下次需重新選帳號
   document.getElementById('appView').classList.add('hidden');
   document.getElementById('loginView').classList.remove('hidden');
+  renderLogin();
 }
 
 /* ===================================================================
@@ -2872,9 +2893,11 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.8.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.8.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
+/* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
+{ const _s=cachedSession(); if(_s) enterAppShell(userById(_s.id)); }
 renderLogin();
 /* ===================================================================
    長按拖曳：把任務拖到其他象限改分類（主管限定）
