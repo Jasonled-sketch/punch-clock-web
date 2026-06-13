@@ -780,8 +780,11 @@ function taskCardClick(e, id){
   if(task.classList.contains('swiped')){ task.style.transform=''; task.classList.remove('swiped'); return; }
   showTaskDetail(id);
 }
+const WIP_CAP = 5;   // 同時持有(已接、未提交)任務數上限，防囤單先搶後做
 function acceptTask(id){
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  const held=STATE.tasks.filter(x=>x.assigneeId===STATE.user.id && x.status==='open').length;
+  if(held>=WIP_CAP){ toast('你手上已有 '+held+' 件待處理任務（上限 '+WIP_CAP+'），先完成幾件再接 🙂'); return; }
   t.assigneeId=STATE.user.id; renderBoard(); dbUpsert(t); toast('已接單，開始處理！');
 }
 
@@ -799,7 +802,7 @@ function renderTaskCard(t){
   if(t.status!=='done'){
     if(sup){
       swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();openTaskModal('${t.id}')">編輯</button>`;
-      if(t.status==='submitted') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
+      if(t.status==='submitted' && (t.assigneeId!==STATE.user.id || isBeta())) swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
     } else {
       if(!mine) swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
       if(t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
@@ -976,7 +979,7 @@ async function saveTask(){
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
-async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
+async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; } t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
 async function rejectTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='open'; renderBoard(); await dbUpsert(t); toast('已退回，請員工繼續'); }
 function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remove(); editingId=null; }
 
@@ -1356,19 +1359,19 @@ const REWARDS = [
   {id:'rw_song',   icon:'🎵', name:'辦公室點歌權',     price:30,   desc:'指定一個下午的歌單', qty:8},
   {id:'rw_coffee', icon:'☕', name:'咖啡升級券',       price:40,   desc:'超商咖啡升大杯',     qty:6},
   {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',       price:60,   desc:'主管請，60 元內',    qty:6},
-  {id:'rw_late5',  icon:'⏱️', name:'遲到豁免券(5分)',  price:80,   desc:'當日 5 分內遲到不計', qty:3},
-  {id:'rw_nap',    icon:'😴', name:'午休＋15 分券',    price:100,  desc:'午休延長 15 分鐘',    qty:4},
+  {id:'rw_late5',  icon:'⏱️', name:'彈性上班 5 分券',  price:80,   desc:'事前申請的彈性，不影響法定出勤計算', qty:2, perUser:true},
+  {id:'rw_nap',    icon:'😴', name:'午休＋15 分券',    price:100,  desc:'午休延長 15 分鐘（雇主自願福利）', qty:2, perUser:true},
   {id:'rw_snack',  icon:'🍗', name:'下午茶點心',       price:120,  desc:'雞排＋飲料',          qty:4},
   {id:'rw_lunch',  icon:'🍱', name:'午餐公司請',       price:150,  desc:'指定一天，150 元內',  qty:4},
-  {id:'rw_early30',icon:'🕔', name:'早下班 30 分',     price:150,  desc:'需提前一天告知',      qty:3},
+  {id:'rw_early30',icon:'🕔', name:'彈性早下班 30 分', price:150,  desc:'事前申請的彈性，需排班允許', qty:2, perUser:true},
   {id:'rw_seat',   icon:'🪑', name:'優先排休券',       price:180,  desc:'排休優先選 1 次',     qty:2},
-  {id:'rw_late10', icon:'⏰', name:'萬能遲到豁免(10分)',price:200, desc:'10 分內遲到不計 1 次', qty:2},
+  {id:'rw_late10', icon:'⏰', name:'彈性上班 10 分券', price:200, desc:'事前申請的彈性，不影響法定出勤計算', qty:1, perUser:true},
   {id:'rw_coupon', icon:'🎫', name:'200 元禮券',       price:200,  desc:'全聯／超商擇一',      qty:3},
   {id:'rw_errand', icon:'🛵', name:'主管跑腿一次',     price:250,  desc:'買飲料/取件主管代勞', qty:2},
-  {id:'rw_early60',icon:'🏃', name:'早下班 1 小時',    price:280,  desc:'需提前一天告知',      qty:2},
+  {id:'rw_early60',icon:'🏃', name:'彈性早下班 1 小時',price:280,  desc:'事前申請的彈性，需排班允許', qty:1, perUser:true},
   {id:'rw_pick',   icon:'🍽️', name:'聚餐選店權',       price:300,  desc:'下次公司聚餐你選',    qty:1},
-  {id:'rw_half',   icon:'🌴', name:'半天特休',         price:1300, desc:'4 小時，需排班允許',  qty:2},
-  {id:'rw_day',    icon:'🏖️', name:'一日特休',         price:2600, desc:'需提前三天告知',      qty:1},
+  {id:'rw_half',   icon:'🌴', name:'半天有薪福利假',   price:1300, desc:'4 小時，雇主額外給；兌換後補正式請假單留底', qty:1, perUser:true},
+  {id:'rw_day',    icon:'🏖️', name:'一日有薪福利假',   price:2600, desc:'雇主額外給；兌換後補正式請假單留底', qty:1, perUser:true},
 ];
 /* 限時隱藏獎：確定性亂數(日期 hash)→全公司同時看到、限量 1、時段內沒買就消失 */
 const HIDDEN_REWARDS = [
@@ -1388,7 +1391,9 @@ function todayHidden(){
   return {...it, until:endH+':00'};
 }
 /* 神祕商人：每天隨機 3 場、每場 10 分鐘，收貢獻值換鑽石（依日期 hash 確定性、跨裝置一致、零儲存） */
-const MERCHANT_RATES=[{c:1,d:30},{c:10,d:350},{c:30,d:1000}];
+const MERCHANT_RATES=[{c:1,d:3},{c:10,d:35},{c:30,d:120}];   // 降十倍，仍是 T 點換鑽率的 30~40 倍(保留貢獻值=高價值手感)
+const CONTRIB_MONTH_CAP=30;   // 貢獻值每月最多向商人兌換 30 點(防印鈔)
+function contribMchUsed(){ const ym=new Date().toISOString().slice(0,7); return (GS&&GS.mchMonth&&GS.mchMonth.ym===ym)?(GS.mchMonth.used||0):0; }
 function merchantSlots(d){
   const h=dayHash(d||new Date().toISOString().slice(0,10)), slots=[];
   for(let i=0;i<3;i++){ const sh=9+i*3+((h>>(i*3))%2); const sm=((h>>(i*2+1))%6)*10; slots.push(sh*60+sm); }
@@ -1404,16 +1409,21 @@ function merchantState(){
 function merchantBannerHtml(){
   const m=merchantState(), sp=contribSpendable(STATE.user.id);
   if(!m.active) return `<div class="mch-banner off">🧙‍♂️ 神祕商人暫離 · ${m.nextText}<div style="font-size:10px;opacity:.8;margin-top:2px">每天隨機 3 場、每場 10 分鐘，收貢獻值換鑽石</div></div>`;
+  const left=CONTRIB_MONTH_CAP-contribMchUsed();
   return `<div class="mch-banner on">
-    <div class="mch-h">🧙‍♂️ 神祕商人來了！<b>剩 ${m.leftMin} 分</b> · 你有 <b>${sp}</b> 貢獻值</div>
-    <div class="mch-rates">${MERCHANT_RATES.map((r,i)=>`<button class="mch-btn${sp<r.c?' dis':''}" ${sp<r.c?'disabled':''} onclick="merchantExchange(${i})">${r.c} 貢獻 → ${r.d} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></button>`).join('')}</div>
+    <div class="mch-h">🧙‍♂️ 神祕商人來了！<b>剩 ${m.leftMin} 分</b> · 你有 <b>${sp}</b> 貢獻值 · 本月還可換 <b>${left}</b> 點</div>
+    <div class="mch-rates">${MERCHANT_RATES.map((r,i)=>{const no=sp<r.c||left<r.c; return `<button class="mch-btn${no?' dis':''}" ${no?'disabled':''} onclick="merchantExchange(${i})">${r.c} 貢獻 → ${r.d} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></button>`;}).join('')}</div>
   </div>`;
 }
 async function merchantExchange(ci){
   const r=MERCHANT_RATES[ci]; if(!r||!GS) return;
   if(!merchantState().active){ toast('🧙‍♂️ 商人已離開，下次再來'); return; }
   if(contribSpendable(STATE.user.id)<r.c){ toast('貢獻值不足（需 '+r.c+'）'); return; }
+  if(contribMchUsed()+r.c>CONTRIB_MONTH_CAP){ toast('本月兌換已達上限 '+CONTRIB_MONTH_CAP+' 點貢獻值'); return; }
   if(!await vConfirm({icon:'🧙‍♂️',title:'神祕商人',msg:'用 '+r.c+' 點貢獻值換 '+r.d+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？\n（貢獻值花掉不影響你的等級與戰力）',okText:'兌換'})) return;
+  const ym=new Date().toISOString().slice(0,7);
+  if(!GS.mchMonth||GS.mchMonth.ym!==ym) GS.mchMonth={ym,used:0};
+  GS.mchMonth.used+=r.c;
   GS.contribSpent=(GS.contribSpent||0)+r.c; GS.mchGain=(GS.mchGain||0)+r.d;   // 商人換得記 mchGain(合法,永遠計入)，與測試 bonus 分開
   await saveGameState(); toast('🪙 兌換成功！+'+r.d+' 鑽石'); refreshGameUI();
 }
@@ -1429,12 +1439,18 @@ function soldCount(rid){
   return n;
 }
 function rewardDef(id){ return REWARDS.find(x=>x.id===id)||HIDDEN_REWARDS.find(x=>x.id===id); }
+/* 我本季已兌數（perUser 獎品用：每人每季限量，非全公司先搶先贏） */
+function mySeasonCount(rid){ const qk=quarterKey(); return ((GS&&GS.redeem)||[]).filter(r=>r.rid===rid && (r.st==='pending'||r.st==='ok') && quarterKey(new Date(r.at))===qk).length; }
+function rewardUsed(it){ return it.perUser ? mySeasonCount(it.id) : soldCount(it.id); }
 const RD_ST={pending:'⏳ 待核准', ok:'✅ 已核准', no:'❌ 已婉拒', cancel:'↩️ 已取消'};
 async function requestRedeem(rid){
   const it=rewardDef(rid); if(!it||!GS) return;
-  if(it.qty && soldCount(rid)>=it.qty){ toast(rid.indexOf('hw_')===0?'快閃獎已被搶走 😭':'本季已兌完，下季補貨 🔒'); return; }
+  if(it.perUser && isSupervisor(STATE.user) && !isBeta()){ toast('福利假類由員工兌換；主管請走正式給假'); return; }
+  if(rid.indexOf('hw_')===0 && isSupervisor(STATE.user) && !isBeta()){ toast('主管不參與快閃搶購 🙅'); return; }
+  if(it.qty && rewardUsed(it)>=it.qty){ toast(rid.indexOf('hw_')===0?'快閃獎已被搶走 😭':(it.perUser?'你本季已兌過，下季再來 🔒':'本季已兌完，下季補貨 🔒')); return; }
   if(coinBalance()<it.price){ toast('鑽石不足'); return; }
-  if(!await vConfirm({icon:'🎁',title:'兌換實體獎',msg:'用 '+it.price+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。',okText:'送出申請'})) return;
+  const leaveNote = it.perUser ? '\n（兌換核准後請補一張正式請假單留底）' : '';
+  if(!await vConfirm({icon:'🎁',title:'兌換實體獎',msg:'用 '+it.price+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。'+leaveNote,okText:'送出申請'})) return;
   GS.redeem=GS.redeem||[];
   GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
   GS.spent+=it.price;   // 先扣住，婉拒/取消退回
@@ -1451,6 +1467,7 @@ function pendingRedeems(){
 }
 async function decideRedeem(pi, redId, ok){
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
+  if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的兌換要請另一位主管核准 🤝'); return; }
   const r=(p.save.redeem||[]).find(x=>x.id===redId); if(!r||r.st!=='pending') return;
   r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
   if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
@@ -1709,15 +1726,18 @@ function teamKpi(){ return KPI_MONTH * CONFIG.USERS.length; }
 function monthPts(uid,y,m){ const s=new Date(y,m,1).getTime(), e=new Date(y,m+1,1).getTime();
   return STATE.tasks.filter(t=>t.assigneeId===uid&&t.status==='done'&&(d=>d>=s&&d<e)(new Date(t.approvedAt||t.submittedAt||t.createdAt||0).getTime()))
     .reduce((a,t)=>a+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0); }
-function teamMonthPts(y,m){ return CONFIG.USERS.reduce((a,u)=>a+monthPts(u.id,y,m),0); }
+function teamMonthPts(y,m){ return CONFIG.USERS.reduce((a,u)=>a+monthPts(u.id,y,m),0); }   // 開池用：全員點數(含主管,主管幫忙開池)
+function empMonthPts(y,m){ return CONFIG.USERS.filter(u=>!isSupervisor(u)).reduce((a,u)=>a+monthPts(u.id,y,m),0); }   // 分潤用：只算員工
 function poolCoinsFor(pct){ for(const t of TEAM_POOL){ if(pct>=t.pct) return t.coins; } return 0; }
-/* 過去每月的池金分潤（純衍生＝跨裝置一致、永不重複發放）：份額=個人月點數/團隊月點數 */
+/* 過去每月的池金分潤（純衍生＝跨裝置一致、永不重複發放）：主管開池不分潤，整池按員工點數比例發給員工 */
 function teamPoolCoins(uid){
+  if(isSupervisor(userById(uid))) return 0;   // 老闆/主管退出分潤，錢全流向員工
   let total=0; const now=new Date();
   for(let i=1;i<=24;i++){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); const y=d.getFullYear(), m=d.getMonth();
     const team=teamMonthPts(y,m); if(team<=0) continue;
     const pool=poolCoinsFor(team/teamKpi()); if(!pool) continue;
-    total+=Math.floor(pool*monthPts(uid,y,m)/team); }
+    const emp=empMonthPts(y,m); if(emp<=0) continue;
+    total+=Math.floor(pool*monthPts(uid,y,m)/emp); }   // 分母改員工點數總和 → 整池發給員工
   return total;
 }
 const COIN_PER_TPTS = 10;          // 每 10 點實得 T 點 = 1 鑽石（6500點/月 ≈ 650幣）
@@ -1839,7 +1859,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[]}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[]}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -1881,9 +1901,10 @@ async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) retu
   GS.items[id]--; await saveGameState(); renderBattle(); }
 /* 裝備可賣出（40% 回收，避免低階裝備變垃圾） */
 async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
-  const back=Math.floor(it.price*0.4);
-  if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？',okText:'賣出'})) return;
-  GS.owned=GS.owned.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
+  const fromDrop=GS.dropped&&GS.dropped.includes(id);
+  const back=fromDrop?5:Math.floor(it.price*0.4);   // 副本掉落的固定 5 鑽(堵掉落→賣→再掉永動機)；買的維持 40%
+  if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？'+(fromDrop?'\n（副本掉落品回收價固定）':''),okText:'賣出'})) return;
+  GS.owned=GS.owned.filter(x=>x!==id); if(GS.dropped) GS.dropped=GS.dropped.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
   GS.spent-=back; await saveGameState(); toast('已賣出 ＋'+back+' 鑽石'); refreshGameUI(); }
 function userEarnedCoins(uid){
   const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
@@ -1958,6 +1979,7 @@ async function buyItem(id){
 }
 async function buyPet(id){
   const p=petDef(id); if(!p||(GS.pets&&GS.pets[id])) return;
+  if(p.unique && isSupervisor(STATE.user) && !isBeta()){ toast('主管不參與唯一寵物爭奪，留給同事們 🙅'); return; }
   if(p.unique && STATE.uniqueOwners && STATE.uniqueOwners[id]){ toast('這是公司唯一，已被 '+STATE.uniqueOwners[id]+' 領養了 🔒'); return; }
   if(coinBalance()<p.price){ toast('鑽石不足'); return; }
   GS.pets=GS.pets||{}; GS.pets[id]={exp:0}; GS.spent+=p.price;
@@ -2139,10 +2161,10 @@ function showShop(tab){
   else if(t==='gift'){
     const myRd=(GS.redeem||[]).slice().reverse();
     const pend=isSupervisor(STATE.user)?pendingRedeems():[];
-    body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{};return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',false)">婉拒</button></div>`;}).join('')}`:''}
+    body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{}; const own=(STATE.user.email||'').toLowerCase()===x.p.email && !isBeta(); return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div>${own?'<span class="rd-st">待另一位主管核准</span>':`<button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${x.r.id}',false)">婉拒</button>`}</div>`;}).join('')}`:''}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">用鑽石換真的獎勵（申請→主管核准→兌現）。每季限量、換完下季補貨 🎁</div>
     ${(()=>{const hd=todayHidden(); if(!hd) return ''; const sold=soldCount(hd.id)>=hd.qty; return `<div class="rw-card hidden-rw${sold?' out':''}"><div class="rw-icon">${hd.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${hd.name}</div><div class="rw-desc">${hd.desc} 只到 ${hd.until}、全公司限 1 個！</div></div>${sold?'<span class="rw-out">已被搶走</span>':`<button class="buy-btn${bal<hd.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<hd.price?'disabled':''} onclick="requestRedeem('${hd.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${hd.price}</button>`}</div>`;})()}
-    <div class="rw-grid">${REWARDS.map(it=>{const sold=soldCount(it.id), left=Math.max(0,(it.qty||99)-sold), out=left<=0; return `<div class="rw-card${out?' out':''}"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}</div><div class="rw-desc">${it.desc} · 本季剩 ${left}/${it.qty}</div></div>${out?'<span class="rw-out">本季完售</span>':`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`}</div>`;}).join('')}</div>
+    <div class="rw-grid">${REWARDS.map(it=>{const used=rewardUsed(it), left=Math.max(0,(it.qty||99)-used), out=left<=0, lbl=it.perUser?('你本季剩 '+left+'/'+it.qty):('本季剩 '+left+'/'+it.qty); return `<div class="rw-card${out?' out':''}"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${it.perUser?' <span style="font-size:9px;color:var(--accent)">每人每季限量</span>':''}</div><div class="rw-desc">${it.desc} · ${lbl}</div></div>${out?`<span class="rw-out">${it.perUser?'本季已換':'本季完售'}</span>`:`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`}</div>`;}).join('')}</div>
     ${myRd.length?`<div class="detail-label" style="margin-top:14px">📜 我的兌換</div>${myRd.slice(0,8).map(r=>{const it=rewardDef(r.rid)||{};return `<div class="rd-row">${it.icon||''} ${it.name||r.rid} · <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${r.price}<span class="rd-st">${RD_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelRedeem('${r.id}')">取消</button>`:''}</div>`;}).join('')}`:''}`;
   }
   else { const sp=activeSeasonPets(); body=`${sp.length?`<div class="shop-slot-h" style="color:var(--accent)">✨ 限定登場（期間限定）</div><div class="shop-grid">${sp.map(shopPetCard).join('')}</div><div class="shop-slot-h">一般寵物</div>`:''}<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`; }
@@ -2168,10 +2190,10 @@ function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remov
 const DUNGEON_DAILY = 3;                  // 每日挑戰次數（鑽石不能太好賺）
 // 血量設計成「適當裝備約 3-4 題打完」(配合單次傷害上限＝血量/3)
 const BOSSES = [
-  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:5,  dropR:2, minLevel:1},
-  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:8,  dropR:3, minLevel:5},
-  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:12, dropR:4, minLevel:10},
-  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:18, dropR:5, minLevel:18},
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:2, dropR:2, minLevel:1},
+  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:3, dropR:3, minLevel:5},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:5, dropR:4, minLevel:10},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:8, dropR:5, minLevel:18},
 ];
 const QUIZ = [
   // 智力測驗
@@ -2391,7 +2413,7 @@ async function endBattle(win){
   if(win){
     let coins=Math.round(b.reward*(1+petSkillVal('coin')));
     const dbl=Math.random()<petSkillVal('coindbl'); if(dbl) coins*=2;   // 寵物鑽石翻倍機率
-    let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0))){ drop=randomDrop(b.dropR); if(drop) GS.owned.push(drop.id); }
+    let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0))){ drop=randomDrop(b.dropR); if(drop){ GS.owned.push(drop.id); GS.dropped=GS.dropped||[]; GS.dropped.push(drop.id); } }
     const bonus=bonusDrop();   // 偶爾隨機掉落：蛋/零食/道具
     GS.won=(GS.won||0)+coins; GS.clears=(GS.clears||0)+1; saveGameState();
     showChest(coins, drop, left, bonus);   // 寶箱開箱儀式
@@ -2432,14 +2454,25 @@ function timeLeft(iso){
   const dt=new Date(iso); return {text:(dt.getMonth()+1)+'/'+dt.getDate(), urgent:false};
 }
 /* 逾期點數打折：每逾期 2 小時 ×0.9 累計，直到 0 */
+/* 逾期工作時數（只算週一~五 09:00-18:00，排除週末/下班；上限 20 即足以觸地板） */
+function workHoursOverdue(dueMs, refMs){
+  if(refMs<=dueMs) return 0;
+  let h=0, t=dueMs;
+  for(let i=0;i<3000 && t<refMs && h<20;i++){
+    const d=new Date(t), day=d.getDay(), hr=d.getHours();
+    if(day>=1 && day<=5 && hr>=9 && hr<18) h+=Math.min(1,(refMs-t)/3600000);
+    t+=3600000;
+  }
+  return h;
+}
 function effectivePoints(t){
   if(!t.points || !t.dueAt) return t.points||0;
   // 已提交/已完成：衰減凍結在「提交當下」，不因主管核准延遲繼續扣（修 bug：準時交卻被核准慢扣分）
   const ref = (t.submittedAt && (t.status==='submitted'||t.status==='done')) ? new Date(t.submittedAt).getTime() : Date.now();
-  const overH = (ref - new Date(t.dueAt).getTime())/3600000;
+  const overH = workHoursOverdue(new Date(t.dueAt).getTime(), ref);   // 只計工作時段，週末/下班不扣
   if(overH <= 0) return t.points;
   const steps = Math.ceil(overH/2);
-  return Math.max(0, Math.round(t.points * Math.pow(0.9, steps)));
+  return Math.max(Math.round(t.points*0.5), Math.round(t.points * Math.pow(0.9, steps)));   // 地板 50%：付出仍被看見
 }
 function pointsHtml(t){
   if(!t.points) return '';
@@ -2476,7 +2509,7 @@ function vConfirm(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.3.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.4.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
