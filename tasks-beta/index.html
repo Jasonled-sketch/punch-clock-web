@@ -328,6 +328,10 @@ img{display:block}
 .shop-item.soldout{opacity:.62;filter:grayscale(.55)}
 .shop-item.soldout .si-img{filter:grayscale(1) brightness(.7)}
 .soldout-tag{position:absolute;top:6px;left:6px;font-size:9px;font-weight:800;color:#fff;background:#ef4444;border-radius:6px;padding:1px 6px}
+.glow-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;font-weight:700;text-align:center;background:linear-gradient(120deg,rgba(56,189,248,.2),rgba(168,85,247,.18),rgba(240,165,0,.18));border:1px solid #38bdf8;box-shadow:0 0 18px rgba(56,189,248,.25)}
+.glow-banner b{font-size:20px;color:#38bdf8}
+.tb-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;background:linear-gradient(120deg,rgba(239,68,68,.18),rgba(168,85,247,.16));border:1px solid #ef4444;box-shadow:0 0 16px rgba(239,68,68,.22)}
+.tb-banner.won{background:linear-gradient(120deg,rgba(240,165,0,.2),rgba(34,197,94,.16));border-color:#f0a500;text-align:center;font-weight:700}
 .mch-banner{border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:12px}
 .mch-banner.off{background:var(--surface2);border:1px dashed var(--border);color:var(--muted);text-align:center}
 .mch-banner.on{background:linear-gradient(110deg,rgba(168,85,247,.22),rgba(240,165,0,.18));border:1px solid #a855f7;box-shadow:0 0 16px rgba(168,85,247,.3);animation:mchGlow 1.8s ease-in-out infinite}
@@ -524,7 +528,7 @@ const CONFIG = {
       title:1003055, quadrant:1003056, status:1003057, assignee:1003058, creator:1003059,
       due:1003060, points:1003061, earnedPoints:1003062, note:1003063, images:1003064,
       submittedAt:1003065, approvedAt:1003066, createdAt:1003067,
-      contribution:1003070, favor:1003071
+      contribution:1003070, favor:1003071, glow:1003080
     },
     QUAD2RAGIC: { q1:'重要又緊急', q2:'重要不緊急', q3:'不重要但緊急', q4:'不重要不緊急' },
     STATUS2RAGIC: { open:'待處理', submitted:'待審核', done:'已完成' },
@@ -571,6 +575,7 @@ async function dbDelete(task){
 }
 
 /* === CLOUD 模式：Ragic 對應 + 讀寫（透過 punch-clock-proxy）=== */
+function glowFromRec(rec){ for(const k in rec){ const v=rec[k]; if(v==='小屏'||v==='大屏') return v; } return ''; }   // 不依賴欄名,掃描值=小屏/大屏(欄位1003080)
 function quadFromRagic(v){ for(const k in CONFIG.RAGIC.QUAD2RAGIC) if(CONFIG.RAGIC.QUAD2RAGIC[k]===v) return k; return 'q4'; }
 function statusFromRagic(v){ for(const k in CONFIG.RAGIC.STATUS2RAGIC) if(CONFIG.RAGIC.STATUS2RAGIC[k]===v) return k; return 'open'; }
 function isoToRagic(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
@@ -598,7 +603,8 @@ async function ragicLoadTasks(){
       earnedPoints: rec['實得點數']? parseInt(rec['實得點數']) : null,
       contribution: parseInt(rec['貢獻值'])||0, favor: parseInt(rec['人情點'])||0,
       note: rec['備註步驟']||'', images: parseImages(rec['圖片網址']),
-      submittedAt: ragicToIso(rec['提交時間']), approvedAt: ragicToIso(rec['核准時間']), createdAt: ragicToIso(rec['建立時間'])
+      submittedAt: ragicToIso(rec['提交時間']), approvedAt: ragicToIso(rec['核准時間']), createdAt: ragicToIso(rec['建立時間']),
+      glow: glowFromRec(rec)
     });
   });
   return tasks;
@@ -616,6 +622,7 @@ async function ragicSaveTask(t){
   if(t.earnedPoints!=null) fd.append(F.earnedPoints, String(t.earnedPoints));
   fd.append(F.contribution, String(t.contribution||0));
   fd.append(F.favor, String(t.favor||0));
+  if(t.glow) fd.append(F.glow, t.glow);   // 城市光彩類型：小屏/大屏
   fd.append(F.note, t.note||'');
   fd.append(F.images, (t.images||[]).map(m=>typeof m==='string'?m:m.src).filter(s=>/^https?:/.test(s)).join('\n'));
   if(t.submittedAt) fd.append(F.submittedAt, isoToRagic(t.submittedAt));
@@ -905,6 +912,13 @@ function openTaskModal(taskId, presetQuad){
         <div class="reward-item"><span class="reward-lbl" style="color:#f472b6">人情點</span><input type="number" id="f_favor" value="${t&&t.favor?t.favor:0}" min="0"></div>
       </div>
     </div>
+    <div class="field"><label>🌃 城市光彩（這件任務點亮了顯示屏嗎？完成後計入「公司之光」）</label>
+      <select id="f_glow">
+        <option value="" ${!t||!t.glow?'selected':''}>無 / 非裝屏任務</option>
+        <option value="小屏" ${t&&t.glow==='小屏'?'selected':''}>小屏 一面</option>
+        <option value="大屏" ${t&&t.glow==='大屏'?'selected':''}>大屏 一面</option>
+      </select>
+    </div>
     <div class="field"><label>附圖 / 影片（最多 3 個，記錄怎麼做的）</label>
       <div class="img-input-row"><input type="file" accept="image/*,video/*" capture="environment" id="f_img" onchange="onPickMedia(event)"></div>
       <div class="img-preview-list" id="imgPreview"></div>
@@ -1000,13 +1014,14 @@ async function saveTask(){
     if(favor>room){ favor=room; toast('人情點本月上限 '+FAVOR_MONTH_CAP+'，'+(room>0?('已自動調為 '+room):'已用完，本筆改為 0')); }
   }
   const note = document.getElementById('f_note').value.trim();
+  const glow = (document.getElementById('f_glow')||{}).value || '';
   const quad = computeQuad();
   let task;
   if(editingId){
     task = STATE.tasks.find(x=>x.id===editingId);
-    Object.assign(task,{ title, quadrant:quad, assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, images:[...modalImages] });
+    Object.assign(task,{ title, quadrant:quad, assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, glow, images:[...modalImages] });
   }else{
-    task = { id:'t'+Date.now(), title, quadrant:quad, status:'open', assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, images:[...modalImages], createdById:STATE.user.id, createdAt:new Date().toISOString() };
+    task = { id:'t'+Date.now(), title, quadrant:quad, status:'open', assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, glow, images:[...modalImages], createdById:STATE.user.id, createdAt:new Date().toISOString() };
     STATE.tasks.unshift(task);
   }
   const wasEdit = !!editingId;
@@ -1391,6 +1406,7 @@ function showTeam(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='teamModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0">👥 團隊夥伴</h3><button class="t-expand" onclick="closeTeam()" style="font-size:18px">✕</button></div>
+    ${cityGlowHtml()}
     ${kpiPoolHtml()}
     <div class="detail-label" style="margin-top:14px">夥伴狀態</div>
     ${cards}
@@ -1783,6 +1799,9 @@ function teamKpi(){ const n=new Date(); return teamKpiForMonth(n.getFullYear(), 
 function monthPts(uid,y,m){ const s=new Date(y,m,1).getTime(), e=new Date(y,m+1,1).getTime();
   return STATE.tasks.filter(t=>t.assigneeId===uid&&t.status==='done'&&(d=>d>=s&&d<e)(new Date(t.approvedAt||t.submittedAt||t.createdAt||0).getTime()))
     .reduce((a,t)=>a+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0); }
+/* 公司之光：完成的裝屏任務 → 點亮城市的顯示屏數（小屏/大屏），純衍生 */
+function cityGlow(){ let s=0,b=0; STATE.tasks.forEach(t=>{ if(t.status==='done'){ if(t.glow==='小屏')s++; else if(t.glow==='大屏')b++; } }); return {small:s, big:b, total:s+b}; }
+function cityGlowHtml(){ const g=cityGlow(); if(!g.total) return ''; return `<div class="glow-banner">🌆 譽昇至今綻放城市光彩 <b>${g.total}</b> 面顯示屏（小屏 ${g.small}／大屏 ${g.big}）<div style="font-size:10px;opacity:.85;margin-top:3px">每一面都是你們親手點亮的 ✨</div></div>`; }
 function teamMonthPts(y,m){ return CONFIG.USERS.reduce((a,u)=>a+monthPts(u.id,y,m),0); }   // 開池用：全員點數(含主管,主管幫忙開池)
 function empMonthPts(y,m){ return CONFIG.USERS.filter(u=>!isSupervisor(u)).reduce((a,u)=>a+monthPts(u.id,y,m),0); }   // 分潤用：只算員工
 function poolCoinsFor(pct){ for(const t of TEAM_POOL){ if(pct>=t.pct) return t.coins; } return 0; }
@@ -1916,7 +1935,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[]}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -2319,6 +2338,95 @@ function bonusDrop(){
   const it=ITEMS[Math.floor(Math.random()*ITEMS.length)]; GS.items=GS.items||{}; GS.items[it.id]=(GS.items[it.id]||0)+1;
   return {rc:'#38bdf8', html:itemImg(it,38), label:'道具 — '+it.name};
 }
+/* ===================================================================
+   團隊共鬥大 Boss（凝聚共識）：每月第 1、3 個禮拜一出現；
+   破關門檻＝全體成員「連續 2 天」都出力攻擊（高難度,逼團隊同步現身）。
+   每人攻擊日存各自 GS.teamBoss,破關條件跨員工衍生(沿用 allPlayers)。
+   =================================================================== */
+const TEAMBOSS = { name:'巨型・共鬥魔王', file:'monster_04.png', reward:250, durDays:9 };
+function nthMonday(y,m,n){ const d=new Date(y,m,1); let c=0; while(d.getMonth()===m){ if(d.getDay()===1){ c++; if(c===n) return new Date(d.getFullYear(),d.getMonth(),d.getDate()); } d.setDate(d.getDate()+1); } return null; }
+function teamBossEvent(){
+  if(isBeta()){ const n=new Date(); return {id:'BETA-'+n.getFullYear()+'-'+(n.getMonth()+1), label:'測試檔（beta 隨時可打）', start:Date.now()-86400000, endsAt:Date.now()+TEAMBOSS.durDays*86400000}; }   // beta 全程顯示供驗收
+  const now=new Date(), nowMs=Date.now(), cands=[];
+  for(const off of [-1,0]){ const dd=new Date(now.getFullYear(), now.getMonth()+off, 1); const y=dd.getFullYear(), m=dd.getMonth();
+    [1,3].forEach(n=>{ const ms=nthMonday(y,m,n); if(ms) cands.push({id:y+'-'+(m+1)+'-W'+n, label:(m+1)+'月第'+n+'個週一檔', start:ms.getTime(), endsAt:ms.getTime()+TEAMBOSS.durDays*86400000}); }); }
+  return cands.filter(e=>nowMs>=e.start && nowMs<e.endsAt).sort((a,b)=>b.start-a.start)[0]||null;
+}
+function tbDay(){ return new Date(Date.now()+8*3600000).toISOString().slice(0,10); }     // 台北日期
+function tbNextDay(d){ const dt=new Date(d+'T00:00:00Z'); dt.setUTCDate(dt.getUTCDate()+1); return dt.toISOString().slice(0,10); }
+function teamBossMembers(){ return CONFIG.USERS.map(u=>u.id); }
+function teamBossProgress(){
+  const ev=teamBossEvent(); if(!ev) return null;
+  const ids=teamBossMembers(), byDay={};
+  const add=(uid,days)=>{ (days||[]).forEach(d=>{ (byDay[d]=byDay[d]||{})[uid]=1; }); };
+  (STATE.allPlayers||[]).forEach(p=>{ if(p.save&&p.save.teamBoss&&p.save.teamBoss.ev===ev.id) add(emailToUserId(p.email), p.save.teamBoss.days); });
+  if(GS&&GS.teamBoss&&GS.teamBoss.ev===ev.id) add(STATE.user.id, GS.teamBoss.days);   // 我自己用最新 GS
+  const fullDays=Object.keys(byDay).filter(d=>ids.every(id=>byDay[d]&&byDay[d][id])).sort();
+  let defeated=false, winDays=null;
+  for(const d of fullDays){ if(fullDays.indexOf(tbNextDay(d))>=0){ defeated=true; winDays=[d,tbNextDay(d)]; break; } }
+  const today=tbDay(), todayCount=ids.filter(id=>byDay[today]&&byDay[today][id]).length;
+  return {ev, ids, byDay, fullDays, defeated, winDays, today, todayCount,
+    iAttackedToday: !!(byDay[today]&&byDay[today][STATE.user.id]),
+    leftDays: Math.max(1, Math.ceil((ev.endsAt-Date.now())/86400000))};
+}
+function teamBossBannerHtml(){
+  const pr=teamBossProgress(); if(!pr) return '';
+  const claimed=GS&&GS.teamBoss&&GS.teamBoss.ev===pr.ev.id&&GS.teamBoss.claimed;
+  if(pr.defeated) return `<div class="tb-banner won">🎉 團隊大 Boss 已討伐！全員連續 2 天到齊 💪<div style="margin-top:8px">${claimed?'<span style="color:var(--muted);font-size:12px">你已領取討伐獎勵 ✓</span>':`<button class="buy-btn" style="width:auto;padding:7px 16px" onclick="claimTeamBoss()">領取討伐獎勵 +${TEAMBOSS.reward} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></button>`}</div></div>`;
+  return `<div class="tb-banner">
+    <div style="font-weight:800">🐲 團隊共鬥・${TEAMBOSS.name}　<span style="font-size:11px;color:var(--muted)">${pr.ev.label}｜剩 ${pr.leftDays} 天</span></div>
+    <div style="font-size:12px;color:var(--muted);margin:5px 0">破關：全體 ${pr.ids.length} 人要「<b>連續 2 天</b>」都出力。今日到齊 <b style="color:var(--accent)">${pr.todayCount}/${pr.ids.length}</b>｜目前累積全員日 <b style="color:var(--accent)">${pr.fullDays.length}</b></div>
+    <button class="buy-btn" style="width:100%;padding:9px" ${pr.iAttackedToday?'disabled':''} onclick="doTeamBossAttack()">${pr.iAttackedToday?'今天你已出力 ✓ — 揪夥伴一起來':'⚔️ 今日出力攻擊'}</button>
+  </div>`;
+}
+function doTeamBossAttack(){
+  const ev=teamBossEvent(); if(!ev){ toast('大 Boss 還沒出現'); return; }
+  if(!GS.teamBoss || GS.teamBoss.ev!==ev.id) GS.teamBoss={ev:ev.id, days:[], claimed:false};
+  if(GS.teamBoss.days.indexOf(tbDay())>=0){ toast('今天你已經出力過了，明天再來補刀 💪'); return; }
+  const qi=Math.floor(Math.random()*QUIZ.length), q=QUIZ[qi];
+  const order=q.a.map((_,i)=>i); for(let i=order.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=order[i];order[i]=order[j];order[j]=t;}
+  const o=document.createElement('div'); o.className='modal-mask'; o.id='tbAtkModal';
+  o.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+    <div style="font-size:40px">🐲</div><h3 style="margin:6px 0">今日出力 · 答對即攻擊</h3>
+    <div class="quiz-cat">${q.cat}題</div><div class="quiz-q">${q.q}</div>
+    <div class="quiz-opts">${order.map(oi=>`<button class="quiz-opt" onclick="answerTeamBoss(${qi},${oi})">${q.a[oi]}</button>`).join('')}</div>
+    <button class="t-expand" onclick="document.getElementById('tbAtkModal').remove()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">先不打</button>
+  </div>`;
+  document.body.appendChild(o);
+}
+async function answerTeamBoss(qi,idx){
+  const q=QUIZ[qi], m=document.getElementById('tbAtkModal');
+  if(idx!==q.c){ if(m){ const ob=m.querySelector('.quiz-opts'); if(ob&&!m.querySelector('.tb-wrong')) ob.insertAdjacentHTML('afterend','<div class="tb-wrong" style="color:var(--q1);font-size:12px;margin-top:8px">答錯了，再選一次（答對才出力成功）</div>'); } return; }
+  if(m) m.remove();
+  const ev=teamBossEvent(); if(!ev) return;
+  if(!GS.teamBoss||GS.teamBoss.ev!==ev.id) GS.teamBoss={ev:ev.id,days:[],claimed:false};
+  if(GS.teamBoss.days.indexOf(tbDay())<0) GS.teamBoss.days.push(tbDay());
+  await saveGameState();
+  const pr=teamBossProgress();
+  if(pr&&pr.defeated) teamBossWinFx();
+  else toast('💥 出力成功！今日到齊 '+(pr?pr.todayCount:1)+'/'+(pr?pr.ids.length:teamBossMembers().length)+'，揪夥伴連續 2 天一起破關');
+  const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); }
+}
+async function claimTeamBoss(){
+  const pr=teamBossProgress(); if(!pr||!pr.defeated) return;
+  if(!GS.teamBoss||GS.teamBoss.ev!==pr.ev.id) GS.teamBoss={ev:pr.ev.id,days:[],claimed:false};
+  if(GS.teamBoss.claimed){ toast('你已領過了'); return; }
+  GS.teamBoss.claimed=true; GS.won=(GS.won||0)+TEAMBOSS.reward;
+  await saveGameState(); toast('🎉 討伐獎勵 +'+TEAMBOSS.reward+' 鑽石入帳！');
+  const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); } else refreshGameUI();
+}
+function teamBossWinFx(){
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='tbWinMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,#f0a500cc,transparent 70%)"></div>
+    <div class="lvup-card" style="border:2px solid #f0a500;box-shadow:0 0 44px #f0a500">
+      <div style="font-size:56px">🐲💥</div>
+      <div class="lvup-title" style="color:#f0a500">團隊大 Boss 討伐成功！</div>
+      <div class="lvup-lv" style="color:#fde68a">全員連續 2 天到齊，這就是團隊的力量 💪</div>
+      <div class="lvup-hint">回副本頁領取討伐獎勵（點一下關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); if(typeof sfxVictory==='function') sfxVictory();
+  setTimeout(()=>{const x=document.getElementById('tbWinMask'); if(x)x.remove();},6000);
+}
 function showDungeon(){
   if(!STATE.user) return;
   syncHp();
@@ -2326,6 +2434,7 @@ function showDungeon(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='dungeonModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
+    ${teamBossBannerHtml()}
     <div style="font-size:12px;color:var(--muted);margin-bottom:12px">答對攻擊（武器/項鍊/戒指加攻）；答錯或超時被怪打（頭盔/護甲/鞋減傷）。❤️ ${Math.round(GS.hp)}%（每小時回4%）｜今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次</div>
     ${BOSSES.map(b=>{ const lk=!lvOK(b.minLevel); return `<div class="boss-row${lk?' lk':''}">
       <img src="assets/game/mob/${b.file}" class="boss-img">
@@ -2589,7 +2698,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.5.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.6.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
