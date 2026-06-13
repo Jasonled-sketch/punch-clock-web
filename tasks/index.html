@@ -488,7 +488,6 @@ img{display:block}
       <button class="btn-logout" onclick="logout()">登出</button>
     </div>
   </div>
-  <div id="gcalBanner" class="gcal-wrap"></div>
   <div id="board"></div>
 </div>
 
@@ -547,6 +546,7 @@ const STATE = { user:null, tasks:[], activeQuad:'q1' };
 
 function userById(id){ return CONFIG.USERS.find(u=>u.id===id); }
 function isSupervisor(u){ return u && (u.role==='admin'||u.role==='supervisor'); }
+function isAdmin(){ return STATE.user && (STATE.user.email||'').toLowerCase()==='covernself@gmail.com'; }   // 唯一管理員(Jason)，測試工具只開放給他
 
 /* ===================================================================
    資料層（db）—— LOCAL 用 localStorage；CLOUD 預留 Ragic
@@ -713,7 +713,7 @@ async function login(uid){
   if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
-  gcalInit(); renderGcalBanner(); connectGcal(false);   // Google 日曆今日行程（已授權則靜默載入）
+  // Google 日曆已停用（Jason 2026-06：避免第二次登入太麻煩）
 }
 /* 登入回顧卡：上次登入後主管核准了你幾件任務、入帳多少點（付出被看見的字面時刻） */
 function checkApprovals(){
@@ -1286,9 +1286,8 @@ function showGameCenter(){
       <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
     </div>
     <div class="gc-actionrow">
-      <span class="coin-pill big"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${coinBalance()} 鑽石</span>
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
-      ${isBeta()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
+      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -2102,9 +2101,9 @@ function coinBalance(){ return userEarnedCoins(STATE.user.id) + teamPoolCoins(ST
 function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done').reduce((s,t)=>s+(t.contribution||0),0); }
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
-async function grantTestCoins(){ if(!isBeta()||!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }   // 守衛：正式站(非beta)叫不動，防 console 自肥
+async function grantTestCoins(){ if(!isAdmin()||!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }   // 守衛：只有管理員(covernself)叫得動，防其他人/console 自肥
 async function resetGame(){
-  if(!isBeta()) return;   // 守衛：正式站(非beta)叫不動，防 console 清檔/濫用
+  if(!isAdmin()) return;   // 守衛：只有管理員(covernself)叫得動，防其他人/console 清檔
   if(!await vConfirm({icon:'🧹',title:'重置遊戲存檔',msg:'確定重置你的遊戲存檔？\n裝備／寵物／鑽石／進度全部歸零（無法復原）',okText:'重置',danger:true})) return;
   const rid=GS&&GS._ragicId; GS=blankGS(); if(rid!=null) GS._ragicId=rid;   // 保留同一筆覆蓋(不新增重複)
   STATE.uniqueOwners=STATE.uniqueOwners||{};
@@ -2873,7 +2872,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.8.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.8.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
