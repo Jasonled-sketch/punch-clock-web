@@ -334,6 +334,9 @@ img{display:block}
 .tb-banner.won{background:linear-gradient(120deg,rgba(240,165,0,.2),rgba(34,197,94,.16));border-color:#f0a500;text-align:center;font-weight:700}
 .mm-banner{border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;background:var(--surface2);border:1px solid var(--border)}
 .mm-banner b{color:var(--accent)}
+.onboard-card{background:rgba(34,197,94,.1);border:1px solid #22c55e;border-radius:12px;padding:12px 14px;margin:6px 0 12px;text-align:left}
+.ob-step{font-size:12.5px;padding:2px 0;color:var(--muted)}
+.ob-step.ok{color:var(--text)}
 .mch-banner{border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:12px}
 .mch-banner.off{background:var(--surface2);border:1px dashed var(--border);color:var(--muted);text-align:center}
 .mch-banner.on{background:linear-gradient(110deg,rgba(168,85,247,.22),rgba(240,165,0,.18));border:1px solid #a855f7;box-shadow:0 0 16px rgba(168,85,247,.3);animation:mchGlow 1.8s ease-in-out infinite}
@@ -705,6 +708,8 @@ async function login(uid){
   checkFavorEarned();         // 新獲得的人情點 → 金光儀式提醒
   checkApprovals();           // 上次登入後被核准的任務 → 「付出被看見」回顧卡
   checkKudos();               // 新收到的感謝卡 → 粉光儀式
+  checkStarter();             // 新人起步禮包(一次性)
+  checkNewbieGrad();          // 新星之路全達標 → 頒新星稱號
   if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
@@ -1271,6 +1276,7 @@ function showGameCenter(){
       ${charHeroHtml()}
       <div class="gc-rank" style="color:${c}">${g.rank.name}${GS&&GS.title?`<span class="gc-title-tag">「${(shopItem(GS.title)||{}).name||''}」</span>`:''}</div>
       <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power+gearPower()}</div>
+      ${onboardCardHtml()}
       <div class="gc-statrow">
         <div class="gc-stat"><b style="color:#f0a500">${coinBalance()}</b><span>💎 鑽石</span></div>
         <div class="gc-stat"><b style="color:#22c55e">${contribSpendable(STATE.user.id)}</b><span>貢獻值</span></div>
@@ -1396,7 +1402,7 @@ function showTeam(){
       <div class="team-top">
         <img class="team-char" src="${charFile(sv.charId||'c1')}">
         <div style="flex:1;min-width:0">
-          <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span></div>
+          <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:#22c55e;margin-left:4px">🌱新人</span>':''}</div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
           <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
         </div>
@@ -1693,6 +1699,62 @@ function kudosCeremony(list){
   o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
   setTimeout(()=>{const m=document.getElementById('kudosMask'); if(m)m.remove();},6500);
 }
+/* ===== 新星之路：起步禮包 + 任務鏈(衍生里程碑) + 新星稱號畢業（接住新人前兩週） ===== */
+const STARTER = {coins:300, petId:'pet_dog'};
+function isNewbie(uid){ return userGameLevel(uid||STATE.user.id) < 5; }   // 等級<5＝新手期(老手早已遠超)
+function onboardSteps(){
+  const uid=STATE.user.id, mine=STATE.tasks.filter(t=>t.assigneeId===uid);
+  return [
+    {label:'完成第一個任務並被核准', ok: mine.some(t=>t.status==='done')},
+    {label:'賺到第一筆鑽石',         ok: coinBalance()>0},
+    {label:'打贏第一場副本',         ok: (GS&&GS.clears)>0},
+    {label:'帶一隻寵物回家',         ok: !!(GS&&GS.pets&&Object.keys(GS.pets).length)},
+    {label:'入手第一件裝備',         ok: !!(GS&&(GS.owned||[]).some(id=>equipItem(id)))},
+    {label:'送出一張感謝卡',         ok: !!(GS&&(GS.kudos||[]).length)},
+  ];
+}
+function onboardDone(){ return onboardSteps().every(s=>s.ok); }
+function checkStarter(){
+  if(!GS || GS.starterClaimed) return;
+  if(userGameLevel(STATE.user.id)>=5 || (GS.owned||[]).length || (GS.clears||0)>0 || Object.keys(GS.pets||{}).length){ GS.starterClaimed=true; saveGameState(); return; }   // 老手/已有進度→只標記不發
+  GS.starterClaimed=true; GS.won=(GS.won||0)+STARTER.coins;
+  GS.pets=GS.pets||{}; if(!GS.pets[STARTER.petId]){ GS.pets[STARTER.petId]={exp:0}; if(!GS.activePet) GS.activePet=STARTER.petId; }
+  saveGameState(); starterCeremony();
+}
+function checkNewbieGrad(){
+  if(!GS || GS.newbieGradClaimed || !onboardDone()) return;
+  if(userGameLevel(STATE.user.id)>=5){ GS.newbieGradClaimed=true; saveGameState(); return; }   // 老手不觸發畢業
+  GS.newbieGradClaimed=true; GS.won=(GS.won||0)+200; GS.title='ti_newstar';
+  saveGameState(); newbieGradCeremony();
+}
+function starterCeremony(){
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='starterMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,#22c55ecc,transparent 70%)"></div>
+    <div class="lvup-card" style="border:2px solid #22c55e;box-shadow:0 0 40px #22c55e">
+      <div style="font-size:52px">🎁</div><div class="lvup-title" style="color:#22c55e">歡迎加入譽昇！</div>
+      <div class="lvup-lv" style="color:#86efac">起步禮包：+${STARTER.coins} 鑽 ＆ 一隻小狗蛋 🐶<br>打開「新星之路」一步步認識任務牆</div>
+      <div class="lvup-hint">（點一下關閉）</div></div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); sfxLevelUp();
+  setTimeout(()=>{const m=document.getElementById('starterMask'); if(m)m.remove();},6500);
+}
+function newbieGradCeremony(){
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='gradMask';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,#f0a500cc,transparent 70%)"></div>
+    <div class="lvup-card" style="border:2px solid #f0a500;box-shadow:0 0 44px #f0a500">
+      <div style="font-size:54px">🌟</div><div class="lvup-title" style="color:#f0a500">新星之路完成！</div>
+      <div class="lvup-lv" style="color:#fde68a">獲得稱號「譽昇新星 🌱」＋200 鑽<br>你已經是任務牆的一員了 💪</div>
+      <div class="lvup-hint">（點一下關閉）</div></div>`;
+  o.onclick=()=>o.remove(); document.body.appendChild(o); if(typeof sfxVictory==='function') sfxVictory();
+  setTimeout(()=>{const m=document.getElementById('gradMask'); if(m)m.remove();},6500);
+}
+function onboardCardHtml(){
+  if(!isNewbie() || (GS&&GS.newbieGradClaimed)) return '';
+  const steps=onboardSteps(), n=steps.filter(s=>s.ok).length;
+  return `<div class="onboard-card">
+    <div style="font-weight:800;color:#22c55e;margin-bottom:6px">🌱 新星之路　<span style="font-size:11px;color:var(--muted);font-weight:400">${n}/${steps.length} · 全部完成得「譽昇新星 🌱」+200鑽</span></div>
+    ${steps.map(s=>`<div class="ob-step${s.ok?' ok':''}">${s.ok?'✅':'⬜'} ${s.label}</div>`).join('')}
+  </div>`;
+}
 
 /* 月度成長回顧卡：每月首次登入自動彈上月成績；成長頁可手動回看 */
 function monthStatsFor(uid,y,m){
@@ -1870,7 +1932,7 @@ const SHOP = {
   aura:[
     {id:'au_flame',name:'烈焰光環',icon:'🔥',price:14}, {id:'au_ice',name:'冰晶光環',icon:'❄️',price:14}, {id:'au_jade',name:'翡翠光環',icon:'🍀',price:16},
     {id:'au_rose',name:'玫瑰光環',icon:'🌸',price:18}, {id:'au_star',name:'星輝光環',icon:'🌟',price:22}, {id:'au_holy',name:'黃金聖光',icon:'☀️',price:35}],
-  title:[ {id:'ti_diligent',name:'勤奮之星',icon:'⭐',price:8}, {id:'ti_earlybird',name:'早起鳥',icon:'🌅',price:8}, {id:'ti_coffee',name:'咖啡成癮',icon:'☕',price:8}, {id:'ti_lucky',name:'錦鯉附身',icon:'🍀',price:10}, {id:'ti_boss',name:'老闆愛將',icon:'💼',price:15}, {id:'ti_ace',name:'譽昇王牌',icon:'👑',price:30}],
+  title:[ {id:'ti_diligent',name:'勤奮之星',icon:'⭐',price:8}, {id:'ti_earlybird',name:'早起鳥',icon:'🌅',price:8}, {id:'ti_coffee',name:'咖啡成癮',icon:'☕',price:8}, {id:'ti_lucky',name:'錦鯉附身',icon:'🍀',price:10}, {id:'ti_boss',name:'救火隊長',icon:'💼',price:15}, {id:'ti_ace',name:'譽昇王牌',icon:'👑',price:30}, {id:'ti_newstar',name:'譽昇新星',icon:'🌱',price:0,grant:true}],
 };
 const AURA_COLOR  = {au_flame:'#ff6b35', au_ice:'#38bdf8', au_jade:'#34d399', au_rose:'#f472b6', au_star:'#a855f7', au_holy:'#fbbf24'};
 // 角色（17 隻 y708；高等級解鎖更帥的）
@@ -1983,7 +2045,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[]}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -2281,7 +2343,7 @@ function showShop(tab){
   if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
     body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
   else if(t==='item'){ syncHp(); body=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">❤️ 目前血量 ${Math.round(GS.hp)}%（每小時自然回 4%）— 道具可累積、戰鬥中可用、也能 40% 賣出</div><div class="rw-grid">${ITEMS.map(it=>{const n=itemCount(it.id); return `<div class="rw-card"><div class="rw-icon">${itemImg(it,38)}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${n>0?` <span style="color:var(--accent)">×${n}</span>`:''}</div><div class="rw-desc">${it.desc}</div></div>${n>0?`<button class="equip-btn" style="width:auto;padding:6px 9px" onclick="useItem('${it.id}')">用</button><button class="sell-btn" style="width:auto;padding:6px 8px;margin:0" onclick="sellConsum('${it.id}')">賣${Math.floor(it.price*0.4)}</button>`:''}<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 11px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="buyConsum('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button></div>`;}).join('')}</div>`; }
-  else if(t==='deco') body=`<div class="shop-slot-h">✨ 光環（擇一裝備）</div><div class="shop-grid">${SHOP.aura.map(x=>shopCosCard({...x,slot:'aura'})).join('')}</div><div class="shop-slot-h" style="margin-top:14px">🏅 稱號（擇一配戴）</div><div class="shop-grid">${SHOP.title.map(x=>shopCosCard({...x,slot:'title'})).join('')}</div>`;
+  else if(t==='deco') body=`<div class="shop-slot-h">✨ 光環（擇一裝備）</div><div class="shop-grid">${SHOP.aura.map(x=>shopCosCard({...x,slot:'aura'})).join('')}</div><div class="shop-slot-h" style="margin-top:14px">🏅 稱號（擇一配戴）</div><div class="shop-grid">${SHOP.title.filter(x=>!x.grant).map(x=>shopCosCard({...x,slot:'title'})).join('')}</div>`;
   else if(t==='gift'){
     const myRd=(GS.redeem||[]).slice().reverse();
     const pend=isSupervisor(STATE.user)?pendingRedeems():[];
@@ -2670,7 +2732,7 @@ function takeDamage(prefix){
   if(bt.shield) dmg=Math.ceil(dmg/2);
   GS.hp=Math.max(0, GS.hp-dmg); GS.hpAt=Date.now();
   bt.hit=null; bt.msg=prefix+'被 '+bt.boss.name+' 攻擊 −'+dmg+'% ❤️';
-  if(GS.hp<=0){ GS.hp=5; return endBattle(false); }   // 留一口氣，不死鎖
+  if(GS.hp<=0){ GS.hp=isNewbie()?30:5; return endBattle(false); }   // 留一口氣，不死鎖(新人保底較高,降低挫折)
   bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
 }
 function answerQuiz(idx){
@@ -2811,7 +2873,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.7.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.8.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 renderLogin();
