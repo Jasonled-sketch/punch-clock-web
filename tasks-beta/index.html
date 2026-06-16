@@ -398,6 +398,21 @@ img{display:block}
 .rr-pt{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 4px}
 .role-face{border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .role-face.empty{background:var(--surface2);color:var(--muted)}
+/* 團隊人格地圖 */
+.tmap{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.tmap-lb{display:flex;gap:8px;margin-bottom:8px}
+.tmap-lbcell{flex:1;background:var(--surface);border:1px solid;border-radius:10px;padding:8px;text-align:center}
+.tmap-lbcell b{font-size:22px;display:block}
+.tmap-lbcell span{font-size:11px;color:var(--muted)}
+.tmap-fams{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.tmap-fam{background:var(--surface);border:1px solid;border-radius:9px;padding:6px 2px;text-align:center}
+.tmap-fam b{font-size:17px;display:block}
+.tmap-fam span{font-size:10px;color:var(--muted)}
+.tmap-axes{display:flex;flex-direction:column;gap:7px}
+.tmap-axhead{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px}
+.tmap-split{height:8px;background:#3b82f633;border-radius:4px;overflow:hidden}
+.tmap-split i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.tmap-side{margin-top:10px;font-size:12px;color:var(--text);line-height:1.7;background:var(--surface);border-radius:9px;padding:9px 11px}
 /* 副本 / 戰鬥 / 答題 */
 .dungeon-btn{width:100%;margin-top:14px;background:linear-gradient(90deg,#ef4444,#f59e0b);color:#fff;font-weight:800;border-radius:12px;padding:13px;font-size:15px}
 .dungeon-btn:active{opacity:.88}
@@ -1430,6 +1445,26 @@ function closePricing(){ const m=document.getElementById('pricingModal'); if(m)m
 
 /* 實體獎目錄（用鑽石換真的東西 — 申請 → 主管核准 → 兌現） */
 /* 團隊頁：看夥伴的角色/等級/戰力/稱號/裝備/寵物/本月產值（互相提醒、互相拉抬） */
+/* 團隊人格地圖（主管限定）：全員動物角色 → aggregate → 領航/定錨、四家族、六軸、自動側寫 */
+function teamRoleCodes(){ return (STATE.allPlayers||[]).map(p=>p.save&&p.save.role&&p.save.role.code).filter(Boolean); }
+function teamRoleMapHtml(){
+  if(!isSupervisor(STATE.user)) return '';
+  const codes=teamRoleCodes();
+  if(!codes.length) return `<div class="detail-label" style="margin-top:14px">🗺️ 團隊人格地圖</div><div style="font-size:12px;color:var(--muted);padding:10px 12px;background:var(--surface2);border-radius:10px">團隊還沒有人做角色測驗。請大家到🎮養成中心測一次，這裡就會長出整個團隊的人格組成。</div>`;
+  const ag=AR.aggregate(codes);
+  const fams=[['SJ','守護者'],['SP','探險家'],['NT','分析家'],['NF','外交家']];
+  const fc={NT:'#b07ff0',NF:'#4fc98a',SJ:'#5ab0e0',SP:'#f2944a'};
+  return `<div class="detail-label" style="margin-top:16px">🗺️ 團隊人格地圖 <span style="font-size:11px;color:var(--muted);font-weight:400">${ag.n} 人已測 · 主管限定</span></div>
+  <div class="tmap">
+    <div class="tmap-lb">
+      <div class="tmap-lbcell" style="border-color:#f0a500"><b style="color:#f0a500">${ag.leaders}</b><span>領航者 帶頭</span></div>
+      <div class="tmap-lbcell" style="border-color:#3b82f6"><b style="color:#3b82f6">${ag.backers}</b><span>定錨者 後援</span></div>
+    </div>
+    <div class="tmap-fams">${fams.map(([k,n])=>`<div class="tmap-fam" style="border-color:${fc[k]}"><b style="color:${fc[k]}">${ag.fam[k]}</b><span>${n}</span></div>`).join('')}</div>
+    <div class="tmap-axes">${ag.axes.map(a=>`<div class="tmap-axrow"><div class="tmap-axhead"><span>${a.aLabel} ${a.aPct}%</span><span style="color:var(--muted)">${a.name}</span><span>${a.bPct}% ${a.bLabel}</span></div><div class="tmap-split"><i style="width:${a.aPct}%"></i></div></div>`).join('')}</div>
+    <div class="tmap-side">${ag.sidewrite.map(s=>`<div>💡 ${s}</div>`).join('')}</div>
+  </div>`;
+}
 function showTeam(){
   if(!STATE.user) return;
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
@@ -1466,6 +1501,7 @@ function showTeam(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0">👥 團隊夥伴</h3><button class="t-expand" onclick="closeTeam()" style="font-size:18px">✕</button></div>
     ${cityGlowHtml()}
     ${kpiPoolHtml()}
+    ${teamRoleMapHtml()}
     <div class="detail-label" style="margin-top:14px">夥伴狀態</div>
     ${cards}
   </div>`;
@@ -3100,7 +3136,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
