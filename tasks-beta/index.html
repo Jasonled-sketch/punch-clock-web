@@ -427,6 +427,7 @@ img{display:block}
 .si-rar.pet-below{margin-top:-2px;font-size:11px}
 .pet-emoji.egg{animation:eggWobble 2.2s ease-in-out infinite}
 @keyframes eggWobble{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.pet-img{object-fit:contain;vertical-align:middle;display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .pet-emoji-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:54px}
 .pet-rbadge{font-size:9px;font-weight:800;color:#fff;border-radius:6px;padding:1px 7px;line-height:1.5;white-space:nowrap}
 .feed-btn.inv{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
@@ -1415,7 +1416,7 @@ function showTeam(){
     const g=gameStats(sp,sc,sf), c=g.rank.color;
     const gp=(sv.gear?Object.values(sv.gear):[]).reduce((s,id)=>{const it=id&&equipItem(id);return s+(it?it.power:0);},0);
     const title=sv.title&&shopItem(sv.title);
-    const pets=sv.pets?Object.keys(sv.pets).map(pid=>petEmoji(pid,sv.pets[pid].exp)).join(''):'';
+    const pets=sv.pets?Object.keys(sv.pets).map(pid=>petFace(pid,sv.pets[pid].exp,20)).join(''):'';
     const mp=monthPts(u.id,y,m);
     const gearIcons=EQUIP_SLOTS.map(s=>{const id=sv.gear&&sv.gear[s.slot], it=id&&equipItem(id); return it?`<img src="${equipFile(id)}" title="${SLOTNAME[s.slot]}⚔️${it.power}">`:`<i></i>`;}).join('');
     return `<div class="team-card" style="border-color:${c}44">
@@ -1993,30 +1994,54 @@ function equipStock(it){
   return {inStock:true};
 }
 const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
-// 寵物：每隻獨特輔助技能(副本生效)，稀有度越高越強、越貴越難得
-/* 寵物技能皆「幸運/輔助」類（作答節奏慢，不放攻擊加成）；技能值會隨寵物等級成長 */
-/* 寵物稀有、不易取得：一般寵物 120 起跳，越高稀有越貴 */
+/* 寵物分級＝動物性格迷因 6 階（NPC普羅大眾→菁英原型極稀有）；與裝備稀有度 PET_RARITY 分開 */
+const PET_TIER = {
+  1:{name:'NPC層級',   color:'#94a3b8'},   // 普羅大眾
+  2:{name:'太好人層級',color:'#22c55e'},   // 善良但容易被利用
+  3:{name:'怪異類型',  color:'#3b82f6'},   // 獨特但被誤解
+  4:{name:'危險心靈',  color:'#a855f7'},   // 不適合弱者
+  5:{name:'令人上癮',  color:'#ef4444'},   // 難以抗拒
+  6:{name:'菁英原型',  color:'#f0a500'},   // 極其罕見
+};
+function petTier(r){ return PET_TIER[r]||PET_TIER[1]; }
+/* 寵物＝動物性格分級（圖 assets/game/pet/<id>.svg，OpenMoji 開源 CC-BY-SA；技能皆幸運/輔助類；越高階越稀有越貴）。
+   ⚠️ 寫實圖：Jason 之後提供同檔名的 .svg/.png 即可替換成寫實風（廣告原圖有版權不能用）。 */
 const PETS = [
-  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:120, skill:{t:'coin',v:0.12}},
-  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:130,skill:{t:'drop',v:0.10}},
-  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:140, skill:{t:'dodge',v:0.10}},
-  {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:150,   skill:{t:'regen',v:0.30}},
-  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:230,    skill:{t:'crit',v:0.15}},
-  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:250,skill:{t:'coin',v:0.25}},
-  {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:280,  skill:{t:'drop',v:0.18}},
-  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:430,  skill:{t:'hint',v:1}},
-  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:480, skill:{t:'dodge',v:0.18}},
-  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:680, skill:{t:'crit',v:0.25}},
-  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:740, skill:{t:'coindbl',v:0.33}},
-  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:820,skill:{t:'regen',v:0.50}},
-  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:1200,unique:true, skill:{t:'extrarun',v:1}},
-  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:1400,unique:true, skill:{t:'coin',v:1.0}},
+  // NPC 層級（普羅大眾）
+  {id:'pet_dog',    name:'狗',  icon:'🐕',r:1,price:120, skill:{t:'regen',v:0.30}},
+  {id:'pet_cat',    name:'貓',  icon:'🐱',r:1,price:130, skill:{t:'crit', v:0.12}},
+  {id:'pet_rabbit', name:'兔子',icon:'🐰',r:1,price:140, skill:{t:'dodge',v:0.10}},
+  {id:'pet_pigeon', name:'鴿子',icon:'🕊️',r:1,price:150, skill:{t:'coin', v:0.12}},
+  // 太好人層級（善良但容易被利用）
+  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:2,price:210, skill:{t:'drop', v:0.14}},
+  {id:'pet_deer',   name:'鹿',  icon:'🦌',r:2,price:230, skill:{t:'dodge',v:0.16}},
+  {id:'pet_puppy',  name:'小狗',icon:'🐶',r:2,price:250, skill:{t:'regen',v:0.45}},
+  {id:'pet_dolphin',name:'海豚',icon:'🐬',r:2,price:270, skill:{t:'coin', v:0.22}},
+  {id:'pet_panda',  name:'熊貓',icon:'🐼',r:2,price:300, skill:{t:'coindbl',v:0.22}},
+  // 怪異類型（獨特但被誤解）
+  {id:'pet_octopus',name:'章魚',icon:'🐙',r:3,price:400, skill:{t:'hint', v:1}},
+  {id:'pet_turtle', name:'烏龜',icon:'🐢',r:3,price:430, skill:{t:'regen',v:0.60}},
+  // 危險心靈（不適合弱者）
+  {id:'pet_wolf',   name:'狼',  icon:'🐺',r:4,price:560, skill:{t:'crit', v:0.22}},
+  {id:'pet_panther',name:'黑豹',icon:'🐆',r:4,price:600, skill:{t:'dodge',v:0.22}},
+  {id:'pet_snake',  name:'蛇',  icon:'🐍',r:4,price:640, skill:{t:'drop', v:0.24}},
+  {id:'pet_shark',  name:'鯊魚',icon:'🦈',r:4,price:700, skill:{t:'crit', v:0.26}},
+  // 令人上癮類型（難以抗拒）
+  {id:'pet_fox',    name:'狐狸',icon:'🦊',r:5,price:850, skill:{t:'drop', v:0.30}},
+  {id:'pet_lion',   name:'獅子',icon:'🦁',r:5,price:920, skill:{t:'coindbl',v:0.40}},
+  {id:'pet_eagle',  name:'老鷹',icon:'🦅',r:5,price:980, skill:{t:'extrarun',v:1}},
+  {id:'pet_tiger',  name:'老虎',icon:'🐯',r:5,price:1050,skill:{t:'crit', v:0.32}},
+  // 菁英原型（極其罕見，公司唯一）
+  {id:'pet_dragon', name:'龍',    icon:'🐉',r:6,price:1500,unique:true, skill:{t:'extrarun',v:1,extra:{t:'crit',v:0.2}}},
+  {id:'pet_swan',   name:'天鵝',  icon:'🦢',r:6,price:1400,unique:true, skill:{t:'coin',v:0.6}},
+  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:6,price:1600,unique:true, skill:{t:'regen',v:0.7,extra:{t:'dodge',v:0.15}}},
 ];
-/* 限定登場寵物（固定時間出現、期間限購、BUFF 強但不 OVER）；一律幻彩繽紛蛋、每隻顏色不同 */
+const PET_IMG_IDS = new Set(PETS.map(p=>p.id));   // 有 OpenMoji 動物圖的寵物；節慶寵暫無圖→顯示用 emoji
+/* 限定登場（節慶,幻彩繽紛蛋）；暫無動物圖→emoji */
 const SEASON_PETS = [
-  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:5,price:1300,season:'cny',   skill:{t:'coindbl',v:0.50}},
-  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:5,price:980, season:'dragon',skill:{t:'drop',v:0.35}},
-  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:5,price:980,season:'midautumn',skill:{t:'extrarun',v:1}},
+  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:6,price:1500,season:'cny',   skill:{t:'coindbl',v:0.50}},
+  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:6,price:1100,season:'dragon',skill:{t:'drop',v:0.40}},
+  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:6,price:1100,season:'midautumn',skill:{t:'extrarun',v:1}},
 ];
 function inSeason(s){ const m=new Date().getMonth()+1, d=new Date().getDate();
   if(s==='cny') return (m===1&&d>=20)||(m===2&&d<=20);          // 農曆年前後（近似）
@@ -2037,9 +2062,24 @@ function skillTextLive(){ const s=activePetSkill(); if(!s) return ''; if(s.t==='
 const PET_STG=['幼雛','小型','中型','大型','巨型','究級'];
 const PET_EVO=[30,150,330,560,860,1250];   // 各階所需「累積經驗」門檻（達標即進化；蛋在 30 破殼成幼雛）
 function petEmoji(id,exp){ return petProgress(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
+function petImg(id,sz){ sz=sz||30; return `<img class="pet-img" src="assets/game/pet/${id}.svg" style="width:${sz}px;height:${sz}px" alt="">`; }
+/* 寵物臉：未孵化→稀有度配色蛋；孵化→動物圖(有圖才用,節慶寵 fallback emoji) */
+function petFace(id,exp,sz){ const pr=petProgress(exp), p=petDef(id);
+  if(pr.egg) return `<span class="egg-ic">${eggSvg(p||{r:1},Math.round((sz||30)*0.95))}</span>`;
+  if(p && PET_IMG_IDS.has(id)) return petImg(id,sz);
+  return `<span style="font-size:${Math.round((sz||30)*0.9)}px;line-height:1">${(p&&p.icon)||'🐾'}</span>`; }
 const SLOTS = ['hat','glasses','hand','frame','aura'];
 function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return petDef(id)||FEED.find(x=>x.id===id)||null; }
-function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id); }
+/* 舊版寵物（已下架,僅供既有擁有者顯示不崩潰；重疊 id 已自動 remap 成新動物） */
+const LEGACY_PETS = [
+  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,skill:{t:'coin',v:0.12}},
+  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,skill:{t:'coin',v:0.25}},
+  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,skill:{t:'hint',v:1}},
+  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,skill:{t:'dodge',v:0.18}},
+  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,skill:{t:'coindbl',v:0.33}},
+  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,skill:{t:'coin',v:1.0}},
+];
+function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id)||LEGACY_PETS.find(x=>x.id===id); }
 function petProgress(exp){
   const T=PET_EVO;
   if(exp<T[0]) return {egg:true, stageIdx:-1, stageName:'蛋', into:exp, span:T[0], toNext:T[0]-exp, scale:0.74, max:false};
@@ -2221,11 +2261,12 @@ async function feedFromInv(feedId){
   petFeedFx(pet,b,a,f);
 }
 function petEvolveCeremony(pet, prog, title){
-  const r=PET_RARITY[pet.r], c=r.color;
+  const r=petTier(pet.r), c=r.color;
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='evolveMask';
+  const face = PET_IMG_IDS.has(pet.id) ? petImg(pet.id, Math.round(78*prog.scale)) : `<span style="font-size:${Math.round(72*prog.scale)}px">${pet.icon}</span>`;
   o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
     <div class="lvup-card">
-      <div style="font-size:${Math.round(72*prog.scale)}px;filter:drop-shadow(0 0 22px ${c})">${pet.icon}</div>
+      <div style="filter:drop-shadow(0 0 22px ${c})">${face}</div>
       <div class="lvup-title">🎉 恭喜！</div>
       <div class="lvup-lv" style="color:${c}">${pet.name} ${title}</div>
       <div class="lvup-hint">${r.name} · ${prog.stageName}　｜　技能：${skillText(pet.skill)}<br>（點一下關閉）</div>
@@ -2292,17 +2333,18 @@ function petCardHtml(){
   if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet])
     return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`;
   const id=GS.activePet, p=petDef(id), st=GS.pets[id], pr=petProgress(st.exp);
+  if(!p){ const valid=Object.keys(GS.pets).find(x=>petDef(x)); if(valid){ GS.activePet=valid; return petCardHtml(); } return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`; }
   const pct=pr.max?100:Math.round(pr.into/pr.span*100);
   const others=Object.keys(GS.pets).filter(x=>x!==id);
-  const bal=coinBalance(), rc=PET_RARITY[p.r].color, leg=p.r>=5;
+  const bal=coinBalance(), rc=petTier(p.r).color, leg=p.r>=6;
   const nextName=pr.egg?'幼雛':(pr.max?'':PET_STG[pr.stageIdx+1]);
   const expTxt = pr.egg ? ('破殼倒數：再餵 '+pr.toNext+' 經驗孵化 🥚')
     : (pr.max?'已達究極形態 ✨':('距進化「'+nextName+'」還差 '+pr.toNext+' 經驗'));
   const ownFeed=Object.keys(GS.feed||{}).filter(k=>GS.feed[k]>0);
   return `<div class="pet-card">
     <div class="pet-emoji-col">
-      <div class="pet-emoji${pr.egg?' egg':''}" style="font-size:${Math.round(30*pr.scale)}px">${petEmoji(id,st.exp)}</div>
-      <span class="pet-rbadge" style="background:${rc}${leg?';box-shadow:0 0 9px '+rc:''}">${PET_RARITY[p.r].name}</span>
+      <div class="pet-emoji${pr.egg?' egg':''}">${petFace(id,st.exp,Math.round(46*pr.scale))}</div>
+      <span class="pet-rbadge" style="background:${rc}${leg?';box-shadow:0 0 9px '+rc:''}">${petTier(p.r).name}</span>
     </div>
     <div class="pet-info">
       <div class="pet-name">${pr.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${pr.egg?'未孵化':pr.stageName}</span></div>
@@ -2311,7 +2353,7 @@ function petCardHtml(){
       <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·<img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${f.price}</button>`).join('')}</div>
       ${ownFeed.length?`<div class="feed-row">${ownFeed.map(k=>{const f=FEED.find(x=>x.id===k);return `<button class="feed-btn inv" onclick="feedFromInv('${k}')">🎒${f.icon}${f.name}×${GS.feed[k]} 餵</button>`;}).join('')}</div>`:''}
     </div>
-    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
+    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petFace(o,GS.pets[o].exp,26)}</button>`).join('')}</div>`:''}
   </div>`;
 }
 /* 商店 */
@@ -2326,7 +2368,7 @@ function shopCosCard(it){
 }
 /* 蛋圖（依稀有度配色，幻彩=彩虹）— 商店一律顯示蛋，孵化才現原形，給期待感 */
 function eggSvg(p,size){
-  const u=++AV_SEQ, rc=PET_RARITY[p.r].color, sz=size||40;
+  const u=++AV_SEQ, rc=petTier(p.r).color, sz=size||40;
   const limited = !!(p.season||p.rainbow);
   let fill, defs;
   if(limited){
@@ -2341,15 +2383,15 @@ function eggSvg(p,size){
   return `<svg viewBox="0 0 40 50" width="${sz}" height="${Math.round(sz*1.25)}" style="display:block"><defs>${defs}</defs><ellipse cx="20" cy="29" rx="17" ry="20" fill="${fill}" stroke="rgba(0,0,0,.18)" stroke-width="1"/><ellipse cx="13.5" cy="19" rx="4.5" ry="6.5" fill="#fff" opacity=".5"/></svg>`;
 }
 function shopPetCard(p){
-  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=petTier(p.r).color;
   const owners=STATE.uniqueOwners||{}, takenByOther = p.unique && owners[p.id] && !owned;
   const soldOut = p.season && false;   // 節慶寵物期間不限購（期間就一隻＝你買一次擁有）
   let action;
   if(owned) action=`<button class="equip-btn${active?' on':''}" onclick="setActivePet('${p.id}')">${active?'夥伴中 ✓':'設為夥伴'}</button>`;
   else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
   else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${p.price}</button>`;
-  const limited=!!(p.season||p.rainbow), leg=p.r>=5;
-  const tag = limited ? '🌈幻彩限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑公司唯一') : PET_RARITY[p.r].name);
+  const limited=!!(p.season||p.rainbow), leg=p.r>=6;
+  const tag = limited ? '🌈幻彩限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑公司唯一') : petTier(p.r).name);
   return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}88"><div class="si-icon egg-ic">${eggSvg(p,42)}</div><div class="si-rar pet-below" style="color:${rc}${leg?';font-weight:800':''}">${tag}</div><div class="si-name">${p.name}蛋</div><div class="si-skill">${skillText(p.skill)}</div>${action}</div>`;
 }
 function showShop(tab){
@@ -2459,7 +2501,7 @@ function bonusDrop(){
   if(r<0.12){   // 罕見：寵物蛋（只給沒有的、非唯一一般寵物）
     const pool=PETS.filter(p=>!p.unique && !(GS.pets&&GS.pets[p.id]));
     if(pool.length){ const p=pool[Math.floor(Math.random()*pool.length)]; GS.pets=GS.pets||{}; GS.pets[p.id]={exp:0}; if(!GS.activePet) GS.activePet=p.id;
-      return {rc:PET_RARITY[p.r].color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
+      return {rc:petTier(p.r).color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
   }
   if(r<0.6){   // 寵物零食（進庫存，回養成中心餵）
     const f=FEED[Math.floor(Math.random()*FEED.length)]; GS.feed=GS.feed||{}; GS.feed[f.id]=(GS.feed[f.id]||0)+1;
@@ -2893,7 +2935,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.8.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.9.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
