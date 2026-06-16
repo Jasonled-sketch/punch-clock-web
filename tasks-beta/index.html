@@ -1996,12 +1996,12 @@ function equipStock(it){
 const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
 /* 寵物分級＝動物性格迷因 6 階（NPC普羅大眾→菁英原型極稀有）；與裝備稀有度 PET_RARITY 分開 */
 const PET_TIER = {
-  1:{name:'NPC層級',   color:'#94a3b8'},   // 普羅大眾
-  2:{name:'太好人層級',color:'#22c55e'},   // 善良但容易被利用
-  3:{name:'怪異類型',  color:'#3b82f6'},   // 獨特但被誤解
-  4:{name:'危險心靈',  color:'#a855f7'},   // 不適合弱者
-  5:{name:'令人上癮',  color:'#ef4444'},   // 難以抗拒
-  6:{name:'菁英原型',  color:'#f0a500'},   // 極其罕見
+  1:{name:'🐾 親切常見', color:'#94a3b8'},   // 普羅大眾
+  2:{name:'💛 善良暖心', color:'#22c55e'},   // 善良但容易被利用
+  3:{name:'🎭 神祕獨特', color:'#3b82f6'},   // 獨特但被誤解
+  4:{name:'⚡ 強悍危險', color:'#a855f7'},   // 不適合弱者
+  5:{name:'🔥 魅力難擋', color:'#ef4444'},   // 難以抗拒
+  6:{name:'👑 夢幻逸品', color:'#f0a500'},   // 極其罕見
 };
 function petTier(r){ return PET_TIER[r]||PET_TIER[1]; }
 /* 寵物＝動物性格分級（圖 assets/game/pet/<id>.svg，OpenMoji 開源 CC-BY-SA；技能皆幸運/輔助類；越高階越稀有越貴）。
@@ -2015,7 +2015,7 @@ const PETS = [
   // 太好人層級（善良但容易被利用）
   {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:2,price:210, skill:{t:'drop', v:0.14}},
   {id:'pet_deer',   name:'鹿',  icon:'🦌',r:2,price:230, skill:{t:'dodge',v:0.16}},
-  {id:'pet_puppy',  name:'小狗',icon:'🐶',r:2,price:250, skill:{t:'regen',v:0.45}},
+  {id:'pet_puppy',  name:'幼犬',icon:'🐶',r:2,price:250, skill:{t:'regen',v:0.45}},
   {id:'pet_dolphin',name:'海豚',icon:'🐬',r:2,price:270, skill:{t:'coin', v:0.22}},
   {id:'pet_panda',  name:'熊貓',icon:'🐼',r:2,price:300, skill:{t:'coindbl',v:0.22}},
   // 怪異類型（獨特但被誤解）
@@ -2926,7 +2926,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.9.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.9.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
