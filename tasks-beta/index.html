@@ -379,11 +379,11 @@ img{display:block}
 .gc-role-empty{font-size:56px;color:var(--muted);z-index:1;align-self:center;font-weight:300}
 /* 動物角色測驗 */
 .rt-list{max-height:54vh;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:10px;padding-right:2px}
-.rt-q{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:10px 11px}
-.rt-qtext{font-size:13.5px;margin-bottom:8px;line-height:1.5}
-.rt-opts{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
-.qopt{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:7px 2px;font-size:10px;line-height:1.2}
-.qopt.sel{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:700}
+.rt-q{position:relative;background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:10px 11px 10px 30px}
+.rt-qnum{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;font-weight:800;color:var(--muted)}
+.bopt{display:block;width:100%;text-align:left;background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:9px;padding:11px 12px;font-size:13.5px;line-height:1.4}
+.bopt.sel{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:700}
+.rt-or{text-align:center;font-size:10px;color:var(--muted);margin:4px 0}
 /* 角色結果 */
 .rr-hero{border-radius:14px;padding:14px 10px 12px;margin-bottom:6px}
 .rr-badge{font-size:11px;font-weight:800;color:#fff;border-radius:8px;padding:2px 9px}
@@ -2064,13 +2064,38 @@ const AR = (function(){
   function genCodes(){const o=[];for(const a of[POLES[0].a,POLES[0].b])for(const b of[POLES[1].a,POLES[1].b])for(const c of[POLES[2].a,POLES[2].b])for(const d of[POLES[3].a,POLES[3].b])for(const e of[POLES[4].a,POLES[4].b])for(const f of[POLES[5].a,POLES[5].b])o.push(a+b+c+d+e+f);return o;}
   const CODES=genCodes(), BY_CODE={}; CODES.forEach((c,i)=>BY_CODE[c]={code:c,emoji:ANIMALS[i][0],name:ANIMALS[i][1],idx:i});
   function familyOf(code){const sn=code[1],tf=code[2],jp=code[3];if(sn==='N'&&tf==='T')return FAMILIES.NT;if(sn==='N'&&tf==='F')return FAMILIES.NF;if(sn==='S'&&jp==='J')return FAMILIES.SJ;return FAMILIES.SP;}
+  // 二選一直覺題：pole=a極；選 a 推向 a 極、選 b 推向 b 極（UI 對應 a→5、b→1）
   const QUESTIONS=[
-    {axis:0,pole:'E',text:'在熱鬧的場合待久了，我反而更有精神。'},{axis:0,pole:'E',text:'我常常邊講邊想，把話說出來才理得清楚。'},{axis:0,pole:'E',text:'主動跟陌生人攀談，對我來說不太費力。'},{axis:0,pole:'I',text:'忙了一整天的人際互動後，我需要獨處才能回血。'},{axis:0,pole:'I',text:'比起一群人狂歡，我更享受一兩個人的深聊或獨處。'},
-    {axis:1,pole:'S',text:'我比較相信看得見、可驗證的事實。'},{axis:1,pole:'S',text:'處理事情時，我會先注意具體的細節和步驟。'},{axis:1,pole:'N',text:'我常常想到事情背後的模式，或未來的可能性。'},{axis:1,pole:'N',text:'比起照著既有做法，我更愛想有沒有全新的做法。'},{axis:1,pole:'N',text:'聊天時我容易從一個點，聯想到很多延伸的想法。'},
-    {axis:2,pole:'T',text:'做決定時，我傾向先看邏輯和客觀標準。'},{axis:2,pole:'T',text:'就算會讓人不太舒服，我也會直接把問題指出來。'},{axis:2,pole:'F',text:'我做選擇時很在意，會不會影響到別人的感受。'},{axis:2,pole:'F',text:'團隊的和諧氣氛，對我來說很重要。'},{axis:2,pole:'F',text:'別人心情不好時，我很容易被牽動、想去安慰。'},
-    {axis:3,pole:'J',text:'我喜歡先把計畫排好，再照著做。'},{axis:3,pole:'J',text:'事情有明確的結論和截止日，我才安心。'},{axis:3,pole:'P',text:'計畫臨時改變，我其實不太在意，隨機應變就好。'},{axis:3,pole:'P',text:'我習慣保持選項開放，到最後再決定。'},{axis:3,pole:'P',text:'比起照表操課，我更喜歡邊做邊看狀況調整。'},
-    {axis:4,pole:'A',text:'壓力大的時候，我通常還算冷靜、不太慌。'},{axis:4,pole:'A',text:'就算出了狀況，我也相對淡定，不會太焦慮。'},{axis:4,pole:'V',text:'我對細節和周遭的氣氛變化很敏感。'},{axis:4,pole:'V',text:'做完一件事，我容易反覆回想哪裡可以更好。'},{axis:4,pole:'V',text:'別人的一句話或一個眼神，有時會在我心裡放很久。'},
-    {axis:5,pole:'L',text:'在團隊裡，我常常自然而然就站出來帶頭。'},{axis:5,pole:'L',text:'我喜歡主導方向、推動事情往前走。'},{axis:5,pole:'B',text:'比起站到台前，我更擅長在背後把事情接穩。'},{axis:5,pole:'B',text:'我很願意補位、收尾，讓整個團隊順利運轉。'},{axis:5,pole:'B',text:'我不一定要當決策的人，把支援做好我就有成就感。'},
+    {axis:0,pole:'E',a:'揪一群人出去熱鬧',b:'自己安靜待著耍廢'},
+    {axis:0,pole:'E',a:'休息時找同事聊兩句',b:'休息時自己放空滑手機'},
+    {axis:0,pole:'E',a:'認識新朋友很自然就聊起來',b:'等別人先來搭話'},
+    {axis:0,pole:'E',a:'邊講邊想，說出來才清楚',b:'自己想清楚才開口'},
+    {axis:0,pole:'E',a:'忙一整天人際後還很有電',b:'忙完只想獨處不講話'},
+    {axis:1,pole:'S',a:'先問具體要做什麼、怎麼做',b:'先想這能變出什麼新玩法'},
+    {axis:1,pole:'S',a:'相信看得到、做得出來的事',b:'相信還沒發生但有可能的'},
+    {axis:1,pole:'S',a:'學東西喜歡一步步照步驟',b:'抓個大方向自己摸索'},
+    {axis:1,pole:'S',a:'講話圍繞具體發生的事',b:'容易從一個點聯想一大串'},
+    {axis:1,pole:'S',a:'欣賞把事做扎實的人',b:'欣賞想法天馬行空的人'},
+    {axis:2,pole:'T',a:'有問題就直接點出來',b:'先顧及對方感受再說'},
+    {axis:2,pole:'T',a:'做決定先看邏輯、划不划算',b:'做決定先看會不會影響別人'},
+    {axis:2,pole:'T',a:'就事論事、對錯優先',b:'以和為貴、感受優先'},
+    {axis:2,pole:'T',a:'吵架先把對錯講清楚',b:'吵架先讓大家氣消'},
+    {axis:2,pole:'T',a:'朋友訴苦先幫他分析解法',b:'朋友訴苦先陪他、聽他說'},
+    {axis:3,pole:'J',a:'出去玩行程先排好',b:'到現場再看著辦'},
+    {axis:3,pole:'J',a:'事情早早做完才安心',b:'拖到最後衝刺也行'},
+    {axis:3,pole:'J',a:'計畫臨時改會有點不舒服',b:'計畫改了無所謂、隨機應變'},
+    {axis:3,pole:'J',a:'檔案桌面喜歡分類整齊',b:'找得到就好、不太整理'},
+    {axis:3,pole:'J',a:'喜歡明確的結論和死線',b:'喜歡保持彈性最後再決定'},
+    {axis:4,pole:'A',a:'出狀況時還算冷靜',b:'出狀況時心會揪一下'},
+    {axis:4,pole:'A',a:'事情過了就過了',b:'事後會反覆回想哪裡能更好'},
+    {axis:4,pole:'A',a:'別人一句話很快就忘',b:'別人一句話會放心上很久'},
+    {axis:4,pole:'A',a:'高壓環境撐得住、不太慌',b:'高壓環境容易緊繃、累'},
+    {axis:4,pole:'A',a:'對周遭氣氛沒特別感覺',b:'對氣氛變化很敏感'},
+    {axis:5,pole:'L',a:'沒人帶時自然站出來帶',b:'等有人帶、我來補位'},
+    {axis:5,pole:'L',a:'享受主導方向、推著事情走',b:'享受在背後把事情接穩'},
+    {axis:5,pole:'L',a:'常是發號施令的那個',b:'常是默默把事做完的那個'},
+    {axis:5,pole:'L',a:'成就感來自帶大家達標',b:'成就感來自把支援做到位'},
+    {axis:5,pole:'L',a:'開會主動拋方向、做決定',b:'開會聽完大家、補充收尾'},
   ];
   const SCALE=[{v:1,t:'很不同意'},{v:2,t:'不太同意'},{v:3,t:'普普通通'},{v:4,t:'有點同意'},{v:5,t:'非常同意'}];
   function score(answers){
@@ -2436,16 +2461,16 @@ function showAnimalTest(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='roleTestModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><h3 style="margin:0">🐾 動物角色測驗</h3><button class="t-expand" onclick="closeRoleTest()" style="font-size:18px">✕</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${hasRole()?'重新測一次，更新你的動物角色。':'30 題、約 5 分鐘，測出你的內在動物，成為你的 RPG 角色。'}依直覺作答最準 · 已答 <b id="testProg">0/${Q.length}</b></div>
-    <div class="rt-list">${Q.map((q,i)=>`<div class="rt-q q-${i}"><div class="rt-qtext">${i+1}. ${q.text}</div><div class="rt-opts">${S.map(s=>`<button class="qopt" data-v="${s.v}" onclick="pickRoleAns(${i},${s.v})">${s.t}</button>`).join('')}</div></div>`).join('')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${hasRole()?'重新測一次，更新你的動物角色。':'30 題二選一、約 3 分鐘。'}<b>憑直覺選比較像你的那個</b>，沒有對錯 · 已答 <b id="testProg">0/${Q.length}</b></div>
+    <div class="rt-list">${Q.map((q,i)=>`<div class="rt-q q-${i}"><div class="rt-qnum">${i+1}</div><button class="bopt" data-s="a" onclick="pickRoleAns(${i},'a')">${q.a}</button><div class="rt-or">或</div><button class="bopt" data-s="b" onclick="pickRoleAns(${i},'b')">${q.b}</button></div>`).join('')}</div>
     <button class="buy-btn dis" id="testSubmit" disabled style="width:100%;padding:13px;margin-top:14px" onclick="submitRoleTest()">完成測驗 · 看我的角色</button>
   </div>`;
   mask.onclick=closeRoleTest; document.body.appendChild(mask);
 }
 function closeRoleTest(){ const m=document.getElementById('roleTestModal'); if(m)m.remove(); }
-function pickRoleAns(qi,v){
-  STATE.testAns=STATE.testAns||{}; STATE.testAns[qi]=v;
-  document.querySelectorAll('.q-'+qi+' .qopt').forEach(b=>b.classList.toggle('sel',+b.dataset.v===v));
+function pickRoleAns(qi,side){
+  STATE.testAns=STATE.testAns||{}; STATE.testAns[qi]= side==='a'?5:1;   // 選 a 推向 a 極、b 推向 b 極
+  document.querySelectorAll('.q-'+qi+' .bopt').forEach(b=>b.classList.toggle('sel',b.dataset.s===side));
   const done=Object.keys(STATE.testAns).length, total=AR.QUESTIONS.length;
   const pc=document.getElementById('testProg'); if(pc) pc.textContent=done+'/'+total;
   const sb=document.getElementById('testSubmit'); if(sb){ const ok=done>=total; sb.disabled=!ok; sb.classList.toggle('dis',!ok); }
@@ -3136,7 +3161,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
