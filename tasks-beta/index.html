@@ -554,9 +554,9 @@ const CONFIG = {
     { id:'u-chen',   name:'陳俊男', nick:'男', title:'經理', role:'supervisor', color:'#4fc3f7', email:'covernself@gmail.com', joinedAt:'2021/01/01' },   // 老闆,到職日待確認(設早即可)
     { id:'u-chuang', name:'莊鈺萱', nick:'萱', title:'主管', role:'supervisor', color:'#ce93d8', email:'t8562ne@gmail.com', joinedAt:'2021/11/15' },
     { id:'u-yu',     name:'陳譽昇', nick:'昇', title:'助理', role:'employee',   color:'#f48fb1', email:'us104931@gmail.com', kpi:3000, joinedAt:'2021/01/01' },   // 助理文書,KPI 設低;到職日待確認
-    // 待補 email 後啟用(到職日已填好)：
-    // { id:'u-huang', name:'黃偉智', nick:'智', title:'?', role:'employee', color:'#80cbc4', email:'TODO', kpi:6500, joinedAt:'2021/08/01' },
-    // { id:'u-li',    name:'李尹蘋', nick:'蘋', title:'?', role:'employee', color:'#ffab91', email:'TODO', kpi:3000, joinedAt:'2025/11/10' },
+    // 2026-06 啟用(Jason 提供 email)；職稱暫填「員工」可再改
+    { id:'u-huang', name:'黃偉智', nick:'智', title:'員工', role:'employee', color:'#80cbc4', email:'qaz0989514613@gmail.com', kpi:6500, joinedAt:'2021/08/01' },
+    { id:'u-li',    name:'李尹蘋', nick:'蘋', title:'員工', role:'employee', color:'#ffab91', email:'apple839600@gmail.com', kpi:3000, joinedAt:'2025/11/10' },
   ],
 
   // 四象限（艾森豪矩陣）
@@ -2672,10 +2672,10 @@ function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remov
 const DUNGEON_DAILY = 3;                  // 每日挑戰次數（鑽石不能太好賺）
 // 血量設計成「適當裝備約 3-4 題打完」(配合單次傷害上限＝血量/3)
 const BOSSES = [
-  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:2, dropR:2, minLevel:1},
-  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:3, dropR:3, minLevel:5},
-  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:5, dropR:4, minLevel:10},
-  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:8, dropR:5, minLevel:18},
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:2, dropR:2, minLevel:1,  minHits:5},   // minHits=保證至少答對幾題才破關(傷害上限=hp/minHits)
+  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:3, dropR:3, minLevel:5,  minHits:5},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:5, dropR:4, minLevel:10, minHits:6},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:8, dropR:5, minLevel:18, minHits:7},
 ];
 const QUIZ = [
   // 智力測驗
@@ -2916,7 +2916,7 @@ function buildQuizOrder(pool){
 }
 function callConfucius(){
   const bt=STATE.battle; if(!bt||(bt.hints||0)<=0) return; bt.hints--;
-  const dmg=Math.min(attackPower(), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
+  const dmg=Math.min(attackPower(), Math.ceil(bt.boss.hp/(bt.boss.minHits||3))); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
   if(bt.hp<=0) return endBattle(true);
   bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
 }
@@ -3034,7 +3034,7 @@ function takeDamage(prefix){
 function answerQuiz(idx){
   const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=(bt.pool||QUIZ)[qi];
   GS.quizSeen=GS.quizSeen||[]; GS.quizWrong=GS.quizWrong||[];
-  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')+(monthMod().critAdd||0)); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/3)); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
+  if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')+(monthMod().critAdd||0)); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/(bt.boss.minHits||3))); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
     if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi);
     if(bt.hp<=0) return endBattle(true);
     bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle(); }
@@ -3169,7 +3169,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.5';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.6';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
