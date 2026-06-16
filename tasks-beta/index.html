@@ -2070,16 +2070,7 @@ function petFace(id,exp,sz){ const pr=petProgress(exp), p=petDef(id);
   return `<span style="font-size:${Math.round((sz||30)*0.9)}px;line-height:1">${(p&&p.icon)||'🐾'}</span>`; }
 const SLOTS = ['hat','glasses','hand','frame','aura'];
 function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return petDef(id)||FEED.find(x=>x.id===id)||null; }
-/* 舊版寵物（已下架,僅供既有擁有者顯示不崩潰；重疊 id 已自動 remap 成新動物） */
-const LEGACY_PETS = [
-  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,skill:{t:'coin',v:0.12}},
-  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,skill:{t:'coin',v:0.25}},
-  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,skill:{t:'hint',v:1}},
-  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,skill:{t:'dodge',v:0.18}},
-  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,skill:{t:'coindbl',v:0.33}},
-  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,skill:{t:'coin',v:1.0}},
-];
-function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id)||LEGACY_PETS.find(x=>x.id===id); }
+function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id); }
 function petProgress(exp){
   const T=PET_EVO;
   if(exp<T[0]) return {egg:true, stageIdx:-1, stageName:'蛋', into:exp, span:T[0], toNext:T[0]-exp, scale:0.74, max:false};
@@ -2335,7 +2326,7 @@ function petCardHtml(){
   const id=GS.activePet, p=petDef(id), st=GS.pets[id], pr=petProgress(st.exp);
   if(!p){ const valid=Object.keys(GS.pets).find(x=>petDef(x)); if(valid){ GS.activePet=valid; return petCardHtml(); } return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`; }
   const pct=pr.max?100:Math.round(pr.into/pr.span*100);
-  const others=Object.keys(GS.pets).filter(x=>x!==id);
+  const others=Object.keys(GS.pets).filter(x=>x!==id && petDef(x));   // 只列能解析的(防殘留舊id崩)
   const bal=coinBalance(), rc=petTier(p.r).color, leg=p.r>=6;
   const nextName=pr.egg?'幼雛':(pr.max?'':PET_STG[pr.stageIdx+1]);
   const expTxt = pr.egg ? ('破殼倒數：再餵 '+pr.toNext+' 經驗孵化 🥚')
@@ -2935,7 +2926,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.9.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.9.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
