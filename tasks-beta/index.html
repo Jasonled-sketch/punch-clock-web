@@ -391,6 +391,7 @@ img{display:block}
 /* 角色結果 */
 .rr-hero{border-radius:14px;padding:14px 10px 12px;margin-bottom:6px}
 .rr-badge{font-size:11px;font-weight:800;color:#fff;border-radius:8px;padding:2px 9px}
+.rr-code{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .rr-desc{font-size:12.5px;color:var(--text);text-align:left;line-height:1.7;background:var(--surface2);border-radius:10px;padding:10px 12px;margin:8px 0}
 .rr-axes{display:flex;flex-direction:column;gap:5px;margin-top:6px}
 .rr-axrow{display:flex;align-items:center;gap:6px;font-size:11px}
@@ -773,7 +774,7 @@ async function login(uid){
   checkStarter();             // 新人起步禮包(一次性)
   checkNewbieGrad();          // 新星之路全達標 → 頒新星稱號
   if(!hasRole()) toast('🐾 還沒有 RPG 角色 — 到🎮養成中心做一次動物測驗，解鎖你的角色');
-  else if(roleDaysSince()>=90) toast('🐾 你的動物角色滿 90 天了，可到養成中心重測更新');
+  else if(roleDaysSince()>=180) toast('🐾 你的動物角色滿 180 天了，可到養成中心重測更新');
   if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
@@ -1490,7 +1491,7 @@ function showTeam(){
         ${roleFaceHtml(role,54)}
         <div style="flex:1;min-width:0">
           <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:#22c55e;margin-left:4px">🌱新人</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted)">${role?`${role.animalName}·${role.title}`:'<span style="color:var(--q1)">尚未做角色測驗</span>'}</div>
+          <div style="font-size:11px;color:var(--muted)">${role?`${role.emoji}${role.animalName} ${codeFmt(role.code)} · ${role.title}`:'<span style="color:var(--q1)">尚未做角色測驗</span>'}</div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
           <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
         </div>
@@ -2454,12 +2455,12 @@ function closeCharPick(){ const m=document.getElementById('charPickModal'); if(m
 /* ===== 動物角色測驗（RPG 角色入口）：頭像空白→新增→30題→解釋→成為角色；每90天可重測 ===== */
 function hasRole(){ return !!(GS && GS.role && GS.role.code); }
 function roleDaysSince(){ return hasRole()&&GS.role.testedAt ? Math.floor((Date.now()-new Date(GS.role.testedAt).getTime())/86400000) : 999; }
-function canTestRole(){ return !hasRole() || isBeta() || isAdmin() || roleDaysSince()>=90; }
-function roleDaysLeft(){ return Math.max(0, 90-roleDaysSince()); }
+function canTestRole(){ return !hasRole() || isBeta() || isAdmin() || roleDaysSince()>=180; }
+function roleDaysLeft(){ return Math.max(0, 180-roleDaysSince()); }
 function viewMyRole(){ if(hasRole()) showRoleResult(GS.role,'view'); else showAnimalTest(); }
 function showAnimalTest(){
   if(!STATE.user) return;
-  if(!canTestRole()){ toast('🐾 角色每 90 天才能重測（還有 '+roleDaysLeft()+' 天）'); return; }
+  if(!canTestRole()){ toast('🐾 角色每 180 天才能重測（還有 '+roleDaysLeft()+' 天）'); return; }
   STATE.testAns={};
   const Q=AR.QUESTIONS, S=AR.SCALE;
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='roleTestModal';
@@ -2467,7 +2468,7 @@ function showAnimalTest(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><h3 style="margin:0">🐾 動物角色測驗</h3><button class="t-expand" onclick="closeRoleTest()" style="font-size:18px">✕</button></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${hasRole()?'重新測一次，更新你的動物角色。':'30 題三選一、約 3 分鐘。'}<b>憑直覺選最像你的</b>，沒有對錯。</div>
     <div class="rt-prog"><div class="rt-progbar"><i id="testProgBar" style="width:0%"></i></div><span id="testProg">0/${Q.length}</span></div>
-    <div class="rt-list">${Q.map((q,i)=>{const opts=[['a',q.a],['m',q.m],['b',q.b]];return `<div class="rt-q q-${i}"><div class="rt-qnum">第 ${i+1} 題</div>${opts.map(([s,t])=>`<button class="bopt" data-s="${s}" onclick="pickRoleAns(${i},'${s}')">${t}</button>`).join('')}</div>`;}).join('')}</div>
+    <div class="rt-list">${Q.map((q,i)=>{const opts=[['a',q.a],['m',q.m],['b',q.b]];for(let j=opts.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));const t=opts[j];opts[j]=opts[k];opts[k]=t;}return `<div class="rt-q q-${i}"><div class="rt-qnum">第 ${i+1} 題</div>${opts.map(([s,t])=>`<button class="bopt" data-s="${s}" onclick="pickRoleAns(${i},'${s}')">${t}</button>`).join('')}</div>`;}).join('')}</div>
     <button class="buy-btn dis" id="testSubmit" disabled style="width:100%;padding:13px;margin-top:14px" onclick="submitRoleTest()">完成測驗 · 看我的角色</button>
   </div>`;
   mask.onclick=closeRoleTest; document.body.appendChild(mask);
@@ -2498,7 +2499,7 @@ function showRoleResult(profile, mode){
     <div style="display:flex;justify-content:flex-end"><button class="t-expand" onclick="closeRoleResult()" style="font-size:18px">✕</button></div>
     <div class="rr-hero" style="background:radial-gradient(circle at 50% 35%,${c}33,transparent 70%)">
       <div style="font-size:74px;filter:drop-shadow(0 0 20px ${c})">${profile.emoji}</div>
-      <div style="font-size:20px;font-weight:800;margin-top:2px">${profile.animalName}</div>
+      <div style="font-size:20px;font-weight:800;margin-top:2px">${profile.animalName} <span class="rr-code">${codeFmt(profile.code)}</span></div>
       <div style="font-size:14px;color:${c};font-weight:700">${profile.title}</div>
       <div style="margin-top:6px"><span class="rr-badge" style="background:${c}">${profile.familyName}</span> <span class="rr-badge" style="background:${profile.roleType==='L'?'#f0a500':'#3b82f6'}">${profile.roleName}</span></div>
     </div>
@@ -2523,6 +2524,7 @@ async function saveRole(){
   toast('🎉 你的 RPG 角色：'+profile.emoji+' '+profile.animalName+'（'+profile.title+'）');
 }
 /* 角色頭像（動物在家族色圓框內），給卡片/團隊頁用 */
+function codeFmt(code){ return code?code.slice(0,4)+'·'+code.slice(4):''; }   // 代號 ISTPAL → ISTP·AL（前4=MBTI軸,後2=團隊軸）
 function roleFaceHtml(role, size){ size=size||44; if(!role||!role.code) return `<div class="role-face empty" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px">？</div>`; return `<div class="role-face" style="width:${size}px;height:${size}px;background:${role.familyColor}22;border-color:${role.familyColor};font-size:${Math.round(size*0.58)}px">${role.emoji}</div>`; }
 function charHeroHtml(){
   if(hasRole()){
@@ -2530,7 +2532,7 @@ function charHeroHtml(){
     return `<div class="gc-char role" onclick="viewMyRole()">
       <div class="gc-char-aura" style="background:radial-gradient(circle,${c}cc,transparent 60%)"></div>
       <div class="gc-role-emoji">${r.emoji}</div>
-      <span class="gc-char-edit">${r.animalName} · ${r.title}</span>
+      <span class="gc-char-edit">${r.animalName} · ${codeFmt(r.code)}</span>
     </div>`;
   }
   return `<div class="gc-char empty" onclick="showAnimalTest()">
@@ -3167,7 +3169,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.4';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.5';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
