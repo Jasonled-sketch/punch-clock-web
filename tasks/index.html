@@ -373,7 +373,51 @@ img{display:block}
 .gc-char-img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));position:relative;z-index:1}
 .gc-char-aura{position:absolute;inset:-6% -6% 6%;z-index:0;animation:auraPulse 2.6s ease-in-out infinite}
 @keyframes auraPulse{0%,100%{opacity:.4;transform:scale(.92)}50%{opacity:.78;transform:scale(1.06)}}
-.gc-char-edit{position:absolute;bottom:0;right:4px;z-index:2;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:3px 9px;color:var(--text)}
+.gc-char-edit{position:absolute;bottom:0;right:4px;z-index:2;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:3px 9px;color:var(--text);max-width:96%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gc-role-emoji{font-size:96px;line-height:1;position:relative;z-index:1;filter:drop-shadow(0 4px 10px rgba(0,0,0,.5))}
+.gc-char.empty{border:2px dashed var(--border);border-radius:16px;background:var(--surface2)}
+.gc-role-empty{font-size:56px;color:var(--muted);z-index:1;align-self:center;font-weight:300}
+/* 動物角色測驗 */
+.rt-prog{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:3;background:var(--surface);padding:6px 0 10px;font-size:11px;color:var(--muted)}
+.rt-progbar{flex:1;height:6px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.rt-progbar i{display:block;height:100%;background:var(--accent);border-radius:4px;transition:width .2s}
+.rt-list{max-height:52vh;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:18px;padding:2px 2px 4px}
+.rt-q{background:var(--surface2);border:1px solid var(--border);border-radius:13px;padding:11px 12px 13px;display:flex;flex-direction:column;gap:7px}
+.rt-qnum{font-size:11px;font-weight:800;color:var(--accent);margin-bottom:1px}
+.bopt{display:block;width:100%;text-align:center;background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:10px;padding:13px 12px;font-size:14px;line-height:1.4}
+.bopt:active{transform:scale(.99)}
+.bopt.mid{padding:8px;font-size:12px;color:var(--muted);border-style:dashed}
+.bopt.sel{background:var(--accent);color:#1a1205;border-color:var(--accent);border-style:solid;font-weight:700}
+/* 角色結果 */
+.rr-hero{border-radius:14px;padding:14px 10px 12px;margin-bottom:6px}
+.rr-badge{font-size:11px;font-weight:800;color:#fff;border-radius:8px;padding:2px 9px}
+.rr-code{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.5px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.rr-desc{font-size:12.5px;color:var(--text);text-align:left;line-height:1.7;background:var(--surface2);border-radius:10px;padding:10px 12px;margin:8px 0}
+.rr-axes{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.rr-axrow{display:flex;align-items:center;gap:6px;font-size:11px}
+.rr-axn{width:30px;color:var(--muted);flex-shrink:0}
+.rr-bar{flex:1;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.rr-bar i{display:block;height:100%;border-radius:4px}
+.rr-axp{width:34px;text-align:right;color:var(--muted)}
+.rr-partners{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rr-pt{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 4px}
+.role-face{border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.role-face.empty{background:var(--surface2);color:var(--muted)}
+/* 團隊人格地圖 */
+.tmap{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
+.tmap-lb{display:flex;gap:8px;margin-bottom:8px}
+.tmap-lbcell{flex:1;background:var(--surface);border:1px solid;border-radius:10px;padding:8px;text-align:center}
+.tmap-lbcell b{font-size:22px;display:block}
+.tmap-lbcell span{font-size:11px;color:var(--muted)}
+.tmap-fams{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
+.tmap-fam{background:var(--surface);border:1px solid;border-radius:9px;padding:6px 2px;text-align:center}
+.tmap-fam b{font-size:17px;display:block}
+.tmap-fam span{font-size:10px;color:var(--muted)}
+.tmap-axes{display:flex;flex-direction:column;gap:7px}
+.tmap-axhead{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px}
+.tmap-split{height:8px;background:#3b82f633;border-radius:4px;overflow:hidden}
+.tmap-split i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.tmap-side{margin-top:10px;font-size:12px;color:var(--text);line-height:1.7;background:var(--surface);border-radius:9px;padding:9px 11px}
 /* 副本 / 戰鬥 / 答題 */
 .dungeon-btn{width:100%;margin-top:14px;background:linear-gradient(90deg,#ef4444,#f59e0b);color:#fff;font-weight:800;border-radius:12px;padding:13px;font-size:15px}
 .dungeon-btn:active{opacity:.88}
@@ -427,6 +471,7 @@ img{display:block}
 .si-rar.pet-below{margin-top:-2px;font-size:11px}
 .pet-emoji.egg{animation:eggWobble 2.2s ease-in-out infinite}
 @keyframes eggWobble{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+.pet-img{object-fit:contain;vertical-align:middle;display:inline-block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35))}
 .pet-emoji-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0;width:54px}
 .pet-rbadge{font-size:9px;font-weight:800;color:#fff;border-radius:6px;padding:1px 7px;line-height:1.5;white-space:nowrap}
 .feed-btn.inv{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
@@ -728,6 +773,8 @@ async function login(uid){
   checkKudos();               // 新收到的感謝卡 → 粉光儀式
   checkStarter();             // 新人起步禮包(一次性)
   checkNewbieGrad();          // 新星之路全達標 → 頒新星稱號
+  if(!hasRole()) toast('🐾 還沒有 RPG 角色 — 到🎮養成中心做一次動物測驗，解鎖你的角色');
+  else if(roleDaysSince()>=180) toast('🐾 你的動物角色滿 180 天了，可到養成中心重測更新');
   if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
   { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
@@ -1264,7 +1311,7 @@ function gameCardHtml(sumPts,sumCon,sumFav,done){
   return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
     <div class="gp-glow" style="background:${c}"></div>
     <div class="gp-top">
-      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${avatarSvg(g.level,44,GS&&GS.equipped)}</div>
+      <div class="gp-ava" style="border-color:${c};box-shadow:0 0 14px ${c}55">${hasRole()?`<span style="font-size:30px">${GS.role.emoji}</span>`:avatarSvg(g.level,44,GS&&GS.equipped)}</div>
       <div class="gp-meta">
         <div class="gp-rank">${g.rank.name}<span class="gp-lvl" style="background:${c}">Lv.${g.level}</span></div>
         <div class="gp-power">⚔️ 戰力 ${g.power+gearPower()}</div>
@@ -1403,6 +1450,26 @@ function closePricing(){ const m=document.getElementById('pricingModal'); if(m)m
 
 /* 實體獎目錄（用鑽石換真的東西 — 申請 → 主管核准 → 兌現） */
 /* 團隊頁：看夥伴的角色/等級/戰力/稱號/裝備/寵物/本月產值（互相提醒、互相拉抬） */
+/* 團隊人格地圖（主管限定）：全員動物角色 → aggregate → 領航/定錨、四家族、六軸、自動側寫 */
+function teamRoleCodes(){ return (STATE.allPlayers||[]).map(p=>p.save&&p.save.role&&p.save.role.code).filter(Boolean); }
+function teamRoleMapHtml(){
+  if(!isSupervisor(STATE.user)) return '';
+  const codes=teamRoleCodes();
+  if(!codes.length) return `<div class="detail-label" style="margin-top:14px">🗺️ 團隊人格地圖</div><div style="font-size:12px;color:var(--muted);padding:10px 12px;background:var(--surface2);border-radius:10px">團隊還沒有人做角色測驗。請大家到🎮養成中心測一次，這裡就會長出整個團隊的人格組成。</div>`;
+  const ag=AR.aggregate(codes);
+  const fams=[['SJ','守護者'],['SP','探險家'],['NT','分析家'],['NF','外交家']];
+  const fc={NT:'#b07ff0',NF:'#4fc98a',SJ:'#5ab0e0',SP:'#f2944a'};
+  return `<div class="detail-label" style="margin-top:16px">🗺️ 團隊人格地圖 <span style="font-size:11px;color:var(--muted);font-weight:400">${ag.n} 人已測 · 主管限定</span></div>
+  <div class="tmap">
+    <div class="tmap-lb">
+      <div class="tmap-lbcell" style="border-color:#f0a500"><b style="color:#f0a500">${ag.leaders}</b><span>領航者 帶頭</span></div>
+      <div class="tmap-lbcell" style="border-color:#3b82f6"><b style="color:#3b82f6">${ag.backers}</b><span>定錨者 後援</span></div>
+    </div>
+    <div class="tmap-fams">${fams.map(([k,n])=>`<div class="tmap-fam" style="border-color:${fc[k]}"><b style="color:${fc[k]}">${ag.fam[k]}</b><span>${n}</span></div>`).join('')}</div>
+    <div class="tmap-axes">${ag.axes.map(a=>`<div class="tmap-axrow"><div class="tmap-axhead"><span>${a.aLabel} ${a.aPct}%</span><span style="color:var(--muted)">${a.name}</span><span>${a.bPct}% ${a.bLabel}</span></div><div class="tmap-split"><i style="width:${a.aPct}%"></i></div></div>`).join('')}</div>
+    <div class="tmap-side">${ag.sidewrite.map(s=>`<div>💡 ${s}</div>`).join('')}</div>
+  </div>`;
+}
 function showTeam(){
   if(!STATE.user) return;
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
@@ -1415,14 +1482,16 @@ function showTeam(){
     const g=gameStats(sp,sc,sf), c=g.rank.color;
     const gp=(sv.gear?Object.values(sv.gear):[]).reduce((s,id)=>{const it=id&&equipItem(id);return s+(it?it.power:0);},0);
     const title=sv.title&&shopItem(sv.title);
-    const pets=sv.pets?Object.keys(sv.pets).map(pid=>petEmoji(pid,sv.pets[pid].exp)).join(''):'';
+    const pets=sv.pets?Object.keys(sv.pets).map(pid=>petFace(pid,sv.pets[pid].exp,20)).join(''):'';
     const mp=monthPts(u.id,y,m);
     const gearIcons=EQUIP_SLOTS.map(s=>{const id=sv.gear&&sv.gear[s.slot], it=id&&equipItem(id); return it?`<img src="${equipFile(id)}" title="${SLOTNAME[s.slot]}⚔️${it.power}">`:`<i></i>`;}).join('');
+    const role=sv.role&&sv.role.code?sv.role:null;
     return `<div class="team-card" style="border-color:${c}44">
       <div class="team-top">
-        <img class="team-char" src="${charFile(sv.charId||'c1')}">
+        ${roleFaceHtml(role,54)}
         <div style="flex:1;min-width:0">
           <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:#22c55e;margin-left:4px">🌱新人</span>':''}</div>
+          <div style="font-size:11px;color:var(--muted)">${role?`${role.emoji}${role.animalName} ${codeFmt(role.code)} · ${role.title}`:'<span style="color:var(--q1)">尚未做角色測驗</span>'}</div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
           <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
         </div>
@@ -1437,6 +1506,7 @@ function showTeam(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><h3 style="margin:0">👥 團隊夥伴</h3><button class="t-expand" onclick="closeTeam()" style="font-size:18px">✕</button></div>
     ${cityGlowHtml()}
     ${kpiPoolHtml()}
+    ${teamRoleMapHtml()}
     <div class="detail-label" style="margin-top:14px">夥伴狀態</div>
     ${cards}
   </div>`;
@@ -1958,6 +2028,101 @@ const AURA_COLOR  = {au_flame:'#ff6b35', au_ice:'#38bdf8', au_jade:'#34d399', au
 // 角色（17 隻 y708；高等級解鎖更帥的）
 const CHARS=[]; for(let _i=1;_i<=17;_i++){ if(_i===7) continue; CHARS.push({id:'c'+_i, file:'character_'+String(_i).padStart(2,'0')+'.png', minLevel:_i<=10?1:(_i<=14?5:10)}); }   // #7 蝙蝠款與 #8 重複，移除
 function charFile(id){ const c=CHARS.find(x=>x.id===id)||CHARS[0]; return 'assets/game/char/'+c.file; }
+/* ===================================================================
+   USLED 動物角色引擎（64 型，Jason 原創；MBTI 軸非著作權、動物 emoji 零授權）
+   六軸 E/I·S/N·T/F·J/P·A/V·L/B → 64 基因碼 → 動物 + 家族 + 領航/定錨 + 稱號
+   =================================================================== */
+const AR = (function(){
+  const POLES=[
+    {key:'EI',a:'E',b:'I',name:'能量來源',aLabel:'外向',bLabel:'內向'},
+    {key:'SN',a:'S',b:'N',name:'接收訊息',aLabel:'務實',bLabel:'直覺'},
+    {key:'TF',a:'T',b:'F',name:'做決定',aLabel:'理智',bLabel:'重情'},
+    {key:'JP',a:'J',b:'P',name:'做事節奏',aLabel:'計畫',bLabel:'彈性'},
+    {key:'AV',a:'A',b:'V',name:'面對壓力',aLabel:'穩健',bLabel:'細膩'},
+    {key:'LB',a:'L',b:'B',name:'團隊定位',aLabel:'帶頭',bLabel:'後援'},
+  ];
+  const PC={
+    E:{adj:'外放',trait:'你在人群與互動中充電，想法常常要先說出口才會清晰。',strength:'帶動氣氛、把人連結起來。',tip:'多用面對面或語音溝通。'},
+    I:{adj:'沉靜',trait:'你靠獨處回血，習慣先在心裡想清楚才開口。',strength:'沉得住氣、想得深。',tip:'給你準備時間、先用文字講重點。'},
+    S:{adj:'務實',trait:'你相信看得到、做得出來的事，重視細節與現實。',strength:'把想法落地成具體步驟。',tip:'給具體例子和清楚規格。'},
+    N:{adj:'靈感',trait:'你著迷於可能性與背後的模式，常先看到新方向。',strength:'替團隊指出新路線、連成大局。',tip:'先聊大方向與「為什麼」。'},
+    T:{adj:'理智',trait:'你做決定先看邏輯與原則，對事不對人。',strength:'在混亂裡保持客觀公平。',tip:'用數據和道理討論。'},
+    F:{adj:'暖心',trait:'你做決定會把人和感受放進來，在意和諧。',strength:'是團隊的黏著劑。',tip:'先肯定再給建議。'},
+    J:{adj:'條理',trait:'你喜歡先把計畫排好、要有結論。',strength:'推動進度、守住期限。',tip:'事先講好時程與分工。'},
+    P:{adj:'靈活',trait:'你保持開放、隨機應變，邊走邊調整。',strength:'狀況一變能馬上轉向。',tip:'給空間和彈性。'},
+    A:{adj:'穩健',trait:'壓力來時你相對淡定，不太被起伏帶走。',strength:'在風浪裡當團隊的定錨。',tip:'有狀況直接跟你說。'},
+    V:{adj:'細膩',trait:'你對細節和氛圍很敏感，在意把每件事做好。',strength:'提前嗅到風險、顧好品質。',tip:'多給你肯定與安全感。'},
+    L:{adj:'主導',roleNoun:'領航者',trait:'你習慣站出來推動，喜歡讓事情往前走。',strength:'扛起方向、帶著大家動起來。',tip:'給你舞台和決策權。'},
+    B:{adj:'穩盤',roleNoun:'定錨者',trait:'你習慣在背後把事情接穩，讓團隊順暢運轉。',strength:'補位、收尾、把細節接住。',tip:'主動問你的想法、別把付出當理所當然。'},
+  };
+  const ANIMALS=[
+    ['🦁','獅子'],['🐘','大象'],['🐅','老虎'],['🦫','河狸'],['🐆','獵豹'],['🐎','馬'],['🦝','浣熊'],['🐿️','松鼠'],
+    ['🐝','蜜蜂'],['🐶','狗'],['🦩','紅鶴'],['🐧','企鵝'],['🦚','孔雀'],['🦦','水獺'],['🐵','猴子'],['🐹','倉鼠'],
+    ['🦅','老鷹'],['🐺','狼'],['🦈','鯊魚'],['🐙','章魚'],['🦊','狐狸'],['🦜','鸚鵡'],['🦎','變色龍'],['🦇','蝙蝠'],
+    ['🐬','海豚'],['🦒','長頸鹿'],['🦢','天鵝'],['🦌','鹿'],['🦋','蝴蝶'],['🐰','兔子'],['🐦','小鳥'],['🐞','瓢蟲'],
+    ['🐢','烏龜'],['🦡','獾'],['🐃','水牛'],['🐜','螞蟻'],['🐱','貓'],['🐭','老鼠'],['🐊','鱷魚'],['🦔','刺蝟'],
+    ['🐨','無尾熊'],['🐑','綿羊'],['🦭','海豹'],['🐮','乳牛'],['🐼','貓熊'],['🦥','樹懶'],['🐠','熱帶魚'],['🐣','小雞'],
+    ['🦉','貓頭鷹'],['🦑','魷魚'],['🐍','蛇'],['🕷️','蜘蛛'],['🐡','河豚'],['🐸','青蛙'],['🦀','螃蟹'],['🦞','龍蝦'],
+    ['🐋','鯨'],['🦙','羊駝'],['🫎','駝鹿'],['🐐','山羊'],['🐫','駱駝'],['🦘','袋鼠'],['🦓','斑馬'],['🐌','蝸牛'],
+  ];
+  const FAMILIES={NT:{key:'NT',name:'分析家',color:'#b07ff0'},NF:{key:'NF',name:'外交家',color:'#4fc98a'},SJ:{key:'SJ',name:'守護者',color:'#5ab0e0'},SP:{key:'SP',name:'探險家',color:'#f2944a'}};
+  function genCodes(){const o=[];for(const a of[POLES[0].a,POLES[0].b])for(const b of[POLES[1].a,POLES[1].b])for(const c of[POLES[2].a,POLES[2].b])for(const d of[POLES[3].a,POLES[3].b])for(const e of[POLES[4].a,POLES[4].b])for(const f of[POLES[5].a,POLES[5].b])o.push(a+b+c+d+e+f);return o;}
+  const CODES=genCodes(), BY_CODE={}; CODES.forEach((c,i)=>BY_CODE[c]={code:c,emoji:ANIMALS[i][0],name:ANIMALS[i][1],idx:i});
+  function familyOf(code){const sn=code[1],tf=code[2],jp=code[3];if(sn==='N'&&tf==='T')return FAMILIES.NT;if(sn==='N'&&tf==='F')return FAMILIES.NF;if(sn==='S'&&jp==='J')return FAMILIES.SJ;return FAMILIES.SP;}
+  // 三選一直覺題：pole=a極；a 推向 a 極、b 推向 b 極、m=該題專屬的折衷型(計分中立)。UI 對應 a→5/m→3/b→1
+  const QUESTIONS=[
+    {axis:0,pole:'E',a:'揪一大群人出去熱鬧',m:'約三兩好友小聚就好',b:'自己一個人待著最放鬆'},
+    {axis:0,pole:'E',a:'休息時主動找同事聊',m:'有人聊就聊、沒有就自己來',b:'休息時只想自己安靜'},
+    {axis:0,pole:'E',a:'遇到陌生人馬上能聊開',m:'先觀察一下、再慢慢熱起來',b:'等對方先開口我才接話'},
+    {axis:0,pole:'E',a:'想法邊說邊想才會清楚',m:'先抓個大方向再邊講邊補',b:'全部想好了才開口'},
+    {axis:0,pole:'E',a:'整天跟人互動完還很興奮',m:'還行，但也需要喘口氣',b:'累爆、只想關機獨處'},
+    {axis:1,pole:'S',a:'接案先問具體要怎麼做',m:'先抓重點，方法邊做邊定',b:'先想這能玩出什麼新花樣'},
+    {axis:1,pole:'S',a:'只信看得到、做得出的事',m:'有根據的推測我也接受',b:'還沒發生的可能性更吸引我'},
+    {axis:1,pole:'S',a:'學東西愛照步驟一步步來',m:'先抓框架、細節用到再補',b:'抓個大方向自己摸最快'},
+    {axis:1,pole:'S',a:'講話圍繞具體發生的事',m:'講事情也順手帶點延伸',b:'很容易從一點聯想一大串'},
+    {axis:1,pole:'S',a:'最佩服把事做扎實的人',m:'能落地又有想法的最強',b:'最佩服腦洞大的點子王'},
+    {axis:2,pole:'T',a:'有問題當場就直接講',m:'挑個時機講，但一定會講',b:'先顧對方感受、委婉提'},
+    {axis:2,pole:'T',a:'做決定先算邏輯划不划算',m:'道理和感受一起權衡',b:'做決定先看會不會傷到人'},
+    {axis:2,pole:'T',a:'對錯比和氣重要',m:'盡量兩全，真衝突才講對錯',b:'和氣比爭對錯重要'},
+    {axis:2,pole:'T',a:'吵架先把是非講清楚',m:'先降溫，再好好把事講開',b:'吵架先讓大家氣消再說'},
+    {axis:2,pole:'T',a:'朋友訴苦先幫他想辦法',m:'先聽，再陪他一起想',b:'先陪他、聽他把話講完'},
+    {axis:3,pole:'J',a:'出去玩行程先排滿排好',m:'抓大框架，細節現場彈性',b:'不排、到現場隨興走'},
+    {axis:3,pole:'J',a:'事情早早做完才安心',m:'抓著進度，不一定要超早',b:'習慣拖到最後再衝刺'},
+    {axis:3,pole:'J',a:'計畫被改會不太舒服',m:'會配合調整，但希望先講一聲',b:'改了無所謂、馬上應變'},
+    {axis:3,pole:'J',a:'檔案桌面分類得整整齊齊',m:'大致有序、自己找得到就好',b:'亂歸亂、反正找得到'},
+    {axis:3,pole:'J',a:'要有明確結論和死線才安心',m:'有方向就好、死線可彈性',b:'愛保持開放、最後再決定'},
+    {axis:4,pole:'A',a:'出狀況時我相對冷靜',m:'會緊張一下、但很快穩住',b:'出狀況心會揪很久'},
+    {axis:4,pole:'A',a:'事情做完就放下',m:'稍微檢討一下就過',b:'會反覆回想哪裡能更好'},
+    {axis:4,pole:'A',a:'別人一句話很快就忘',m:'當下在意、過了就放下',b:'會在心裡放很久'},
+    {axis:4,pole:'A',a:'高壓也撐得住、不太慌',m:'撐得住，但會默默消耗',b:'高壓容易緊繃、累'},
+    {axis:4,pole:'A',a:'對周遭氣氛沒太大感覺',m:'明顯的變化才會察覺',b:'氣氛一變馬上就感覺到'},
+    {axis:5,pole:'L',a:'沒人帶我就自然站出來',m:'需要時站出來、平常不搶',b:'等有人帶、我來補位'},
+    {axis:5,pole:'L',a:'享受主導、推著事情走',m:'能帶也能輔、看團隊缺哪個',b:'享受在背後把事接穩'},
+    {axis:5,pole:'L',a:'常是發號施令的那個',m:'有時帶頭、有時當執行',b:'常是默默把事做完的那個'},
+    {axis:5,pole:'L',a:'成就感來自帶大家達標',m:'目標達成就好、誰帶都行',b:'成就感來自把支援做到位'},
+    {axis:5,pole:'L',a:'開會主動拋方向、做決定',m:'先聽，再適時提我的看法',b:'聽完大家、補充收尾'},
+  ];
+  const SCALE=[{v:1,t:'很不同意'},{v:2,t:'不太同意'},{v:3,t:'普普通通'},{v:4,t:'有點同意'},{v:5,t:'非常同意'}];
+  function score(answers){
+    const as=POLES.map(()=>0);
+    QUESTIONS.forEach((q,i)=>{const v=answers[i];if(!v)return;const d=v-3;const p=POLES[q.axis];as[q.axis]+=(q.pole===p.a)?d:-d;});
+    const result=POLES.map((p,ai)=>{const sa=as[ai];const winner=sa>=0?p.a:p.b;const mag=Math.abs(sa);const strength=Math.round(50+mag/10*50);let pos=50-(sa/10*50);pos=Math.max(0,Math.min(100,pos));return{axis:ai,sa,winner,mag,strength,pos};});
+    return{code:result.map(r=>r.winner).join(''),result};
+  }
+  function buildTitle(result){let best=0,bm=-1;for(let i=0;i<5;i++){if(result[i].mag>bm){bm=result[i].mag;best=i;}}return PC[result[best].winner].adj+'的'+PC[result[5].winner].roleNoun;}
+  function compatScore(m,o){if(m===o)return-999;let s=0;if(m[1]===o[1])s+=2;if(m[2]===o[2])s+=2;s+=(m[0]!==o[0])?1:0.5;s+=(m[5]!==o[5])?2:0;s+=(m[4]!==o[4])?1:0.5;s+=(m[3]===o[3])?1:0.5;return s;}
+  function bestPartners(m,n){n=n||3;return CODES.filter(c=>c!==m).map(c=>({...BY_CODE[c],s:compatScore(m,c)})).sort((x,y)=>y.s-x.s||x.idx-y.idx).slice(0,n).map(p=>({code:p.code,emoji:p.emoji,name:p.name,role:PC[p.code[5]].roleNoun}));}
+  function aggregate(codes){
+    const n=codes.length;
+    const axes=POLES.map((p,i)=>{const ac=codes.filter(c=>c[i]===p.a).length,bc=n-ac;const aPct=n?Math.round(ac/n*100):50;return{key:p.key,name:p.name,aLabel:p.aLabel,bLabel:p.bLabel,aCount:ac,bCount:bc,aPct,bPct:100-aPct};});
+    const leaders=codes.filter(c=>c[5]==='L').length,backers=n-leaders;const fam={NT:0,NF:0,SJ:0,SP:0};codes.forEach(c=>fam[familyOf(c).key]++);
+    const w=[];const e=axes[0],d=axes[2];
+    if(n>0){ if(leaders>backers*1.8)w.push('領航者偏多、方向感強，但小心多頭馬車——讓定錨者多補位。');else if(backers>leaders*1.8)w.push('定錨者偏多、執行很穩，但可能在等人帶方向——鼓勵有人站出來領航。');else w.push('帶頭與後援比例均衡，很理想的搭配。'); }
+    return{n,axes,leaders,backers,fam,sidewrite:w};
+  }
+  function roleProfile(answers){const{code,result}=score(answers);const a=BY_CODE[code];const fam=familyOf(code);return{code,emoji:a.emoji,animalName:a.name,title:buildTitle(result),family:fam.key,familyName:fam.name,familyColor:fam.color,roleType:code[5],roleName:PC[code[5]].roleNoun,axes:result.map(r=>({key:POLES[r.axis].key,winner:r.winner,strength:r.strength})),partners:bestPartners(code,3),testedAt:new Date().toISOString()};}
+  return{POLES,PC,FAMILIES,CODES,BY_CODE,QUESTIONS,SCALE,familyOf,score,buildTitle,bestPartners,aggregate,roleProfile};
+})();
 // 裝備 6 部位（y708 圖示，帶戰力；史詩/傳說需等級解鎖＝白帽成就＋黑帽稀缺）
 const EQUIP_SLOTS=[
   {slot:'weapon',name:'武器',base:10,n:12,pad:2}, {slot:'hat',name:'頭盔',base:7,n:12,pad:2},
@@ -1993,30 +2158,54 @@ function equipStock(it){
   return {inStock:true};
 }
 const PET_RARITY = {1:{name:'優質',color:'#94a3b8'}, 2:{name:'稀有',color:'#3b82f6'}, 3:{name:'菁英',color:'#14b8a6'}, 4:{name:'史詩',color:'#a855f7'}, 5:{name:'傳說',color:'#f0a500'}};
-// 寵物：每隻獨特輔助技能(副本生效)，稀有度越高越強、越貴越難得
-/* 寵物技能皆「幸運/輔助」類（作答節奏慢，不放攻擊加成）；技能值會隨寵物等級成長 */
-/* 寵物稀有、不易取得：一般寵物 120 起跳，越高稀有越貴 */
+/* 寵物分級＝動物性格迷因 6 階（NPC普羅大眾→菁英原型極稀有）；與裝備稀有度 PET_RARITY 分開 */
+const PET_TIER = {
+  1:{name:'🐾 親切常見', color:'#94a3b8'},   // 普羅大眾
+  2:{name:'💛 善良暖心', color:'#22c55e'},   // 善良但容易被利用
+  3:{name:'🎭 神祕獨特', color:'#3b82f6'},   // 獨特但被誤解
+  4:{name:'⚡ 強悍危險', color:'#a855f7'},   // 不適合弱者
+  5:{name:'🔥 魅力難擋', color:'#ef4444'},   // 難以抗拒
+  6:{name:'👑 夢幻逸品', color:'#f0a500'},   // 極其罕見
+};
+function petTier(r){ return PET_TIER[r]||PET_TIER[1]; }
+/* 寵物＝動物性格分級（圖 assets/game/pet/<id>.svg，OpenMoji 開源 CC-BY-SA；技能皆幸運/輔助類；越高階越稀有越貴）。
+   ⚠️ 寫實圖：Jason 之後提供同檔名的 .svg/.png 即可替換成寫實風（廣告原圖有版權不能用）。 */
 const PETS = [
-  {id:'pet_chick',name:'小雞',icon:'🐤',r:1,price:120, skill:{t:'coin',v:0.12}},
-  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:1,price:130,skill:{t:'drop',v:0.10}},
-  {id:'pet_rabbit',name:'小兔',icon:'🐰',r:1,price:140, skill:{t:'dodge',v:0.10}},
-  {id:'pet_dog',name:'小狗',icon:'🐶',r:1,price:150,   skill:{t:'regen',v:0.30}},
-  {id:'pet_cat',name:'小貓',icon:'🐱',r:2,price:230,    skill:{t:'crit',v:0.15}},
-  {id:'pet_penguin',name:'企鵝',icon:'🐧',r:2,price:250,skill:{t:'coin',v:0.25}},
-  {id:'pet_fox',name:'小狐狸',icon:'🦊',r:2,price:280,  skill:{t:'drop',v:0.18}},
-  {id:'pet_owl',name:'貓頭鷹',icon:'🦉',r:3,price:430,  skill:{t:'hint',v:1}},
-  {id:'pet_bird',name:'小飛雁',icon:'🦅',r:3,price:480, skill:{t:'dodge',v:0.18}},
-  {id:'pet_tiger',name:'小老虎',icon:'🐯',r:4,price:680, skill:{t:'crit',v:0.25}},
-  {id:'pet_peacock',name:'孔雀',icon:'🦚',r:4,price:740, skill:{t:'coindbl',v:0.33}},
-  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:4,price:820,skill:{t:'regen',v:0.50}},
-  {id:'pet_dragon',name:'小龍',icon:'🐉',r:5,price:1200,unique:true, skill:{t:'extrarun',v:1}},
-  {id:'pet_dino',name:'小恐龍',icon:'🦕',r:5,price:1400,unique:true, skill:{t:'coin',v:1.0}},
+  // NPC 層級（普羅大眾）
+  {id:'pet_dog',    name:'狗',  icon:'🐕',r:1,price:120, skill:{t:'regen',v:0.30}},
+  {id:'pet_cat',    name:'貓',  icon:'🐱',r:1,price:130, skill:{t:'crit', v:0.12}},
+  {id:'pet_rabbit', name:'兔子',icon:'🐰',r:1,price:140, skill:{t:'dodge',v:0.10}},
+  {id:'pet_pigeon', name:'鴿子',icon:'🕊️',r:1,price:150, skill:{t:'coin', v:0.12}},
+  // 太好人層級（善良但容易被利用）
+  {id:'pet_hamster',name:'倉鼠',icon:'🐹',r:2,price:210, skill:{t:'drop', v:0.14}},
+  {id:'pet_deer',   name:'鹿',  icon:'🦌',r:2,price:230, skill:{t:'dodge',v:0.16}},
+  {id:'pet_puppy',  name:'幼犬',icon:'🐶',r:2,price:250, skill:{t:'regen',v:0.45}},
+  {id:'pet_dolphin',name:'海豚',icon:'🐬',r:2,price:270, skill:{t:'coin', v:0.22}},
+  {id:'pet_panda',  name:'熊貓',icon:'🐼',r:2,price:300, skill:{t:'coindbl',v:0.22}},
+  // 怪異類型（獨特但被誤解）
+  {id:'pet_octopus',name:'章魚',icon:'🐙',r:3,price:400, skill:{t:'hint', v:1}},
+  {id:'pet_turtle', name:'烏龜',icon:'🐢',r:3,price:430, skill:{t:'regen',v:0.60}},
+  // 危險心靈（不適合弱者）
+  {id:'pet_wolf',   name:'狼',  icon:'🐺',r:4,price:560, skill:{t:'crit', v:0.22}},
+  {id:'pet_panther',name:'黑豹',icon:'🐆',r:4,price:600, skill:{t:'dodge',v:0.22}},
+  {id:'pet_snake',  name:'蛇',  icon:'🐍',r:4,price:640, skill:{t:'drop', v:0.24}},
+  {id:'pet_shark',  name:'鯊魚',icon:'🦈',r:4,price:700, skill:{t:'crit', v:0.26}},
+  // 令人上癮類型（難以抗拒）
+  {id:'pet_fox',    name:'狐狸',icon:'🦊',r:5,price:850, skill:{t:'drop', v:0.30}},
+  {id:'pet_lion',   name:'獅子',icon:'🦁',r:5,price:920, skill:{t:'coindbl',v:0.40}},
+  {id:'pet_eagle',  name:'老鷹',icon:'🦅',r:5,price:980, skill:{t:'extrarun',v:1}},
+  {id:'pet_tiger',  name:'老虎',icon:'🐯',r:5,price:1050,skill:{t:'crit', v:0.32}},
+  // 菁英原型（極其罕見，公司唯一）
+  {id:'pet_dragon', name:'龍',    icon:'🐉',r:6,price:1500,unique:true, skill:{t:'extrarun',v:1,extra:{t:'crit',v:0.2}}},
+  {id:'pet_swan',   name:'天鵝',  icon:'🦢',r:6,price:1400,unique:true, skill:{t:'coin',v:0.6}},
+  {id:'pet_unicorn',name:'獨角獸',icon:'🦄',r:6,price:1600,unique:true, skill:{t:'regen',v:0.7,extra:{t:'dodge',v:0.15}}},
 ];
-/* 限定登場寵物（固定時間出現、期間限購、BUFF 強但不 OVER）；一律幻彩繽紛蛋、每隻顏色不同 */
+const PET_IMG_IDS = new Set(PETS.map(p=>p.id));   // 有 OpenMoji 動物圖的寵物；節慶寵暫無圖→顯示用 emoji
+/* 限定登場（節慶,幻彩繽紛蛋）；暫無動物圖→emoji */
 const SEASON_PETS = [
-  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:5,price:1300,season:'cny',   skill:{t:'coindbl',v:0.50}},
-  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:5,price:980, season:'dragon',skill:{t:'drop',v:0.35}},
-  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:5,price:980,season:'midautumn',skill:{t:'extrarun',v:1}},
+  {id:'pet_nian',  name:'年獸',  icon:'🦁',r:6,price:1500,season:'cny',   skill:{t:'coindbl',v:0.50}},
+  {id:'pet_zongzi',name:'粽子弟',icon:'🍙',r:6,price:1100,season:'dragon',skill:{t:'drop',v:0.40}},
+  {id:'pet_rabbit_moon',name:'玉兔',icon:'🐇',r:6,price:1100,season:'midautumn',skill:{t:'extrarun',v:1}},
 ];
 function inSeason(s){ const m=new Date().getMonth()+1, d=new Date().getDate();
   if(s==='cny') return (m===1&&d>=20)||(m===2&&d<=20);          // 農曆年前後（近似）
@@ -2037,6 +2226,12 @@ function skillTextLive(){ const s=activePetSkill(); if(!s) return ''; if(s.t==='
 const PET_STG=['幼雛','小型','中型','大型','巨型','究級'];
 const PET_EVO=[30,150,330,560,860,1250];   // 各階所需「累積經驗」門檻（達標即進化；蛋在 30 破殼成幼雛）
 function petEmoji(id,exp){ return petProgress(exp).egg ? '🥚' : ((petDef(id)||{}).icon||'🐾'); }
+function petImg(id,sz){ sz=sz||30; return `<img class="pet-img" src="assets/game/pet/${id}.svg" style="width:${sz}px;height:${sz}px" alt="">`; }
+/* 寵物臉：未孵化→稀有度配色蛋；孵化→動物圖(有圖才用,節慶寵 fallback emoji) */
+function petFace(id,exp,sz){ const pr=petProgress(exp), p=petDef(id);
+  if(pr.egg) return `<span class="egg-ic">${eggSvg(p||{r:1},Math.round((sz||30)*0.95))}</span>`;
+  if(p && PET_IMG_IDS.has(id)) return petImg(id,sz);
+  return `<span style="font-size:${Math.round((sz||30)*0.9)}px;line-height:1">${(p&&p.icon)||'🐾'}</span>`; }
 const SLOTS = ['hat','glasses','hand','frame','aura'];
 function shopItem(id){ const e=equipItem(id); if(e) return e; for(const k of Object.keys(SHOP)){ const it=SHOP[k].find(x=>x.id===id); if(it) return {...it,slot:k}; } return petDef(id)||FEED.find(x=>x.id===id)||null; }
 function petDef(id){ return PETS.find(x=>x.id===id)||SEASON_PETS.find(x=>x.id===id); }
@@ -2065,7 +2260,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[]}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -2221,11 +2416,12 @@ async function feedFromInv(feedId){
   petFeedFx(pet,b,a,f);
 }
 function petEvolveCeremony(pet, prog, title){
-  const r=PET_RARITY[pet.r], c=r.color;
+  const r=petTier(pet.r), c=r.color;
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='evolveMask';
+  const face = PET_IMG_IDS.has(pet.id) ? petImg(pet.id, Math.round(78*prog.scale)) : `<span style="font-size:${Math.round(72*prog.scale)}px">${pet.icon}</span>`;
   o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
     <div class="lvup-card">
-      <div style="font-size:${Math.round(72*prog.scale)}px;filter:drop-shadow(0 0 22px ${c})">${pet.icon}</div>
+      <div style="filter:drop-shadow(0 0 22px ${c})">${face}</div>
       <div class="lvup-title">🎉 恭喜！</div>
       <div class="lvup-lv" style="color:${c}">${pet.name} ${title}</div>
       <div class="lvup-hint">${r.name} · ${prog.stageName}　｜　技能：${skillText(pet.skill)}<br>（點一下關閉）</div>
@@ -2256,13 +2452,92 @@ function showCharPick(){
   mask.onclick=closeCharPick; document.body.appendChild(mask);
 }
 function closeCharPick(){ const m=document.getElementById('charPickModal'); if(m)m.remove(); }
+/* ===== 動物角色測驗（RPG 角色入口）：頭像空白→新增→30題→解釋→成為角色；每90天可重測 ===== */
+function hasRole(){ return !!(GS && GS.role && GS.role.code); }
+function roleDaysSince(){ return hasRole()&&GS.role.testedAt ? Math.floor((Date.now()-new Date(GS.role.testedAt).getTime())/86400000) : 999; }
+function canTestRole(){ return !hasRole() || isBeta() || isAdmin() || roleDaysSince()>=180; }
+function roleDaysLeft(){ return Math.max(0, 180-roleDaysSince()); }
+function viewMyRole(){ if(hasRole()) showRoleResult(GS.role,'view'); else showAnimalTest(); }
+function showAnimalTest(){
+  if(!STATE.user) return;
+  if(!canTestRole()){ toast('🐾 角色每 180 天才能重測（還有 '+roleDaysLeft()+' 天）'); return; }
+  STATE.testAns={};
+  const Q=AR.QUESTIONS, S=AR.SCALE;
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='roleTestModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><h3 style="margin:0">🐾 動物角色測驗</h3><button class="t-expand" onclick="closeRoleTest()" style="font-size:18px">✕</button></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${hasRole()?'重新測一次，更新你的動物角色。':'30 題三選一、約 3 分鐘。'}<b>憑直覺選最像你的</b>，沒有對錯。</div>
+    <div class="rt-prog"><div class="rt-progbar"><i id="testProgBar" style="width:0%"></i></div><span id="testProg">0/${Q.length}</span></div>
+    <div class="rt-list">${Q.map((q,i)=>{const opts=[['a',q.a],['m',q.m],['b',q.b]];for(let j=opts.length-1;j>0;j--){const k=Math.floor(Math.random()*(j+1));const t=opts[j];opts[j]=opts[k];opts[k]=t;}return `<div class="rt-q q-${i}"><div class="rt-qnum">第 ${i+1} 題</div>${opts.map(([s,t])=>`<button class="bopt" data-s="${s}" onclick="pickRoleAns(${i},'${s}')">${t}</button>`).join('')}</div>`;}).join('')}</div>
+    <button class="buy-btn dis" id="testSubmit" disabled style="width:100%;padding:13px;margin-top:14px" onclick="submitRoleTest()">完成測驗 · 看我的角色</button>
+  </div>`;
+  mask.onclick=closeRoleTest; document.body.appendChild(mask);
+}
+function closeRoleTest(){ const m=document.getElementById('roleTestModal'); if(m)m.remove(); }
+function pickRoleAns(qi,side){
+  STATE.testAns=STATE.testAns||{}; STATE.testAns[qi]= side==='a'?5:(side==='b'?1:3);   // a→偏a極 / b→偏b極 / m→中立
+  document.querySelectorAll('.q-'+qi+' .bopt').forEach(b=>b.classList.toggle('sel',b.dataset.s===side));
+  const done=Object.keys(STATE.testAns).length, total=AR.QUESTIONS.length;
+  const pc=document.getElementById('testProg'); if(pc) pc.textContent=done+'/'+total;
+  const bar=document.getElementById('testProgBar'); if(bar) bar.style.width=Math.round(done/total*100)+'%';
+  const sb=document.getElementById('testSubmit'); if(sb){ const ok=done>=total; sb.disabled=!ok; sb.classList.toggle('dis',!ok); sb.textContent=ok?'完成測驗 · 看我的角色':('還有 '+(total-done)+' 題未答'); }
+}
+function submitRoleTest(){
+  if(Object.keys(STATE.testAns||{}).length<AR.QUESTIONS.length){ toast('還有題目沒答完'); return; }
+  STATE.pendingRole=AR.roleProfile(STATE.testAns);
+  closeRoleTest(); showRoleResult(STATE.pendingRole,'new');
+}
+function showRoleResult(profile, mode){
+  if(!profile) return;
+  const c=profile.familyColor;
+  const AXN={EI:'能量',SN:'訊息',TF:'決定',JP:'節奏',AV:'壓力',LB:'定位'};
+  const poleLabel=(key,w)=>{ const p=AR.POLES.find(x=>x.key===key); return w===p.a?p.aLabel:p.bLabel; };
+  const strongest=profile.axes.slice(0,5).slice().sort((a,b)=>b.strength-a.strength).slice(0,2);
+  const desc=strongest.map(ax=>AR.PC[ax.winner].trait).concat([AR.PC[profile.roleType].strength]);
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='roleResultModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+    <div style="display:flex;justify-content:flex-end"><button class="t-expand" onclick="closeRoleResult()" style="font-size:18px">✕</button></div>
+    <div class="rr-hero" style="background:radial-gradient(circle at 50% 35%,${c}33,transparent 70%)">
+      <div style="font-size:74px;filter:drop-shadow(0 0 20px ${c})">${profile.emoji}</div>
+      <div style="font-size:20px;font-weight:800;margin-top:2px">${profile.animalName} <span class="rr-code">${codeFmt(profile.code)}</span></div>
+      <div style="font-size:14px;color:${c};font-weight:700">${profile.title}</div>
+      <div style="margin-top:6px"><span class="rr-badge" style="background:${c}">${profile.familyName}</span> <span class="rr-badge" style="background:${profile.roleType==='L'?'#f0a500':'#3b82f6'}">${profile.roleName}</span></div>
+    </div>
+    <div class="rr-desc">${desc.map(t=>`<div>· ${t}</div>`).join('')}</div>
+    <div class="rr-axes">${profile.axes.map(ax=>`<div class="rr-axrow"><span class="rr-axn">${AXN[ax.key]}</span><b style="color:${c};width:34px">${poleLabel(ax.key,ax.winner)}</b><div class="rr-bar"><i style="width:${ax.strength}%;background:${c}"></i></div><span class="rr-axp">${ax.strength}%</span></div>`).join('')}</div>
+    <div class="detail-label" style="margin-top:14px">🤝 最合拍的夥伴</div>
+    <div class="rr-partners">${profile.partners.map(p=>`<div class="rr-pt"><div style="font-size:30px">${p.emoji}</div><div style="font-size:11px;font-weight:600">${p.name}</div><div style="font-size:9px;color:var(--muted)">${p.role}</div></div>`).join('')}</div>
+    <div class="modal-actions" style="margin-top:16px">
+      ${mode==='view'
+        ? `<button class="equip-btn" onclick="closeRoleResult()" style="width:auto;padding:11px 18px">關閉</button>${canTestRole()?`<button class="buy-btn" onclick="closeRoleResult();showAnimalTest()" style="width:auto;padding:11px 18px">重新測驗</button>`:`<span style="font-size:12px;color:var(--muted);align-self:center">${roleDaysLeft()} 天後可重測</span>`}`
+        : `<button class="buy-btn" onclick="saveRole()" style="width:100%;padding:13px">就是這個！設為我的 RPG 角色</button>`}
+    </div>
+  </div>`;
+  mask.onclick=closeRoleResult; document.body.appendChild(mask);
+}
+function closeRoleResult(){ const m=document.getElementById('roleResultModal'); if(m)m.remove(); }
+async function saveRole(){
+  const profile=STATE.pendingRole; if(!profile) return;
+  if(hasRole()){ GS.roleHistory=GS.roleHistory||[]; GS.roleHistory.push({code:GS.role.code,emoji:GS.role.emoji,animalName:GS.role.animalName,testedAt:GS.role.testedAt}); }
+  GS.role=profile; STATE.pendingRole=null;
+  await saveGameState(); closeRoleResult(); refreshGameUI();
+  toast('🎉 你的 RPG 角色：'+profile.emoji+' '+profile.animalName+'（'+profile.title+'）');
+}
+/* 角色頭像（動物在家族色圓框內），給卡片/團隊頁用 */
+function codeFmt(code){ return code?code.slice(0,4)+'·'+code.slice(4):''; }   // 代號 ISTPAL → ISTP·AL（前4=MBTI軸,後2=團隊軸）
+function roleFaceHtml(role, size){ size=size||44; if(!role||!role.code) return `<div class="role-face empty" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.5)}px">？</div>`; return `<div class="role-face" style="width:${size}px;height:${size}px;background:${role.familyColor}22;border-color:${role.familyColor};font-size:${Math.round(size*0.58)}px">${role.emoji}</div>`; }
 function charHeroHtml(){
-  const cid=(GS&&GS.charId)||'c1';
-  const auraId=GS&&GS.equipped&&GS.equipped.aura, auraCol=auraId&&AURA_COLOR[auraId];
-  return `<div class="gc-char" onclick="showCharPick()">
-    ${auraCol?`<div class="gc-char-aura" style="background:radial-gradient(circle,${auraCol},transparent 62%)"></div>`:''}
-    <img src="${charFile(cid)}" class="gc-char-img" alt="">
-    <span class="gc-char-edit">🦸 換角色</span>
+  if(hasRole()){
+    const r=GS.role, c=r.familyColor;
+    return `<div class="gc-char role" onclick="viewMyRole()">
+      <div class="gc-char-aura" style="background:radial-gradient(circle,${c}cc,transparent 60%)"></div>
+      <div class="gc-role-emoji">${r.emoji}</div>
+      <span class="gc-char-edit">${r.animalName} · ${codeFmt(r.code)}</span>
+    </div>`;
+  }
+  return `<div class="gc-char empty" onclick="showAnimalTest()">
+    <div class="gc-role-empty">＋</div>
+    <span class="gc-char-edit" style="background:var(--accent);color:#1a1205;border:none">🐾 新增頭像 · 做測驗</span>
   </div>`;
 }
 function equipPanelHtml(){
@@ -2292,17 +2567,18 @@ function petCardHtml(){
   if(!GS||!GS.activePet||!GS.pets||!GS.pets[GS.activePet])
     return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`;
   const id=GS.activePet, p=petDef(id), st=GS.pets[id], pr=petProgress(st.exp);
+  if(!p){ const valid=Object.keys(GS.pets).find(x=>petDef(x)); if(valid){ GS.activePet=valid; return petCardHtml(); } return `<div class="pet-card empty" onclick="showShop('pet')">🥚 還沒有夥伴 — 點我到商店帶一顆蛋回家孵</div>`; }
   const pct=pr.max?100:Math.round(pr.into/pr.span*100);
-  const others=Object.keys(GS.pets).filter(x=>x!==id);
-  const bal=coinBalance(), rc=PET_RARITY[p.r].color, leg=p.r>=5;
+  const others=Object.keys(GS.pets).filter(x=>x!==id && petDef(x));   // 只列能解析的(防殘留舊id崩)
+  const bal=coinBalance(), rc=petTier(p.r).color, leg=p.r>=6;
   const nextName=pr.egg?'幼雛':(pr.max?'':PET_STG[pr.stageIdx+1]);
   const expTxt = pr.egg ? ('破殼倒數：再餵 '+pr.toNext+' 經驗孵化 🥚')
     : (pr.max?'已達究極形態 ✨':('距進化「'+nextName+'」還差 '+pr.toNext+' 經驗'));
   const ownFeed=Object.keys(GS.feed||{}).filter(k=>GS.feed[k]>0);
   return `<div class="pet-card">
     <div class="pet-emoji-col">
-      <div class="pet-emoji${pr.egg?' egg':''}" style="font-size:${Math.round(30*pr.scale)}px">${petEmoji(id,st.exp)}</div>
-      <span class="pet-rbadge" style="background:${rc}${leg?';box-shadow:0 0 9px '+rc:''}">${PET_RARITY[p.r].name}</span>
+      <div class="pet-emoji${pr.egg?' egg':''}">${petFace(id,st.exp,Math.round(46*pr.scale))}</div>
+      <span class="pet-rbadge" style="background:${rc}${leg?';box-shadow:0 0 9px '+rc:''}">${petTier(p.r).name}</span>
     </div>
     <div class="pet-info">
       <div class="pet-name">${pr.egg?p.name+'蛋':p.name}<span class="pet-stage" style="color:${rc}">${pr.egg?'未孵化':pr.stageName}</span></div>
@@ -2311,7 +2587,7 @@ function petCardHtml(){
       <div class="feed-row">${FEED.map(f=>`<button class="feed-btn${bal<f.price?' dis':''}" ${bal<f.price?'disabled':''} onclick="feedActivePet('${f.id}')">${f.icon} ${f.name}·<img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${f.price}</button>`).join('')}</div>
       ${ownFeed.length?`<div class="feed-row">${ownFeed.map(k=>{const f=FEED.find(x=>x.id===k);return `<button class="feed-btn inv" onclick="feedFromInv('${k}')">🎒${f.icon}${f.name}×${GS.feed[k]} 餵</button>`;}).join('')}</div>`:''}
     </div>
-    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petEmoji(o,GS.pets[o].exp)}</button>`).join('')}</div>`:''}
+    ${others.length?`<div class="pet-switch">${others.map(o=>`<button onclick="setActivePet('${o}')" title="切換 ${petDef(o).name}">${petFace(o,GS.pets[o].exp,26)}</button>`).join('')}</div>`:''}
   </div>`;
 }
 /* 商店 */
@@ -2326,7 +2602,7 @@ function shopCosCard(it){
 }
 /* 蛋圖（依稀有度配色，幻彩=彩虹）— 商店一律顯示蛋，孵化才現原形，給期待感 */
 function eggSvg(p,size){
-  const u=++AV_SEQ, rc=PET_RARITY[p.r].color, sz=size||40;
+  const u=++AV_SEQ, rc=petTier(p.r).color, sz=size||40;
   const limited = !!(p.season||p.rainbow);
   let fill, defs;
   if(limited){
@@ -2341,15 +2617,15 @@ function eggSvg(p,size){
   return `<svg viewBox="0 0 40 50" width="${sz}" height="${Math.round(sz*1.25)}" style="display:block"><defs>${defs}</defs><ellipse cx="20" cy="29" rx="17" ry="20" fill="${fill}" stroke="rgba(0,0,0,.18)" stroke-width="1"/><ellipse cx="13.5" cy="19" rx="4.5" ry="6.5" fill="#fff" opacity=".5"/></svg>`;
 }
 function shopPetCard(p){
-  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=PET_RARITY[p.r].color;
+  const owned=GS.pets&&GS.pets[p.id], active=GS.activePet===p.id, bal=coinBalance(), rc=petTier(p.r).color;
   const owners=STATE.uniqueOwners||{}, takenByOther = p.unique && owners[p.id] && !owned;
   const soldOut = p.season && false;   // 節慶寵物期間不限購（期間就一隻＝你買一次擁有）
   let action;
   if(owned) action=`<button class="equip-btn${active?' on':''}" onclick="setActivePet('${p.id}')">${active?'夥伴中 ✓':'設為夥伴'}</button>`;
   else if(takenByOther) action=`<button class="equip-btn" disabled style="opacity:.45">🔒 已被領養</button>`;
   else action=`<button class="buy-btn${bal<p.price?' dis':''}" ${bal<p.price?'disabled':''} onclick="buyPet('${p.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${p.price}</button>`;
-  const limited=!!(p.season||p.rainbow), leg=p.r>=5;
-  const tag = limited ? '🌈幻彩限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑公司唯一') : PET_RARITY[p.r].name);
+  const limited=!!(p.season||p.rainbow), leg=p.r>=6;
+  const tag = limited ? '🌈幻彩限定' : (p.unique ? (takenByOther?('👑'+owners[p.id]):'👑公司唯一') : petTier(p.r).name);
   return `<div class="shop-item${active?' eq':''}${takenByOther?' taken':''}" style="border-color:${rc}88"><div class="si-icon egg-ic">${eggSvg(p,42)}</div><div class="si-rar pet-below" style="color:${rc}${leg?';font-weight:800':''}">${tag}</div><div class="si-name">${p.name}蛋</div><div class="si-skill">${skillText(p.skill)}</div>${action}</div>`;
 }
 function showShop(tab){
@@ -2459,7 +2735,7 @@ function bonusDrop(){
   if(r<0.12){   // 罕見：寵物蛋（只給沒有的、非唯一一般寵物）
     const pool=PETS.filter(p=>!p.unique && !(GS.pets&&GS.pets[p.id]));
     if(pool.length){ const p=pool[Math.floor(Math.random()*pool.length)]; GS.pets=GS.pets||{}; GS.pets[p.id]={exp:0}; if(!GS.activePet) GS.activePet=p.id;
-      return {rc:PET_RARITY[p.r].color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
+      return {rc:petTier(p.r).color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
   }
   if(r<0.6){   // 寵物零食（進庫存，回養成中心餵）
     const f=FEED[Math.floor(Math.random()*FEED.length)]; GS.feed=GS.feed||{}; GS.feed[f.id]=(GS.feed[f.id]||0)+1;
@@ -2893,7 +3169,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.8.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.5';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
