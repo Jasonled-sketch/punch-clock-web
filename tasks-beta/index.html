@@ -2068,38 +2068,38 @@ const AR = (function(){
   function genCodes(){const o=[];for(const a of[POLES[0].a,POLES[0].b])for(const b of[POLES[1].a,POLES[1].b])for(const c of[POLES[2].a,POLES[2].b])for(const d of[POLES[3].a,POLES[3].b])for(const e of[POLES[4].a,POLES[4].b])for(const f of[POLES[5].a,POLES[5].b])o.push(a+b+c+d+e+f);return o;}
   const CODES=genCodes(), BY_CODE={}; CODES.forEach((c,i)=>BY_CODE[c]={code:c,emoji:ANIMALS[i][0],name:ANIMALS[i][1],idx:i});
   function familyOf(code){const sn=code[1],tf=code[2],jp=code[3];if(sn==='N'&&tf==='T')return FAMILIES.NT;if(sn==='N'&&tf==='F')return FAMILIES.NF;if(sn==='S'&&jp==='J')return FAMILIES.SJ;return FAMILIES.SP;}
-  // 二選一直覺題：pole=a極；選 a 推向 a 極、選 b 推向 b 極（UI 對應 a→5、b→1）
+  // 三選一直覺題：pole=a極；a 推向 a 極、b 推向 b 極、m=該題專屬的折衷型(計分中立)。UI 對應 a→5/m→3/b→1
   const QUESTIONS=[
-    {axis:0,pole:'E',a:'揪一群人出去熱鬧',b:'自己安靜待著耍廢'},
-    {axis:0,pole:'E',a:'休息時找同事聊兩句',b:'休息時自己放空滑手機'},
-    {axis:0,pole:'E',a:'認識新朋友很自然就聊起來',b:'等別人先來搭話'},
-    {axis:0,pole:'E',a:'邊講邊想，說出來才清楚',b:'自己想清楚才開口'},
-    {axis:0,pole:'E',a:'忙一整天人際後還很有電',b:'忙完只想獨處不講話'},
-    {axis:1,pole:'S',a:'先問具體要做什麼、怎麼做',b:'先想這能變出什麼新玩法'},
-    {axis:1,pole:'S',a:'相信看得到、做得出來的事',b:'相信還沒發生但有可能的'},
-    {axis:1,pole:'S',a:'學東西喜歡一步步照步驟',b:'抓個大方向自己摸索'},
-    {axis:1,pole:'S',a:'講話圍繞具體發生的事',b:'容易從一個點聯想一大串'},
-    {axis:1,pole:'S',a:'欣賞把事做扎實的人',b:'欣賞想法天馬行空的人'},
-    {axis:2,pole:'T',a:'有問題就直接點出來',b:'先顧及對方感受再說'},
-    {axis:2,pole:'T',a:'做決定先看邏輯、划不划算',b:'做決定先看會不會影響別人'},
-    {axis:2,pole:'T',a:'就事論事、對錯優先',b:'以和為貴、感受優先'},
-    {axis:2,pole:'T',a:'吵架先把對錯講清楚',b:'吵架先讓大家氣消'},
-    {axis:2,pole:'T',a:'朋友訴苦先幫他分析解法',b:'朋友訴苦先陪他、聽他說'},
-    {axis:3,pole:'J',a:'出去玩行程先排好',b:'到現場再看著辦'},
-    {axis:3,pole:'J',a:'事情早早做完才安心',b:'拖到最後衝刺也行'},
-    {axis:3,pole:'J',a:'計畫臨時改會有點不舒服',b:'計畫改了無所謂、隨機應變'},
-    {axis:3,pole:'J',a:'檔案桌面喜歡分類整齊',b:'找得到就好、不太整理'},
-    {axis:3,pole:'J',a:'喜歡明確的結論和死線',b:'喜歡保持彈性最後再決定'},
-    {axis:4,pole:'A',a:'出狀況時還算冷靜',b:'出狀況時心會揪一下'},
-    {axis:4,pole:'A',a:'事情過了就過了',b:'事後會反覆回想哪裡能更好'},
-    {axis:4,pole:'A',a:'別人一句話很快就忘',b:'別人一句話會放心上很久'},
-    {axis:4,pole:'A',a:'高壓環境撐得住、不太慌',b:'高壓環境容易緊繃、累'},
-    {axis:4,pole:'A',a:'對周遭氣氛沒特別感覺',b:'對氣氛變化很敏感'},
-    {axis:5,pole:'L',a:'沒人帶時自然站出來帶',b:'等有人帶、我來補位'},
-    {axis:5,pole:'L',a:'享受主導方向、推著事情走',b:'享受在背後把事情接穩'},
-    {axis:5,pole:'L',a:'常是發號施令的那個',b:'常是默默把事做完的那個'},
-    {axis:5,pole:'L',a:'成就感來自帶大家達標',b:'成就感來自把支援做到位'},
-    {axis:5,pole:'L',a:'開會主動拋方向、做決定',b:'開會聽完大家、補充收尾'},
+    {axis:0,pole:'E',a:'揪一大群人出去熱鬧',m:'約三兩好友小聚就好',b:'自己一個人待著最放鬆'},
+    {axis:0,pole:'E',a:'休息時主動找同事聊',m:'有人聊就聊、沒有就自己來',b:'休息時只想自己安靜'},
+    {axis:0,pole:'E',a:'遇到陌生人馬上能聊開',m:'先觀察一下、再慢慢熱起來',b:'等對方先開口我才接話'},
+    {axis:0,pole:'E',a:'想法邊說邊想才會清楚',m:'先抓個大方向再邊講邊補',b:'全部想好了才開口'},
+    {axis:0,pole:'E',a:'整天跟人互動完還很興奮',m:'還行，但也需要喘口氣',b:'累爆、只想關機獨處'},
+    {axis:1,pole:'S',a:'接案先問具體要怎麼做',m:'先抓重點，方法邊做邊定',b:'先想這能玩出什麼新花樣'},
+    {axis:1,pole:'S',a:'只信看得到、做得出的事',m:'有根據的推測我也接受',b:'還沒發生的可能性更吸引我'},
+    {axis:1,pole:'S',a:'學東西愛照步驟一步步來',m:'先抓框架、細節用到再補',b:'抓個大方向自己摸最快'},
+    {axis:1,pole:'S',a:'講話圍繞具體發生的事',m:'講事情也順手帶點延伸',b:'很容易從一點聯想一大串'},
+    {axis:1,pole:'S',a:'最佩服把事做扎實的人',m:'能落地又有想法的最強',b:'最佩服腦洞大的點子王'},
+    {axis:2,pole:'T',a:'有問題當場就直接講',m:'挑個時機講，但一定會講',b:'先顧對方感受、委婉提'},
+    {axis:2,pole:'T',a:'做決定先算邏輯划不划算',m:'道理和感受一起權衡',b:'做決定先看會不會傷到人'},
+    {axis:2,pole:'T',a:'對錯比和氣重要',m:'盡量兩全，真衝突才講對錯',b:'和氣比爭對錯重要'},
+    {axis:2,pole:'T',a:'吵架先把是非講清楚',m:'先降溫，再好好把事講開',b:'吵架先讓大家氣消再說'},
+    {axis:2,pole:'T',a:'朋友訴苦先幫他想辦法',m:'先聽，再陪他一起想',b:'先陪他、聽他把話講完'},
+    {axis:3,pole:'J',a:'出去玩行程先排滿排好',m:'抓大框架，細節現場彈性',b:'不排、到現場隨興走'},
+    {axis:3,pole:'J',a:'事情早早做完才安心',m:'抓著進度，不一定要超早',b:'習慣拖到最後再衝刺'},
+    {axis:3,pole:'J',a:'計畫被改會不太舒服',m:'會配合調整，但希望先講一聲',b:'改了無所謂、馬上應變'},
+    {axis:3,pole:'J',a:'檔案桌面分類得整整齊齊',m:'大致有序、自己找得到就好',b:'亂歸亂、反正找得到'},
+    {axis:3,pole:'J',a:'要有明確結論和死線才安心',m:'有方向就好、死線可彈性',b:'愛保持開放、最後再決定'},
+    {axis:4,pole:'A',a:'出狀況時我相對冷靜',m:'會緊張一下、但很快穩住',b:'出狀況心會揪很久'},
+    {axis:4,pole:'A',a:'事情做完就放下',m:'稍微檢討一下就過',b:'會反覆回想哪裡能更好'},
+    {axis:4,pole:'A',a:'別人一句話很快就忘',m:'當下在意、過了就放下',b:'會在心裡放很久'},
+    {axis:4,pole:'A',a:'高壓也撐得住、不太慌',m:'撐得住，但會默默消耗',b:'高壓容易緊繃、累'},
+    {axis:4,pole:'A',a:'對周遭氣氛沒太大感覺',m:'明顯的變化才會察覺',b:'氣氛一變馬上就感覺到'},
+    {axis:5,pole:'L',a:'沒人帶我就自然站出來',m:'需要時站出來、平常不搶',b:'等有人帶、我來補位'},
+    {axis:5,pole:'L',a:'享受主導、推著事情走',m:'能帶也能輔、看團隊缺哪個',b:'享受在背後把事接穩'},
+    {axis:5,pole:'L',a:'常是發號施令的那個',m:'有時帶頭、有時當執行',b:'常是默默把事做完的那個'},
+    {axis:5,pole:'L',a:'成就感來自帶大家達標',m:'目標達成就好、誰帶都行',b:'成就感來自把支援做到位'},
+    {axis:5,pole:'L',a:'開會主動拋方向、做決定',m:'先聽，再適時提我的看法',b:'聽完大家、補充收尾'},
   ];
   const SCALE=[{v:1,t:'很不同意'},{v:2,t:'不太同意'},{v:3,t:'普普通通'},{v:4,t:'有點同意'},{v:5,t:'非常同意'}];
   function score(answers){
@@ -2467,7 +2467,7 @@ function showAnimalTest(){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><h3 style="margin:0">🐾 動物角色測驗</h3><button class="t-expand" onclick="closeRoleTest()" style="font-size:18px">✕</button></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${hasRole()?'重新測一次，更新你的動物角色。':'30 題三選一、約 3 分鐘。'}<b>憑直覺選最像你的</b>，沒有對錯。</div>
     <div class="rt-prog"><div class="rt-progbar"><i id="testProgBar" style="width:0%"></i></div><span id="testProg">0/${Q.length}</span></div>
-    <div class="rt-list">${Q.map((q,i)=>`<div class="rt-q q-${i}"><div class="rt-qnum">第 ${i+1} 題</div><button class="bopt a" data-s="a" onclick="pickRoleAns(${i},'a')">${q.a}</button><button class="bopt mid" data-s="m" onclick="pickRoleAns(${i},'m')">都有一點 · 看情況</button><button class="bopt b" data-s="b" onclick="pickRoleAns(${i},'b')">${q.b}</button></div>`).join('')}</div>
+    <div class="rt-list">${Q.map((q,i)=>{const opts=[['a',q.a],['m',q.m],['b',q.b]];return `<div class="rt-q q-${i}"><div class="rt-qnum">第 ${i+1} 題</div>${opts.map(([s,t])=>`<button class="bopt" data-s="${s}" onclick="pickRoleAns(${i},'${s}')">${t}</button>`).join('')}</div>`;}).join('')}</div>
     <button class="buy-btn dis" id="testSubmit" disabled style="width:100%;padding:13px;margin-top:14px" onclick="submitRoleTest()">完成測驗 · 看我的角色</button>
   </div>`;
   mask.onclick=closeRoleTest; document.body.appendChild(mask);
@@ -3167,7 +3167,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.4';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
