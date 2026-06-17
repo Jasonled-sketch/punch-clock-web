@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>USLED 題庫彙整 · 副本闖關</title>
+<style>
+:root{
+  --bg:#11151c; --card:#1b2230; --card2:#212a3b; --line:#2c3850;
+  --txt:#e7edf6; --muted:#8a98ad; --accent:#7c5cff; --accent2:#22c55e;
+  --warn:#f59e0b; --bad:#ef4444; --chip:#283349;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding-bottom:90px}
+header{position:sticky;top:0;z-index:30;background:rgba(17,21,28,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 14px}
+h1{font-size:18px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:12.5px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.search{flex:1;min-width:160px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 12px;font-size:14px}
+.btn{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.btn.warn{color:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--chip);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:5px 12px;font-size:12.5px;cursor:pointer;user-select:none}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip b{color:inherit;opacity:.7;font-weight:600;margin-left:4px}
+.legend{margin:10px 14px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;color:var(--muted)}
+.legend b{color:var(--txt)}
+.wrap{padding:6px 12px}
+.secthead{display:flex;align-items:center;gap:8px;margin:18px 2px 8px;font-size:15px;font-weight:800}
+.secthead .n{color:var(--muted);font-weight:600;font-size:12.5px}
+.secthead .selbtns{margin-left:auto;display:flex;gap:6px}
+.secthead .mini{font-size:11.5px;color:var(--muted);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.card.off{opacity:.42}
+.cb{width:22px;height:22px;flex:0 0 auto;margin-top:2px;accent-color:var(--accent2);cursor:pointer}
+.body{flex:1;min-width:0}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
+.tag{font-size:11px;border-radius:6px;padding:1px 7px;border:1px solid var(--line);color:var(--muted)}
+.tag.new{color:var(--accent2);border-color:#2c5}
+.tag.old{color:var(--warn);border-color:#a70}
+.tag.lv{color:var(--accent)}
+.catsel{font-size:11px;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:2px 4px}
+.q{font-weight:600;outline:none;border-radius:6px;padding:1px 2px}
+.q:focus{background:#0d1118;box-shadow:0 0 0 1px var(--accent)}
+.opts{margin-top:6px;display:grid;gap:4px}
+.opt{display:flex;gap:8px;align-items:flex-start;font-size:13.5px;color:var(--muted);cursor:pointer;border-radius:6px;padding:2px 4px}
+.opt .mk{flex:0 0 auto;width:18px;height:18px;border-radius:50%;border:1.5px solid var(--line);font-size:11px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.opt.right{color:var(--accent2);font-weight:600}
+.opt.right .mk{background:var(--accent2);border-color:var(--accent2);color:#06210f}
+.opt .ot{outline:none;border-radius:4px;padding:0 2px;flex:1}
+.opt .ot:focus{background:#0d1118;box-shadow:0 0 0 1px var(--accent)}
+.del{color:var(--bad);background:none;border:none;font-size:12px;cursor:pointer;margin-top:4px}
+footer{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(17,21,28,.97);border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center}
+.count{font-size:14px}
+.count b{color:var(--accent2);font-size:18px}
+.spacer{flex:1}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+.modal.on{display:flex}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;max-height:86vh;overflow:auto;padding:16px}
+.box h3{margin:0 0 8px}
+textarea{width:100%;min-height:240px;background:#0d1118;color:#cfe;border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.field{margin:8px 0}
+.field label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px}
+.field input,.field select{width:100%;background:#0d1118;color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:8px}
+.row4{display:grid;grid-template-columns:24px 1fr;gap:6px;align-items:center;margin:4px 0}
+.note{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎯 USLED 題庫彙整</h1>
+  <div class="sub">勾選要用的題、可直接改字／改正解／改分類，最後按「匯出」把結果丟回給 Claude。修改會自動存在這台裝置。</div>
+  <div class="bar">
+    <input class="search" id="search" placeholder="🔍 搜尋題目或選項…">
+    <button class="btn" id="toggleHide">只看已選</button>
+    <button class="btn" id="addBtn">➕ 新增題</button>
+    <button class="btn warn" id="resetBtn">重設</button>
+  </div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="legend" id="legend"></div>
+<div class="wrap" id="list"></div>
+
+<footer>
+  <div class="count">已選 <b id="selN">0</b> / <span id="totN">0</span> 題</div>
+  <div class="spacer"></div>
+  <button class="btn go" id="exportBtn">📋 匯出給 Claude</button>
+</footer>
+
+<!-- 匯出 -->
+<div class="modal" id="expModal">
+  <div class="box">
+    <h3>📋 匯出已選題目</h3>
+    <div class="note">把下面整段複製貼回對話給 Claude，我就照這份寫進題庫。共 <b id="expN">0</b> 題。</div>
+    <div style="margin:8px 0;display:flex;gap:8px">
+      <button class="btn go" id="copyBtn">複製到剪貼簿</button>
+      <button class="btn" id="closeExp">關閉</button>
+    </div>
+    <textarea id="expTxt" readonly></textarea>
+  </div>
+</div>
+
+<!-- 新增 -->
+<div class="modal" id="addModal">
+  <div class="box">
+    <h3>➕ 新增題目</h3>
+    <div class="field"><label>分類</label><select id="aCat"></select></div>
+    <div class="field"><label>題目</label><input id="aQ" placeholder="輸入題目"></div>
+    <div class="note">四個選項，點左邊圓圈選正解：</div>
+    <div id="aOpts"></div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn go" id="aSave">加入</button>
+      <button class="btn" id="aCancel">取消</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================== 題庫資料 ================== */
+/* 每組: {cat, job, status:新擬/現有, def:預設是否勾選, level?, items:[ [題目,[四選項],正解index] ]} */
+const GROUPS = [
+{cat:'綜合',job:'all',status:'現有',def:true,items:[
+ ['一打(dozen)是幾個？',['12','10','16','24'],0],
+ ['一公里等於幾公尺？',['1000','100','500','10000'],0],
+ ['台灣最高的山是？',['玉山','雪山','合歡山','阿里山'],0],
+ ['圓周率 π 約等於？',['3.14','2.14','4.13','3.41'],0],
+ ['「事半功倍」是什麼意思？',['效率很高','非常辛苦','一定失敗','需要加班'],0],
+ ['紅綠燈哪個顏色可以通行？',['綠','紅','黃','都可以'],0],
+ ['滅火器口訣「拉、瞄、壓、掃」第一步是？',['拉插銷','壓把手','瞄火源','掃射'],0],
+ ['收到客訴，最好的第一步是？',['先傾聽了解','先辯解','已讀不回','推給別人'],0],
+ ['工作交接最重要的是？',['留下清楚記錄','口頭帶過','不用交接','只告訴朋友'],0],
+ ['開會不小心遲到，較得體的做法？',['安靜入座、事後致歉','大聲解釋原因','乾脆不參加','責怪塞車'],0],
+ ['公司機密文件外流，主要違反？',['保密原則','環保法','交通規則','勞基法'],0],
+ ['發現同事在現場受傷，第一步較妥當？',['先確認傷勢並通報','先拍照上傳','當作沒看到','責怪對方'],0],
+ ['需要請假時，較正確的做法？',['事先提出申請','直接不來','只跟同事口頭說','當天遲到再說'],0],
+ ['報帳時最該核對的是？',['金額與發票相符','字寫得漂亮','紙張顏色','發票紙質'],0],
+ ['LED 顯示螢幕規格「P10」的 P 代表什麼？',['點間距(mm)','亮度','功率','總畫素'],0],
+ ['全彩 LED 的三原色是？',['紅綠藍(RGB)','紅黃藍','青洋紅黃','黑白灰'],0],
+ ['戶外 LED 看板防水等級通常至少要求？',['IP65','IP20','IP44','不需防水'],0],
+ ['LED 點間距越小代表？',['畫面越細緻','越便宜','越省電','字越大'],0],
+ ['下列何者「不是」字幕機控制卡常見的傳輸方式？',['藍牙煮飯','網路TCP','RS485','USB'],0],
+ ['LED 模組「16×16」通常是指？',['16列×16行像素','16公分','16瓦','16種顏色'],0],
+ ['譽昇光電(USLED)主要產品領域是？',['LED字幕機/顯示看板','賣咖啡','旅遊業','服飾'],0],
+ ['LED 的中文全名是？',['發光二極體','液晶','電漿','映像管'],0],
+ ['字幕機顯示亂碼，最可能的原因？',['編碼/字型問題','天氣太熱','電壓太高','音量太大'],0],
+ ['控制卡 IP 設定錯誤，最常見後果？',['無法連線控制','畫面變亮','變省電','字變大'],0],
+ ['戶外大型 LED 若散熱不良，容易？',['縮短壽命/故障','更省電','畫面自動變大','完全沒影響'],0],
+ ['螢幕「亮度」常用單位是？',['nit (cd/m²)','公斤','公升','赫茲'],0],
+]},
+{cat:'智力',job:'all',status:'現有',def:false,level:'基礎(偏易)',items:[
+ ['數列 2, 4, 8, 16, ？',['32','24','30','64'],0],
+ ['下列何者是質數？',['17','9','15','21'],0],
+ ['100 的 15% 是多少？',['15','10','20','150'],0],
+ ['直角是幾度？',['90','45','60','180'],0],
+ ['下列分數何者最大？',['1/2','1/3','1/4','1/5'],0],
+ ['一年中有幾個月有 31 天？',['7','4','5','12'],0],
+ ['3 個工人 3 天做 3 張桌子，9 個工人 9 天做幾張？',['27','9','3','81'],0],
+ ['一個正方體有幾個面？',['6','4','8','12'],0],
+ ['數列 5, 10, 20, 40, ？',['80','60','100','160'],0],
+ ['下列何者不是偶數？',['7','2','4','8'],0],
+ ['時鐘 3 點整，時針與分針夾角？',['90°','60°','120°','180°'],0],
+ ['甲比乙高、乙比丙高，誰最高？',['甲','乙','丙','一樣高'],0],
+]},
+{cat:'智力',job:'all',status:'新擬',def:true,level:'90-95級',items:[
+ ['數列 3, 6, 12, 24, ？',['48','36','30','96'],0],
+ ['數列 2, 5, 10, 17, ？（差 3,5,7,9）',['26','24','22','28'],0],
+ ['800 元打 9 折是多少？',['720','710','700','730'],0],
+ ['時速 60 公里，行駛 150 公里需幾小時？',['2.5 小時','2 小時','3 小時','1.5 小時'],0],
+ ['一個數的 3 倍是 27，這個數是？',['9','6','8','81'],0],
+ ['連續三個偶數的和是 18，最小的是？',['4','6','2','8'],0],
+ ['哥哥 12 歲是弟弟的 2 倍，弟弟幾歲？',['6','8','10','4'],0],
+ ['1/4 + 1/4 + 1/4 = ？',['3/4','1','1/2','1/12'],0],
+ ['A>B 且 B>C，則 A 與 C 的關係？',['A>C','A<C','A=C','無法判斷'],0],
+ ['24 顆蘋果平分給 6 人，每人幾顆？',['4','3','6','5'],0],
+ ['下列哪個圖形沒有「角」？',['圓形','三角形','正方形','長方形'],0],
+ ['一個正方體有幾條稜(邊)？',['12','6','8','4'],0],
+]},
+{cat:'工程',job:'eng',status:'新擬',def:true,items:[
+ ['全彩 LED 屏「1/16 掃描」相較「靜態驅動」主要差異？',['分時點亮16行、用料省成本低但刷新率較低','完全不影響規格','1/16 比靜態亮','靜態只能單色'],0],
+ ['LED 要同時做到高灰階又高刷新，靠的是？',['驅動IC的PWM調製能力(高刷IC)','加大點間距','降低亮度','換電源'],0],
+ ['戶外屏拍照出現掃描線/水波紋，規格上的根本解法？',['提高視覺刷新率(≥1920Hz/3840Hz)','提高亮度','縮小點距','換顏色'],0],
+ ['「逐點校正(逐點校色)」主要解決？',['燈珠批次差異造成的亮度/色度不均(花屏)','防水','省電','增加點距'],0],
+ ['千兆網口接收卡單口帶載點數上限約？',['約65萬點(655360)','1024點','無上限','100點'],0],
+ ['恒流驅動IC(如MBI5系列)主要作用？',['穩定每顆燈珠電流、亮度一致','防水','當變壓器','收網路訊號'],0],
+ ['P4 戶外屏 10㎡，平均功率與最大功率關係常抓？',['平均約為最大的1/3~1/2(全白才滿載)','兩者相同','平均比最大高','無關'],0],
+ ['模組「320×160mm、P4」的單模組解析度？',['80×40 點','320×160 點','4×4 點','1280 點寬'],0],
+ ['模組間出現亮線/暗線(拼縫)，原因「不」包含下列何者？',['網路 IP 設錯','機構公差','燈珠批次不同','未做校正'],0],
+ ['模組資料接口 HUB75 傳的是？',['RGB資料、行選址、時鐘/latch等控制訊號','220V市電','網路封包','聲音'],0],
+ ['同步系統(諾瓦/靈星雨/卡萊特)的「同步」指？',['畫面即時跟電腦輸出(像延伸螢幕)','內容存卡離線播','自動關機','雙機備援'],0],
+ ['IP65 的「第二位數字 5」代表？',['防各方向低壓噴水','防塵','防曬','防鏽'],0],
+ ['「Gamma 校正」主要目的？',['讓灰階過渡符合人眼感知、暗部更自然','防水','省電','提高亮度上限'],0],
+ ['出現上一行殘影/拖影(鬼影)，常見處理？',['加消隱電路或調驅動IC消隱參數','換電源','提高亮度','加大點距'],0],
+ ['「共陽極/共陰極」指燈珠的？',['驅動極性接線方式(影響IC選型)','顏色','防水等級','封裝大小'],0],
+ ['戶外 P10 屏 100㎡、最大約 800W/㎡，總配電最大功率約？',['約80kW(需預留餘裕)','800W','8kW','8MW'],0],
+ ['全彩屏「白平衡」是在調？',['紅綠藍三色亮度比例使白色純正','點間距','刷新率','防水'],0],
+ ['SMD2121/3535/1010 的數字代表？',['燈珠尺寸(2.1×2.1mm…)，越小可做越小點距','亮度','價格','壽命'],0],
+ ['戶外大型屏「防雷接地」主要目的？',['洩放雷擊/靜電、保護設備與人身','增加亮度','美觀','省電'],0],
+ ['接收卡「級聯(串接)」常見限制？',['單口帶載點數與級聯數量有上限，超過要分口/加卡','無限制','只能接1張','與點數無關'],0],
+ ['屏體「視角(如水平160°)」指？',['亮度/色彩不嚴重衰減仍看得清的角度範圍','安裝傾角','太陽角度','攝影角度'],0],
+ ['業界出廠「死燈(壞點)率」要求多在？',['萬分之幾以內(越低越好)','10%','50%','無標準'],0],
+ ['模組「老化(Aging)測試」目的？',['出廠前長時間點亮，提早篩出早夭不良','讓屏變舊','增加點距','充電'],0],
+ ['戶外亮度(cd/m²)要比室內高，因為？',['戶外環境光強，要更亮才看得清','戶外較遠','戶外較貴','沒原因'],0],
+ ['控制卡「韌體升級」常見情境？',['支援新模組/修顯示異常/新增功能','讓屏變暗','增加重量','沒必要'],0],
+ ['兩台同型號屏並排卻顏色不一致，最可能？',['未做整屏校正/白平衡批次差異','距離太近','電壓相同','點距不同'],0],
+ ['8bit 與 16bit 灰階主要差別？',['可表現灰階層次數(256 vs 65536)，低亮過渡更細膩','亮度上限','點間距','防水'],0],
+ ['「刷新率」常被誤當影片幀率，它其實指？',['每秒整屏掃描重畫次數(影響拍攝/閃爍)','影片每秒幀數','開關機速度','網速'],0],
+ ['提高刷新率又不掉亮度，靠驅動IC的？',['高灰高刷技術(GCLK倍頻/占空比優化)','加大電流燒燈','換更大電源','降點距'],0],
+ ['千兆網口約帶 65 萬點，換算 P4 屏約多少面積？',['約10㎡出頭(1㎡≈62500點)','1㎡','100㎡','無上限'],0],
+ ['大屏改用「光纖傳輸」而非網線主因？',['網線約100m上限，光纖可拉更遠抗干擾','較便宜','較亮','防水'],0],
+ ['「占空比(Duty)」太低會造成？',['亮度不足/低灰偏暗，需IC補償','點距變大','防水變差','變重'],0],
+ ['色域(如NTSC%)越高代表？',['可呈現色彩範圍越廣、越鮮豔真實','越亮','越省電','點距越小'],0],
+ ['低亮度出現「丟階/灰階斷層」常見對策？',['高灰階IC + Gamma/低灰補償','提高整體亮度','換電源','加大點距'],0],
+ ['戶外大功率屏常用「三相電」的好處？',['平衡負載、線徑與壓降較佳','較亮','較便宜','防水'],0],
+ ['供電線「壓降」過大會導致？',['末端電壓不足、亮度不均偏暗，需加大線徑/就近配電','屏變亮','刷新變快','無影響'],0],
+ ['模組「遮光罩/墨色面罩(Mask)」作用？',['提升對比、減少反光讓黑更黑','防水','散熱','增加亮度'],0],
+ ['「雙電源/電源備援」主要用於？',['單顆電源故障不全黑、提升可靠度','增加亮度','省電','美觀'],0],
+ ['卡萊特/諾瓦的「智能設置/帶載回讀」在做？',['自動讀模組參數完成箱體配置與走線','調亮度','播影片','升韌體'],0],
+ ['異形屏/弧形屏拼接最需克服？',['模組切割/箱體角度與校正使畫面連續一致','顏色','防水','重量'],0],
+ ['電視牆(拼接屏)出現「區域訊號異常、時好時壞」，多數原因來自？',['AC電源未正確接地(接地不良造成干擾)','影片解析度不足','亮度調太高','點間距選太小'],0],
+]},
+{cat:'電學',job:'eng,asm',status:'新擬',def:true,items:[
+ ['歐姆定律 V=I×R，電壓 12V、電阻 4Ω，電流是？',['3A','48A','0.33A','16A'],0],
+ ['功率 P=V×I，5V × 2A = 幾瓦？',['10W','7W','2.5W','3W'],0],
+ ['模組 5V、單片最大 4A，最大功率約？',['20W','9W','1.25W','40W'],0],
+ ['200W 電源、5V 輸出，最大輸出電流約？',['40A','1000A','4A','20A'],0],
+ ['10 片模組各 20W，電源功率至少約？',['200W(需再留餘裕)','20W','2W','100W'],0],
+ ['並聯電路各分支的電壓關係？',['相同(等於電源電壓)','相加','相減','相乘'],0],
+ ['兩顆 1.5V 電池「串聯」總電壓？',['3V','1.5V','0.75V','4.5V'],0],
+ ['線徑太細、電流太大會？',['發熱、壓降甚至燒線(走火風險)','變省電','電壓變高','沒事'],0],
+ ['5V/3A 模組 60 片，總電流約？',['180A(需多組電源分擔)','18A','3A','300A'],0],
+ ['選電源供應器額定功率較佳抓法？',['實際負載的 1.2~1.5 倍留餘裕','剛好等於負載','越小越好','隨便'],0],
+ ['大屏為何要「分區供電/多顆電源」？',['單顆電源電流有上限，分擔才安全穩定','較亮','較便宜','美觀'],0],
+ ['接線「正負極(+/–)接反」最可能？',['模組不亮或燒毀，務必確認極性','變更亮','變省電','沒差'],0],
+]},
+{cat:'組裝',job:'asm',status:'新擬',def:true,items:[
+ ['模組裝箱體前最該先確認？',['型號/批次一致，避免混批色差','顏色喜好','重量','包裝'],0],
+ ['鎖附模組螺絲正確做法？',['依規定扭力鎖緊、不過鬆不過緊','越緊越好','隨便鎖','不鎖滿'],0],
+ ['排線(扁平線)插拔應注意？',['對準防呆缺口、輕插到底、勿折角','用力硬插','沾水','斜插'],0],
+ ['模組組裝後「整片不亮」先檢查？',['電源與排線是否到位/極性','直接報廢','換箱體','調影片'],0],
+ ['箱體模組「平整度」沒對好會？',['拼縫/亮線、畫面不平','變亮','防水變好','省電'],0],
+ ['組裝完成出貨前必要動作？',['通電老化測試＋整屏點亮檢查壞點','直接裝箱','只看外觀','不用測'],0],
+]},
+{cat:'業務',job:'sales',status:'新擬',def:true,items:[
+ ['報價 LED 屏前最該先確認？',['安裝環境(室內/戶外)、觀看距離、尺寸','客戶生肖','公司人數','喜歡的顏色'],0],
+ ['客戶說「隔壁比較便宜」，較專業的回應方向？',['釐清對方規格(點距/IC/電源/保固)是否同級再比','直接降價','罵競品','不理會'],0],
+ ['客戶報價後遲未回覆，較有效的跟進？',['主動提供新資訊/案例再關心，而非只問「決定了嗎」','一直催下單','從此不聯絡','直接降價'],0],
+ ['業務初次拜訪理想的時間分配？',['多聽多問了解需求，少一味推銷','全程講規格','只談價格','講自家多厲害'],0],
+ ['客戶殺價時較專業的應對？',['先談價值與規格差異，必要時用配套/數量換折讓','立刻砍底價','拒絕溝通','推給老闆'],0],
+ ['下列何者是客戶的「成交訊號」？',['開始問交期、付款方式、保固細節','一直沉默','說再看看就掛電話','一味嫌東嫌西'],0],
+ ['報價單寄出後的標準動作？',['確認客戶收到、約回覆時間、記錄追蹤','寄出就等','不用記錄','刪掉備份'],0],
+ ['接單/簽約最該白紙黑字確認？',['規格、金額、交期、付款與驗收條件','只談總價','口頭承諾即可','細節之後再說'],0],
+ ['收到客訴電話的第一步？',['先傾聽安撫、了解問題全貌再處理','先撇清責任','立刻反駁','轉給別人不管'],0],
+ ['老客戶轉介紹的價值在於？',['信任成本低、成交率高，應主動經營與感謝','沒用','會搶生意','增加麻煩'],0],
+ ['客戶說「我再考慮一下」較有效回應？',['釐清在考慮哪一點(價/規格/交期)對症處理','直接結束','一直催','馬上降價'],0],
+ ['業務承諾交期的正確心態？',['與生產/採購確認後再承諾，寧保守不跳票','先答應再說','越短越好','隨口給'],0],
+ ['一個案子多位窗口，最該優先確認？',['誰是真正決策者/付款者','誰最年輕','誰話最多','不用管'],0],
+ ['客戶預算不足以做想要的規格，較好做法？',['提供分階段/降規格替代方案','騙他先簽','直接掛電話','偷工'],0],
+ ['比價/招標勝出關鍵「不只是」最低價，還有？',['規格符合度、交期、服務與信任','只有價格','老闆人脈','運氣'],0],
+ ['客戶要「先做、款之後再說」，流程上應？',['依付款條件(訂金/分期)簽訂保障雙方','全部先做','自己墊錢','隨便答應'],0],
+ ['提供樣品/demo 的主要目的？',['降低疑慮、展示效果推進成交','送人情','消庫存','沒目的'],0],
+ ['把客戶分級(A/B/C)經營的好處？',['資源聚焦高價值客戶、跟進更有效率','歧視客戶','沒必要','看心情'],0],
+ ['旺季交期吃緊，對新客戶承諾交期應？',['先確認產能再報實際交期','照樣承諾最短','拒接單','偷別人的料'],0],
+ ['既有客戶「追加訂單」業務應把握？',['快速報價跟進、確認規格一致、深化關係','拖延','漲很多','愛理不理'],0],
+ ['客戶下單後想取消，較專業處理？',['依合約/投產狀況協商並說明條款','立刻全退','不理會','吵架'],0],
+ ['用「成功案例/實績照片」行銷的好處？',['具體可信、降低決策風險、利於轉介','炫耀','沒用','洩密'],0],
+ ['報價附「規格說明/比較表」好處？',['讓客戶看懂價值差異、減少純比價','增加紙張','拖時間','沒差'],0],
+ ['成交後「售後跟進」的長期價值？',['維繫關係促回購與轉介，勝過一次性買賣','浪費時間','沒用','增加客訴'],0],
+]},
+{cat:'行政',job:'admin',status:'新擬',def:true,items:[
+ ['出貨前核對最關鍵的是？',['型號/數量/規格與訂單、出貨單一致','紙箱顏色','出貨員心情','字體大小'],0],
+ ['收到廠商請款發票最該先核對？',['金額、品項、統編與採購單/驗收相符','發票紙質','開立日期好看與否','不用核對'],0],
+ ['客戶保固維修紀錄較好的管理方式？',['建檔留存(機型/出貨日/維修內容)可追溯','修完就忘','記在腦中','寫便利貼隨手丟'],0],
+ ['公司導入 Ragic 雲端資料庫主要好處？',['資料集中、多人共用查詢、減少紙本重複登打','只是好看','會變慢','取代員工'],0],
+ ['合約/報價單對外用印前較正確流程？',['經權責主管確認內容無誤再用印','先蓋再說','自己決定','隨便蓋'],0],
+ ['報價單「型號」打錯一個字可能造成？',['出貨/報價錯誤、客訴甚至賠償，務必核對','沒影響','客戶不會發現','自動更正'],0],
+ ['單據編「流水號」的主要目的？',['可追溯、不重複、方便查找對帳','好看','湊頁數','沒意義'],0],
+ ['發票統編打錯的正確處理？',['依規定作廢重開，不可塗改','用筆改一改','當作沒事','丟掉重印不註記'],0],
+ ['同份報價單改了三次，檔案管理較好的做法？',['用版本/日期命名保留紀錄，避免用錯舊版','一直覆蓋同檔','全部刪掉','桌面不命名'],0],
+ ['客戶資料(電話/地址/統編)建檔最重要？',['正確且即時更新，錯一碼出貨/請款就錯','填好看','隨便填','不用更新'],0],
+ ['請款流程正確順序較接近？',['報價→訂單→出貨/驗收→請款→收款對帳','先收款再報價','先請款再出貨','沒有順序'],0],
+ ['主管不在卻有合約要用印，較妥當的做法？',['依授權確認權限，無權則等候/請示','自己先蓋','找同事亂蓋','偽簽'],0],
+ ['盤點時帳面與實物不符的正確處理？',['查明原因並登錄調整、留紀錄','直接改帳對齊','裝沒看到','把多的藏起來'],0],
+ ['為何流程「該照規定走」即使較慢？',['可追溯、減少出錯與糾紛、交接不斷層','浪費時間','刁難','給主管面子'],0],
+ ['貨品驗收時行政/倉管最該做？',['清點數量品項並核對單據，異常即回報','直接簽收','堆著再說','只看外箱'],0],
+ ['合約金額除阿拉伯數字外通常還要？',['加註中文大寫(防竄改)且一致','不用','畫底線即可','隨意'],0],
+ ['單據日期格式公司內最好？',['統一格式(如 YYYY/MM/DD)避免混淆','各寫各的','不用寫','只寫月'],0],
+ ['寄出報價/合約 email 較保險的做法？',['留存寄件紀錄、附件命名清楚、必要時請回簽','寄完刪','不附件','無主旨'],0],
+ ['一式兩份的合約正確處理？',['雙方各執一份、皆用印、內容完全一致','自己留兩份','只給客戶','一份就好'],0],
+ ['客戶來電催貨，行政較妥當回應？',['先查實際進度再據實回覆並記錄','隨口說快好了','不接電話','推給業務不查'],0],
+ ['公司文件/憑證保存應注意？',['依規定年限保存(如會計憑證)不可隨意丟','看完就丟','全碎掉','堆到爛'],0],
+ ['處理客戶個資(電話/地址)應？',['妥善保管、僅供必要用途、勿外洩','隨意轉傳','公開貼出','賣名單'],0],
+ ['採購比價單最該完整記錄？',['各廠商報價、規格、交期與比價日期','只記最便宜','不用記','憑印象'],0],
+ ['零用金/代墊款報支正確做法？',['憑單據核銷、金額相符、主管核可','口頭報','自己抓個數','不用單據'],0],
+ ['會議結論沒有「會議記錄」常見後果？',['各自解讀、責任不清、易生爭議','沒差','比較自由','更有效率'],0],
+ ['出貨單「數量」與裝箱不符，出貨前發現應？',['立即更正並重新核對才出貨','照單出','之後再算','不管'],0],
+ ['交期/排程登錄到系統的好處？',['大家看得到、不漏單、可追進度','增加工作','沒意義','只有主管看'],0],
+]},
+];
+const CATS = ['綜合','智力','工程','電學','組裝','業務','行政'];
+const WHO = {
+  '綜合':'全部人','智力':'全部人',
+  '工程':'黃偉智、全看(你/陳譽昇)',
+  '電學':'黃偉智、李尹蘋、全看',
+  '組裝':'李尹蘋、全看',
+  '業務':'莊鈺萱、全看',
+  '行政':'李尹蘋、莊鈺萱、全看',
+};
+
+/* ================== 狀態 ================== */
+const LS='usled_quiz_curation_v1';
+let ST={sel:{},edit:{},added:[],hide:false,filter:'全部',q:''};
+try{const s=JSON.parse(localStorage.getItem(LS));if(s)ST=Object.assign(ST,s);}catch(e){}
+function save(){try{localStorage.setItem(LS,JSON.stringify(ST));}catch(e){}}
+
+/* 建立全部題目(含 id) */
+let ALL=[];
+function buildAll(){
+  ALL=[];let i=0;
+  GROUPS.forEach(g=>{
+    g.items.forEach(it=>{
+      ALL.push({id:'q'+(i++),cat:g.cat,job:g.job,status:g.status,def:g.def,level:g.level||'',q:it[0],a:it[1].slice(),c:it[2],added:false});
+    });
+  });
+  ST.added.forEach((it,k)=>{
+    ALL.push({id:'a'+k,cat:it.cat,job:catJob(it.cat),status:'自訂',def:true,level:'',q:it.q,a:it.a.slice(),c:it.c,added:true});
+  });
+}
+function catJob(c){return ({'綜合':'all','智力':'all','工程':'eng','電學':'eng,asm','組裝':'asm','業務':'sales','行政':'admin'})[c]||'all';}
+function isSel(it){return (it.id in ST.sel)?ST.sel[it.id]:it.def;}
+function cur(it){const e=ST.edit[it.id];if(!e)return it;return Object.assign({},it,e,{cat:e.cat||it.cat});}
+
+/* ================== 渲染 ================== */
+function render(){
+  buildAll();
+  // chips
+  const chips=document.getElementById('chips');
+  const cnt={};let tot=0,sel=0;
+  ALL.forEach(it=>{const c=cur(it);cnt[c.cat]=(cnt[c.cat]||0)+1;tot++;if(isSel(it))sel++;});
+  let ch='<span class="chip '+(ST.filter==='全部'?'on':'')+'" data-f="全部">全部<b>'+tot+'</b></span>';
+  CATS.forEach(c=>{if(cnt[c])ch+='<span class="chip '+(ST.filter===c?'on':'')+'" data-f="'+c+'">'+c+'<b>'+cnt[c]+'</b></span>';});
+  chips.innerHTML=ch;
+  chips.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ST.filter=el.dataset.f;save();render();});
+  document.getElementById('selN').textContent=sel;
+  document.getElementById('totN').textContent=tot;
+  document.getElementById('toggleHide').textContent=ST.hide?'顯示全部':'只看已選';
+  // legend
+  document.getElementById('legend').innerHTML='<b>誰會考到哪類：</b>'+CATS.map(c=>c+'＝'+WHO[c]).join('　·　')+'<br><span class="note">智力＋綜合人人都考；職務題只給對應的人（一人可多類，「全看」者全部都考）。</span>';
+  // list
+  const list=document.getElementById('list');list.innerHTML='';
+  const q=(ST.q||'').trim();
+  CATS.forEach(catName=>{
+    const items=ALL.filter(it=>cur(it).cat===catName)
+      .filter(it=>ST.filter==='全部'||ST.filter===catName)
+      .filter(it=>!ST.hide||isSel(it))
+      .filter(it=>{if(!q)return true;const c=cur(it);return (c.q+c.a.join('')).includes(q);});
+    if(!items.length)return;
+    const head=document.createElement('div');head.className='secthead';
+    head.innerHTML='<span>'+catName+'</span><span class="n">('+items.length+'題 · '+WHO[catName]+')</span>'+
+      '<span class="selbtns"><span class="mini" data-all="'+catName+'">全選</span><span class="mini" data-none="'+catName+'">全不選</span></span>';
+    list.appendChild(head);
+    head.querySelector('[data-all]').onclick=()=>{items.forEach(it=>ST.sel[it.id]=true);save();render();};
+    head.querySelector('[data-none]').onclick=()=>{items.forEach(it=>ST.sel[it.id]=false);save();render();};
+    items.forEach(it=>list.appendChild(card(it)));
+  });
+  if(!list.children.length)list.innerHTML='<p class="note" style="text-align:center;padding:30px">沒有符合的題目</p>';
+}
+
+function card(it){
+  const c=cur(it);const on=isSel(it);
+  const el=document.createElement('div');el.className='card'+(on?'':' off');
+  const stTag = it.added?'<span class="tag lv">自訂</span>' : (it.status==='新擬'?'<span class="tag new">新擬</span>':'<span class="tag old">現有</span>');
+  const lvTag = c.level?'<span class="tag lv">'+c.level+'</span>':'';
+  let catOpts=CATS.map(x=>'<option'+(x===c.cat?' selected':'')+'>'+x+'</option>').join('');
+  let opts='';
+  c.a.forEach((o,i)=>{
+    opts+='<div class="opt'+(i===c.c?' right':'')+'" data-opt="'+i+'"><span class="mk">'+(i===c.c?'✓':String.fromCharCode(65+i))+'</span><span class="ot" contenteditable="true" data-ot="'+i+'">'+esc(o)+'</span></div>';
+  });
+  el.innerHTML=
+    '<input type="checkbox" class="cb" '+(on?'checked':'')+'>'+
+    '<div class="body">'+
+      '<div class="meta">'+stTag+lvTag+'<select class="catsel">'+catOpts+'</select>'+(it.added?'<button class="del">刪除</button>':'')+'</div>'+
+      '<div class="q" contenteditable="true">'+esc(c.q)+'</div>'+
+      '<div class="opts">'+opts+'</div>'+
+    '</div>';
+  // checkbox
+  el.querySelector('.cb').onchange=e=>{ST.sel[it.id]=e.target.checked;save();el.classList.toggle('off',!e.target.checked);document.getElementById('selN').textContent=ALL.filter(x=>isSel(x)).length;};
+  // category change
+  el.querySelector('.catsel').onchange=e=>{ed(it).cat=e.target.value;save();render();};
+  // question edit
+  const qEl=el.querySelector('.q');
+  qEl.onblur=()=>{ed(it).q=qEl.textContent.trim();save();};
+  // option text edit
+  el.querySelectorAll('.ot').forEach(o=>{o.onblur=()=>{const arr=(ST.edit[it.id]&&ST.edit[it.id].a)?ST.edit[it.id].a.slice():it.a.slice();arr[+o.dataset.ot]=o.textContent.trim();ed(it).a=arr;save();};});
+  // set correct
+  el.querySelectorAll('.opt').forEach(o=>{o.querySelector('.mk').onclick=()=>{ed(it).c=+o.dataset.opt;save();render();};});
+  // delete (added)
+  if(it.added){el.querySelector('.del').onclick=()=>{const k=+it.id.slice(1);ST.added.splice(k,1);// reindex sel/edit for added not tracked separately; simplest re-render
+    save();render();};}
+  return el;
+}
+function ed(it){if(!ST.edit[it.id])ST.edit[it.id]={};return ST.edit[it.id];}
+function esc(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ================== 工具列 ================== */
+document.getElementById('search').oninput=e=>{ST.q=e.target.value;clearTimeout(window._t);window._t=setTimeout(()=>{save();render();},180);};
+document.getElementById('toggleHide').onclick=()=>{ST.hide=!ST.hide;save();render();};
+document.getElementById('resetBtn').onclick=()=>{if(confirm('確定清掉所有勾選與修改？(回到預設)')){ST={sel:{},edit:{},added:[],hide:false,filter:'全部',q:''};save();document.getElementById('search').value='';render();}};
+
+/* 匯出 */
+document.getElementById('exportBtn').onclick=()=>{
+  buildAll();
+  const out=ALL.filter(it=>isSel(it)).map(it=>{const c=cur(it);return {cat:c.cat,job:catJob(c.cat),q:c.q,a:c.a,c:c.c};});
+  document.getElementById('expN').textContent=out.length;
+  document.getElementById('expTxt').value='以下是我(Jason)選定的題庫，請寫進任務牆 QUIZ：\n\n'+JSON.stringify(out,null,1);
+  document.getElementById('expModal').classList.add('on');
+};
+document.getElementById('closeExp').onclick=()=>document.getElementById('expModal').classList.remove('on');
+document.getElementById('copyBtn').onclick=async()=>{const t=document.getElementById('expTxt');t.select();try{await navigator.clipboard.writeText(t.value);document.getElementById('copyBtn').textContent='已複製 ✓';}catch(e){document.execCommand('copy');document.getElementById('copyBtn').textContent='已複製 ✓';}setTimeout(()=>document.getElementById('copyBtn').textContent='複製到剪貼簿',1500);};
+
+/* 新增題 */
+const aCat=document.getElementById('aCat');aCat.innerHTML=CATS.map(c=>'<option>'+c+'</option>').join('');
+const aOpts=document.getElementById('aOpts');
+aOpts.innerHTML=[0,1,2,3].map(i=>'<div class="row4"><input type="radio" name="acorrect" value="'+i+'"'+(i===0?' checked':'')+'><input class="aopt" placeholder="選項 '+String.fromCharCode(65+i)+(i===0?'(預設正解)':'')+'"></div>').join('');
+document.getElementById('addBtn').onclick=()=>document.getElementById('addModal').classList.add('on');
+document.getElementById('aCancel').onclick=()=>document.getElementById('addModal').classList.remove('on');
+document.getElementById('aSave').onclick=()=>{
+  const q=document.getElementById('aQ').value.trim();
+  const opts=[...document.querySelectorAll('.aopt')].map(x=>x.value.trim());
+  const c=+document.querySelector('input[name=acorrect]:checked').value;
+  if(!q||opts.some(o=>!o)){alert('請填完題目與四個選項');return;}
+  ST.added.push({cat:aCat.value,q,a:opts,c});save();
+  document.getElementById('aQ').value='';document.querySelectorAll('.aopt').forEach(x=>x.value='');
+  document.getElementById('addModal').classList.remove('on');render();
+};
+
+render();
+</script>
+</body>
+</html>
