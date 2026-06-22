@@ -494,6 +494,7 @@ function enterApp(){
   S.myName = localStorage.getItem('wl_myname') || CFG.EMAIL2NAME[S.user.email] || '';
   buildForm();
   loadRecent();
+  resendPending();
 }
 
 /* ---------- 通用點選元件 ---------- */
@@ -680,87 +681,109 @@ async function callRagic(suffix, opts){
   return fetch(CFG.WORKER + CFG.PATH + suffix, Object.assign({}, opts, { headers }));
 }
 
-/* ---------- 送出 ---------- */
-async function submitLog(){
-  const date=$('f_date').value, lead=(S.pick.lead||'').trim(), subject=$('f_subject').value.trim();
-  if(!date){ toast('請選擇執行日期','bad'); return; }
-  if(!lead){ toast('請選擇負責主任','bad'); return; }
-  if(!subject){ toast('請填寫施工主題','bad'); $('f_subject').focus(); return; }
-  const need = siteShown();
-  if(need && !S.pick.item){ toast('請選擇施作項目名稱','bad'); return; }
-
+/* ---------- 送出（含弱訊號離線補送）---------- */
+function buildPayload(){
+  const F=CFG.F, need=siteShown();
   let payVal=S.seg.pay; const payNote=$('f_payNote').value.trim();
   if(payVal==='有') payVal = payNote? ('有 '+payNote) : '有';
-
-  const fd=new FormData(); const F=CFG.F;
-  fd.append(F.execDate, dateToRagic(date));
-  fd.append(F.execDate2, dateToRagic(date));
-  fd.append(F.logTime, nowRagic());
-  fd.append(F.lead, lead);
-  S.coworkers.forEach(n=>fd.append(F.coworkers, n));
-  fd.append(F.io, S.seg.io);
-  fd.append(F.subject, subject);
-  if($('f_arrive').value) fd.append(F.arrive, timeToRagic($('f_arrive').value));
-  if($('f_leave').value)  fd.append(F.leave, timeToRagic($('f_leave').value));
-  if(S.pick.main) fd.append(F.main, S.pick.main);
-  if(S.pick.sub)  fd.append(F.sub, S.pick.sub);
+  const f=[];
+  f.push([F.execDate,dateToRagic($('f_date').value)],[F.execDate2,dateToRagic($('f_date').value)],[F.logTime,nowRagic()],[F.lead,(S.pick.lead||'').trim()]);
+  S.coworkers.forEach(n=>f.push([F.coworkers,n]));
+  f.push([F.io,S.seg.io],[F.subject,$('f_subject').value.trim()]);
+  if($('f_arrive').value) f.push([F.arrive,timeToRagic($('f_arrive').value)]);
+  if($('f_leave').value)  f.push([F.leave,timeToRagic($('f_leave').value)]);
+  if(S.pick.main) f.push([F.main,S.pick.main]);
+  if(S.pick.sub)  f.push([F.sub,S.pick.sub]);
   if(need){
-    if(S.pick.item) fd.append(F.item, S.pick.item);
-    fd.append(F.volt, S.seg.volt);
-    if($('f_height').value.trim()) fd.append(F.height, $('f_height').value.trim());
-    if(S.pick.ladder) fd.append(F.ladder, S.pick.ladder);
-    fd.append(F.pay, payVal);
-    if($('f_siteNote').value.trim()) fd.append(F.siteNote, $('f_siteNote').value.trim());
-    if(F.workLevel && S.grade.score>0) fd.append(F.workLevel, 'Lv.'+S.grade.lv+'（'+S.grade.score+'分）');
+    if(S.pick.item) f.push([F.item,S.pick.item]);
+    f.push([F.volt,S.seg.volt]);
+    if($('f_height').value.trim()) f.push([F.height,$('f_height').value.trim()]);
+    if(S.pick.ladder) f.push([F.ladder,S.pick.ladder]);
+    f.push([F.pay,payVal]);
+    if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
+    if(F.workLevel && S.grade.score>0) f.push([F.workLevel,'Lv.'+S.grade.lv+'（'+S.grade.score+'分）']);
   }
-  if($('f_process').value.trim()) fd.append(F.process, $('f_process').value.trim());
-  if($('f_aar').value.trim())     fd.append(F.aar, $('f_aar').value.trim());
-  CFG.CHECKS.forEach(c=>fd.append(F[c.k], S.checks[c.k]));
-  S.photos.forEach((p,i)=>fd.append(F.photo, p.blob, 'wl_'+Date.now()+'_'+i+'.jpg'));
-
-  $('submitBtn').disabled=true; showLoad(S.photos.length? '上傳照片與日誌…':'送出日誌…');
+  if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
+  if($('f_aar').value.trim())     f.push([F.aar,$('f_aar').value.trim()]);
+  CFG.CHECKS.forEach(c=>f.push([F[c.k],S.checks[c.k]]));
+  return { fields:f, photos:S.photos.map(p=>p.url), lead:(S.pick.lead||'').trim() };
+}
+function dataURLtoBlob(u){ const a=u.split(','),mime=(a[0].match(/:(.*?);/)||[])[1]||'image/jpeg',bin=atob(a[1]),n=bin.length,arr=new Uint8Array(n); for(let i=0;i<n;i++)arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:mime}); }
+function payloadToFD(p){ const fd=new FormData(); p.fields.forEach(kv=>fd.append(kv[0],kv[1])); (p.photos||[]).forEach((du,i)=>{ try{ fd.append(CFG.F.photo, dataURLtoBlob(du), 'wl_'+i+'.jpg'); }catch(e){} }); return fd; }
+async function sendPayload(p){
+  const r=await callRagic('?api&doFormula=true', { method:'POST', body:payloadToFD(p) });
+  if(r.status===401) return { auth:false };
+  let data=null; try{ data=await r.json(); }catch(e){}
+  const ok=!!(data&&data.status==='SUCCESS');
+  return { ok:ok, sn: ok? ((data.data&&(data.data['1002584']||data.data['序列號']))||('#'+data.ragicId)) : '', msg:(data&&data.msg)||('HTTP '+r.status) };
+}
+function savePending(p){
+  try{ localStorage.setItem('wl_pending', JSON.stringify(p)); }
+  catch(e){ try{ localStorage.setItem('wl_pending', JSON.stringify(Object.assign({},p,{photos:[],photoDropped:true}))); }catch(_){} }
+}
+async function submitLog(){
+  if(!$('f_date').value){ toast('請選擇執行日期','bad'); return; }
+  if(!(S.pick.lead||'').trim()){ toast('請選擇負責主任','bad'); return; }
+  if(!$('f_subject').value.trim()){ toast('請填寫施工主題','bad'); $('f_subject').focus(); return; }
+  if(siteShown() && !S.pick.item){ toast('請選擇施作項目名稱','bad'); return; }
+  const p=buildPayload();
+  $('submitBtn').disabled=true; showLoad(p.photos.length? '上傳照片與日誌…':'送出日誌…');
   try{
-    const r=await callRagic('?api&doFormula=true', { method:'POST', body:fd });
-    if(r.status===401){ hideLoad(); $('submitBtn').disabled=false; toast('登入逾時，請重新登入','bad'); google.accounts.id.prompt(); return; }
-    const data=await r.json();
-    if(data && data.status==='SUCCESS'){
-      localStorage.setItem('wl_myname', lead);
-      const sn = (data.data && (data.data['1002584']||data.data['序列號'])) || ('#'+data.ragicId);
-      hideLoad(); showDone(sn);
-    }else{
-      hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+((data&&data.msg)||r.status),'bad');
-    }
-  }catch(e){ hideLoad(); $('submitBtn').disabled=false; toast('網路錯誤：'+e.message,'bad'); }
+    const res=await sendPayload(p);
+    if(res.auth===false){ hideLoad(); $('submitBtn').disabled=false; toast('登入逾時，請重新登入','bad'); google.accounts.id.prompt(); return; }
+    if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); hideLoad(); showDone(res.sn); }
+    else { hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+res.msg,'bad'); }
+  }catch(e){
+    savePending(p);   // 弱訊號/離線 → 暫存,下次開啟自動補送
+    hideLoad(); $('submitBtn').disabled=false;
+    toast('訊號不穩,已暫存草稿,恢復訊號後自動補送','bad');
+  }
+}
+async function resendPending(){
+  const raw=localStorage.getItem('wl_pending'); if(!raw) return;
+  let p; try{ p=JSON.parse(raw); }catch(e){ localStorage.removeItem('wl_pending'); return; }
+  try{
+    const res=await sendPayload(p);
+    if(res && res.ok){ localStorage.removeItem('wl_pending'); toast('已自動補送先前未送出的日誌 ✓'+(p.photoDropped?'（照片請補拍）':''),'ok'); loadRecent(); }
+  }catch(e){ /* 仍無訊號,保留待下次自動補送 */ }
 }
 
 function showDone(sn){ $('doneSn').textContent=sn; $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden'); $('submitBtn').disabled=false; }
 function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); $('f_subject').focus(); }
 function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); }
 
-/* ---------- 近期日誌 ---------- */
+/* ---------- 近期日誌（限 200 筆 + 本地快取秒開）---------- */
+function readRecentCache(){ try{ const a=JSON.parse(localStorage.getItem('wl_recent_v1')||'null'); return (a&&a.length)?a:null; }catch(e){ return null; } }
+function writeRecentCache(recs){ try{ if(recs&&recs.length) localStorage.setItem('wl_recent_v1', JSON.stringify(recs)); }catch(e){} }
+function renderRecent(all){
+  const box=$('recentList');
+  const me=((S.pick.lead||S.myName)||'').trim();
+  let recs=all.filter(x=> !me || (x['負責主任']||'')===me );
+  recs.sort((a,b)=> String(b['登打日期']||'').localeCompare(String(a['登打日期']||'')) );
+  recs=recs.slice(0,8);
+  if(!recs.length){ box.innerHTML='<div class="hint">'+(me?('「'+esc(me)+'」'):'')+'目前沒有日誌紀錄</div>'; return; }
+  box.innerHTML=recs.map(x=>{
+    const d=(x['執行日期']||'').slice(5)||'—';
+    const subj=x['施工主題']||'(未填主題)';
+    const main=x['工務主類別']||''; const item=x['施作項目名稱']||'';
+    const sn=x['序列號']||'';
+    return '<div class="it"><div class="dt">'+esc(d)+'<br><span style="color:#94a3b8;font-size:11px">'+esc(sn)+'</span></div>'+
+      '<div class="ti">'+esc(subj)+'<small>'+esc([main,item].filter(Boolean).join(' · '))+'</small></div>'+
+      (main?'<div class="tag">'+esc(main)+'</div>':'')+'</div>';
+  }).join('');
+}
 async function loadRecent(){
-  const box=$('recentList'); box.innerHTML='<div class="hint">載入中…</div>';
+  const box=$('recentList');
+  const cached=readRecentCache();
+  if(cached){ renderRecent(cached); } else { box.innerHTML='<div class="hint">載入中…</div>'; }
   try{
-    const r=await callRagic('?api', { method:'GET' });
+    const r=await callRagic('?api&limit=200', { method:'GET' });   // 只取最近 200 筆,省流量
     const json=await r.json();
     let all=[];
     Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) all.push(rec); });
-    syncStaff(all);   // 自動從記錄長出人員名單
-    const me=((S.pick.lead||S.myName)||'').trim();
-    let recs = all.filter(x=> !me || (x['負責主任']||'')===me );
-    recs.sort((a,b)=> String(b['登打日期']||'').localeCompare(String(a['登打日期']||'')) );
-    recs=recs.slice(0,8);
-    if(!recs.length){ box.innerHTML='<div class="hint">'+(me?('「'+esc(me)+'」'):'')+'目前沒有日誌紀錄</div>'; return; }
-    box.innerHTML=recs.map(x=>{
-      const d=(x['執行日期']||'').slice(5)||'—';
-      const subj=x['施工主題']||'(未填主題)';
-      const main=x['工務主類別']||''; const item=x['施作項目名稱']||'';
-      const sn=x['序列號']||'';
-      return '<div class="it"><div class="dt">'+esc(d)+'<br><span style="color:#94a3b8;font-size:11px">'+esc(sn)+'</span></div>'+
-        '<div class="ti">'+esc(subj)+'<small>'+esc([main,item].filter(Boolean).join(' · '))+'</small></div>'+
-        (main?'<div class="tag">'+esc(main)+'</div>':'')+'</div>';
-    }).join('');
-  }catch(e){ box.innerHTML='<div class="hint">近期紀錄載入失敗</div>'; }
+    if(all.length){ writeRecentCache(all); syncStaff(all); renderRecent(all); }
+    else if(!cached){ renderRecent([]); }
+  }catch(e){ if(!cached) box.innerHTML='<div class="hint">近期紀錄載入失敗(可能訊號不穩)</div>'; }
 }
 
 /* ---------- 啟動 ---------- */
