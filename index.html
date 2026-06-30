@@ -300,7 +300,11 @@ const CONFIG = {
       start_date:     1002900,
       shift:          1002921,
       dependents:     1002940,
-      line_user_id:   1003042
+      line_user_id:   1003042,
+      init_annual_used: 1003051,
+      init_sick:        1003052,
+      init_personal:    1003053,
+      init_reg_date:    1003054
     },
     R: {
       email:          1002871,
@@ -413,7 +417,8 @@ const FNAME_MAP = {
     'Email':1002864,'姓名':1002865,'平日時薪':1002866,
     '假日時薪':1002867,'顏色標籤':1002868,'啟用':1002869,
     '大頭照':1002897,'員工類型':1002898,'月薪':1002899,'到職日':1002900,
-    '班別':1002921,'眷口數':1002940,'LINE userId':1003042
+    '班別':1002921,'眷口數':1002940,'LINE userId':1003042,
+    '期初已用特休':1003051,'期初病假':1003052,'期初事假':1003053,'期初登錄日':1003054
   },
   'check-in-system/3': {
     'Email':1002871,'姓名':1002872,'日期':1002873,
@@ -560,6 +565,25 @@ function calcAnnualLeave(startDateStr) {
   if (years < 5)  return 14;
   if (years < 10) return 15;
   return Math.min(15 + Math.floor(years - 10), 30);
+}
+// 日期→YYYYMMDD 整數（容錯 / 或 - 分隔、時間後綴）；與 LINE bot ymd 一致，純整數比對避免時區
+function ymdInt(ds) { const p = String(ds || '').replace(/\//g, '-').split('T')[0].split(' ')[0].split('-').map(Number); return p.length >= 3 ? p[0] * 10000 + p[1] * 100 + p[2] : 0; }
+// 到職週年制本年度區間 [startN, endN)（YYYYMMDD 整數；與 LINE bot attYearWindow 一致）
+function annYearWindow(startStr) {
+  const [jy, jm, jd] = String(startStr || '').replace(/\//g, '-').split('-').map(Number);
+  const now = new Date(), ty = now.getFullYear();
+  const todayN = ty * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+  const startY = todayN < (ty * 10000 + jm * 100 + jd) ? ty - 1 : ty;  // 今年週年還沒到→退一年
+  return { startY, jy, startN: startY * 10000 + jm * 100 + jd, endN: (startY + 1) * 10000 + jm * 100 + jd };
+}
+// 特休已用(天) = 到職週年區間內已核准特休時數 + 期初已用特休(時) ÷ 每日工時（與 LINE bot 一致；期初最常被忘）
+function annualUsedDays(w, leaves, shHours) {
+  if (!w || !w.start_date) return 0;
+  const win = annYearWindow(w.start_date);
+  const inWin = ds => { const n = ymdInt(ds); return n >= win.startN && n < win.endN; };
+  const initH = (w.init_reg_date && inWin(w.init_reg_date)) ? (Number(w.init_annual_used) || 0) : 0;
+  const sysH = (leaves || []).filter(l => l.email === w.email && l.leave_type === '特休' && l.status === 'approved' && inWin(l.start_date)).reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
+  return Math.round((sysH + initH) / shHours * 100) / 100;
 }
 
 function getWorkDays(year, month) {
@@ -1513,7 +1537,11 @@ async function getAllWorkers() {
     monthly_salary: Number(r[F.monthly_salary]) || 0,
     start_date:     r[F.start_date] || '',
     shift:          r[F.shift] || '',
-    dependents:     Number(F.dependents ? r[F.dependents] : 0) || 0
+    dependents:     Number(F.dependents ? r[F.dependents] : 0) || 0,
+    init_annual_used: Number(r[F.init_annual_used]) || 0,
+    init_sick:        Number(r[F.init_sick]) || 0,
+    init_personal:    Number(r[F.init_personal]) || 0,
+    init_reg_date:    r[F.init_reg_date] || ''
   }));
 }
 
@@ -2031,9 +2059,7 @@ async function viewReport() {
       // 特休：應有 / 已用(當年度特休請假時數→天) / 剩餘
       const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
       const shHours = sh ? sh.hours : 8;
-      const usedAnnual = isFull ? Math.round(
-        leaves.filter(l => l.email === w.email && l.leave_type === '特休' && l.status === 'approved' && (l.start_date || '').startsWith(String(CUR_YEAR)))
-          .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
+      const usedAnnual = isFull ? annualUsedDays(w, leaves, shHours) : 0;  // 到職週年區間特休 + 期初已用特休（與 LINE 同步）
       const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const compRemain = calcOtBalance(otAll.filter(o => o.email === w.email));
@@ -2209,9 +2235,7 @@ function showReportDetail(email) {
 
   // 特休
   const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
-  const usedAnnual = isFull ? Math.round(
-    leaves.filter(l => l.email === email && l.leave_type === '特休' && l.status === 'approved' && (l.start_date || '').startsWith(String(year)))
-      .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / shHours * 100) / 100 : 0;
+  const usedAnnual = isFull ? annualUsedDays(w, leaves, shHours) : 0;  // 到職週年區間特休 + 期初已用特休（與 LINE 同步）
 
   // 薪資彙整
   const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
