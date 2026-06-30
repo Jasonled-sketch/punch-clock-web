@@ -817,7 +817,10 @@ async function loadMyWorker() {
         color: r[F.color] || '#1a73e8',
         photo: resolvePhotoUrl(r._ragicId, rawPhoto) || ME.picture || '',
         shift: r[F.shift] || '',
-        emp_type: r[F.emp_type] || '工讀生'
+        emp_type: r[F.emp_type] || '工讀生',
+        start_date: r[F.start_date] || '',
+        init_annual_used: Number(r[F.init_annual_used]) || 0,
+        init_reg_date: r[F.init_reg_date] || ''
       };
       // 若 Ragic 尚無大頭照，自動把 Google 頭貼 URL 存入（fire & forget）
       if (!rawPhoto && ME.picture) {
@@ -3079,6 +3082,13 @@ async function saveLeave() {
   if (!date) { toast('請選擇請假日期', 'red'); return; }
   if (!start || !end) { toast('請填寫開始與結束時間', 'red'); return; }
   if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
+  // 特休餘額把關（與 LINE bot / 月報同步：到職週年區間已核准特休 + 期初已用特休；剩餘不足擋送出）
+  if (type === '特休' && MY_WORKER && MY_WORKER.emp_type !== '管理者') {
+    const total = calcAnnualLeave(MY_WORKER.start_date);
+    const usedLv = (_MY_LEAVES || []).filter(l => l.ragicId !== _LF_EDIT_ID);  // 編輯時排除本筆，避免重複計
+    const remain = Math.round((total - annualUsedDays(MY_WORKER, usedLv, _LF_SHIFT?.hours || 8)) * 100) / 100;
+    if (Number(days) > remain + 1e-9) { toast(`特休不足：本次需 ${days} 天，剩餘僅 ${remain} 天，無法送出`, 'red'); return; }
+  }
   const F = CONFIG.FID.L;
   const photoFile = document.getElementById('lf-photo')?.files?.[0];
   const fields = {
