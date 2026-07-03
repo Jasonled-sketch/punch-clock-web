@@ -63,6 +63,7 @@
     font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px;font-family:inherit}
   input,select,textarea{width:100%;font-size:16px;font-family:inherit;color:var(--ink);
     border:1.5px solid var(--line);border-radius:11px;padding:13px 13px;background:#fff;transition:border-color .15s}
+  select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M6 8 0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:34px}
   input:focus,select:focus,textarea:focus{outline:none;border-color:var(--sky)}
   textarea{resize:vertical;min-height:88px;line-height:1.6}
   textarea.big{min-height:130px}
@@ -75,26 +76,30 @@
   .grade-result .gr-meta small{font-size:11px;opacity:.85;margin-top:3px}
   .hint{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
 
-  /* 點選式按鈕組（取代下拉）*/
-  .pick{display:flex;flex-wrap:wrap;gap:9px}
-  .pick:empty::after{content:'（請先選上一層）';color:#94a3b8;font-size:13px}
+  /* 點選式按鈕組（等大對齊 3 欄格）*/
+  .pick{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .pick:empty::after{content:'（請先選上一層）';color:#94a3b8;font-size:13px;grid-column:1/-1}
   .pick button{border:1.5px solid var(--line);background:#fff;color:#334155;border-radius:12px;
-    padding:12px 16px;font-size:15.5px;font-weight:600;font-family:inherit;min-height:46px;transition:.12s}
+    padding:11px 6px;font-size:14px;font-weight:600;font-family:inherit;min-height:48px;transition:.12s;
+    display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.25}
   .pick button.on{background:var(--sky);border-color:var(--sky);color:#fff;box-shadow:0 2px 10px rgba(14,165,233,.32)}
   .pick button.add{border-style:dashed;color:var(--sky);background:#f8fafc}
   .pick button:active{transform:scale(.97)}
 
-  /* 分段（滿版二/三選一）*/
+  /* 分段（滿版）*/
   .seg{display:flex;gap:9px;flex-wrap:wrap}
   .seg button{flex:1 1 28%;border:1.5px solid var(--line);background:#fff;color:#475569;
     border-radius:12px;padding:13px 8px;font-size:15.5px;font-weight:700;font-family:inherit;min-height:48px}
   .seg button.on{background:var(--sky);border-color:var(--sky);color:#fff;box-shadow:0 2px 10px rgba(14,165,233,.3)}
   .seg button:active{transform:scale(.98)}
+  /* 緊湊分段（一行塞多顆：電壓6顆、難易度5顆）*/
+  .seg.compact{flex-wrap:nowrap;gap:5px}
+  .seg.compact button{flex:1 1 0;min-width:0;padding:10px 2px;font-size:12px;min-height:42px;white-space:nowrap}
 
-  /* 協做員 chips（可複選）*/
+  /* 協做員 / 額外狀況 chips（可複選）*/
   .chips{display:flex;flex-wrap:wrap;gap:9px}
   .chips .chip{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:22px;
-    padding:10px 17px;font-size:14.5px;font-weight:600;font-family:inherit;min-height:44px}
+    padding:10px 15px;font-size:14px;font-weight:600;font-family:inherit;min-height:42px}
   .chips .chip.on{background:#0ea5e91a;border-color:var(--sky);color:var(--sky-d)}
   .chips .chip.add{border-style:dashed;color:var(--sky)}
 
@@ -251,30 +256,37 @@
       </div>
     </div>
 
-    <!-- 4 現場狀況（內部時隱藏）-->
+    <!-- 4 現場狀況（內部/送貨時隱藏）-->
     <div class="card" id="card_site">
       <div class="sec-t"><span class="n">4</span>現場狀況</div>
       <div class="field">
         <label class="lb">設備使用電壓</label>
-        <div class="seg" id="seg_volt"></div>
+        <div class="seg compact" id="seg_volt"></div>
       </div>
       <div class="row2">
         <div class="field">
           <label class="lb">現場最高點<span class="opt">米</span></label>
-          <input type="number" id="f_height" inputmode="decimal" placeholder="例：3.5">
+          <select id="f_height" onchange="calcGrade()">
+            <option value="">請選擇</option>
+            <option value="1">1 米</option><option value="1.5">1.5 米</option>
+            <option value="2">2 米</option><option value="2.5">2.5 米</option>
+            <option value="3">3 米</option><option value="3.5">3.5 米</option>
+            <option value="4">4 米</option><option value="4.5">4.5 米</option>
+            <option value="5">5 米</option><option value="5.5">5.5 米</option>
+            <option value="6">6 米</option><option value="6.5">6.5 米</option>
+            <option value="7">7 米</option><option value="7.5">7.5 米</option>
+          </select>
         </div>
         <div class="field">
-          <label class="lb">是否收款</label>
-          <div class="seg" id="seg_pay"></div>
+          <label class="lb">使用梯子</label>
+          <select id="f_ladder">
+            <option value="">請選擇</option>
+            <option>1.0–1.8m（無）</option><option>1.8–3.0m（6尺梯）</option>
+            <option>3.0–3.5m（7尺梯）</option><option>3.5–3.9m（8尺梯）</option>
+            <option>3.9–4.3m（10尺梯）</option><option>4.3–4.8m（12尺梯）</option>
+            <option>4.8–5.3m（長拉梯）</option><option>5.3m以上（需吊車）</option>
+          </select>
         </div>
-      </div>
-      <div class="field" id="payNoteWrap" style="display:none">
-        <label class="lb">收款／款項說明<span class="opt">選填</span></label>
-        <input type="text" id="f_payNote" placeholder="例：1600 現金 / 待匯款" autocomplete="off">
-      </div>
-      <div class="field">
-        <label class="lb">使用梯子</label>
-        <div class="pick" id="pick_ladder"></div>
       </div>
       <div class="field">
         <label class="lb">現場備註<span class="opt">選填</span></label>
@@ -290,8 +302,12 @@
         <textarea id="f_process" class="big" placeholder="施工步驟、用料、工法、配置…（可分行）"></textarea>
       </div>
       <div class="field">
-        <label class="lb">覆盤 AAR<span class="opt">檢討／學習，選填</span></label>
-        <textarea id="f_aar" placeholder="這次學到什麼？下次怎麼更好？有無待辦二次工…"></textarea>
+        <label class="lb">是否收款</label>
+        <div class="seg" id="seg_pay"></div>
+      </div>
+      <div class="field" id="payNoteWrap" style="display:none">
+        <label class="lb">收款金額 $<span class="opt">選填</span></label>
+        <input type="number" id="f_payNote" inputmode="decimal" placeholder="例：1600" autocomplete="off">
       </div>
       <div class="field">
         <label class="lb">現場照片<span class="opt">可多張</span></label>
@@ -305,6 +321,10 @@
     <div class="card">
       <div class="sec-t"><span class="n">6</span>自我檢核</div>
       <div id="checks"></div>
+      <div class="field" style="margin-top:14px">
+        <label class="lb">覆盤 AAR<span class="opt">檢討／學習，選填</span></label>
+        <textarea id="f_aar" placeholder="這次學到什麼？下次怎麼更好？有無待辦二次工…"></textarea>
+      </div>
     </div>
 
     <!-- 7 工務評級（外務時顯示）-->
@@ -312,29 +332,33 @@
       <div class="sec-t"><span class="n">7</span>工務評級<span class="opt" style="margin-left:auto;font-weight:500">選填·難度評分</span></div>
       <div class="grade-result">
         <div class="gr-lv" id="g_lv">Lv.0</div>
-        <div class="gr-meta"><span id="g_score">0 分</span><small id="g_breakdown">距離0 高度0 材積0 固定0 難度0</small></div>
+        <div class="gr-meta"><span id="g_score">0 分</span><small id="g_breakdown">—</small></div>
       </div>
       <div class="field">
-        <label class="lb">直線距離<span class="opt">km</span></label>
-        <input type="number" id="g_km" inputmode="decimal" placeholder="例：25">
+        <label class="lb">工務類型<span class="opt">快捷</span></label>
+        <div class="pick" id="grade_quick"></div>
       </div>
       <div class="field">
-        <label class="lb">施工固定難度</label>
-        <div class="seg" id="seg_fix"></div>
+        <label class="lb">直線距離<span class="opt">km · 公司↔現場來回</span></label>
+        <input type="number" id="g_km" inputmode="decimal" placeholder="例：50" oninput="calcGrade()">
       </div>
       <div class="field">
+        <label class="lb">施工難易度</label>
+        <div class="seg compact" id="seg_fix"></div>
+      </div>
+      <div class="field" id="field_vol">
         <label class="lb">看板材積<span class="opt">公分·長×寬×高</span></label>
         <div class="row3">
-          <input type="number" id="g_vl" inputmode="decimal" placeholder="長">
-          <input type="number" id="g_vw" inputmode="decimal" placeholder="寬">
-          <input type="number" id="g_vh" inputmode="decimal" placeholder="高">
+          <input type="number" id="g_vl" inputmode="decimal" placeholder="長" oninput="calcGrade()">
+          <input type="number" id="g_vw" inputmode="decimal" placeholder="寬" oninput="calcGrade()">
+          <input type="number" id="g_vh" inputmode="decimal" placeholder="高" oninput="calcGrade()">
         </div>
       </div>
       <div class="field">
         <label class="lb">額外狀況<span class="opt">可複選</span></label>
         <div class="chips" id="gradeExtra"></div>
       </div>
-      <div class="hint">高度分數自動取自上方「使用梯子」；此評級選填,僅供難度參考。</div>
+      <div class="hint">高度分數自動取自上方「現場最高點」（戶外高空已含在高度內）。</div>
     </div>
 
     <!-- 近期 -->
@@ -374,16 +398,13 @@
 
 <script>
 /* ====================================================================
-   USLED 工務行程日誌 — 單檔手機 PWA
-   寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy 代理
-   v3：三層連動（工務內外 → 主類別 → 次類別），選項取自 Ragic 表單實際設定
+   USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
 const CFG = {
   WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
   PATH: '/forms2/18',
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
-  // 前端白名單：只有這些 Google 帳號登入後進得去（空陣列＝全部放行）。要加人就把 email 加進這個清單
-  ALLOWED: ['qaz0989514613@gmail.com','covernself@gmail.com'],
+  ALLOWED: ['qaz0989514613@gmail.com','covernself@gmail.com'],   // 前端白名單
   F: {
     execDate:1002615, execDate2:1002585, logTime:1002578,
     lead:1002620, coworkers:1002619, io:1002592, subject:1002618,
@@ -391,11 +412,10 @@ const CFG = {
     volt:1002790, height:1002791, ladder:1002789, pay:1002785,
     siteNote:1002590, process:1002788, aar:1002778, photo:1002622,
     toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643,
-    workLevel:1003079    // 「工務等級」欄（自由輸入），寫入如「Lv.5（55分）」
+    workLevel:1003079
   },
-  STAFF: ['偉智','俊男'],
+  STAFF: ['偉智','俊男','阿維'],
   IO: ['🌄外務','🏠內部'],
-  // 三層連動：工務內外 → 工務主類別 → 工務次類別（取自 Ragic 表單「選項連動」設定）
   CASCADE: {
     '🌄外務': {
       main: ['安裝','維修','丈量','送貨'],
@@ -422,7 +442,6 @@ const CFG = {
   OPT: {
     volt: ['AC 110V','AC 220V','DC 12V','DC 24V','DC 05V','暫時未知'],
     pay:  ['無','有'],
-    ladder:['1.0–1.8m（無）','1.8–3.0m（6尺梯）','3.0–3.5m（7尺梯）','3.5–3.9m（8尺梯）','3.9–4.3m（10尺梯）','4.3–4.8m（12尺梯）','4.8–5.3m（長拉梯）','5.3m以上（需吊車）'],
     item: ['前置加工','現場-丈量/安裝','現場-維修/補強']
   },
   CHECKS: [
@@ -432,16 +451,26 @@ const CFG = {
     {k:'suggest',  t:'是否有精進建議？'}
   ],
   EMAIL2NAME: { 'qaz0989514613@gmail.com':'偉智', 'covernself@gmail.com':'俊男' },
-  // ── 工務評級（精簡版,權重取自 led-tools）──
+  // ── 工務評級 ──
   GRADE: {
-    LADDER_SCORE: { '1.0–1.8m（無）':2,'1.8–3.0m（6尺梯）':5,'3.0–3.5m（7尺梯）':8,'3.5–3.9m（8尺梯）':11,'3.9–4.3m（10尺梯）':14,'4.3–4.8m（12尺梯）':17,'4.8–5.3m（長拉梯）':19,'5.3m以上（需吊車）':20 },
-    FIX: [{t:'簡單',v:0},{t:'普通',v:7},{t:'困難',v:14},{t:'極難',v:20}],
-    EXTRA: [{k:'demo',t:'拆舊機',p:5},{k:'elec',t:'電工拉電',p:4},{k:'struct',t:'結構鐵架',p:5},{k:'outdoor',t:'戶外高空',p:5},{k:'signal',t:'訊號網路',p:3}],
+    QUICK: ['屏幕安裝','屏幕維修','招牌施作','燈具施作','亮化施工'],
+    MATERIAL_QUICK: ['屏幕安裝','屏幕維修','招牌施作'],   // 只有這幾類才出現看板材積
+    FIX: [{t:'簡易',v:0},{t:'普通',v:5},{t:'複雜',v:10},{t:'困難',v:15},{t:'艱鉅',v:20}],
+    EXTRA: [
+      {k:'demo_m',t:'拆舊機-中型',p:3},
+      {k:'demo_l',t:'拆舊機-大型',p:6},
+      {k:'elec_c',t:'電工-複雜串接',p:4},
+      {k:'elec_d',t:'電工-長距配接',p:3},
+      {k:'switch',t:'額外開關配置',p:3},
+      {k:'struct',t:'結構鐵架',p:5},
+      {k:'signal',t:'訊號網路',p:3},
+      {k:'rain',  t:'下雨施作',p:4}
+    ],
     LEVELS: [[0,6],[7,14],[15,22],[23,33],[34,46],[47,56],[57,66],[67,76],[77,88],[89,999]]
   }
 };
 
-const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{}, grade:{fix:0,extra:{},score:0,lv:0} };
+const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{}, grade:{fix:0,extra:{},score:0,lv:0,quick:''} };
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -535,7 +564,6 @@ function buildCoChips(){
   add.onclick=()=>{ const n=(prompt('輸入協做員姓名')||'').trim(); if(!n||S.coworkers.includes(n))return; S.coworkers.push(n); const c=document.createElement('button'); c.type='button'; c.className='chip on'; c.textContent=n; bind(c,n); w.insertBefore(c, add); };
   w.appendChild(add);
 }
-// 自動從日誌記錄長出人員名單（負責主任＋協做參與員），零維護、不碰薪資
 function syncStaff(recs){
   const set=new Set(CFG.STAFF);
   recs.forEach(x=>{
@@ -568,7 +596,6 @@ function buildChecks(){
 
 /* ---------- 工務分類三層連動 + 智能顯示／預設 ---------- */
 const ITEM_DEFAULT = { '安裝':'現場-丈量/安裝', '維修':'現場-維修/補強', '丈量':'現場-丈量/安裝' };
-// 只有「外務且非送貨」才顯示 施作項目 + 現場狀況（內部、送貨皆隱藏）
 function siteShown(){ return S.mode==='🌄外務' && S.pick.main!=='送貨'; }
 function renderMain(){
   const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
@@ -577,13 +604,13 @@ function renderMain(){
 }
 function onMainPick(){
   S.pick.sub='';
-  S.pick.item = ITEM_DEFAULT[S.pick.main] || '';   // 智能預設施作項目
+  S.pick.item = ITEM_DEFAULT[S.pick.main] || '';
   renderSub(); renderItem(); applyModeVis();
 }
 function renderSub(){
   const m = CFG.CASCADE[S.mode] || {main:[],sub:{}};
   const subs = (S.pick.main && m.sub[S.pick.main]) ? m.sub[S.pick.main].slice() : [];
-  if(subs.length===1) S.pick.sub = subs[0];   // 智能：單一選項自動帶入
+  if(subs.length===1) S.pick.sub = subs[0];
   buildPick('pick_sub','sub', subs, {custom:false, prompt:'工務次類別'});
   const h=$('catHint');
   if(!S.pick.main){ h.style.display='block'; h.textContent='選好上面的「工務主類別」，這裡會自動帶出對應的次類別。'; }
@@ -592,24 +619,34 @@ function renderSub(){
 function renderItem(){
   buildPick('pick_item','item', CFG.OPT.item.slice(), {custom:false, clearable:false, prompt:'施作項目'});
 }
+function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderMain(); }
+function applyModeVis(){
+  const show = siteShown();
+  ['field_item','card_site','card_grade'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
+}
 
-/* ---------- 工務評級（精簡,權重取自 led-tools）---------- */
+/* ---------- 工務評級 ---------- */
 function getLevel(score){ const t=CFG.GRADE.LEVELS; for(let i=0;i<t.length;i++){ if(score>=t[i][0]&&score<=t[i][1]) return i; } return 9; }
+function heightScore(m){ if(!m||m<=0)return 0; if(m<=1.8)return 2; if(m<=3.0)return 5; if(m<=3.5)return 8; if(m<=3.9)return 11; if(m<=4.3)return 14; if(m<=4.8)return 17; if(m<=5.3)return 19; return 20; }
+function toggleMaterial(){ const show=CFG.GRADE.MATERIAL_QUICK.indexOf(S.grade.quick)>=0; const e=$('field_vol'); if(e) e.style.display=show?'':'none'; }
 function buildGrade(){
-  S.grade={fix:0,extra:{},score:0,lv:0};
+  S.grade={fix:0,extra:{},score:0,lv:0,quick:''};
+  const q=$('grade_quick'); q.innerHTML='';
+  CFG.GRADE.QUICK.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.dataset.v=v; b.textContent=v; b.onclick=()=>{ S.grade.quick=(S.grade.quick===v?'':v); [...q.children].forEach(c=>c.classList.toggle('on', c.dataset.v===S.grade.quick && S.grade.quick!=='')); toggleMaterial(); calcGrade(); }; q.appendChild(b); });
   const w=$('seg_fix'); w.innerHTML='';
   CFG.GRADE.FIX.forEach((o,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=o.t; if(i===0)b.classList.add('on'); b.onclick=()=>{ S.grade.fix=o.v; [...w.children].forEach(c=>c.classList.toggle('on',c===b)); calcGrade(); }; w.appendChild(b); });
   const g=$('gradeExtra'); g.innerHTML='';
   CFG.GRADE.EXTRA.forEach(o=>{ S.grade.extra[o.k]=false; const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=o.t+' +'+o.p; c.onclick=()=>{ S.grade.extra[o.k]=!S.grade.extra[o.k]; c.classList.toggle('on',S.grade.extra[o.k]); calcGrade(); }; g.appendChild(c); });
-  ['g_km','g_vl','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e){ e.value=''; e.oninput=calcGrade; } });
-  calcGrade();
+  ['g_km','g_vl','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
+  toggleMaterial(); calcGrade();
 }
 function calcGrade(){
   const num=id=>parseFloat(($(id)||{}).value)||0;
   const km=num('g_km');
   const sKm = km<=0?0: km<=15?2: km<=30?5: km<=50?8: km<=80?11: km<=120?13:15;
-  const sH = CFG.GRADE.LADDER_SCORE[S.pick.ladder]||0;
-  const vol=(num('g_vl')*num('g_vw')*num('g_vh'))/27000;
+  const sH = heightScore(num('f_height'));
+  const showMat = CFG.GRADE.MATERIAL_QUICK.indexOf(S.grade.quick)>=0;
+  const vol = showMat ? (num('g_vl')*num('g_vw')*num('g_vh'))/27000 : 0;
   const sV = vol<=0?0: vol<=1?2: vol<=3?5: vol<=6?9: vol<=15?12: vol<=30?14:15;
   const sF = S.grade.fix||0;
   let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>30)sC=30;
@@ -617,12 +654,7 @@ function calcGrade(){
   S.grade.score=total; S.grade.lv=getLevel(total);
   if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;
   if($('g_score')) $('g_score').textContent=total+' 分';
-  if($('g_breakdown')) $('g_breakdown').textContent='距離'+sKm+' 高度'+sH+' 材積'+sV+' 固定'+sF+' 難度'+sC;
-}
-function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderMain(); }
-function applyModeVis(){
-  const show = siteShown();
-  ['field_item','card_site','card_grade'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
+  if($('g_breakdown')) $('g_breakdown').textContent='距離'+sKm+' 高度'+sH+(showMat?(' 材積'+sV):'')+' 難易'+sF+' 加項'+sC;
 }
 
 /* ---------- 建立／重置表單 ---------- */
@@ -637,12 +669,11 @@ function buildForm(){
   buildSeg('seg_volt','volt', CFG.OPT.volt, 'AC 110V');
   buildSeg('seg_pay','pay', CFG.OPT.pay, '無');
   $('payNoteWrap').style.display='none';
-  buildPick('pick_ladder','ladder', CFG.OPT.ladder.slice(), {custom:false, onpick:calcGrade, prompt:'輸入梯子／高度'});
   buildChecks();
   buildGrade();
   renderPhotos();
   applyModeVis();
-  ['f_subject','f_arrive','f_leave','f_height','f_payNote','f_siteNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  ['f_subject','f_arrive','f_leave','f_height','f_ladder','f_payNote','f_siteNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
 }
 
 /* ---------- 照片 ---------- */
@@ -684,8 +715,8 @@ async function callRagic(suffix, opts){
 /* ---------- 送出（含弱訊號離線補送）---------- */
 function buildPayload(){
   const F=CFG.F, need=siteShown();
-  let payVal=S.seg.pay; const payNote=$('f_payNote').value.trim();
-  if(payVal==='有') payVal = payNote? ('有 '+payNote) : '有';
+  let payVal=S.seg.pay; const payAmt=$('f_payNote').value.trim();
+  if(payVal==='有') payVal = payAmt? ('有 '+payAmt) : '有';
   const f=[];
   f.push([F.execDate,dateToRagic($('f_date').value)],[F.execDate2,dateToRagic($('f_date').value)],[F.logTime,nowRagic()],[F.lead,(S.pick.lead||'').trim()]);
   S.coworkers.forEach(n=>f.push([F.coworkers,n]));
@@ -694,14 +725,14 @@ function buildPayload(){
   if($('f_leave').value)  f.push([F.leave,timeToRagic($('f_leave').value)]);
   if(S.pick.main) f.push([F.main,S.pick.main]);
   if(S.pick.sub)  f.push([F.sub,S.pick.sub]);
+  f.push([F.pay,payVal]);   // 收款（在工作紀錄區，一律寫）
   if(need){
     if(S.pick.item) f.push([F.item,S.pick.item]);
     f.push([F.volt,S.seg.volt]);
-    if($('f_height').value.trim()) f.push([F.height,$('f_height').value.trim()]);
-    if(S.pick.ladder) f.push([F.ladder,S.pick.ladder]);
-    f.push([F.pay,payVal]);
+    if($('f_height').value) f.push([F.height,$('f_height').value]);
+    if($('f_ladder').value) f.push([F.ladder,$('f_ladder').value]);
     if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
-    if(F.workLevel && S.grade.score>0) f.push([F.workLevel,'Lv.'+S.grade.lv+'（'+S.grade.score+'分）']);
+    if(F.workLevel && S.grade.score>0){ const q=S.grade.quick?(S.grade.quick+'｜'):''; f.push([F.workLevel, q+'Lv.'+S.grade.lv+'（'+S.grade.score+'分）']); }
   }
   if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
   if($('f_aar').value.trim())     f.push([F.aar,$('f_aar').value.trim()]);
@@ -734,7 +765,7 @@ async function submitLog(){
     if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); hideLoad(); showDone(res.sn); }
     else { hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+res.msg,'bad'); }
   }catch(e){
-    savePending(p);   // 弱訊號/離線 → 暫存,下次開啟自動補送
+    savePending(p);
     hideLoad(); $('submitBtn').disabled=false;
     toast('訊號不穩,已暫存草稿,恢復訊號後自動補送','bad');
   }
@@ -745,7 +776,7 @@ async function resendPending(){
   try{
     const res=await sendPayload(p);
     if(res && res.ok){ localStorage.removeItem('wl_pending'); toast('已自動補送先前未送出的日誌 ✓'+(p.photoDropped?'（照片請補拍）':''),'ok'); loadRecent(); }
-  }catch(e){ /* 仍無訊號,保留待下次自動補送 */ }
+  }catch(e){}
 }
 
 function showDone(sn){ $('doneSn').textContent=sn; $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden'); $('submitBtn').disabled=false; }
@@ -777,7 +808,7 @@ async function loadRecent(){
   const cached=readRecentCache();
   if(cached){ renderRecent(cached); } else { box.innerHTML='<div class="hint">載入中…</div>'; }
   try{
-    const r=await callRagic('?api&limit=200', { method:'GET' });   // 只取最近 200 筆,省流量
+    const r=await callRagic('?api&limit=200', { method:'GET' });
     const json=await r.json();
     let all=[];
     Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) all.push(rec); });
