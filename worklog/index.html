@@ -342,10 +342,6 @@
         <label class="lb">直線距離<span class="opt">km · 公司↔現場來回</span></label>
         <input type="number" id="g_km" inputmode="decimal" placeholder="例：50" oninput="calcGrade()">
       </div>
-      <div class="field">
-        <label class="lb">施工難易度</label>
-        <div class="seg compact" id="seg_fix"></div>
-      </div>
       <div class="field" id="field_vol">
         <label class="lb">看板材積<span class="opt">公分·長×寬×高</span></label>
         <div class="row3">
@@ -455,8 +451,8 @@ const CFG = {
   // ── 工務評級 ──
   GRADE: {
     QUICK: ['屏幕安裝','屏幕維修','招牌施作','燈具施作','亮化施工'],
+    QUICK_BASE: { '屏幕安裝':25, '招牌施作':22, '屏幕維修':14, '亮化施工':14, '燈具施作':8 },  // 工作類型基礎分（依工程量,可調）
     MATERIAL_QUICK: ['屏幕安裝','屏幕維修','招牌施作'],   // 只有這幾類才出現看板材積
-    FIX: [{t:'簡易',v:0},{t:'普通',v:5},{t:'複雜',v:10},{t:'困難',v:15},{t:'艱鉅',v:20}],
     EXTRA: [
       {k:'demo_m',t:'拆舊機-中型',p:3},
       {k:'demo_l',t:'拆舊機-大型',p:6},
@@ -628,11 +624,9 @@ function getLevel(score){ const t=CFG.GRADE.LEVELS; for(let i=0;i<t.length;i++){
 function heightScore(m){ if(!m||m<=0)return 0; if(m<=1.8)return 2; if(m<=3.0)return 5; if(m<=3.5)return 8; if(m<=3.9)return 11; if(m<=4.3)return 14; if(m<=4.8)return 17; if(m<=5.3)return 19; return 20; }
 function toggleMaterial(){ const show=CFG.GRADE.MATERIAL_QUICK.indexOf(S.grade.quick)>=0; const e=$('field_vol'); if(e) e.style.display=show?'':'none'; }
 function buildGrade(){
-  S.grade={fix:0,extra:{},score:0,lv:0,quick:''};
+  S.grade={extra:{},score:0,lv:0,quick:''};
   const q=$('grade_quick'); q.innerHTML='';
   CFG.GRADE.QUICK.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.dataset.v=v; b.textContent=v; b.onclick=()=>{ S.grade.quick=(S.grade.quick===v?'':v); [...q.children].forEach(c=>c.classList.toggle('on', c.dataset.v===S.grade.quick && S.grade.quick!=='')); toggleMaterial(); calcGrade(); }; q.appendChild(b); });
-  const w=$('seg_fix'); w.innerHTML='';
-  CFG.GRADE.FIX.forEach((o,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=o.t; if(i===0)b.classList.add('on'); b.onclick=()=>{ S.grade.fix=o.v; [...w.children].forEach(c=>c.classList.toggle('on',c===b)); calcGrade(); }; w.appendChild(b); });
   const g=$('gradeExtra'); g.innerHTML='';
   CFG.GRADE.EXTRA.forEach(o=>{ S.grade.extra[o.k]=false; const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=o.t+' +'+o.p; c.onclick=()=>{ S.grade.extra[o.k]=!S.grade.extra[o.k]; c.classList.toggle('on',S.grade.extra[o.k]); calcGrade(); }; g.appendChild(c); });
   ['g_km','g_vl','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
@@ -640,19 +634,19 @@ function buildGrade(){
 }
 function calcGrade(){
   const num=id=>parseFloat(($(id)||{}).value)||0;
+  const base = CFG.GRADE.QUICK_BASE[S.grade.quick]||0;   // 工作類型基礎分
   const km=num('g_km');
-  const sKm = km<=0?0: km<=15?2: km<=30?5: km<=50?8: km<=80?11: km<=120?13:15;
+  const sKm = km<=0?0: km<=20?2: km<=40?5: km<=70?8: km<=110?11: km<=160?13:15;   // 來回距離,放寬級距
   const sH = heightScore(num('f_height'));
   const showMat = CFG.GRADE.MATERIAL_QUICK.indexOf(S.grade.quick)>=0;
   const vol = showMat ? (num('g_vl')*num('g_vw')*num('g_vh'))/27000 : 0;
   const sV = vol<=0?0: vol<=1?2: vol<=3?5: vol<=6?9: vol<=15?12: vol<=30?14:15;
-  const sF = S.grade.fix||0;
-  let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>30)sC=30;
-  const total=sKm+sH+sV+sF+sC;
+  let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>25)sC=25;
+  const total=base+sKm+sH+sV+sC;   // 難度只算一次:類型基礎分 + 客觀加項
   S.grade.score=total; S.grade.lv=getLevel(total);
   if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;
   if($('g_score')) $('g_score').textContent=total+' 分';
-  if($('g_breakdown')) $('g_breakdown').textContent='距離'+sKm+' 高度'+sH+(showMat?(' 材積'+sV):'')+' 難易'+sF+' 加項'+sC;
+  if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+' 距離'+sKm+' 高度'+sH+(showMat?(' 材積'+sV):'')+' 加項'+sC;
 }
 
 /* ---------- 建立／重置表單 ---------- */
