@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -584,6 +584,28 @@ function annualUsedDays(w, leaves, shHours) {
   const initH = (w.init_reg_date && inWin(w.init_reg_date)) ? (Number(w.init_annual_used) || 0) : 0;
   const sysH = (leaves || []).filter(l => l.email === w.email && l.leave_type === '特休' && l.status === 'approved' && inWin(l.start_date)).reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
   return Math.round((sysH + initH) / shHours * 100) / 100;
+}
+
+// ══ 治本：特休數字改吃 bot 集中計算（單一來源）。本地 calcAnnualLeave/annualUsedDays 保留當 Railway 掛掉時的 fallback ══
+let _API_ANNUAL = null;  // { emailLower: {total,used,remain,expire} }；null＝未載或載入失敗→自動回退本地算
+async function loadApiAnnual() {
+  try {
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/leave-balance?all=1`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok || !Array.isArray(data.list)) return null;
+    const m = {};
+    data.list.forEach(x => { m[String(x.email || '').toLowerCase()] = { total: x.annual.capD, used: x.annual.usedD, remain: x.annual.remainD, expire: x.annual.expire }; });
+    return m;
+  } catch (e) { return null; }
+}
+// 取某員工特休 {total,used,remain}：優先用 API（與員工 LINE 同一份計算），API 沒有才回退本地算
+function annualNums(w, leaves, shHours, isFull) {
+  if (!isFull) return { total: 0, used: 0, remain: 0 };
+  const a = _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()];
+  if (a) return { total: a.total, used: a.used, remain: a.remain };
+  const total = calcAnnualLeave(w.start_date);
+  const used = annualUsedDays(w, leaves, shHours);
+  return { total, used, remain: Math.round((total - used) * 100) / 100 };
 }
 
 // ══ 試點：特休「本地算 vs 單一API算」對照（治本第一步；確認一致後再刪本地算改吃 API）══
@@ -2048,6 +2070,7 @@ async function viewReport() {
     // 試點：特休 本地算 vs 單一 API 對照（治本第一步，確認一致後再改吃 API）
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#7c3aed;color:#fff;padding:6px 14px" onclick="annualParityCheck()">🔍 特休 API 對照（驗證兩邊一致）</button><div id="parity-box" style="margin-top:8px"></div></div>`;
 
+    _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
       const sh = CONFIG.SHIFTS[w.shift];
@@ -2099,11 +2122,10 @@ async function viewReport() {
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
         : 0;
       const net = Math.round(base + ot.pay + holidayBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
-      // 特休：應有 / 已用(當年度特休請假時數→天) / 剩餘
-      const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
+      // 特休：改吃 bot 單一 API（與員工 LINE 同一份計算），API 沒有才回退本地算
       const shHours = sh ? sh.hours : 8;
-      const usedAnnual = isFull ? annualUsedDays(w, leaves, shHours) : 0;  // 到職週年區間特休 + 期初已用特休（與 LINE 同步）
-      const annualRemain = isFull ? Math.round((annualTotal - usedAnnual) * 100) / 100 : 0;
+      const _an = annualNums(w, leaves, shHours, isFull);
+      const annualTotal = _an.total, usedAnnual = _an.used, annualRemain = _an.remain;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const compRemain = calcOtBalance(otAll.filter(o => o.email === w.email));
       payrollRows.push({ email: w.email, name: w.name, base, ot: ot.pay, absentd: absentDeduct + disasterDeduct,  // 天災假不支薪併入缺勤扣(快照無獨立欄)
@@ -2276,9 +2298,9 @@ function showReportDetail(email) {
     return `<span style="white-space:nowrap">${addDayShort(l.start_date)}${tr}　${l.leave_type}${urgent} ${l.hours}h　扣$${ded}</span>`;
   });
 
-  // 特休
-  const annualTotal = isFull ? calcAnnualLeave(w.start_date) : 0;
-  const usedAnnual = isFull ? annualUsedDays(w, leaves, shHours) : 0;  // 到職週年區間特休 + 期初已用特休（與 LINE 同步）
+  // 特休：改吃 bot 單一 API（與員工 LINE 同一份計算），API 沒有才回退本地算
+  const _an = annualNums(w, leaves, shHours, isFull);
+  const annualTotal = _an.total, usedAnnual = _an.used;
 
   // 薪資彙整
   const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
