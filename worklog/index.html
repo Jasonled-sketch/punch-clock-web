@@ -412,7 +412,7 @@ const CFG = {
     volt:1002790, height:1002791, ladder:1002789, pay:1002785,
     siteNote:1002590, process:1002788, aar:1002778, photo:1002622,
     toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643,
-    workLevel:1003079
+    workLevel:1003079, payAmount:1003085
   },
   STAFF: ['偉智','俊男','阿維'],
   IO: ['🌄外務','🏠內部'],
@@ -715,8 +715,7 @@ async function callRagic(suffix, opts){
 /* ---------- 送出（含弱訊號離線補送）---------- */
 function buildPayload(){
   const F=CFG.F, need=siteShown();
-  let payVal=S.seg.pay; const payAmt=$('f_payNote').value.trim();
-  if(payVal==='有') payVal = payAmt? ('有 '+payAmt) : '有';
+  const payAmt=$('f_payNote').value.trim();
   const f=[];
   f.push([F.execDate,dateToRagic($('f_date').value)],[F.execDate2,dateToRagic($('f_date').value)],[F.logTime,nowRagic()],[F.lead,(S.pick.lead||'').trim()]);
   S.coworkers.forEach(n=>f.push([F.coworkers,n]));
@@ -725,7 +724,8 @@ function buildPayload(){
   if($('f_leave').value)  f.push([F.leave,timeToRagic($('f_leave').value)]);
   if(S.pick.main) f.push([F.main,S.pick.main]);
   if(S.pick.sub)  f.push([F.sub,S.pick.sub]);
-  f.push([F.pay,payVal]);   // 收款（在工作紀錄區，一律寫）
+  f.push([F.pay, S.seg.pay]);   // 有無收款（1002785）
+  if(S.seg.pay==='有' && payAmt) f.push([F.payAmount, payAmt]);   // 收款金額（1003085，獨立數字欄）
   if(need){
     if(S.pick.item) f.push([F.item,S.pick.item]);
     f.push([F.volt,S.seg.volt]);
