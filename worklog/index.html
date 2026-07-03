@@ -414,14 +414,15 @@ const CFG = {
     toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643,
     workLevel:1003079, payAmount:1003085
   },
-  STAFF: ['偉智','俊男','阿維'],
+  STAFF: ['偉智','俊男','阿維'],       // 協做參與員池（會自動長）
+  LEADS: ['偉智','俊男'],             // 負責主任固定只有這兩位（不自動長）
   IO: ['🌄外務','🏠內部'],
   CASCADE: {
     '🌄外務': {
       main: ['安裝','維修','丈量','送貨'],
       sub: {
         '安裝': ['🌈小條屏','⭐中條屏','🖼️大條屏','🏞️電視牆','🛠️特製屏','💡照明燈具','🚨光源材料','🏮燈飾成品','⛑️亮化加工'],
-        '維修': ['更換控制卡','更換模組、光源','更換電源器','僅教學','以上其它皆有','檢查迴路'],
+        '維修': ['🌈小條屏','⭐中條屏','🖼️大條屏','🏞️電視牆','🛠️特製屏','💡照明燈具','🚨光源材料','🏮燈飾成品','⛑️亮化加工'],
         '送貨': ['幫客戶送貨到府'],
         '丈量': ['直接丈量及測電','下梯丈量及測電']
       }
@@ -576,10 +577,7 @@ function syncStaff(recs){
   const list=[...set];
   if(list.length!==CFG.STAFF.length){
     CFG.STAFF=list;
-    const cur=S.pick.lead;
-    const staff=CFG.STAFF.slice(); if(S.myName && staff.indexOf(S.myName)<0) staff.unshift(S.myName);
-    buildPick('pick_lead','lead', staff, {def:cur||S.myName, clearable:false, custom:false, prompt:'主任'});
-    buildCoChips();
+    buildCoChips();   // 只更新協做員池；負責主任固定 LEADS 不動
   }
 }
 function buildChecks(){
@@ -661,8 +659,7 @@ function calcGrade(){
 function buildForm(){
   $('f_date').value = todayStr();
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
-  const staff = CFG.STAFF.slice(); if(S.myName && staff.indexOf(S.myName)<0) staff.unshift(S.myName);
-  buildPick('pick_lead','lead', staff, {def:S.myName, clearable:false, custom:false, prompt:'輸入主任姓名'});
+  buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任'});
   buildCoChips();
   buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange);
   renderMain();
