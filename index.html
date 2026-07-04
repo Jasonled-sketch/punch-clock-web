@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -594,7 +594,7 @@ async function loadApiAnnual() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok || !Array.isArray(data.list)) return null;
     const m = {};
-    data.list.forEach(x => { m[String(x.email || '').toLowerCase()] = { total: x.annual.capD, used: x.annual.usedD, remain: x.annual.remainD, expire: x.annual.expire,
+    data.list.forEach(x => { m[String(x.email || '').toLowerCase()] = { total: x.annual.capD, used: x.annual.usedD, remain: x.annual.remainD, remainH: x.annual.remainH, expire: x.annual.expire,
       sickUsedDisp: x.sick ? x.sick.usedDisp : '', persUsedDisp: x.personal ? x.personal.usedDisp : '' }; });  // 病假/事假今年累積已用（與員工 LINE 同一份）
     return m;
   } catch (e) { return null; }
@@ -613,12 +613,13 @@ async function loadApiSalary(year, month) {
 }
 // 取某員工特休 {total,used,remain}：優先用 API（與員工 LINE 同一份計算），API 沒有才回退本地算
 function annualNums(w, leaves, shHours, isFull) {
-  if (!isFull) return { total: 0, used: 0, remain: 0 };
+  if (!isFull) return { total: 0, used: 0, remain: 0, remainH: 0 };
   const a = _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()];
-  if (a) return { total: a.total, used: a.used, remain: a.remain };
+  if (a) return { total: a.total, used: a.used, remain: a.remain, remainH: (a.remainH != null ? Math.round(a.remainH * 10) / 10 : Math.round(a.remain * shHours * 10) / 10) };
   const total = calcAnnualLeave(w.start_date);
   const used = annualUsedDays(w, leaves, shHours);
-  return { total, used, remain: Math.round((total - used) * 100) / 100 };
+  const remain = Math.round((total - used) * 100) / 100;
+  return { total, used, remain, remainH: Math.round(remain * shHours * 10) / 10 };
 }
 // 查「自己」的特休餘額（走 bot 單一 API；Worker 對非管理者自動鎖回本人 email）；失敗回 null→呼叫端回退本地算
 async function fetchMyAnnual() {
@@ -2207,7 +2208,7 @@ async function viewReport() {
             </div>
             <div class="rpt-email">${w.email}</div>
           </div>
-          ${isFull ? `<div class="rpt-annual"><div class="rpt-annual-lbl">特休尚餘</div><div class="rpt-annual-val">${annualRemain}/${annualTotal} 天</div></div>` : ''}
+          ${isFull ? `<div class="rpt-annual"><div class="rpt-annual-lbl">特休尚餘</div><div class="rpt-annual-val">${annualRemain}/${annualTotal} 天</div><div style="font-size:10px;color:#888;margin-top:1px">≈ ${_an.remainH} 小時</div></div>` : ''}
         </div>
         <div class="rpt-kpi">
           <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
@@ -2457,6 +2458,8 @@ function showReportDetail(email) {
     dailyRows.push(`<div style="display:flex"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div></div>`);
   }
   const urgentTotal = appr.filter(isUrgentLeave).length;
+  const uTier = urgentTierCounts(appr);  // 三級：緊急<24 / 急件<72 / 一般<120
+  const uSum = uTier.緊急 + uTier.急件 + uTier.一般;
   const lateEarlyTot = totLate + totEarly;
   const lateEarlyDeduct = Math.round((lateEarlyTot > 15 ? lateEarlyTot : 0) / 60 * hourly);
   const todayStr2 = `${nowTw.getUTCFullYear()}/${pad2(nowTw.getUTCMonth() + 1)}/${pad2(nowTw.getUTCDate())}`;
@@ -2467,13 +2470,13 @@ function showReportDetail(email) {
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
-    <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${urgentTotal} 次</b></div>
+    <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）'}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
-    ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
+    ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${_an.remain}</b> 天（≈ ${_an.remainH} 小時）</div></div>` : ''}
     ${isFull && _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()] ? (() => { const a = _API_ANNUAL[String(w.email || '').toLowerCase()]; return `<div class="rd-sec"><div class="rd-title">🤒 病假/事假（今年累積・與員工 LINE 同一份）</div><div class="rd-row">病假已用 <b>${a.sickUsedDisp || '0天'}</b>　事假已用 <b>${a.persUsedDisp || '0天'}</b></div></div>`; })() : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
@@ -2907,6 +2910,21 @@ function isUrgentLeave(lv) {
   const applyDt = new Date(lv.apply_time);
   if (isNaN(leaveDt) || isNaN(applyDt)) return false;
   return (leaveDt - applyDt) / 3600000 < 72;
+}
+// 臨時假三級（與 LINE bot 一致）：申請距生效 <24=緊急 / <72=急件 / <120=一般 / 否則正常('')
+function urgentTier(lv) {
+  if (!lv.start_date || !lv.apply_time) return '';
+  const leaveDt = new Date(`${lv.start_date} ${lv.start_time || '00:00'}`);
+  const applyDt = new Date(lv.apply_time);
+  if (isNaN(leaveDt) || isNaN(applyDt) || leaveDt < applyDt) return '';
+  const h = (leaveDt - applyDt) / 3600000;
+  return h < 24 ? '緊急' : h < 72 ? '急件' : h < 120 ? '一般' : '';
+}
+// 一組已核准假的三級計次 {緊急,急件,一般}
+function urgentTierCounts(leaves) {
+  const c = { 緊急: 0, 急件: 0, 一般: 0 };
+  (leaves || []).forEach(l => { const t = urgentTier(l); if (t) c[t]++; });
+  return c;
 }
 
 // 補單逾期：請假事由發生後，超過 12 小時才補送假單
