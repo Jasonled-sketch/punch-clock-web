@@ -347,11 +347,10 @@
         <input type="number" id="g_km" inputmode="decimal" placeholder="例：50" oninput="calcGrade()">
       </div>
       <div class="field" id="field_vol">
-        <label class="lb">看板材積<span class="opt">公分·長×寬×高</span></label>
-        <div class="row3">
-          <input type="number" id="g_vl" inputmode="decimal" placeholder="長" oninput="calcGrade()">
-          <input type="number" id="g_vw" inputmode="decimal" placeholder="寬" oninput="calcGrade()">
-          <input type="number" id="g_vh" inputmode="decimal" placeholder="高" oninput="calcGrade()">
+        <label class="lb">屏幕尺寸<span class="opt">公分·寬×高（立面面積）</span></label>
+        <div class="row2">
+          <input type="number" id="g_vw" inputmode="decimal" placeholder="寬 cm" oninput="calcGrade()">
+          <input type="number" id="g_vh" inputmode="decimal" placeholder="高 cm" oninput="calcGrade()">
         </div>
       </div>
       <div class="field">
@@ -400,16 +399,17 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.1';
+const APP_VERSION='1.2';
 const CHANGELOG=[
-  'v1.1　2026/07/03',
-  '· 工務評級改版更公平：新增「工時」自動計分（抓抵達→返程）',
-  '· 類型基礎分壓縮為 7~12（不再由類型決定命運）；材積改全類型皆可算',
-  '· 高度權重微降、等級改每 10 分一級',
+  'v1.2　2026/07/04',
+  '· 評級重審：屏幕改看「立面面積（寬×高）」取代體積，300 vs 600cm 分數明顯拉開',
+  '· 面積(0~30)、高度(0~25)為兩大主軸；面積只算屏幕安裝/招牌',
+  '· 維修/燈具基礎分最低（維修結構已在、燈具只看高度）',
   '',
-  'v1.0　2026/07/03',
-  '· 右上角新增版本號（點它可看更新紀錄）',
-  '· 登入記住帳號：開啟 App 免重複登入，除非自己按登出'
+  'v1.1　2026/07/03',
+  '· 工務評級新增「工時」自動計分（抓抵達→返程）',
+  '· 登入記住帳號：開啟 App 免重複登入，除非自己按登出',
+  '· 右上角新增版本號（點它可看更新紀錄）'
 ].join('\n');
 function showChangelog(){ alert('工務行程日誌　更新紀錄\n\n'+CHANGELOG); }
 
@@ -468,8 +468,8 @@ const CFG = {
   // ── 工務評級 ──
   GRADE: {
     QUICK: ['屏幕安裝','屏幕維修','招牌施作','燈具施作','亮化施工'],
-    QUICK_BASE: { '屏幕安裝':12, '招牌施作':11, '屏幕維修':9, '亮化施工':9, '燈具施作':7 },  // 類型基礎分壓縮到 7~12，只做微調不主導命運（可調）
-    MATERIAL_QUICK: ['屏幕安裝','屏幕維修','招牌施作'],   // 保留參考；材積已改全類型皆可算（不再靠此清單限制）
+    QUICK_BASE: { '屏幕安裝':15, '招牌施作':13, '亮化施工':9, '燈具施作':7, '屏幕維修':6 },  // 類型基礎分 0~15（v1.2：屏幕安裝最高、維修最低，可調）
+    AREA_QUICK: ['屏幕安裝','招牌施作'],   // 只有這兩類吃「屏幕立面面積」分；維修(結構已在)/燈具/亮化(無屏幕面積)=0
     EXTRA: [
       {k:'demo_m',t:'拆舊機-中型',p:3},
       {k:'demo_l',t:'拆舊機-大型',p:6},
@@ -650,40 +650,41 @@ function applyModeVis(){
 
 /* ---------- 工務評級 ---------- */
 function getLevel(score){ const t=CFG.GRADE.LEVELS; for(let i=0;i<t.length;i++){ if(score>=t[i][0]&&score<=t[i][1]) return i; } return 9; }
-function heightScore(m){ if(!m||m<=0)return 0; if(m<=1.8)return 2; if(m<=3.0)return 4; if(m<=3.5)return 7; if(m<=3.9)return 10; if(m<=4.3)return 13; if(m<=4.8)return 15; if(m<=5.3)return 17; return 18; }
+function heightScore(m){ if(!m||m<=0)return 0; if(m<=1.8)return 3; if(m<=3.0)return 7; if(m<=3.5)return 11; if(m<=3.9)return 15; if(m<=4.3)return 18; if(m<=4.8)return 21; if(m<=5.3)return 23; return 25; }
 function worktimeScore(){
   const a=($('f_arrive')||{}).value, b=($('f_leave')||{}).value;
   if(!a||!b) return 0;
   const [ah,am]=a.split(':').map(Number), [bh,bm]=b.split(':').map(Number);
   let mins=(bh*60+bm)-(ah*60+am); if(mins<0) mins+=1440;   // 跨午夜
   const h=mins/60;
-  return h<1?0: h<=2?3: h<=3?6: h<=4?9: h<=6?12:15;
+  return h<1?0: h<=2?2: h<=4?4: h<=6?6:8;
 }
-function toggleMaterial(){ const e=$('field_vol'); if(e) e.style.display=''; }   // 材積改全類型皆可填算，一律顯示
+function toggleMaterial(){ const show=CFG.GRADE.AREA_QUICK.indexOf(S.grade.quick)>=0; const e=$('field_vol'); if(e) e.style.display=show?'':'none'; }   // 只屏幕安裝/招牌顯示面積欄
 function buildGrade(){
   S.grade={extra:{},score:0,lv:0,quick:''};
   const q=$('grade_quick'); q.innerHTML='';
   CFG.GRADE.QUICK.forEach(v=>{ const b=document.createElement('button'); b.type='button'; b.dataset.v=v; b.textContent=v; b.onclick=()=>{ S.grade.quick=(S.grade.quick===v?'':v); [...q.children].forEach(c=>c.classList.toggle('on', c.dataset.v===S.grade.quick && S.grade.quick!=='')); toggleMaterial(); calcGrade(); }; q.appendChild(b); });
   const g=$('gradeExtra'); g.innerHTML='';
   CFG.GRADE.EXTRA.forEach(o=>{ S.grade.extra[o.k]=false; const c=document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=o.t+' +'+o.p; c.onclick=()=>{ S.grade.extra[o.k]=!S.grade.extra[o.k]; c.classList.toggle('on',S.grade.extra[o.k]); calcGrade(); }; g.appendChild(c); });
-  ['g_km','g_vl','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
+  ['g_km','g_vw','g_vh'].forEach(id=>{ const e=$(id); if(e) e.value=''; });
   toggleMaterial(); calcGrade();
 }
 function calcGrade(){
   const num=id=>parseFloat(($(id)||{}).value)||0;
-  const base = CFG.GRADE.QUICK_BASE[S.grade.quick]||0;   // 類型基礎分（7~12，只微調）
-  const sT = worktimeScore();   // 工時分（自動抓抵達→返程，最客觀辛苦度）
+  const base = CFG.GRADE.QUICK_BASE[S.grade.quick]||0;   // 類型基礎分 0~15
+  const showArea = CFG.GRADE.AREA_QUICK.indexOf(S.grade.quick)>=0;   // 只屏幕安裝/招牌吃面積
+  const area = showArea ? (num('g_vw')*num('g_vh'))/10000 : 0;   // 立面面積 寬×高 cm²→m²
+  const sA = area<=0?0: area<=0.5?2: area<=1?5: area<=2?9: area<=3?13: area<=4.5?17: area<=6?21: area<=9?25: area<=14?28:30;   // 面積 0~30（最大權重,拉開大小）
+  const sH = heightScore(num('f_height'));   // 高度 0~25
   const km=num('g_km');
-  const sKm = km<=0?0: km<=20?2: km<=40?5: km<=70?8: km<=110?11: km<=160?13:15;   // 來回距離,放寬級距
-  const sH = heightScore(num('f_height'));
-  const vol = (num('g_vl')*num('g_vw')*num('g_vh'))/27000;   // 材積全類型皆可算
-  const sV = vol<=0?0: vol<=1?2: vol<=3?5: vol<=6?9: vol<=15?12: vol<=30?14:15;
-  let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>25)sC=25;
-  const total=base+sT+sKm+sH+sV+sC;   // 類型 + 工時 + 距離 + 高度 + 材積 + 額外（滿分100）
+  const sKm = km<=0?0: km<=20?2: km<=40?4: km<=70?6: km<=110?8:10;   // 來回距離 0~10
+  const sT = worktimeScore();   // 工時 0~8（自動抓抵達→返程）
+  let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>12)sC=12;   // 額外 cap 12
+  const total=base+sA+sH+sKm+sT+sC;   // 類型 + 面積 + 高度 + 距離 + 工時 + 額外（滿分100）
   S.grade.score=total; S.grade.lv=getLevel(total);
   if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;
   if($('g_score')) $('g_score').textContent=total+' 分';
-  if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+' 工時'+sT+' 距離'+sKm+' 高度'+sH+' 材積'+sV+' 加項'+sC;
+  if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 高度'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
 }
 
 /* ---------- 建立／重置表單 ---------- */
