@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v4.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -606,6 +606,15 @@ function annualNums(w, leaves, shHours, isFull) {
   const total = calcAnnualLeave(w.start_date);
   const used = annualUsedDays(w, leaves, shHours);
   return { total, used, remain: Math.round((total - used) * 100) / 100 };
+}
+// 查「自己」的特休餘額（走 bot 單一 API；Worker 對非管理者自動鎖回本人 email）；失敗回 null→呼叫端回退本地算
+async function fetchMyAnnual() {
+  try {
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/leave-balance?email=${encodeURIComponent(ME.email)}`);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.ok || !d.annual) return null;
+    return { total: d.annual.capD, used: d.annual.usedD, remain: d.annual.remainD, expire: d.annual.expire };
+  } catch (e) { return null; }
 }
 
 // ══ 試點：特休「本地算 vs 單一API算」對照（治本第一步；確認一致後再刪本地算改吃 API）══
@@ -3144,11 +3153,20 @@ async function saveLeave() {
   if (!date) { toast('請選擇請假日期', 'red'); return; }
   if (!start || !end) { toast('請填寫開始與結束時間', 'red'); return; }
   if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
-  // 特休餘額把關（與 LINE bot / 月報同步：到職週年區間已核准特休 + 期初已用特休；剩餘不足擋送出）
+  // 特休餘額把關：改吃 bot 單一 API（與員工 LINE / 管理者月報同一份計算），API 失敗才回退本地算；剩餘不足擋送出
   if (type === '特休' && MY_WORKER && MY_WORKER.emp_type !== '管理者') {
-    const total = calcAnnualLeave(MY_WORKER.start_date);
-    const usedLv = (_MY_LEAVES || []).filter(l => l.ragicId !== _LF_EDIT_ID);  // 編輯時排除本筆，避免重複計
-    const remain = Math.round((total - annualUsedDays(MY_WORKER, usedLv, _LF_SHIFT?.hours || 8)) * 100) / 100;
+    const shH = _LF_SHIFT?.hours || 8;
+    let remain;
+    const apiBal = await fetchMyAnnual();
+    if (apiBal) {
+      remain = apiBal.remain;
+      const edited = (_MY_LEAVES || []).find(l => l.ragicId === _LF_EDIT_ID && l.leave_type === '特休' && l.status === 'approved');  // 編輯既有已核准特休→API 已計入已用，加回本筆改用新值比
+      if (edited) remain = Math.round((remain + (parseFloat(edited.hours) || 0) / shH) * 100) / 100;
+    } else {
+      const total = calcAnnualLeave(MY_WORKER.start_date);
+      const usedLv = (_MY_LEAVES || []).filter(l => l.ragicId !== _LF_EDIT_ID);  // 編輯時排除本筆，避免重複計
+      remain = Math.round((total - annualUsedDays(MY_WORKER, usedLv, shH)) * 100) / 100;
+    }
     if (Number(days) > remain + 1e-9) { toast(`特休不足：本次需 ${days} 天，剩餘僅 ${remain} 天，無法送出`, 'red'); return; }
   }
   const F = CONFIG.FID.L;
