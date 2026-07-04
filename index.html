@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -653,6 +653,37 @@ async function annualParityCheck() {
         <tbody>${rows || '<tr><td colspan="5" style="padding:8px;color:#999;text-align:center">無正職員工可對照</td></tr>'}</tbody>
       </table>
       <p style="font-size:11px;color:#888;margin-top:6px">綠字＝兩邊一致；紅字「本地≠API」＝有落差。已比對 ${seen} 位正職。資料來源：本地＝網頁 calcAnnualLeave／API＝LINE bot attLeaveBalances（同一份計算的未來唯一來源）。</p>`;
+  } catch (e) { box.innerHTML = `<p style="color:#d33;padding:8px">對照失敗：${e.message}</p>`; }
+}
+
+// ══ 薪資「本地算 vs 單一API算」對照（切薪資前先驗證；比對應發薪資 net + 請假扣 leaveDeduct）══
+async function salaryParityCheck() {
+  const box = document.getElementById('salary-parity-box');
+  if (!box) return;
+  box.innerHTML = '<div class="loading">呼叫薪資 API 對照中…</div>';
+  try {
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/salary?all=1&y=${CUR_YEAR}&m=${CUR_MONTH + 1}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.ok) { box.innerHTML = `<p style="color:#d33;padding:8px">❌ 薪資 API 失敗：${data.reason || data.status || ('HTTP ' + res.status)}</p>`; return; }
+    const apiMap = {}; (data.list || []).forEach(x => { apiMap[String(x.email || '').toLowerCase()] = x; });
+    const rows = (_RPT && _RPT.payrollRows) || [];
+    let out = '', allMatch = true, seen = 0;
+    rows.forEach(p => {
+      const a = apiMap[String(p.email || '').toLowerCase()]; if (!a) return; seen++;
+      const eqNet = p.net === a.net;
+      if (!eqNet) allMatch = false;
+      const c = (l, r) => (l === r) ? `<span style="color:#0a8a0a">$${(l || 0).toLocaleString()}</span>` : `<span style="color:#d33;font-weight:700">$${(l || 0).toLocaleString()}≠$${r == null ? '—' : (r).toLocaleString()}</span>`;
+      out += `<tr style="border-top:1px solid #eee"><td style="padding:5px 8px">${p.name}</td><td style="text-align:right">${c(p.net, a.net)}</td><td style="text-align:right">${c(p.leaved, a.leaveDeduct)}</td><td style="text-align:center;font-size:15px">${eqNet ? '✅' : '❌'}</td></tr>`;
+    });
+    const banner = allMatch
+      ? '<div style="background:#e6f7e6;color:#0a6b0a;padding:8px 12px;border-radius:8px;font-weight:700">✅ 應發薪資全部一致——本地算與單一 API 算相同，可安心改吃 API</div>'
+      : '<div style="background:#fdeaea;color:#c00;padding:8px 12px;border-radius:8px;font-weight:700">❌ 有落差——紅字處本地≠API（常見＝病假前30天半薪/超過全扣，網頁目前一律半薪）。先確認哪邊對再切</div>';
+    box.innerHTML = `${banner}
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:13px;background:#fff;border-radius:8px;overflow:hidden">
+        <thead><tr style="background:#f3f4f6;color:#555"><th style="padding:6px 8px;text-align:left">員工</th><th>應發薪資</th><th>請假扣</th><th>一致</th></tr></thead>
+        <tbody>${out || '<tr><td colspan="4" style="padding:8px;color:#999;text-align:center">無資料可對照</td></tr>'}</tbody>
+      </table>
+      <p style="font-size:11px;color:#888;margin-top:6px">綠＝一致；紅「本地≠API」＝有落差。已比對 ${seen} 位。本地＝網頁月報 net／API＝LINE bot attCalcReport（未來唯一來源）。應發一致即代表整套薪資算法對齊。</p>`;
   } catch (e) { box.innerHTML = `<p style="color:#d33;padding:8px">對照失敗：${e.message}</p>`; }
 }
 
@@ -2079,6 +2110,7 @@ async function viewReport() {
       : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button></div>`;
     // 試點：特休 本地算 vs 單一 API 對照（治本第一步，確認一致後再改吃 API）
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#7c3aed;color:#fff;padding:6px 14px" onclick="annualParityCheck()">🔍 特休 API 對照（驗證兩邊一致）</button><div id="parity-box" style="margin-top:8px"></div></div>`;
+    h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#b45309;color:#fff;padding:6px 14px" onclick="salaryParityCheck()">🔍 薪資 API 對照（切薪資前驗證）</button><div id="salary-parity-box" style="margin-top:8px"></div></div>`;
 
     _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
     actives.forEach(w => {
