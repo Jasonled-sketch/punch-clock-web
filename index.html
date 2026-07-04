@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -594,7 +594,8 @@ async function loadApiAnnual() {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok || !Array.isArray(data.list)) return null;
     const m = {};
-    data.list.forEach(x => { m[String(x.email || '').toLowerCase()] = { total: x.annual.capD, used: x.annual.usedD, remain: x.annual.remainD, expire: x.annual.expire }; });
+    data.list.forEach(x => { m[String(x.email || '').toLowerCase()] = { total: x.annual.capD, used: x.annual.usedD, remain: x.annual.remainD, expire: x.annual.expire,
+      sickUsedDisp: x.sick ? x.sick.usedDisp : '', persUsedDisp: x.personal ? x.personal.usedDisp : '' }; });  // 病假/事假今年累積已用（與員工 LINE 同一份）
     return m;
   } catch (e) { return null; }
 }
@@ -2424,6 +2425,7 @@ function showReportDetail(email) {
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${Math.round((annualTotal - usedAnnual) * 100) / 100}</b> 天</div></div>` : ''}
+    ${isFull && _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()] ? (() => { const a = _API_ANNUAL[String(w.email || '').toLowerCase()]; return `<div class="rd-sec"><div class="rd-title">🤒 病假/事假（今年累積・與員工 LINE 同一份）</div><div class="rd-row">病假已用 <b>${a.sickUsedDisp || '0天'}</b>　事假已用 <b>${a.persUsedDisp || '0天'}</b></div></div>`; })() : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
     <div class="pay-box" style="margin-top:14px">
