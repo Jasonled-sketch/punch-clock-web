@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2467,6 +2467,30 @@ function showReportDetail(email) {
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
     .map(o => { const isOt = o.ot_type === '加班', h = parseFloat(o.hours) || 0, done = (o.date || '') <= todayStr2, c = isOt ? '#2e7d32' : '#1565c0'; return `<div style="display:flex"><span style="color:#777;flex:0 0 88px">${addDayShort(o.date)}</span><span style="color:${c};flex:1">${o.start_time && o.end_time ? `${o.start_time}-${o.end_time} ` : ''}${(done ? '已' : '預') + (isOt ? '加班' : '補休')}${h}h</span></div>`; });
 
+  // 假別明細（逐筆）：特休依到職週年度、病假/事假依曆年；每筆 日期(星期) 時段 時數 + 小計
+  const leaveDetailHtml = (() => {
+    if (!isFull) return '';
+    const wd = ['日', '一', '二', '三', '四', '五', '六'];
+    const cy = nowTw.getUTCFullYear();
+    const win = w.start_date ? annYearWindow(w.start_date) : null;
+    const inWin = ds => { if (!win) return false; const n = ymdInt(ds); return n >= win.startN && n < win.endN; };
+    const inCal = ds => { const n = ymdInt(ds); return n >= cy * 10000 + 101 && n <= cy * 10000 + 1231; };
+    const apprAll = leaves.filter(l => l.email === email && l.status === 'approved');
+    const shH = sh ? sh.hours : 8;
+    const line = l => { const dt = new Date(String(l.start_date || '').replace(/\//g, '-')); const wk = isNaN(dt) ? '' : wd[dt.getDay()]; const hrs = parseFloat(l.hours) || 0; const t = urgentTier(l); return `<div class="rd-row">${String(l.start_date || '').slice(5)}（${wk}）　${String(l.start_time || '').slice(0, 5)}-${String(l.end_time || '').slice(0, 5)}　${hrs}h${t ? ` <span style="color:#e65100">⚡${t}</span>` : ''}</div>`; };
+    const block = (type, pred, plabel) => {
+      const items = apprAll.filter(l => l.leave_type === type && pred(l.start_date)).sort((a, b) => ymdInt(a.start_date) - ymdInt(b.start_date));
+      const totH = items.reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
+      const head = `<div style="font-weight:600;margin-top:8px;color:#374151">${type}（${plabel}）　共 ${items.length} 筆・${totH}h（${Math.round(totH / shH * 100) / 100} 天）</div>`;
+      return head + (items.length ? items.map(line).join('') : `<div class="rd-row" style="color:#999">— 無 —</div>`);
+    };
+    return `<div class="rd-sec"><div class="rd-title">📋 假別明細（逐筆）</div>
+      ${block('特休', inWin, '本到職週年度')}
+      ${block('病假', inCal, cy + ' 曆年')}
+      ${block('事假', inCal, cy + ' 曆年')}
+    </div>`;
+  })();
+
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
@@ -2478,6 +2502,7 @@ function showReportDetail(email) {
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${_an.remain}</b> 天（≈ ${_an.remainH} 小時）</div></div>` : ''}
     ${isFull && _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()] ? (() => { const a = _API_ANNUAL[String(w.email || '').toLowerCase()]; return `<div class="rd-sec"><div class="rd-title">🤒 病假/事假（今年累積・與員工 LINE 同一份）</div><div class="rd-row">病假已用 <b>${a.sickUsedDisp || '0天'}</b>　事假已用 <b>${a.persUsedDisp || '0天'}</b></div></div>`; })() : ''}
+    ${leaveDetailHtml}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
     <div class="pay-box" style="margin-top:14px">
