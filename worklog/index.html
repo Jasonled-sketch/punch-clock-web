@@ -270,7 +270,7 @@
       <div class="row2">
         <div class="field">
           <label class="lb">現場最高點<span class="opt">米</span></label>
-          <select id="f_height" onchange="calcGrade()">
+          <select id="f_height">
             <option value="">請選擇</option>
             <option value="1">1 米</option><option value="1.5">1.5 米</option>
             <option value="2">2 米</option><option value="2.5">2.5 米</option>
@@ -283,7 +283,7 @@
         </div>
         <div class="field">
           <label class="lb">使用梯子</label>
-          <select id="f_ladder">
+          <select id="f_ladder" onchange="calcGrade()">
             <option value="">請選擇</option>
             <option>1.0–1.8m（無）</option><option>1.8–3.0m（6尺梯）</option>
             <option>3.0–3.5m（7尺梯）</option><option>3.5–3.9m（8尺梯）</option>
@@ -352,12 +352,13 @@
           <input type="number" id="g_vw" inputmode="decimal" placeholder="寬 cm" oninput="calcGrade()">
           <input type="number" id="g_vh" inputmode="decimal" placeholder="高 cm" oninput="calcGrade()">
         </div>
+        <div class="hint" id="areaCai" style="font-weight:700;color:var(--sky-d)"></div>
       </div>
       <div class="field">
         <label class="lb">額外狀況<span class="opt">可複選</span></label>
         <div class="chips" id="gradeExtra"></div>
       </div>
-      <div class="hint">高度分數自動取自上方「現場最高點」（戶外高空已含在高度內）。</div>
+      <div class="hint">梯具分數自動取自上方「使用梯子」（設備門檻制：動用高空車／吊車分數大跳，與同業計價邏輯一致）。</div>
     </div>
 
     <!-- 近期 -->
@@ -399,8 +400,12 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.2';
+const APP_VERSION='1.3';
 const CHANGELOG=[
+  'v1.3　2026/07/04',
+  '· 梯具分取代高度分：自動抓「使用梯子」欄（同業設備門檻制，吊車案大跳分）',
+  '· 屏幕尺寸旁自動顯示「≈幾才」（1才=30×30cm，與報價同語言）',
+  '',
   'v1.2　2026/07/04',
   '· 評級重審：屏幕改看「立面面積（寬×高）」取代體積，300 vs 600cm 分數明顯拉開',
   '· 面積(0~30)、高度(0~25)為兩大主軸；面積只算屏幕安裝/招牌',
@@ -650,7 +655,18 @@ function applyModeVis(){
 
 /* ---------- 工務評級 ---------- */
 function getLevel(score){ const t=CFG.GRADE.LEVELS; for(let i=0;i<t.length;i++){ if(score>=t[i][0]&&score<=t[i][1]) return i; } return 9; }
-function heightScore(m){ if(!m||m<=0)return 0; if(m<=1.8)return 3; if(m<=3.0)return 7; if(m<=3.5)return 11; if(m<=3.9)return 15; if(m<=4.3)return 18; if(m<=4.8)return 21; if(m<=5.3)return 23; return 25; }
+function ladderScore(){   // 設備門檻制(同業慣例)：看動用什麼設備,不是線性米數;吊車=公司實際花吊車錢,分數大跳
+  const v=($('f_ladder')||{}).value||'';
+  if(!v) return 0;
+  if(v.includes('吊車')) return 25;
+  if(v.includes('長拉梯')) return 22;
+  if(v.includes('12尺')) return 20;
+  if(v.includes('10尺')) return 17;
+  if(v.includes('8尺')) return 14;
+  if(v.includes('7尺')) return 11;
+  if(v.includes('6尺')) return 7;
+  return 3;   // 1.0–1.8m（無）
+}
 function worktimeScore(){
   const a=($('f_arrive')||{}).value, b=($('f_leave')||{}).value;
   if(!a||!b) return 0;
@@ -674,8 +690,9 @@ function calcGrade(){
   const base = CFG.GRADE.QUICK_BASE[S.grade.quick]||0;   // 類型基礎分 0~15
   const showArea = CFG.GRADE.AREA_QUICK.indexOf(S.grade.quick)>=0;   // 只屏幕安裝/招牌吃面積
   const area = showArea ? (num('g_vw')*num('g_vh'))/10000 : 0;   // 立面面積 寬×高 cm²→m²
-  const sA = area<=0?0: area<=0.5?2: area<=1?5: area<=2?9: area<=3?13: area<=4.5?17: area<=6?21: area<=9?25: area<=14?28:30;   // 面積 0~30（最大權重,拉開大小）
-  const sH = heightScore(num('f_height'));   // 高度 0~25
+  const sA = area<=0?0: area<=0.5?2: area<=1?5: area<=2?9: area<=3?13: area<=4.5?17: area<=6?21: area<=9?25: area<=14?28:30;   // 面積 0~30（最大權重;級距換算才數≈5.5/11/22/33/50/66/100/155才,50才=法規大型跳級點）
+  const sH = ladderScore();   // 梯具 0~25（v1.3 改設備門檻制,自動抓「使用梯子」欄）
+  if($('areaCai')) $('areaCai').textContent = area>0 ? ('≈ '+Math.round(area/0.09)+' 才（'+(Math.round(area*100)/100)+' m²）') : '';
   const km=num('g_km');
   const sKm = km<=0?0: km<=20?2: km<=40?4: km<=70?6: km<=110?8:10;   // 來回距離 0~10
   const sT = worktimeScore();   // 工時 0~8（自動抓抵達→返程）
@@ -684,7 +701,7 @@ function calcGrade(){
   S.grade.score=total; S.grade.lv=getLevel(total);
   if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;
   if($('g_score')) $('g_score').textContent=total+' 分';
-  if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 高度'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
+  if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 梯具'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
 }
 
 /* ---------- 建立／重置表單 ---------- */
