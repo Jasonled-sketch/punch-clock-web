@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -904,6 +904,7 @@ let _MD = {}; // modal data store
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 async function initApp() {
+  loadRemoteCfg();                                   // 背景載入公司設定（假別清單等），失敗用預設
   if (ME.isAdmin) {
     renderAdminTabs();
     switchTab('overview');
@@ -1833,12 +1834,13 @@ function calcMonthOvertimePay(email, otAll, ym, hourly) {
 }
 
 // 請假扣薪：特休不扣、病假半薪、事假/其他全扣（臨時與否不影響扣薪，僅 isUrgentLeave 標記供考核）
+const FULLPAY_LEAVES = ['婚假','喪假','產假','產檢假','陪產假','公傷病假','公假'];  // 全薪假不扣（與 bot ATT_LEAVE_CATALOG 同步；此為 fallback，正式數字吃薪資 API）
 function calcLeaveDeduct(apprLeaves, hourly) {
   let d = 0;
   apprLeaves.forEach(l => {
     const h = parseFloat(l.hours) || 0;
-    if (l.leave_type === '特休') return;
-    if (l.leave_type === '病假') d += h * hourly * 0.5;
+    if (l.leave_type === '特休' || FULLPAY_LEAVES.includes(l.leave_type)) return;
+    if (l.leave_type === '病假' || l.leave_type === '生理假') d += h * hourly * 0.5;
     else d += h * hourly;
   });
   return Math.round(d);
@@ -2899,7 +2901,15 @@ async function doSaveWrkr() {
 //  LEAVE REQUESTS
 // ═══════════════════════════════════════════════════════════════════════
 
-const LEAVE_TYPES = ['特休','病假','事假','其他'];  // 臨時假非假別，改由 isUrgentLeave(72hr) 自動標記
+let LEAVE_TYPES = ['特休','病假','事假','其他'];  // 臨時假非假別，改由 isUrgentLeave(72hr) 自動標記。開頁後從 bot /calc/config 動態載入（公司設定層：含 ATT_EXTRA_LEAVES 開啟的法定假別）
+let REMOTE_CFG = null;
+async function loadRemoteCfg() {
+  try {
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/config`);
+    const d = await res.json().catch(() => ({}));
+    if (res.ok && d.ok) { REMOTE_CFG = d; if (Array.isArray(d.leaveTypes) && d.leaveTypes.length) LEAVE_TYPES = d.leaveTypes; }
+  } catch (e) {}  // 失敗就用預設四假別，不擋任何功能
+}
 const LEAVE_STATUS = { pending:'待審核', approved:'已核准', rejected:'已駁回' };
 
 function toMin(t) { const [h,m] = String(t||'').split(':').map(Number); return (h||0)*60 + (m||0); }
