@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2185,7 +2185,7 @@ async function viewReport() {
       const _an = annualNums(w, leaves, shHours, isFull);
       const annualTotal = _an.total, usedAnnual = _an.used, annualRemain = _an.remain;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
-      const compRemain = calcOtBalance(otAll.filter(o => o.email === w.email));
+      const compRemain = _apiS ? _apiS.compBal : calcOtBalance(otAll.filter(o => o.email === w.email), ym);  // 月結補休：吃 API（查詢當月），fallback 本地同月
       payrollRows.push({ email: w.email, name: w.name, base, ot: otPay, absentd: absentDeduct + disasterDeduct,  // 天災假不支薪併入缺勤扣(快照無獨立欄)
         lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain });
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
@@ -2225,7 +2225,7 @@ async function viewReport() {
           ${cell('早退', `${earlyCnt} 次 / ${earlyMin} 分`, earlyPen>0)}
           ${cell('請假', `${leaveHours} 小時`)}
           ${cell('臨時假', `${urgentCnt} 次`, urgentCnt>0)}
-          ${isFull ? cell('補休餘額', `${calcOtBalance(otAll.filter(o => o.email === w.email))} 小時`) : ''}
+          ${isFull ? cell('本月補休餘額', `${compRemain} 小時`) : ''}
           ${cell('加班費', `$${otPay.toLocaleString()}${ot.hours?` (${ot.hours}h)`:''}`, otPay>0)}
           ${pendingCnt ? cell('待審請假', `${pendingCnt} 件`, true) : ''}
         </div>
@@ -3416,11 +3416,13 @@ function renderOtPresets() {
   }
 }
 
-// 補休餘額：已核准加班時數 − 已核准補休時數
-function calcOtBalance(records) {
+// 補休餘額（月底結清制，與 LINE bot 同步）：「當月」已核准加班 − 已核准補休；未休月底自動折發加班費，不滾入下月
+function calcOtBalance(records, ym) {
+  const now = new Date();
+  const scope = ym || `${now.getFullYear()}/${pad(now.getMonth() + 1)}`;
   let bal = 0;
   records.forEach(o => {
-    if (o.status !== 'approved') return;
+    if (o.status !== 'approved' || !(o.date || '').startsWith(scope)) return;
     const h = parseFloat(o.hours) || 0;
     if (o.ot_type === '加班') bal += h;
     else if (o.ot_type === '補休') bal -= h;
@@ -3480,7 +3482,7 @@ async function viewOt() {
     const bal = calcOtBalance(list);
     const cards = list.map(o => buildOtCard(o, false)).join('');
     setView(`<div class="view">
-      <div class="ot-balance">補休餘額　<b>${bal}</b> 小時</div>
+      <div class="ot-balance">本月補休餘額　<b>${bal}</b> 小時<span style="font-size:11px;color:#888;font-weight:400">（限當月休，月底未休自動折發加班費）</span></div>
       <button class="btn btn-full" style="margin-bottom:14px" onclick="showOtForm()">＋ 申請加班 / 補休</button>
       ${cards || '<p style="color:#999;text-align:center;margin-top:30px">尚無申請紀錄</p>'}
     </div>`);
@@ -3521,7 +3523,7 @@ function showOtForm(ot) {
       <select id="of-type" onchange="renderOtPresets();updateOtCalc()">
         ${OT_TYPES.map(t => `<option ${editing && ot.ot_type===t ? 'selected':''}>${t}</option>`).join('')}
       </select>
-      <div style="font-size:11px;color:#999;margin-top:4px">補休餘額：${bal} 小時（加班核准後累積，補休核准後扣除）</div>
+      <div style="font-size:11px;color:#999;margin-top:4px">本月補休餘額：${bal} 小時（限當月使用，月底未休自動折發加班費）</div>
     </div>
     <div class="ff"><label>日期</label>
       <div style="display:flex;align-items:center;gap:8px">
@@ -3599,11 +3601,15 @@ async function saveOt() {
   if (!start || !end) { toast('請填寫時間', 'red'); return; }
   if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
   if (type === '補休') {
+    const nowD = new Date(), curYm = `${nowD.getFullYear()}-${pad(nowD.getMonth() + 1)}`;
+    if (!(date || '').startsWith(curYm)) {                    // 月底結清制：補休限當月
+      toast('補休限當月使用（月底結清，未休自動折發加班費），請選本月日期', 'red'); return;
+    }
     if (!Number.isInteger(Number(hours))) {
       toast('補休需以整數小時為單位申請（例如 1、2、3 小時）', 'red'); return;
     }
     if (Number(hours) > calcOtBalance(_MY_OT)) {
-      toast(`補休時數超過餘額（${calcOtBalance(_MY_OT)} 小時）`, 'red'); return;
+      toast(`補休時數超過本月餘額（${calcOtBalance(_MY_OT)} 小時）`, 'red'); return;
     }
   }
   const F = CONFIG.FID.O;
