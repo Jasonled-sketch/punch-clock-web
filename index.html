@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2215,6 +2215,7 @@ async function viewReport() {
           <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
         </div>
         ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
+        ${(() => { if (!isFull || !_apiS) return ''; const w1 = _apiS.otMonthH > 46 ? `🔴 本月加班 ${_apiS.otMonthH}h，超過勞基法 46h 上限` : _apiS.otMonthH >= 36 ? `🟠 本月加班 ${_apiS.otMonthH}h，接近 46h 上限` : ''; const w2 = _apiS.consecMax >= 7 ? `🔴 連續出勤 ${_apiS.consecMax} 天，違反七休一` : _apiS.consecMax === 6 ? `🟠 已連續出勤 6 天（七休一預警）` : ''; return (w1 || w2) ? `<div class="rpt-warn">${[w1, w2].filter(Boolean).join('<br>')}</div>` : ''; })()}
         <div class="rpt-grid">
           ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
           ${cell('實際工時', `${totH.toFixed(1)} h`)}
@@ -2505,6 +2506,7 @@ function showReportDetail(email) {
     ${leaveDetailHtml}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
+    ${isFull && _apiS ? `<div class="rd-sec" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 10px"><div class="rd-title">🧾 離職結算試算（以今日離職計）</div><div class="rd-row">本月應發 <b>$${net.toLocaleString()}</b>　＋　未休特休折發 <b>$${(_apiS.annualCashout || 0).toLocaleString()}</b>（剩 ${_apiS.annualRemainYr || 0} 天）</div><div class="rd-row" style="font-weight:700">合計應付 $${(net + (_apiS.annualCashout || 0)).toLocaleString()}</div><div class="rd-row" style="font-size:11px;color:#999">※ 補休依月結制已併入當月薪資折發；離職結算請於最後工作日當天試算最準。</div></div>` : ''}
     <div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
       <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
