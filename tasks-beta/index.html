@@ -608,6 +608,7 @@ function dbSaveTasks(tasks){
 }
 /* 單筆新增/更新：LOCAL 整批存 localStorage；CLOUD 寫 Ragic 並回填 ragicId */
 async function dbUpsert(task){
+  if(STATE.sandbox) return;   // 🧪 測試模式：任務寫入也跳過
   if(CONFIG.MODE==='CLOUD'){
     const res = await ragicSaveTask(task);
     if(res && res.ragicId!=null && task.ragicId==null){ task.ragicId = res.ragicId; task.id = 'r'+res.ragicId; }
@@ -617,6 +618,7 @@ async function dbUpsert(task){
 }
 /* 刪除：CLOUD 走 Ragic DELETE */
 async function dbDelete(task){
+  if(STATE.sandbox) return;   // 🧪 測試模式：任務刪除也跳過
   if(CONFIG.MODE==='CLOUD'){
     if(task.ragicId!=null){ try{ await ragicFetch('/'+task.ragicId+'?api', { method:'DELETE' }); }catch(e){} }
     return;
@@ -737,7 +739,8 @@ function enterAppShell(user){
 function forceRelogin(){ clearSession(); STATE.user=null; document.getElementById('appView').classList.add('hidden'); document.getElementById('loginView').classList.remove('hidden'); try{ google.accounts.id.disableAutoSelect(); }catch(e){} renderLogin(); try{ google.accounts.id.prompt(); }catch(e){} }
 function renderGoogleButton(){
   if(!(window.google && google.accounts && google.accounts.id)){ setTimeout(renderGoogleButton, 400); return; }
-  google.accounts.id.initialize({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false, use_fedcm_for_prompt:true, itp_support:true });
+  const _sess=cachedSession();   // 有記住的登入→帶 login_hint,Google 直接用該帳號靜默登入(多帳號也不彈選單)
+  google.accounts.id.initialize(Object.assign({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false, use_fedcm_for_prompt:true, itp_support:true }, (_sess&&_sess.email)?{login_hint:_sess.email}:{}));
   const el = document.getElementById('gbtn');
   if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
   google.accounts.id.prompt();   // 自動以上次帳號登入（記住，不用每次點）
@@ -1363,7 +1366,7 @@ function showGameCenter(){
     </div>
     <div class="gc-actionrow">
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
-      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
+      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button><button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -1659,6 +1662,7 @@ async function decideRedeem(pi, redId, ok){
   toast(ok?'已核准 ✓ 記得兌現給員工 🎁':'已婉拒，幣已退回'); refreshGameUI();
 }
 async function writeOtherGS(p){
+  if(STATE.sandbox) return {};   // 🧪 測試模式：跨員工寫入也跳過
   const F=GAME_STORE.F, fd=new FormData();
   fd.append(F.email, p.email); fd.append(F.name, p.name||'');
   const uid=emailToUserId(p.email);
@@ -2352,6 +2356,24 @@ function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && 
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
 async function grantTestCoins(){ if(!isAdmin()||!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }   // 守衛：只有管理員(covernself)叫得動，防其他人/console 自肥
+/* 測試模式(沙盒,管理員限定)：開啟後所有雲端/本機寫入全部跳過,隨便玩;關閉或關視窗即還原雲端原狀 */
+async function toggleSandbox(){
+  if(!isAdmin()) return;
+  if(!STATE.sandbox){
+    STATE.sandbox=true;
+    const b=document.createElement('div'); b.id='sandboxBadge';
+    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#b45309;color:#fff;font-size:12px;font-weight:800;text-align:center;padding:5px 8px;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    b.textContent='🧪 測試模式中 — 所有變動不會存檔，關閉本視窗或再按一次按鈕即還原';
+    document.body.appendChild(b);
+    toast('🧪 測試模式已開啟：怎麼玩都不會存檔');
+  } else {
+    STATE.sandbox=false;
+    const b=document.getElementById('sandboxBadge'); if(b)b.remove();
+    await loadGameState(); refreshGameUI();
+    toast('已退出測試模式，雲端存檔已還原 ✓');
+  }
+  const gc=document.getElementById('gameModal'); if(gc){ closeGameCenter(); showGameCenter(); }   // 重繪讓按鈕變色
+}
 async function resetGame(){
   if(!isAdmin()) return;   // 守衛：只有管理員(covernself)叫得動，防其他人/console 清檔
   if(!await vConfirm({icon:'🧹',title:'重置遊戲存檔',msg:'確定重置你的遊戲存檔？\n裝備／寵物／鑽石／進度全部歸零（無法復原）',okText:'重置',danger:true})) return;
@@ -2404,6 +2426,7 @@ async function reloadOtherPlayer(email){
 /* C1：實際存檔邏輯（回傳 boolean）。C2 由 saveGameState 排進序列鏈執行，每次執行讀當下最新全域 GS。 */
 async function _doSaveGS(){
  try{
+  if(STATE.sandbox) return true;   // 🧪 測試模式：一律不寫(雲端+localStorage),關視窗即還原
   if(!STATE.user||!GS) return true;   // 無檔可存，非失敗
   GS.updated = isoToRagic(new Date().toISOString());
   if(CONFIG.MODE!=='CLOUD'){ localStorage.setItem('usled_gs_'+STATE.user.id, JSON.stringify(GS)); return true; }   // B1：LOCAL 視為成功
@@ -3230,7 +3253,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.8';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.9';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
