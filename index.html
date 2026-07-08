@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2123,7 +2123,7 @@ async function viewReport() {
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
     h += `<div class="lock-bar">${isLocked
       ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
-      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button></div>`;
+      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button><button class="btn btn-sm" style="background:#6b21a8;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportPayrollRegister()">📑 工資清冊</button></div>`;
     // 試點：特休 本地算 vs 單一 API 對照（治本第一步，確認一致後再改吃 API）
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#7c3aed;color:#fff;padding:6px 14px" onclick="annualParityCheck()">🔍 特休 API 對照（驗證兩邊一致）</button><div id="parity-box" style="margin-top:8px"></div></div>`;
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#b45309;color:#fff;padding:6px 14px" onclick="salaryParityCheck()">🔍 薪資 API 對照（切薪資前驗證）</button><div id="salary-parity-box" style="margin-top:8px"></div></div>`;
@@ -2306,6 +2306,25 @@ function exportMonthDetail() {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `出勤明細_${ym.replace('/', '-')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// 工資清冊（勞基法§23 II：雇主應置備工資清冊，保存5年）——從薪資 API 取數，離線估算不給匯出
+function exportPayrollRegister() {
+  if (!_RPT) { alert('請先載入薪資月報'); return; }
+  if (!_API_SALARY) { toast('薪資 API 未連線（離線估算中），為避免匯出備用數字，請稍後重新整理再匯出', 'red'); return; }
+  const ym = _RPT.ym;
+  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)']];
+  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
+    const a2 = _API_SALARY[String(w.email || '').toLowerCase()]; if (!a2) return;
+    rows.push([ym, w.name, w.email, a2.attendDays, a2.totH, a2.base, a2.otMonthH, a2.otPay, a2.holidayBonus, a2.absentDeduct, a2.disasterDeduct, a2.lateDeduct, a2.leaveDeduct, a2.laborIns, a2.healthIns, a2.net, a2.annualRemainYr, a2.compBal]);
+  });
+  if (rows.length <= 1) { alert('本月無薪資資料可匯出'); return; }
+  const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `工資清冊_${ym.replace('/', '-')}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
 }
 
