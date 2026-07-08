@@ -1527,21 +1527,49 @@ function closeTeam(){ const m=document.getElementById('teamModal'); if(m)m.remov
 
 /* 實體獎（1 鑽石 ≈ 1 元）。qty = 每季全公司限量，被換完下季補貨（稀缺感＋控制成本） */
 const REWARDS = [
+  /* 2026-07 擴充：AI 經理提案 27 項 + 原 16 項，按價格排序。限量粒度換算成季(每月1→季3)，精確規則寫在 desc、主管核准時把關 */
   {id:'rw_song',   icon:'🎵', name:'辦公室點歌權',     price:30,   desc:'指定一個下午的歌單', qty:8},
   {id:'rw_coffee', icon:'☕', name:'咖啡升級券',       price:40,   desc:'超商咖啡升大杯',     qty:6},
+  {id:'rw_fist',   icon:'✊', name:'老闆猜拳台',       price:50,   desc:'跟老闆猜拳一次，贏了現拿手搖飲券（每人每週限 1 次）', qty:13, perUser:true},
   {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',       price:60,   desc:'主管請，60 元內',    qty:6},
+  {id:'rw_clean',  icon:'🧹', name:'收工清潔跳過券',   price:60,   desc:'掃地/倒垃圾/收工作檯輪值跳過一次（同一輪值週期全公司限 2 張）', qty:6},
+  {id:'rw_praise', icon:'📣', name:'老闆專文表揚',     price:60,   desc:'老闆在公司群親自寫一段具體事蹟表揚，不能只貼貼圖（每月限 2 張）', qty:6},
+  {id:'rw_credit', icon:'🏗️', name:'作品掛名權',       price:80,   desc:'你組裝/安裝的屏出貨照發 FB/官網掛名「本作品由○○○製作」（照片公司拍）'},
   {id:'rw_late5',  icon:'⏱️', name:'彈性上班 5 分券',  price:80,   desc:'事前申請的彈性，不影響法定出勤計算', qty:2, perUser:true},
+  {id:'rw_class',  icon:'📚', name:'技能點播課',       price:100,  desc:'指定想學的技能（報價/焊接/維修/談客戶），老闆或主管 1 對 1 教一小時'},
   {id:'rw_nap',    icon:'😴', name:'午休＋15 分券',    price:100,  desc:'午休延長 15 分鐘（雇主自願福利）', qty:2, perUser:true},
+  {id:'rw_swim',   icon:'🏊', name:'岡山運動中心游泳券',price:110, desc:'單次入場，泳池/健身房擇一（限本人、3 個月內使用、每月 2 張）', qty:6, perUser:true},
+  {id:'rw_tea',    icon:'🍵', name:'老闆奉茶',         price:120,  desc:'老闆親手泡一杯飲料端到你座位，全公司見證（每月全公司限 2 張）', qty:6},
+  {id:'rw_sleepin',icon:'🛌', name:'睡飽券',           price:120,  desc:'當日晚 60 分上班、下班順延補回（時數對移；前一日報備、外勤安裝日不可用、每月 1 張）', qty:3, perUser:true},
   {id:'rw_snack',  icon:'🍗', name:'下午茶點心',       price:120,  desc:'雞排＋飲料',          qty:4},
+  {id:'rw_rest30', icon:'⏳', name:'有薪休息 30 分券', price:130,  desc:'當月任一天帶薪離開/休息 30 分（前一日申請、主管視排班核准、當月有效、出貨日不可用）', qty:3, perUser:true},
   {id:'rw_lunch',  icon:'🍱', name:'午餐公司請',       price:150,  desc:'指定一天，150 元內',  qty:4},
   {id:'rw_early30',icon:'🕔', name:'彈性早下班 30 分', price:150,  desc:'事前申請的彈性，需排班允許', qty:2, perUser:true},
+  {id:'rw_charge', icon:'🔋', name:'合法充電 30 分',   price:150,  desc:'上班時間光明正大休息 30 分，桌上掛「充電中」牌（忙季主管可協調改期）', qty:6},
+  {id:'rw_title',  icon:'📛', name:'頭銜自訂月',       price:150,  desc:'一個月內 LINE 群暱稱＋任務牆稱號掛自選頭銜（稱號需過審、不得貶低他人）', qty:3},
+  {id:'rw_vipnap', icon:'🛏️', name:'午睡 VIP 角',      price:150,  desc:'專屬摺疊躺椅＋眼罩使用權一個月（每月限 1 人）', qty:3},
+  {id:'rw_party',  icon:'🎲', name:'午休同樂會發起權', price:180,  desc:'指定一天全員午休延長 15 分打桌遊/看片，公司出零食（每季全公司限 1 次）', qty:1},
   {id:'rw_seat',   icon:'🪑', name:'優先排休券',       price:180,  desc:'排休優先選 1 次',     qty:2},
   {id:'rw_late10', icon:'⏰', name:'彈性上班 10 分券', price:200, desc:'事前申請的彈性，不影響法定出勤計算', qty:1, perUser:true},
   {id:'rw_coupon', icon:'🎫', name:'200 元禮券',       price:200,  desc:'全聯／超商擇一',      qty:3},
+  {id:'rw_raffle', icon:'🎰', name:'尾牙加碼籤',       price:200,  desc:'年終抽獎多一支籤（每人每年限 2 張）', qty:2, perUser:true},
   {id:'rw_errand', icon:'🛵', name:'主管跑腿一次',     price:250,  desc:'買飲料/取件主管代勞', qty:2},
+  {id:'rw_treat',  icon:'🍗', name:'我請全公司',       price:250,  desc:'掛你的名義請全公司雞排/鹹酥雞，公司出錢（每月全公司限 1 次）', qty:3},
+  {id:'rw_pickjob',icon:'🎯', name:'任務先挑權（一週）',price:250, desc:'本週新任務發布後 24 小時內你有優先認領權（每月限 1 張）', qty:3, perUser:true},
+  {id:'rw_cool',   icon:'🧊', name:'夏季外勤涼感包',   price:250,  desc:'涼感毛巾＋運動飲料一箱＋涼感袖套（限 5-9 月兌換、每人每季 1 次）', qty:1, perUser:true},
+  {id:'rw_gold',   icon:'🖼️', name:'金框頭像月',       price:250,  desc:'任務牆頭像金色光環一個月，團隊頁排最前（同時間限 1 人）', qty:3},
+  {id:'rw_latefix',icon:'🎟️', name:'遲到抵用券',       price:280,  desc:'單次遲到 10 分內不扣薪不記懲處（事後赦免；當日下班前主動出示才生效、當月有效、每月限 1 張。打卡照實記載）', qty:3, perUser:true},
   {id:'rw_early60',icon:'🏃', name:'彈性早下班 1 小時',price:280,  desc:'事前申請的彈性，需排班允許', qty:1, perUser:true},
+  {id:'rw_bosshr', icon:'👷', name:'老闆代班一小時',   price:300,  desc:'老闆親自頂你的崗位 1 小時（組裝/包裝/最討厭的活都行），你在旁監工（提前 3 天預約、每季全公司限 2 張）', qty:2},
+  {id:'rw_pickup', icon:'👨‍👧', name:'接送彈性週',     price:300,  desc:'連續 5 個工作日每天早走 15 分，帶薪（每人每季 1 張）', qty:1, perUser:true},
+  {id:'rw_name',   icon:'✍️', name:'命名權',           price:300,  desc:'幫下一隻新寵物/新Boss/公司WiFi命名，永久留名（每季限 1、名稱過審）', qty:1},
   {id:'rw_pick',   icon:'🍽️', name:'聚餐選店權',       price:300,  desc:'下次公司聚餐你選',    qty:1},
+  {id:'rw_desk',   icon:'🧰', name:'工位升級包',       price:400,  desc:'自選 400 元內工位改善（護腰椅墊/小風扇/檯燈/站墊）歸個人（內勤統一採購不發現金、每人每年 1 次）', qty:1, perUser:true},
+  {id:'rw_absx',   icon:'🧯', name:'臨時假消除券',     price:450,  desc:'消除一次臨時假的「內部扣點與全勤獎金影響」（每季 1 張、不可轉讓、當月已有 2 人臨時缺勤時不可用。請假單與出勤紀錄照實保留）', qty:1, perUser:true},
+  {id:'rw_urgx',   icon:'🚨', name:'緊急假消除券',     price:450,  desc:'消除一次緊急請假（一般事假性質）的內部扣點（每半年 1 張、與臨時假券不可疊用同一事件。法定假別依法本就不影響全勤，不需用券）', qty:1, perUser:true},
+  {id:'rw_massage',icon:'🦶', name:'腳底按摩券',       price:600,  desc:'岡山指定店家 40 分鐘腳底按摩一次（配合店由內勤代訂、限本人不可折現、每季 1 張）', qty:1, perUser:true},
   {id:'rw_half',   icon:'🌴', name:'半天有薪福利假',   price:1300, desc:'4 小時，雇主額外給；兌換後補正式請假單留底', qty:1, perUser:true},
+  {id:'rw_bosshalf',icon:'👑',name:'老闆當你半天助理', price:2000, desc:'老闆半天聽你指揮：搬料、打雜、跑腿都行（鎮店旗艦獎，每年全公司限 1 張）', qty:1},
   {id:'rw_day',    icon:'🏖️', name:'一日有薪福利假',   price:2600, desc:'雇主額外給；兌換後補正式請假單留底', qty:1, perUser:true},
 ];
 /* 限時隱藏獎：確定性亂數(日期 hash)→全公司同時看到、限量 1、時段內沒買就消失 */
@@ -3253,7 +3281,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.9';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.10';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
