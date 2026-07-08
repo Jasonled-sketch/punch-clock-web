@@ -610,7 +610,7 @@ function dbSaveTasks(tasks){
 async function dbUpsert(task){
   if(CONFIG.MODE==='CLOUD'){
     const res = await ragicSaveTask(task);
-    if(res && res.ragicId && !task.ragicId){ task.ragicId = res.ragicId; task.id = 'r'+res.ragicId; }
+    if(res && res.ragicId!=null && task.ragicId==null){ task.ragicId = res.ragicId; task.id = 'r'+res.ragicId; }
     return res;
   }
   dbSaveTasks(STATE.tasks);
@@ -618,7 +618,7 @@ async function dbUpsert(task){
 /* 刪除：CLOUD 走 Ragic DELETE */
 async function dbDelete(task){
   if(CONFIG.MODE==='CLOUD'){
-    if(task.ragicId){ try{ await ragicFetch('/'+task.ragicId+'?api', { method:'DELETE' }); }catch(e){} }
+    if(task.ragicId!=null){ try{ await ragicFetch('/'+task.ragicId+'?api', { method:'DELETE' }); }catch(e){} }
     return;
   }
   dbSaveTasks(STATE.tasks);
@@ -629,7 +629,7 @@ function glowFromRec(rec){ for(const k in rec){ const v=rec[k]; if(v==='小屏'|
 function quadFromRagic(v){ for(const k in CONFIG.RAGIC.QUAD2RAGIC) if(CONFIG.RAGIC.QUAD2RAGIC[k]===v) return k; return 'q4'; }
 function statusFromRagic(v){ for(const k in CONFIG.RAGIC.STATUS2RAGIC) if(CONFIG.RAGIC.STATUS2RAGIC[k]===v) return k; return 'open'; }
 function isoToRagic(iso){ if(!iso) return ''; const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
-function ragicToIso(s){ if(!s) return null; const d=new Date(String(s).replace(/\//g,'-').replace(' ','T')); return isNaN(d)?null:d.toISOString(); }
+function ragicToIso(s){ if(!s) return null; const str=String(s).replace(/\//g,'-').replace(' ','T'); const d=new Date(/T/.test(str)?str:str+'T00:00'); return isNaN(d)?null:d.toISOString(); }   // 純日期補 T00:00,避免被當 UTC 午夜差 8 小時
 function emailToUserId(email){ const u=CONFIG.USERS.find(x=>x.email===email); return u?u.id:(email||''); }
 function parseImages(s){ if(!s) return []; return String(s).split('\n').filter(x=>x.trim()).map(u=>({type:/\.(mp4|mov|webm)/i.test(u)?'video':'image', src:u.trim()})); }
 
@@ -644,7 +644,7 @@ async function ragicLoadTasks(){
   const json = await r.json();
   const tasks = [];
   Object.keys(json).forEach(k=>{
-    const rec = json[k]; if(!rec || typeof rec!=='object' || !rec._ragicId) return;
+    const rec = json[k]; if(!rec || typeof rec!=='object' || rec._ragicId==null) return;
     tasks.push({
       id:'r'+rec._ragicId, ragicId: rec._ragicId,
       title: rec['任務主題']||'', quadrant: quadFromRagic(rec['象限']), status: statusFromRagic(rec['狀態']),
@@ -675,10 +675,10 @@ async function ragicSaveTask(t){
   if(t.glow) fd.append(F.glow, t.glow);   // 城市光彩類型：小屏/大屏
   fd.append(F.note, t.note||'');
   fd.append(F.images, (t.images||[]).map(m=>typeof m==='string'?m:m.src).filter(s=>/^https?:/.test(s)).join('\n'));
-  if(t.submittedAt) fd.append(F.submittedAt, isoToRagic(t.submittedAt));
-  if(t.approvedAt) fd.append(F.approvedAt, isoToRagic(t.approvedAt));
+  fd.append(F.submittedAt, t.submittedAt?isoToRagic(t.submittedAt):'');   // 一律寫入,null 送空字串清欄位(退回時清掉提交時間)
+  fd.append(F.approvedAt, t.approvedAt?isoToRagic(t.approvedAt):'');
   if(t.createdAt) fd.append(F.createdAt, isoToRagic(t.createdAt));
-  const suffix = t.ragicId ? ('/'+t.ragicId+'?api') : '?api';
+  const suffix = t.ragicId!=null ? ('/'+t.ragicId+'?api') : '?api';
   const r = await ragicFetch(suffix, { method:'POST', body:fd });
   return await r.json();
 }
@@ -900,8 +900,8 @@ async function acceptTask(id){
   if(held>=WIP_CAP){ toast('你手上已有 '+held+' 件待處理任務（上限 '+WIP_CAP+'），先完成幾件再接 🙂'); return; }
   // 重讀確認沒被同事搶走/已在處理(競態防護)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id);
-    if(ft && ft.status!=='open'){ STATE.tasks=fresh; renderBoard(); toast('這張單剛被同事接走或處理中了'); return; }
-    if(ft) STATE.tasks=fresh;
+    if(!ft || ft.status!=='open' || ft.assigneeId!==t.assigneeId){ STATE.tasks=fresh; renderBoard(); toast('這張單剛被同事接走或處理中了'); return; }   // !ft=已被刪除,一樣中止
+    STATE.tasks=fresh;
   }catch(e){}
   const t2=STATE.tasks.find(x=>x.id===id)||t;
   t2.assigneeId=STATE.user.id; renderBoard(); await dbUpsert(t2); toast('已接單，開始處理！');
@@ -923,8 +923,8 @@ function renderTaskCard(t){
       swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();openTaskModal('${t.id}')">編輯</button>`;
       if(t.status==='submitted' && (t.assigneeId!==STATE.user.id || isBeta())) swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
     } else {
-      if(!mine) swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
-      if(t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
+      if(!mine && t.status==='open') swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
+      if(mine && t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
     }
   }
   return `<div class="swipe-row">
@@ -1036,7 +1036,7 @@ function setDueQuick(spec){
   else if(spec==='today'){ d = at18(now); if(d<=now){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); } }
   else if(spec==='tmr'){ const t=new Date(now); t.setDate(t.getDate()+1); d=at18(t); }
   else if(spec==='day2'){ const t=new Date(now); t.setDate(t.getDate()+2); d=at18(t); }
-  else if(spec==='week'){ const t=new Date(now); const add=(7-t.getDay())%7; t.setDate(t.getDate()+add); d=at18(t); }
+  else if(spec==='week'){ const t=new Date(now); const add=(7-t.getDay())%7; t.setDate(t.getDate()+add); d=at18(t); if(d<=now){ t.setDate(t.getDate()+7); d=at18(t); } }
   else if(spec==='nextweek'){ const t=new Date(now); const add=(7-t.getDay())%7+7; t.setDate(t.getDate()+add); d=at18(t); }
   else if(spec==='none'){ d=null; }
   const inp = document.getElementById('f_due'); if(inp) inp.value = d? toLocalInput(d.toISOString()):'';
@@ -1106,13 +1106,20 @@ async function saveTask(){
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
-async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
-async function approveTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; } t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
+async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
+async function approveTask(id){ let t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; }
+  // 重讀確認還在待審核(競態防護,比照 acceptTask)
+  try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
+  t=STATE.tasks.find(x=>x.id===id)||t;
+  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
 async function rejectTask(id){
-  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  let t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  // 重讀確認還在待審核(競態防護,比照 acceptTask)；要在 vPrompt 之前,避免填完理由才發現變了
+  try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
+  t=STATE.tasks.find(x=>x.id===id)||t;
   const reason=await vPrompt({icon:'↩️',title:'退回任務',msg:'寫個原因讓對方知道要怎麼修（會給 24 小時寬限，重做期間不扣點）',placeholder:'例：照片再補一張正面、數值欄位漏填',okText:'退回'});
   if(reason===null) return;   // 取消
-  t.status='open'; t.rejectNote=reason||'（未填原因）'; t.submittedAt=null;
+  t.status='open'; t.rejectNote=reason||'（未填原因）'; t.submittedAt=null; t.earnedPoints=null; t.approvedAt=null;
   if(t.dueAt && new Date(t.dueAt).getTime() < Date.now()+24*3600000) t.dueAt=new Date(Date.now()+24*3600000).toISOString();   // 至少 24 小時重做寬限,不被舊逾期繼續打折
   renderBoard(); await dbUpsert(t); toast('已退回，給了 24 小時寬限');
 }
@@ -1122,7 +1129,7 @@ function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remo
    媒體放大（圖片 / 影片）
    =================================================================== */
 function showMedia(taskId,idx){
-  const t=STATE.tasks.find(x=>x.id===taskId); const m=t.images[idx]; const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video';
+  const t=STATE.tasks.find(x=>x.id===taskId); if(!t||!t.images||!t.images[idx]) return; const m=t.images[idx]; const src=typeof m==='string'?m:m.src; const isVid=typeof m==='object'&&m.type==='video';
   const v=document.createElement('div'); v.id='imageView';
   v.innerHTML = isVid? `<video src="${src}" controls autoplay></video>` : `<img src="${src}">`;
   v.onclick=(e)=>{ if(e.target.id==='imageView') v.remove(); }; document.body.appendChild(v);
@@ -1173,11 +1180,11 @@ function showTaskDetail(id){
   document.body.appendChild(mask);
 }
 function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
-function moveTaskQuad(id, qid){
+async function moveTaskQuad(id, qid){
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   closeDetail();
   STATE.activeQuad=qid;
-  if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
+  if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); try{ await dbUpsert(t); }catch(e){ toast('雲端寫入失敗：'+e.message); return; } toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
   else { renderBoard(); }
 }
 
@@ -1553,7 +1560,7 @@ function todayHidden(){
 /* 神祕商人：每天隨機 3 場、每場 10 分鐘，收貢獻值換鑽石（依日期 hash 確定性、跨裝置一致、零儲存） */
 const MERCHANT_RATES=[{c:1,d:3},{c:10,d:35},{c:30,d:120}];   // 降十倍，仍是 T 點換鑽率的 30~40 倍(保留貢獻值=高價值手感)
 const CONTRIB_MONTH_CAP=30;   // 貢獻值每月最多向商人兌換 30 點(防印鈔)
-function contribMchUsed(){ const ym=new Date().toISOString().slice(0,7); return (GS&&GS.mchMonth&&GS.mchMonth.ym===ym)?(GS.mchMonth.used||0):0; }
+function contribMchUsed(){ const ym=new Date(Date.now()+8*3600000).toISOString().slice(0,7); return (GS&&GS.mchMonth&&GS.mchMonth.ym===ym)?(GS.mchMonth.used||0):0; }   // 台北月(比照 dungeonDay)
 /* 固定非上班時段：午休 12:30-13:30、晚上 21:00-22:00（外勤收工也趕得上、不訓練上班檢查強迫症） */
 const MCH_WINDOWS=[[12*60+30,13*60+30],[21*60,22*60]];
 function merchantState(){
@@ -1578,7 +1585,9 @@ async function merchantExchange(ci){
   if(contribSpendable(STATE.user.id)<r.c){ toast('貢獻值不足（需 '+r.c+'）'); return; }
   if(contribMchUsed()+r.c>CONTRIB_MONTH_CAP){ toast('本月兌換已達上限 '+CONTRIB_MONTH_CAP+' 點貢獻值'); return; }
   if(!await vConfirm({icon:'🧙‍♂️',title:'神祕商人',msg:'用 '+r.c+' 點貢獻值換 '+r.d+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？\n（貢獻值花掉不影響你的等級與戰力）',okText:'兌換'})) return;
-  const ym=new Date().toISOString().slice(0,7);
+  if(contribSpendable(STATE.user.id)<r.c){ toast('貢獻值不足（需 '+r.c+'）'); return; }   // confirm 期間餘額可能已變,二次驗證
+  if(contribMchUsed()+r.c>CONTRIB_MONTH_CAP){ toast('本月兌換已達上限 '+CONTRIB_MONTH_CAP+' 點貢獻值'); return; }
+  const ym=new Date(Date.now()+8*3600000).toISOString().slice(0,7);
   if(!GS.mchMonth||GS.mchMonth.ym!==ym) GS.mchMonth={ym,used:0};
   GS.mchMonth.used+=r.c;
   GS.contribSpent=(GS.contribSpent||0)+r.c; GS.mchGain=(GS.mchGain||0)+r.d;   // 商人換得記 mchGain(合法,永遠計入)，與測試 bonus 分開
@@ -1608,6 +1617,8 @@ async function requestRedeem(rid){
   if(coinBalance()<it.price){ toast('鑽石不足'); return; }
   const leaveNote = it.perUser ? '\n（兌換核准後請補一張正式請假單留底）' : '';
   if(!await vConfirm({icon:'🎁',title:'兌換實體獎',msg:'用 '+it.price+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 兌換「'+it.name+'」？\n送出後等主管核准，核准前可取消。'+leaveNote,okText:'送出申請'})) return;
+  if(it.qty && rewardUsed(it)>=it.qty){ toast(rid.indexOf('hw_')===0?'快閃獎已被搶走 😭':(it.perUser?'你本季已兌過，下季再來 🔒':'本季已兌完，下季補貨 🔒')); return; }   // confirm 期間可能被搶,二次驗證
+  if(coinBalance()<it.price){ toast('鑽石不足'); return; }
   GS.redeem=GS.redeem||[];
   GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
   GS.spent+=it.price;   // 先扣住，婉拒/取消退回
@@ -1626,6 +1637,16 @@ async function decideRedeem(pi, redId, ok){
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
   if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的兌換要請另一位主管核准 🤝'); return; }
   const r=(p.save.redeem||[]).find(x=>x.id===redId); if(!r||r.st!=='pending') return;
+  // 核准端超賣守門：限量獎重算已核准數(perUser 只算本人;隱藏獎以申請當天計,比照 soldCount),滿了自動婉拒退款
+  if(ok===true){ const def=rewardDef(r.rid);
+    if(def && def.qty){ const qk=quarterKey(), hidden=r.rid.indexOf('hw_')===0, day=String(r.at).slice(0,10);
+      let n=0; (def.perUser?[p]:(STATE.allPlayers||[])).forEach(pp=>{ (pp.save.redeem||[]).forEach(x=>{
+        if(x.rid!==r.rid||x.st!=='ok'||x.id===r.id) return;
+        if(hidden){ if(String(x.at).slice(0,10)===day) n++; } else if(quarterKey(new Date(x.at))===qk) n++;
+      });});
+      if(n>=def.qty){ toast('這個獎已被換完，自動婉拒'); ok=false; }
+    }
+  }
   r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
   if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
   if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
@@ -1636,7 +1657,7 @@ async function writeOtherGS(p){
   const F=GAME_STORE.F, fd=new FormData();
   fd.append(F.email, p.email); fd.append(F.name, p.name||'');
   const uid=emailToUserId(p.email);
-  fd.append(F.balance, String(userEarnedCoins(uid)+(p.save.won||0)+(p.save.mchGain||0)+(isBeta()?(p.save.bonus||0):0)-(p.save.spent||0)));
+  fd.append(F.balance, String(userEarnedCoins(uid)+teamPoolCoins(uid)+(p.save.won||0)+(p.save.mchGain||0)+(isBeta()?(p.save.bonus||0):0)-(p.save.spent||0)));   // 補團隊池,與 coinBalance 一致
   fd.append(F.save, JSON.stringify(p.save));
   fd.append(F.updated, isoToRagic(new Date().toISOString()));
   const r=await ragicFetchGS('/'+p.ragicId+'?api',{method:'POST',body:fd});
@@ -2011,7 +2032,8 @@ function teamPoolCoins(uid){
   let total=0; const now=new Date();
   for(let i=1;i<=24;i++){ const d=new Date(now.getFullYear(), now.getMonth()-i, 1); const y=d.getFullYear(), m=d.getMonth();
     const team=teamMonthPts(y,m); if(team<=0) continue;
-    const pool=poolCoinsFor(team/teamKpiForMonth(y,m)); if(!pool) continue;   // 用該月在籍名冊算門檻
+    const tk=teamKpiForMonth(y,m); if(tk<=0) continue;   // 該月在籍 KPI 為 0 → 跳過,防除以 0 變 Infinity
+    const pool=poolCoinsFor(team/tk); if(!pool) continue;   // 用該月在籍名冊算門檻
     const emp=empMonthPts(y,m); if(emp<=0) continue;
     total+=Math.floor(pool*monthPts(uid,y,m)/emp); }   // 分母改員工點數總和 → 整池發給員工
   return total;
@@ -2305,6 +2327,7 @@ async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
   const fromDrop=GS.dropped&&GS.dropped.includes(id);
   const back=fromDrop?5:Math.floor(it.price*0.4);   // 副本掉落的固定 5 鑽(堵掉落→賣→再掉永動機)；買的維持 40%
   if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？'+(fromDrop?'\n（副本掉落品回收價固定）':''),okText:'賣出'})) return;
+  if(!owns(id)){ toast('這件裝備已不在背包'); return; }   // confirm 期間可能已被賣掉,二次驗證
   GS.owned=GS.owned.filter(x=>x!==id); if(GS.dropped) GS.dropped=GS.dropped.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
   GS.spent-=back; await saveGameState(); toast('已賣出 ＋'+back+' 鑽石'); refreshGameUI(); }
 function userEarnedCoins(uid){
@@ -2312,7 +2335,7 @@ function userEarnedCoins(uid){
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   return Math.floor(tp/COIN_PER_TPTS);
 }
-function coinBalance(){ return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.mchGain)||0) + (isBeta()?((GS&&GS.bonus)||0):0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }   // bonus(測試)只在 beta 計入；正式站自動忽略殘留
+function coinBalance(){ if(!STATE.user) return 0; return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.mchGain)||0) + (isBeta()?((GS&&GS.bonus)||0):0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }   // bonus(測試)只在 beta 計入；正式站自動忽略殘留
 /* 貢獻值：earned=任務累積(終身,驅動等級)；spendable=可賣給商人換鑽石的餘額 */
 function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done').reduce((s,t)=>s+(t.contribution||0),0); }
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
@@ -2794,8 +2817,8 @@ function doTeamBossAttack(){
   const o=document.createElement('div'); o.className='modal-mask'; o.id='tbAtkModal';
   o.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
     <div style="font-size:40px">🐲</div><h3 style="margin:6px 0">今日出力 · 答對即攻擊</h3>
-    <div class="quiz-cat">${q.cat}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div><div class="quiz-q">${q.q}</div>
-    <div class="quiz-opts">${order.map(oi=>`<button class="quiz-opt" onclick="answerTeamBoss(${qi},${oi})">${q.a[oi]}</button>`).join('')}</div>
+    <div class="quiz-cat">${esc(q.cat)}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div><div class="quiz-q">${esc(q.q)}</div>
+    <div class="quiz-opts">${order.map(oi=>`<button class="quiz-opt" onclick="answerTeamBoss(${qi},${oi})">${esc(q.a[oi])}</button>`).join('')}</div>
     <button class="t-expand" onclick="document.getElementById('tbAtkModal').remove()" style="display:block;margin:12px auto 0;font-size:12px;color:var(--muted)">先不打</button>
   </div>`;
   document.body.appendChild(o);
@@ -2867,7 +2890,9 @@ async function submitQuiz(){
 }
 function quizSubPending(){ const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.quizSub||[]).forEach(s=>{ if(s.st==='pending') out.push({pi,p,s}); }); }); return out; }
 async function decideQuiz(pi, id, ok){
+  if(!isSupervisor(STATE.user)){ return; }   // 守衛：只有主管能採納/婉拒
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
+  if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的出題要請另一位主管採納 🤝'); return; }
   const s=(p.save.quizSub||[]).find(x=>x.id===id); if(!s||s.st!=='pending') return;
   s.st=ok?'ok':'no'; s.decidedAt=new Date().toISOString();
   if(ok) p.save.won=(p.save.won||0)+QUIZ_REWARD;   // 出題者得鑽石
@@ -2960,10 +2985,10 @@ function startBattle(bossId){
   const b=BOSSES.find(x=>x.id===bossId); if(!b) return;
   if(!lvOK(b.minLevel)){ toast('需 Lv.'+b.minLevel); return; }
   if(dungeonLeft()<=0){ toast('今天挑戰次數用完了，明天再來 💪'); return; }
+  syncHp();
+  if(GS.hp<=10){ toast('❤️ 血量太低（'+Math.round(GS.hp)+'%），先用補劑或等自然回復'); return; }   // 先驗血量再扣次數,免得白扣
   if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
   GS.dungeon.used++; saveGameState();
-  syncHp();
-  if(GS.hp<=10){ toast('❤️ 血量太低（'+Math.round(GS.hp)+'%），先用補劑或等自然回復'); return; }
   const pool=quizPool();
   STATE.battle={boss:b, hp:b.hp, pool, order:buildQuizOrder(pool), qi:0, msg:'答對攻擊；答錯或超時會被怪攻擊！', hints:petSkillVal('hint')||0, hit:null, shield:false, deadline:Date.now()+QUIZ_TIME*1000};
   closeDungeon(); renderBattle(); startQuizTimer();
@@ -2986,9 +3011,9 @@ function renderBattle(){
       <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 攻擊 ${attackPower()}　🛡️ 防禦 ${gearDef()}　⏳ <b id="qTimer" style="color:var(--accent)">${Math.max(0,Math.ceil((bt.deadline-Date.now())/1000))}</b> 秒</div>
       <div class="battle-msg">${bt.msg}</div>
     </div>
-    <div class="quiz-cat">${q.cat}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div>
-    <div class="quiz-q">${q.q}</div>
-    <div class="quiz-opts">${bt.opt.map(oi=>`<button class="quiz-opt" onclick="answerQuiz(${oi})">${q.a[oi]}</button>`).join('')}</div>
+    <div class="quiz-cat">${esc(q.cat)}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div>
+    <div class="quiz-q">${esc(q.q)}</div>
+    <div class="quiz-opts">${bt.opt.map(oi=>`<button class="quiz-opt" onclick="answerQuiz(${oi})">${esc(q.a[oi])}</button>`).join('')}</div>
     <div class="battle-items">
       ${ITEMS.map(it=>itemCount(it.id)>0?`<button class="item-btn" onclick="useItem('${it.id}')" title="${it.name}：${it.desc}">${itemImg(it,22)}×${itemCount(it.id)}</button>`:'').join('')}
       ${(bt.hints||0)>0?`<button class="confucius-btn" style="margin:0" onclick="callConfucius()">🧙 孔子（剩 ${bt.hints}）</button>`:''}
@@ -3039,7 +3064,7 @@ function answerQuiz(idx){
     if(bt.hp<=0) return endBattle(true);
     bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle(); }
   else { if(!GS.quizWrong.includes(qi)) GS.quizWrong.push(qi);
-    return takeDamage('✗ 答錯（正解：'+q.a[q.c]+'）'); }
+    return takeDamage('✗ 答錯（正解：'+esc(q.a[q.c])+'）'); }   // 正解也要轉義(bt.msg 進 innerHTML)
 }
 function quitBattle(){ stopQuizTimer(); STATE.battle=null; saveGameState(); const m=document.getElementById('battleModal'); if(m)m.remove(); showDungeon(); }
 async function endBattle(win){
@@ -3169,7 +3194,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.6';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.7';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
@@ -3227,21 +3252,23 @@ function quadrantAt(x,y){
   for(const el of els){ const q = el.closest && el.closest('.quadrant'); if(q) return q; }
   return null;
 }
-function dragEnd(e){
+async function dragEnd(e){
   if(!dragCtx) return;
   clearTimeout(dragCtx.timer);
+  let moved=null;   // 先清 UI 再寫雲端,避免 ghost 卡在畫面等網路
   if(dragCtx.active){
     const pt = e.changedTouches? e.changedTouches[0] : e;
     const q = quadrantAt(pt.clientX, pt.clientY);
     if(q && q.dataset.qid){
       const t = STATE.tasks.find(x=>x.id===dragCtx.tid);
-      if(t && t.quadrant!==q.dataset.qid){ t.quadrant=q.dataset.qid; dbUpsert(t); toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===q.dataset.qid).title+'」'); }
+      if(t && t.quadrant!==q.dataset.qid){ t.quadrant=q.dataset.qid; moved=t; toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===q.dataset.qid).title+'」'); }
     }
     if(dragCtx.ghost) dragCtx.ghost.remove();
     document.querySelectorAll('.quadrant').forEach(q=>q.style.outline='');
     renderBoard();
   }
   dragCtx = null;
+  if(moved){ try{ await dbUpsert(moved); }catch(err){ toast('雲端寫入失敗：'+err.message); } }
 }
 
 /* ===================================================================
@@ -3303,9 +3330,8 @@ function renderGcalBanner(){
 // 每分鐘自動更新倒數 + 檢查逾期
 setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
 setInterval(()=>{ if(STATE.user && STATE.gcalToken && !document.getElementById('appView').classList.contains('hidden')) loadGcalToday(); }, 180000);   // Google 日曆每 3 分鐘刷新
-// 記住上次登入身份（方便 demo）
-const last = localStorage.getItem('usled_last_user');
-if(last && userById(last)) login(last);
+// 記住上次登入身份（方便 demo）— 只在 LOCAL 模式,避免殘留污染 CLOUD 的 Google 登入
+if(CONFIG.MODE!=='CLOUD'){ const last = localStorage.getItem('usled_last_user'); if(last && userById(last)) login(last); }
 </script>
 </body>
 </html>
