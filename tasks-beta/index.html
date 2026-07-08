@@ -680,6 +680,7 @@ async function ragicSaveTask(t){
   if(t.createdAt) fd.append(F.createdAt, isoToRagic(t.createdAt));
   const suffix = t.ragicId!=null ? ('/'+t.ragicId+'?api') : '?api';
   const r = await ragicFetch(suffix, { method:'POST', body:fd });
+  if(!r.ok) throw new Error('Ragic HTTP '+r.status);   // B2：非 2xx 視為失敗（dbUpsert 呼叫端已有 try/catch）
   return await r.json();
 }
 
@@ -1258,7 +1259,7 @@ function achievements(done,sumPts,sumCon,sumFav){
   const quads=new Set(done.map(t=>t.quadrant)).size;
   const onTime=done.filter(t=>t.dueAt && (t.earnedPoints==null || t.earnedPoints>=(t.points||0))).length;
   const g=gameStats(sumPts,sumCon,sumFav);
-  const byMonth={}; done.forEach(t=>{const d=t.approvedAt||t.submittedAt||t.createdAt; if(d){const k=d.slice(0,7); byMonth[k]=(byMonth[k]||0)+1;}});
+  const byMonth={}; done.forEach(t=>{const d=t.submittedAt||t.approvedAt||t.createdAt; if(d){const dt=new Date(d), k=dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0'); byMonth[k]=(byMonth[k]||0)+1;}});   /* E2：歸月改提交月優先+本地時區，與 monthPts 一致 */   /* E2：月度徽章切月改本地時區，與月報一致(原 d.slice(0,7) 為 UTC) */
   const maxMonth=Object.values(byMonth).reduce((m,v)=>Math.max(m,v),0);
   const A=(name,desc,icon,cur,max)=>({name,desc,icon,cur:Math.min(cur,max),max,got:cur>=max});
   return [
@@ -1591,7 +1592,8 @@ async function merchantExchange(ci){
   if(!GS.mchMonth||GS.mchMonth.ym!==ym) GS.mchMonth={ym,used:0};
   GS.mchMonth.used+=r.c;
   GS.contribSpent=(GS.contribSpent||0)+r.c; GS.mchGain=(GS.mchGain||0)+r.d;   // 商人換得記 mchGain(合法,永遠計入)，與測試 bonus 分開
-  await saveGameState(); toast('🪙 兌換成功！+'+r.d+' 鑽石'); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('🪙 兌換成功！+'+r.d+' 鑽石'); refreshGameUI();
 }
 function quarterKey(d){ d=d||new Date(); return d.getFullYear()+'Q'+(Math.floor(d.getMonth()/3)+1); }
 /* 本季全公司已兌數（pending+ok 都算佔位）；隱藏獎以「當天」計 */
@@ -1622,12 +1624,14 @@ async function requestRedeem(rid){
   GS.redeem=GS.redeem||[];
   GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
   GS.spent+=it.price;   // 先扣住，婉拒/取消退回
-  await saveGameState(); toast('已送出兌換申請 ✓'); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：存檔失敗就重載雲端，丟棄本地未存動作
+  toast('已送出兌換申請 ✓'); refreshGameUI();
 }
 async function cancelRedeem(id){
   const r=(GS.redeem||[]).find(x=>x.id===id); if(!r||r.st!=='pending') return;
   r.st='cancel'; GS.spent-=r.price;
-  await saveGameState(); toast('已取消，幣已退回'); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('已取消，幣已退回'); refreshGameUI();
 }
 function pendingRedeems(){
   const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.redeem||[]).forEach(r=>{ if(r.st==='pending') out.push({pi, p, r}); }); });
@@ -1636,6 +1640,7 @@ function pendingRedeems(){
 async function decideRedeem(pi, redId, ok){
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
   if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的兌換要請另一位主管核准 🤝'); return; }
+  if((STATE.user.email||'').toLowerCase()!==p.email){ const fresh=await reloadOtherPlayer(p.email); if(!fresh){ toast('讀取員工最新存檔失敗，稍後再試'); return; } p.save=fresh.save; p.ragicId=fresh.ragicId; }   // D2：跨員工核准前重拉最新 GS，避免舊快照覆寫員工進度
   const r=(p.save.redeem||[]).find(x=>x.id===redId); if(!r||r.st!=='pending') return;
   // 核准端超賣守門：限量獎重算已核准數(perUser 只算本人;隱藏獎以申請當天計,比照 soldCount),滿了自動婉拒退款
   if(ok===true){ const def=rewardDef(r.rid);
@@ -1649,7 +1654,7 @@ async function decideRedeem(pi, redId, ok){
   }
   r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
   if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
-  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
+  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
   toast(ok?'已核准 ✓ 記得兌現給員工 🎁':'已婉拒，幣已退回'); refreshGameUI();
 }
@@ -1661,6 +1666,7 @@ async function writeOtherGS(p){
   fd.append(F.save, JSON.stringify(p.save));
   fd.append(F.updated, isoToRagic(new Date().toISOString()));
   const r=await ragicFetchGS('/'+p.ragicId+'?api',{method:'POST',body:fd});
+  if(!r.ok) throw new Error('HTTP '+r.status);   // B3：非 2xx 視為失敗（decide* 已有 try/catch）
   return await r.json();
 }
 
@@ -1691,19 +1697,20 @@ async function createFavorReq(toId, kind, desc, amount){
   if(kind==='borrow' && (favorBalance(me.id)-favorReserved(me.id))<amount){ toast('你的人情點不足（可用 '+(favorBalance(me.id)-favorReserved(me.id))+'）'); return; }
   GS.favorReq=GS.favorReq||[];
   GS.favorReq.push({id:'fv'+Date.now(), kind, fromId:me.id, fromName:me.name, fromEmail:(me.email||'').toLowerCase(), toId, toName:target.name, toEmail:(target.email||'').toLowerCase(), desc:desc||'', favor:amount, st:'pending', at:new Date().toISOString()});
-  await saveGameState(); toast('已送出，等對方回覆 🤝'); refreshFavorUI();
+  if(!await saveGameState()){ await loadGameState(); refreshFavorUI(); return; } toast('已送出，等對方回覆 🤝'); refreshFavorUI();
 }
 async function cancelFavorReq(reqId){
   const r=(GS&&GS.favorReq||[]).find(x=>x.id===reqId); if(!r||r.st!=='pending') return;
   r.st='cancel'; r.decidedAt=new Date().toISOString();
-  await saveGameState(); toast('已收回請求'); refreshFavorUI();
+  if(!await saveGameState()){ await loadGameState(); refreshFavorUI(); return; } toast('已收回請求'); refreshFavorUI();
 }
 async function decideFavor(pi, reqId, ok){
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
+  if((STATE.user.email||'').toLowerCase()!==p.email){ const fresh=await reloadOtherPlayer(p.email); if(!fresh){ toast('讀取員工最新存檔失敗，稍後再試'); return; } p.save=fresh.save; p.ragicId=fresh.ragicId; }   // D2：跨員工回覆前重拉最新 GS
   const r=(p.save.favorReq||[]).find(x=>x.id===reqId); if(!r||r.st!=='pending') return;
   if(r.toId!==STATE.user.id){ toast('只有對方能回覆'); return; }
   r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
-  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
+  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
   if(ok) favorCeremony(r.favor, r.fromName);   // 接受指派 或 答應幫忙(求助) → 你收到人情,金光儀式「○○感謝你的協助」
   else toast(ok?'已同意 🤝':'已婉拒');
@@ -1785,7 +1792,7 @@ async function sendKudos(){
   if(kudosSentWeek()>=KUDOS_WEEK_CAP){ toast('本週 '+KUDOS_WEEK_CAP+' 張感謝卡已用完，下週再謝 🙏'); return; }
   if(!msg){ toast('寫一句感謝的話'); return; }
   GS.kudos=GS.kudos||[]; GS.kudos.push({id:'kd'+Date.now(), toId:to, toName:target.name, msg:msg.slice(0,40), at:new Date().toISOString()});
-  await saveGameState(); toast('已送出感謝卡給 '+target.name+' 🙏'); refreshFavorUI();
+  if(!await saveGameState()){ await loadGameState(); refreshFavorUI(); return; } toast('已送出感謝卡給 '+target.name+' 🙏'); refreshFavorUI();
 }
 function checkKudos(){
   if(!STATE.user) return;
@@ -1826,6 +1833,7 @@ function onboardSteps(){
 }
 function onboardDone(){ return onboardSteps().every(s=>s.ok); }
 function checkStarter(){
+  if(STATE.gsLoadFailed) return;   // A3：載入失敗時 GS 是空檔，勿誤判發起步禮 300 鑽並建新檔
   if(!GS || GS.starterClaimed) return;
   if(userGameLevel(STATE.user.id)>=5 || (GS.owned||[]).length || (GS.clears||0)>0 || Object.keys(GS.pets||{}).length){ GS.starterClaimed=true; saveGameState(); return; }   // 老手/已有進度→只標記不發
   GS.starterClaimed=true; GS.won=(GS.won||0)+STARTER.coins;
@@ -1870,7 +1878,7 @@ function onboardCardHtml(){
 /* 月度成長回顧卡：每月首次登入自動彈上月成績；成長頁可手動回看 */
 function monthStatsFor(uid,y,m){
   const s=new Date(y,m,1).getTime(), e=new Date(y,m+1,1).getTime();
-  const tAt=t=>new Date(t.approvedAt||t.submittedAt||t.createdAt||0).getTime();
+  const tAt=t=>new Date(t.submittedAt||t.approvedAt||t.createdAt||0).getTime();   /* E：歸月改提交月優先,與 monthPts/achievements 一致 */
   const all=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
   const inM=all.filter(t=>{const d=tAt(t); return d>=s&&d<e;});
   const pts=t=>t.earnedPoints!=null?t.earnedPoints:(t.points||0);
@@ -2018,7 +2026,7 @@ function userKpiForMonth(u,y,m){
 function teamKpiForMonth(y,m){ return CONFIG.USERS.reduce((a,u)=>a+userKpiForMonth(u,y,m),0); }
 function teamKpi(){ const n=new Date(); return teamKpiForMonth(n.getFullYear(), n.getMonth()); }   // 本月在籍版
 function monthPts(uid,y,m){ const s=new Date(y,m,1).getTime(), e=new Date(y,m+1,1).getTime();
-  return STATE.tasks.filter(t=>t.assigneeId===uid&&t.status==='done'&&(d=>d>=s&&d<e)(new Date(t.approvedAt||t.submittedAt||t.createdAt||0).getTime()))
+  return STATE.tasks.filter(t=>t.assigneeId===uid&&t.status==='done'&&(d=>d>=s&&d<e)(new Date(t.submittedAt||t.approvedAt||t.createdAt||0).getTime()))   /* E1：歸月改用提交月(submittedAt 優先)，與 effectivePoints 凍結一致 */
     .reduce((a,t)=>a+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0); }
 /* 公司之光：完成的裝屏任務 → 點亮城市的顯示屏數（小屏/大屏），純衍生 */
 function cityGlow(){ let s=0,b=0; STATE.tasks.forEach(t=>{ if(t.status==='done'){ if(t.glow==='小屏')s++; else if(t.glow==='大屏')b++; } }); return {small:s, big:b, total:s+b}; }
@@ -2307,13 +2315,15 @@ function itemImg(it,sz){ return `<img src="assets/game/item/${it.file}" style="w
 async function buyConsum(id){ const it=itemDef(id); if(!it) return;
   if(coinBalance()<it.price){ toast('鑽石不足'); return; }
   GS.items=GS.items||{}; GS.items[id]=(GS.items[id]||0)+1; GS.spent+=it.price;
-  await saveGameState(); toast('已購買 '+it.name+' ✓'); refreshGameUI(); if(STATE.battle) renderBattle(); }
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); if(STATE.battle) renderBattle(); return; }   // B4：失敗重載雲端
+  toast('已購買 '+it.name+' ✓'); refreshGameUI(); if(STATE.battle) renderBattle(); }
 async function sellConsum(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
   const back=Math.floor(it.price*0.4); GS.items[id]--; GS.spent-=back;
-  await saveGameState(); toast('已賣出 '+it.name+' ＋'+back+' 鑽石'); refreshGameUI(); }
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('已賣出 '+it.name+' ＋'+back+' 鑽石'); refreshGameUI(); }
 async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
   syncHp();
-  if(it.heal){ if(GS.hp>=100){ toast('血量已滿'); return; } GS.hp=Math.min(100,GS.hp+it.heal); GS.hpAt=Date.now(); GS.items[id]--; await saveGameState(); toast('❤️ 回復至 '+Math.round(GS.hp)+'%'); if(STATE.battle) renderBattle(); else refreshGameUI(); return; }
+  if(it.heal){ if(GS.hp>=100){ toast('血量已滿'); return; } GS.hp=Math.min(100,GS.hp+it.heal); GS.hpAt=Date.now(); GS.items[id]--; if(!await saveGameState()){ await loadGameState(); if(STATE.battle) renderBattle(); else refreshGameUI(); return; }   /* B4：失敗重載雲端 */ toast('❤️ 回復至 '+Math.round(GS.hp)+'%'); if(STATE.battle) renderBattle(); else refreshGameUI(); return; }
   // 戰鬥型道具
   if(!STATE.battle){ toast(it.name+' 要在戰鬥中使用'); return; }
   const b=STATE.battle;
@@ -2321,7 +2331,7 @@ async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) retu
   else if(it.battle==='guard'){ b.guard=(b.guard||0)+1; b.msg='💗 護心符！下次受傷免疫'; }
   else if(it.battle==='time'){ b.deadline+=8000; b.msg='☕ 醒腦！本題 +8 秒'; }
   else if(it.battle==='luck'){ b.luck=(b.luck||0)+0.25; b.msg='🍀 幸運草！本場掉寶率提升'; }
-  GS.items[id]--; await saveGameState(); renderBattle(); }
+  GS.items[id]--; if(!await saveGameState()){ if(it.battle==='shield') b.shield=false; else if(it.battle==='guard') b.guard=Math.max(0,(b.guard||0)-1); else if(it.battle==='time') b.deadline-=8000; else if(it.battle==='luck') b.luck=Math.max(0,(b.luck||0)-0.25); await loadGameState(); renderBattle(); return; }   /* B4：失敗回滾本場增益+重載雲端(免白嫖道具) */ renderBattle(); }
 /* 裝備可賣出（40% 回收，避免低階裝備變垃圾） */
 async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
   const fromDrop=GS.dropped&&GS.dropped.includes(id);
@@ -2329,7 +2339,8 @@ async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
   if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？'+(fromDrop?'\n（副本掉落品回收價固定）':''),okText:'賣出'})) return;
   if(!owns(id)){ toast('這件裝備已不在背包'); return; }   // confirm 期間可能已被賣掉,二次驗證
   GS.owned=GS.owned.filter(x=>x!==id); if(GS.dropped) GS.dropped=GS.dropped.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
-  GS.spent-=back; await saveGameState(); toast('已賣出 ＋'+back+' 鑽石'); refreshGameUI(); }
+  GS.spent-=back; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('已賣出 ＋'+back+' 鑽石'); refreshGameUI(); }
 function userEarnedCoins(uid){
   const mine=STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done');
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
@@ -2374,20 +2385,41 @@ async function loadGameState(){
     if(best){ GS=Object.assign(blankGS(), best.pst); GS._ragicId=best.rec._ragicId; }
     STATE.allPlayers=Object.values(byEmail);
     const me=STATE.allPlayers.find(p=>p.email===email); if(me){ me.save=GS; if(GS._ragicId!=null) me.ragicId=GS._ragicId; }
-  }catch(e){ /* 讀不到就用空檔，不擋使用 */ }
+    STATE.gsLoadFailed=false;   // A1：成功載入 → 清旗標
+  }catch(e){ STATE.gsLoadFailed=true; /* A1：載入失敗 → 舉旗，擋掉建新檔/起步禮誤發 */ }
 }
-async function saveGameState(){
-  if(!STATE.user||!GS) return;
+/* D1：跨員工核准前，直接重拉該員工雲端最新一筆 GS（不吃 STATE.allPlayers 舊快照） */
+async function reloadOtherPlayer(email){
+  try{
+    const r=await ragicFetchGS('?api',{method:'GET'}); if(!r.ok) return null;
+    const json=await r.json(); let best=null,bts=-1;
+    Object.keys(json).forEach(k=>{ const rec=json[k]; if(!rec||rec._ragicId==null) return;
+      if(String(rec[GAME_STORE.N.email]||'').toLowerCase()!==String(email).toLowerCase()) return;
+      const ts=+rec._dataTimestamp||0;
+      if(ts>=bts){ bts=ts; let pst={}; try{pst=JSON.parse(rec[GAME_STORE.N.save]||'{}');}catch(e){} best={ragicId:rec._ragicId, save:pst, name:rec[GAME_STORE.N.name]||email}; }
+    });
+    return best;
+  }catch(e){ return null; }
+}
+/* C1：實際存檔邏輯（回傳 boolean）。C2 由 saveGameState 排進序列鏈執行，每次執行讀當下最新全域 GS。 */
+async function _doSaveGS(){
+ try{
+  if(!STATE.user||!GS) return true;   // 無檔可存，非失敗
   GS.updated = isoToRagic(new Date().toISOString());
-  if(CONFIG.MODE!=='CLOUD'){ localStorage.setItem('usled_gs_'+STATE.user.id, JSON.stringify(GS)); return; }
-  if(!GAME_STORE.F.save){ return; }   // 欄位 ID 未設定前不寫雲端（避免空寫）
+  if(CONFIG.MODE!=='CLOUD'){ localStorage.setItem('usled_gs_'+STATE.user.id, JSON.stringify(GS)); return true; }   // B1：LOCAL 視為成功
+  if(!GAME_STORE.F.save){ return true; }   // 欄位 ID 未設定前不寫雲端（避免空寫）
+  if(STATE.gsLoadFailed && GS._ragicId==null){ toast('存檔尚未載入完成，請重新整理再操作'); return false; }   // A2：只擋「建新檔」；已有 _ragicId 的更新照常
+  GS.won=Math.max(0,+GS.won||0); GS.spent=Math.max(0,+GS.spent||0); GS.mchGain=Math.max(0,+GS.mchGain||0);   // F1：clamp 非負，擋最粗暴自肥
   const F=GAME_STORE.F, fd=new FormData();
   const clean=Object.assign({},GS); delete clean._ragicId;
   fd.append(F.email, STATE.user.email||''); fd.append(F.name, STATE.user.name||'');
   fd.append(F.balance, String(coinBalance())); fd.append(F.save, JSON.stringify(clean)); fd.append(F.updated, GS.updated);
   const suffix=(GS._ragicId!=null)?('/'+GS._ragicId+'?api'):'?api';   // _ragicId 可能=0，用 !=null
-  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); const j=await r.json(); const rid=j&&(j.ragicId!=null?j.ragicId:(j._ragicId!=null?j._ragicId:null)); if(rid!=null&&GS._ragicId==null) GS._ragicId=rid; }catch(e){ toast('雲端存檔失敗，稍後再試'); }
+  try{ const r=await ragicFetchGS(suffix,{method:'POST',body:fd}); if(!r.ok) throw new Error('HTTP '+r.status); const j=await r.json(); const rid=j&&(j.ragicId!=null?j.ragicId:(j._ragicId!=null?j._ragicId:null)); if(rid!=null&&GS._ragicId==null) GS._ragicId=rid; return true; }catch(e){ toast('雲端存檔失敗，稍後再試'); return false; }
+ }catch(e){ return false; }   // 保證永遠 resolve boolean(localStorage/stringify/coinBalance 例外也接住,呼叫端才不會 reject)
 }
+let _gsChain=Promise.resolve();   // C2：模組級序列鏈，防同裝置連點亂序覆寫
+async function saveGameState(){ const run=()=>_doSaveGS(); _gsChain=_gsChain.then(run,run); return _gsChain; }
 /* 動作 */
 function owns(id){ return GS&&GS.owned.includes(id); }
 async function buyItem(id){
@@ -2399,7 +2431,8 @@ async function buyItem(id){
   if(eq){ GS.gear=GS.gear||{}; GS.gear[it.slot]=id; }              // 裝備買了自動裝上
   else if(it.slot==='title'){ GS.title=id; }
   else { GS.equipped[it.slot]=id; }                                // 光環
-  await saveGameState(); toast('已入手 '+(eq?(PET_RARITY[it.r].name+SLOTNAME[it.slot]):it.name)+' ✓'); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('已入手 '+(eq?(PET_RARITY[it.r].name+SLOTNAME[it.slot]):it.name)+' ✓'); refreshGameUI();
 }
 async function buyPet(id){
   const p=petDef(id); if(!p||(GS.pets&&GS.pets[id])) return;
@@ -2409,7 +2442,8 @@ async function buyPet(id){
   GS.pets=GS.pets||{}; GS.pets[id]={exp:0}; GS.spent+=p.price;
   if(!GS.activePet) GS.activePet=id;
   if(p.unique){ STATE.uniqueOwners=STATE.uniqueOwners||{}; STATE.uniqueOwners[id]=STATE.user.name; }  // 樂觀鎖定（領養不可取消）
-  await saveGameState(); toast('帶回了 '+(p.unique?'公司唯一的 ':'')+p.name+' 的蛋 🥚 — 餵食孵化吧！'); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
+  toast('帶回了 '+(p.unique?'公司唯一的 ':'')+p.name+' 的蛋 🥚 — 餵食孵化吧！'); refreshGameUI();
 }
 function petFeedFx(pet,b,a,f){
   if(b.egg && !a.egg) petEvolveCeremony(pet, a, '🐣 孵化誕生！');
@@ -2423,8 +2457,8 @@ async function feedActivePet(feedId){
   const pet=petDef(GS.activePet), b=petProgress(GS.pets[GS.activePet].exp);
   GS.pets[GS.activePet].exp+=f.exp; GS.spent+=f.price;
   const a=petProgress(GS.pets[GS.activePet].exp);
-  saveGameState();                       // 背景存檔，不卡畫面/不跳頂
-  refreshGameUI();                        // 先就地刷新(保留捲動)
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端(改為 await，餵食扣鑽需確保存到才播進化)
+  refreshGameUI();                        // 就地刷新(保留捲動)
   petFeedFx(pet,b,a,f);
 }
 /* 用副本掉落的庫存零食餵食（免費） */
@@ -2457,7 +2491,7 @@ async function toggleEquip(id){
   if(equipItem(id)){ GS.gear=GS.gear||{}; GS.gear[it.slot] = GS.gear[it.slot]===id?null:id; }
   else if(it.slot==='title'){ GS.title = GS.title===id?null:id; }
   else { GS.equipped[it.slot] = GS.equipped[it.slot]===id?null:id; }
-  await saveGameState(); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } refreshGameUI();
 }
 function canChangeChar(){ return isUpdateDay(); }   // 角色只在「月度更新日」(每月5號)才能更換
 function selectChar(id){ const c=CHARS.find(x=>x.id===id); if(!c) return;
@@ -2543,7 +2577,7 @@ async function saveRole(){
   const profile=STATE.pendingRole; if(!profile) return;
   if(hasRole()){ GS.roleHistory=GS.roleHistory||[]; GS.roleHistory.push({code:GS.role.code,emoji:GS.role.emoji,animalName:GS.role.animalName,testedAt:GS.role.testedAt}); }
   GS.role=profile; STATE.pendingRole=null;
-  await saveGameState(); closeRoleResult(); refreshGameUI();
+  if(!await saveGameState()){ await loadGameState(); closeRoleResult(); refreshGameUI(); return; } closeRoleResult(); refreshGameUI();
   toast('🎉 你的 RPG 角色：'+profile.emoji+' '+profile.animalName+'（'+profile.title+'）');
 }
 /* 角色頭像（動物在家族色圓框內），給卡片/團隊頁用 */
@@ -2830,7 +2864,7 @@ async function answerTeamBoss(qi,idx){
   const ev=teamBossEvent(); if(!ev) return;
   if(!GS.teamBoss||GS.teamBoss.ev!==ev.id) GS.teamBoss={ev:ev.id,days:[],claimed:false};
   if(GS.teamBoss.days.indexOf(tbDay())<0) GS.teamBoss.days.push(tbDay());
-  await saveGameState();
+  if(!await saveGameState()){ await loadGameState(); const dm0=document.getElementById('dungeonModal'); if(dm0){ closeDungeon(); showDungeon(); } toast('⚠️ 網路異常,出力未記錄,請重新整理再試'); return; }
   const pr=teamBossProgress();
   if(pr&&pr.defeated) teamBossWinFx();
   else toast('💥 出力成功！今日到齊 '+(pr?pr.todayCount:1)+'/'+(pr?pr.ids.length:teamBossMembers().length)+'，揪夥伴連續 2 天一起破關');
@@ -2841,7 +2875,7 @@ async function claimTeamBoss(){
   if(!GS.teamBoss||GS.teamBoss.ev!==pr.ev.id) GS.teamBoss={ev:pr.ev.id,days:[],claimed:false};
   if(GS.teamBoss.claimed){ toast('你已領過了'); return; }
   GS.teamBoss.claimed=true; GS.won=(GS.won||0)+TEAMBOSS.reward;
-  await saveGameState(); toast('🎉 討伐獎勵 +'+TEAMBOSS.reward+' 鑽石入帳！');
+  if(!await saveGameState()){ await loadGameState(); toast('⚠️ 網路異常,獎勵未入帳,請重新整理再領'); return; } toast('🎉 討伐獎勵 +'+TEAMBOSS.reward+' 鑽石入帳！');
   const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); } else refreshGameUI();
 }
 function teamBossWinFx(){
@@ -2886,17 +2920,18 @@ async function submitQuiz(){
   if(isNaN(ci)||!raw[ci]){ toast('標出正解（正解那欄不能空白）'); return; }
   const opts=raw.filter(x=>x), cc=raw.slice(0,ci).filter(x=>x).length;   // 去空白後正解的新索引
   GS.quizSub=GS.quizSub||[]; GS.quizSub.push({id:'qz'+Date.now(), q, a:opts, c:cc, cat, st:'pending', at:new Date().toISOString()});
-  await saveGameState(); toast('已送出，等主管採納 ✍️'); closeQuizSubmit(); showQuizSubmit();
+  if(!await saveGameState()){ await loadGameState(); return; } toast('已送出，等主管採納 ✍️'); closeQuizSubmit(); showQuizSubmit();
 }
 function quizSubPending(){ const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.quizSub||[]).forEach(s=>{ if(s.st==='pending') out.push({pi,p,s}); }); }); return out; }
 async function decideQuiz(pi, id, ok){
   if(!isSupervisor(STATE.user)){ return; }   // 守衛：只有主管能採納/婉拒
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
   if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的出題要請另一位主管採納 🤝'); return; }
+  if((STATE.user.email||'').toLowerCase()!==p.email){ const fresh=await reloadOtherPlayer(p.email); if(!fresh){ toast('讀取員工最新存檔失敗，稍後再試'); return; } p.save=fresh.save; p.ragicId=fresh.ragicId; }   // D2：跨員工採納前重拉最新 GS
   const s=(p.save.quizSub||[]).find(x=>x.id===id); if(!s||s.st!=='pending') return;
   s.st=ok?'ok':'no'; s.decidedAt=new Date().toISOString();
   if(ok) p.save.won=(p.save.won||0)+QUIZ_REWARD;   // 出題者得鑽石
-  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; await saveGameState(); }
+  if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
   toast(ok?('已採納 ✓ 進題庫並給 '+esc(p.name)+' +'+QUIZ_REWARD+' 鑽'):'已婉拒');
   const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); }
@@ -3078,8 +3113,9 @@ async function endBattle(win){
     const dbl=Math.random()<petSkillVal('coindbl'); if(dbl) coins*=2;   // 寵物鑽石翻倍機率
     let drop=null; if(Math.random()<(0.6+petSkillVal('drop')+(bt.luck||0)+(mm.dropAdd||0))){ drop=randomDrop(b.dropR); if(drop){ GS.owned.push(drop.id); GS.dropped=GS.dropped||[]; GS.dropped.push(drop.id); } }
     const bonus=bonusDrop();   // 偶爾隨機掉落：蛋/零食/道具
-    GS.won=(GS.won||0)+coins; GS.clears=(GS.clears||0)+1; saveGameState();
-    showChest(coins, drop, left, bonus);   // 寶箱開箱儀式
+    GS.won=(GS.won||0)+coins; GS.clears=(GS.clears||0)+1;
+    if(!await saveGameState()){ await loadGameState(); toast('⚠️ 網路異常,獎勵未入帳,請重新整理再挑戰'); if(STATE.user) refreshGameUI(); return; }
+    showChest(coins, drop, left, bonus);   // 寶箱開箱儀式(存檔成功才開,免假入帳)
   } else {
     saveGameState();
     const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
@@ -3194,7 +3230,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.7';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.8';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
