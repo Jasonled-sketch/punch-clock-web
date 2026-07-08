@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="robots" content="noindex">
+<title>USLED 實體獎彙整 · AI 經理提案</title>
+<style>
+:root{--bg:#11151c;--card:#1b2230;--card2:#212a3b;--line:#2c3850;--txt:#e7edf6;--muted:#8a98ad;--accent:#7c5cff;--ok:#22c55e;--warn:#f59e0b;--bad:#ef4444;--chip:#283349;--gold:#fbbf24}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.6 -apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;padding-bottom:90px}
+header{position:sticky;top:0;z-index:30;background:rgba(17,21,28,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 14px}
+h1{font-size:18px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:12.5px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:var(--chip);border:1px solid var(--line);color:var(--muted);border-radius:20px;padding:5px 12px;font-size:12.5px;cursor:pointer;user-select:none}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.legend{margin:10px 14px 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;color:var(--muted)}
+.legend b{color:var(--txt)}
+.wrap{padding:6px 12px}
+.secthead{display:flex;align-items:center;gap:8px;margin:18px 2px 8px;font-size:15px;font-weight:800}
+.secthead .n{color:var(--muted);font-weight:600;font-size:12.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.card.off{opacity:.42}
+.card.star{border-color:#7c5cff66}
+.cb{width:22px;height:22px;flex:0 0 auto;margin-top:2px;accent-color:var(--ok);cursor:pointer}
+.body{flex:1;min-width:0}
+.meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}
+.tag{font-size:11px;border-radius:6px;padding:1px 7px;border:1px solid var(--line);color:var(--muted)}
+.tag.c0{color:var(--ok);border-color:#2c5}
+.tag.c1{color:var(--warn);border-color:#a70}
+.tag.c2{color:var(--bad);border-color:#a33}
+.tag.src{color:#93c5fd}
+.tag.star{color:var(--gold);border-color:#a80;font-weight:700}
+.nm{font-weight:700;font-size:15px;outline:none;border-radius:6px;padding:1px 2px}
+.nm:focus,.ds:focus,.pz:focus{background:#0d1118;box-shadow:0 0 0 1px var(--accent)}
+.pz{color:var(--gold);font-weight:800;outline:none;border-radius:6px;padding:1px 4px}
+.ds{font-size:13px;color:var(--muted);outline:none;border-radius:6px;padding:1px 2px;margin-top:2px}
+.rl{font-size:12px;color:#86efac;margin-top:3px}
+.nt{font-size:12px;color:#fca5a5;margin-top:2px}
+footer{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(17,21,28,.97);border-top:1px solid var(--line);padding:10px 14px;display:flex;gap:10px;align-items:center}
+.count{font-size:14px}
+.count b{color:var(--ok);font-size:18px}
+.spacer{flex:1}
+.btn{background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;white-space:nowrap}
+.btn.go{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:16px}
+.modal.on{display:flex}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;max-width:680px;width:100%;max-height:86vh;overflow:auto;padding:16px}
+textarea{width:100%;min-height:240px;background:#0d1118;color:#cfe;border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}
+.law{margin:14px;background:#221a10;border:1px solid #a7702c;border-radius:12px;padding:12px;font-size:12.5px;color:#fcd9a0}
+.law b{color:#ffd77a}
+.ask{margin:14px;background:#101d2a;border:1px solid #2c5a86;border-radius:12px;padding:12px;font-size:12.5px;color:#a8d2f5}
+.ask b{color:#7cc4ff}
+.exist{opacity:.85}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎁 實體獎彙整 · AI 經理聯合提案</h1>
+  <div class="sub">三位 AI 經理（營運/業務/製程）55 項點子去重整合成 34 項。勾選要上架的、可直接改名/改價/改說明，按「匯出」貼回給 Claude 上架。自動存檔。</div>
+  <div class="chips" id="chips"></div>
+</header>
+
+<div class="legend"><b>標籤說明：</b>💰零=不花錢｜💰低=&lt;200元｜💰中=200元以上（兌換才發生）｜⭐=Jason 原案（經防漏檢查修訂版）｜<b>綠字=防濫用規則</b>｜<b>紅字=注意事項</b>。價格錨點：1 鑽≈1 元成本≈100 元產值感，現有帶 30~2600 鑽。</div>
+
+<div class="wrap" id="list"></div>
+
+<div class="law" id="lawBox">
+  <b>⚖️ 法務總則（假別/出勤類全部適用，上架時會印在券說明）</b><br>
+  1. 所有券＝雇主自願性額外福利，不取代任何勞基法法定權益（特休/病假/例休照舊）。<br>
+  2. <b>出勤紀錄一律照實記載</b>（勞基法§30），消除券只免除「內部扣點/全勤獎金影響」，不塗改打卡、不消除請假事實。<br>
+  3. 公告加註「本制度為福利點數活動，非工資之一部」——避免被認定經常性給與，影響加班費/資遣費基數。<br>
+  4. 法定假別（家庭照顧/生理/喪/公傷）依法本就不影響全勤，不需耗券——緊急假消除券只適用一般事假性質。<br>
+  5. ⚠️ 消除券牽動出勤扣點邏輯 → 上架時要對接 LINE bot 現有規則（兩套系統同步鐵則）。
+</div>
+
+<div class="ask" id="askBox">
+  <b>❓ 要你拍板的事（勾選完順便回我）</b><br>
+  1. 公司有無「全勤獎金」？有的話消除券/遲到券使用後是否保全勤，要一句話定案。<br>
+  2. 岡山運動中心泳票、腳底按摩配合店的實際價格（定價照成本回推，先抓 110/600 鑽）。<br>
+  3. 遲到抵用券（事後赦免）上線後，現有「彈性上班 5/10 分券」（事前申請）保留嗎？建議保留、定位分開。<br>
+  4. 準時下班保護罩的例外清單（客訴急件？當日出貨？）你定，我寫進券面。<br>
+  5. 「T 點 1.5 倍日」會動經濟系統，建議先不上，要上我加防通膨上限。
+</div>
+
+<footer>
+  <div class="count">已選 <b id="selN">0</b> / <span id="totN">0</span> 項</div>
+  <div class="spacer"></div>
+  <button class="btn go" id="exportBtn">📋 匯出給 Claude</button>
+</footer>
+
+<div class="modal" id="expModal"><div class="box">
+  <h3>📋 匯出已選獎品</h3>
+  <div class="sub">複製整段貼回對話，我就照這份寫進商店（REWARDS）。共 <b id="expN">0</b> 項。</div>
+  <div style="margin:8px 0;display:flex;gap:8px"><button class="btn go" id="copyBtn">複製到剪貼簿</button><button class="btn" id="closeExp">關閉</button></div>
+  <textarea id="expTxt" readonly></textarea>
+</div></div>
+
+<script>
+/* ============ 34 項新提案（已去重；src=提案經理；star=Jason原案修訂版 ============ */
+const CATS=['⭐你的原案(修訂版)','⏰出勤時間特權','🤝老闆人情','🏆面子榮耀','🔧工作便利現場','💆身心照顧','🎉趣味社交'];
+const R=[
+/* ⭐ Jason 原案（防漏檢查修訂版） */
+{cat:0,icon:'🎟️',name:'遲到抵用券',price:280,cost:0,star:1,src:'製程',desc:'單次遲到 10 分內不扣薪不記懲處（事後赦免）',rule:'遲到當日下班前主動出示才生效、當月有效、每人每月限 1 張',note:'打卡照實記載；定價要貴過事前彈性券(200)否則沒人買事前券'},
+{cat:0,icon:'⏳',name:'有薪休息 30 分券',price:130,cost:0,star:1,src:'製程',desc:'當月任一天帶薪離開/休息 30 分（原「補休30分」改名）',rule:'前一日申請、主管視排班核准、當月有效、出貨日不可用',note:'「補休」是勞基法§32-1法定名詞會混帳，改名避雷'},
+{cat:0,icon:'🏊',name:'岡山運動中心游泳券',price:110,cost:1,star:1,src:'營運',desc:'岡山國民運動中心單次入場（泳池/健身房擇一）',rule:'限本人、兌換後 3 個月內使用、每人每月 2 張',note:'先確認現行票價；買回數票更省'},
+{cat:0,icon:'🦶',name:'腳底按摩券',price:600,cost:2,star:1,src:'製程',desc:'岡山指定店家 40 分鐘腳底按摩一次',rule:'公司指定 1-2 家配合店、內勤代訂、限本人不可折現、每人每季 1 張',note:'唯一真花錢的大獎；先跟店家談好單價'},
+{cat:0,icon:'🧯',name:'臨時假消除券',price:450,cost:0,star:1,src:'製程',desc:'消除一次臨時假的內部扣點與全勤獎金影響',rule:'每人每季 1 張、不可轉讓、當月已有 2 人臨時缺勤時不可用',note:'只消內部扣點,請假單與出勤紀錄照實保留;要對接 LINE bot 扣點規則(兩系統同步)'},
+{cat:0,icon:'🚨',name:'緊急假消除券',price:450,cost:0,star:1,src:'製程',desc:'消除一次緊急請假（一般事假性質）的內部扣點',rule:'每人每半年 1 張、與臨時假券不可疊用於同一事件',note:'法定假別(家庭照顧/生理/喪)依法本就不影響全勤,不適用此券'},
+/* ⏰ 出勤時間特權 */
+{cat:1,icon:'😴',name:'睡飽券',price:120,cost:0,src:'營運',desc:'當日晚 60 分上班、下班順延補回（時數對移）',rule:'每月 1 張、外勤安裝日不可用、前一日報備',note:''},
+{cat:1,icon:'👨‍👧',name:'接送彈性週',price:300,cost:0,src:'營運',desc:'連續 5 個工作日每天早走 15 分（帶薪）',rule:'每人每季 1 張',note:'適合要接小孩的同事'},
+{cat:1,icon:'🍜',name:'錯峰午休券',price:60,cost:0,src:'營運',desc:'午休挪到 11:30 或 13:00，避開人潮',rule:'單次、需與留守同事對班',note:'入門款,低點數也換得起'},
+{cat:1,icon:'🛵',name:'外勤直歸券',price:120,cost:0,src:'業務',desc:'外勤收工地點離家近時就地下班，LINE 回報即可',rule:'單次、當日安裝完工回報照交',note:'把浪費的通勤時間還給員工,成本為零'},
+{cat:1,icon:'🛡️',name:'準時下班保護罩',price:130,cost:0,src:'業務+營運',desc:'當日 17:30 後的新交辦一律順延明天，準點走人',rule:'每月 1 張；例外清單(客訴急件/出貨收尾)白紙黑字',note:'命名框成「防打擾權」,不暗示加班是常態'},
+{cat:1,icon:'🔋',name:'合法充電 30 分',price:150,cost:0,src:'業務',desc:'上班時間光明正大休息 30 分，桌上掛「充電中」牌',rule:'單次、忙季主管可協調改期',note:'把「心虛摸魚」變「公開特權」'},
+/* 🤝 老闆人情 */
+{cat:2,icon:'🍵',name:'老闆奉茶',price:120,cost:1,src:'業務',desc:'老闆親手泡一杯飲料端到你座位，全公司見證',rule:'每月全公司限 2 張',note:''},
+{cat:2,icon:'👷',name:'老闆代班一小時',price:300,cost:0,src:'製程+業務',desc:'老闆親自頂你的崗位 1 小時（組裝/包裝/最討厭的活都行），你在旁監工',rule:'提前 3 天預約、每季全公司限 2 張',note:'零成本價值感天花板,建議設稀有款'},
+{cat:2,icon:'📚',name:'技能點播課',price:100,cost:0,src:'製程+業務',desc:'指定想學的技能（報價/焊接/維修/談客戶），老闆或主管 1 對 1 教一小時',rule:'不需要防濫用——公司最希望被瘋狂兌換的獎品',note:'刻意訂低價鼓勵換,員工變強公司賺'},
+{cat:2,icon:'👑',name:'老闆當你半天助理',price:2000,cost:0,src:'業務',desc:'老闆半天聽你指揮：搬料、打雜、跑腿都行（鎮店旗艦獎）',rule:'每年全公司限 1 張',note:'建議放快閃池(HIDDEN);它同時是價格錨,讓 1300 半天假顯得便宜'},
+{cat:2,icon:'✊',name:'老闆猜拳台',price:50,cost:1,src:'營運',desc:'花 50 鑽與老闆猜拳一次，贏了現拿手搖飲券',rule:'每人每週 1 次',note:'期望值約30元,純娛樂無博弈疑慮,節目效果滿分'},
+{cat:2,icon:'📣',name:'老闆專文表揚',price:60,cost:0,src:'業務+營運',desc:'老闆在公司群親自寫一段具體事蹟表揚（不能只貼貼圖）',rule:'每月限 2 張',note:'FB露臉版需本人同意(肖像個資)'},
+/* 🏆 面子榮耀 */
+{cat:3,icon:'🪑',name:'王座週',price:150,cost:1,src:'業務',desc:'公司最好的座位/車位本週歸你＋「本週王座」立牌',rule:'同時間全公司限 1',note:'立牌 A4 護貝即可,儀式感是重點'},
+{cat:3,icon:'🅿️',name:'專屬車位月卡',price:100,cost:0,src:'營運',desc:'廠內最好/有遮雨車位一個月＋立名牌',rule:'每月限 1 人',note:''},
+{cat:3,icon:'📛',name:'頭銜自訂月',price:150,cost:0,src:'業務+營運',desc:'一個月內 LINE 群暱稱＋任務牆稱號掛自選頭銜（如「岡山LED之神」）',rule:'稱號需過審、不得貶低他人',note:'任務牆稱號系統加一筆 custom 即可(小開發)'},
+{cat:3,icon:'🖼️',name:'金框頭像月',price:250,cost:0,src:'業務',desc:'任務牆頭像金色光環一個月，團隊頁排最前',rule:'同時間限 1 人',note:'需小開發(頭像加class)'},
+{cat:3,icon:'✍️',name:'命名權',price:300,cost:0,src:'業務',desc:'幫下一隻新寵物/新Boss/公司WiFi命名，永久留名',rule:'每季限 1、名稱過審',note:'IKEA效應:自己留下的痕跡估值極高'},
+{cat:3,icon:'🏗️',name:'作品掛名權',price:80,cost:0,src:'業務',desc:'你組裝/安裝的屏出貨照發 FB/官網時掛名「本作品由○○○製作」',rule:'單次、照片由公司拍',note:'公司之光的實體化,對現場同事最有感'},
+{cat:3,icon:'🍗',name:'我請全公司',price:250,cost:1,src:'營運',desc:'掛你的名義請全公司雞排/鹹酥雞（公司出錢）',rule:'每月全公司限 1 次',note:'一份預算買到請客面子+全員士氣'},
+{cat:3,icon:'🎰',name:'尾牙加碼籤',price:200,cost:0,src:'營運',desc:'年終抽獎多一支籤',rule:'每人每年限 2 張',note:'提前半年就能賣,回收鑽石利器'},
+{cat:3,icon:'🎲',name:'午休同樂會發起權',price:180,cost:1,src:'營運',desc:'指定一天全員午休延長 15 分打桌遊/看片，公司出零食',rule:'每季全公司限 1 次',note:'兌換者是發起人,面子+社交雙效'},
+/* 🔧 工作便利現場 */
+{cat:4,icon:'🎯',name:'任務先挑權（一週）',price:250,cost:0,src:'業務',desc:'本週新任務發布後 24 小時內你有優先認領權',rule:'每月限 1 張',note:'把「被分派」翻成「我先選」,還刺激大家搶著看任務牆'},
+{cat:4,icon:'🗺️',name:'外勤案件優先選',price:180,cost:0,src:'製程',desc:'下輪外勤派工先選一件（近程/室內/免爬高）',rule:'同日 2 件以上可選時才適用;急件與客戶指定不在範圍;主管可否決(否決退鑽)',note:''},
+{cat:4,icon:'🚗',name:'好車優先權（一個月）',price:200,cost:0,src:'製程',desc:'外勤時段公司車輛擇優先開一個月',rule:'載重需求優先(載大屏還是得開貨車);同時間限 1 人',note:''},
+{cat:4,icon:'🎧',name:'一週 DJ 權',price:120,cost:0,src:'業務+營運',desc:'辦公室/組裝區播放清單一週由你掌控',rule:'每月限 1 人、音量共識',note:'現有點歌權(30)是單次,這是升級版'},
+{cat:4,icon:'🔥',name:'燒機顧機豁免券',price:120,cost:0,src:'製程',desc:'LED 老化/燒機測試盯機時段免顧一次，主管排人輪替',rule:'每人每月 1 張;當日僅 2 人在廠可延後兌現(不退鑽)',note:''},
+{cat:4,icon:'🧹',name:'收工清潔跳過券',price:60,cost:0,src:'製程',desc:'掃地/倒垃圾/收工作檯輪值跳過一次',rule:'同一輪值週期全公司限 2 張',note:'防最後剩同一人天天掃'},
+{cat:4,icon:'📦',name:'重物搬運豁免半日',price:150,cost:0,src:'製程',desc:'當日上下貨/大屏搬運豁免半天，改派輕工作',rule:'前一日申請;出貨日全員動員時可改期;每月 1 張',note:''},
+{cat:4,icon:'🧰',name:'工位升級包',price:400,cost:2,src:'製程+營運',desc:'自選 400 元內工位改善（護腰椅墊/小風扇/檯燈/站墊）歸個人',rule:'內勤統一採購不發現金;每人每年 1 次',note:'買的是公司資產兼生產力'},
+{cat:4,icon:'🧊',name:'夏季外勤涼感包',price:250,cost:2,src:'製程+營運',desc:'涼感毛巾＋運動飲料一箱＋涼感袖套',rule:'限 5-9 月、每人每季 1 次',note:'安全帽/護目鏡等法定防護具不可做成獎品(本來就要給)'},
+/* 💆 身心照顧 */
+{cat:5,icon:'🛏️',name:'午睡 VIP 角',price:150,cost:1,src:'營運',desc:'專屬摺疊躺椅＋眼罩使用權一個月',rule:'每月限 1 人',note:'第一個月買躺椅約千元,之後零成本'},
+];
+/* 現有 16 項（參考,只給「保留/下架」勾選） */
+const EXISTING=[
+['🎵','辦公室點歌權',30],['☕','咖啡升級券',40],['🧋','手搖飲一杯',60],['⏱️','彈性上班5分券',80],['😴','午休＋15分券',100],['🍗','下午茶點心',120],['🍱','午餐公司請',150],['🕔','彈性早下班30分',150],['🪑','優先排休券',180],['⏰','彈性上班10分券',200],['🎫','200元禮券',200],['🛵','主管跑腿一次',250],['🏃','彈性早下班1小時',280],['🍽️','聚餐選店權',300],['🌴','半天有薪福利假',1300],['🏖️','一日有薪福利假',2600]];
+
+const LS='usled_rewards_curation_v1';
+let ST={sel:{},edit:{},keep:{},filter:-1};
+try{const s=JSON.parse(localStorage.getItem(LS));if(s)ST=Object.assign(ST,s);}catch(e){}
+function save(){try{localStorage.setItem(LS,JSON.stringify(ST));}catch(e){}}
+function isSel(i){return (('n'+i) in ST.sel)?ST.sel['n'+i]:true;}
+function cur(i){const e=ST.edit['n'+i]||{};return Object.assign({},R[i],e);}
+const COST=['💰零','💰低','💰中'];
+
+function render(){
+  const chips=document.getElementById('chips');
+  let ch='<span class="chip '+(ST.filter===-1?'on':'')+'" data-f="-1">全部 '+R.length+'</span>';
+  CATS.forEach((c,ci)=>{const n=R.filter(x=>x.cat===ci).length; if(n)ch+='<span class="chip '+(ST.filter===ci?'on':'')+'" data-f="'+ci+'">'+c+' '+n+'</span>';});
+  ch+='<span class="chip '+(ST.filter===99?'on':'')+'" data-f="99">📦現有16項</span>';
+  chips.innerHTML=ch;
+  chips.querySelectorAll('.chip').forEach(el=>el.onclick=()=>{ST.filter=+el.dataset.f;save();render();});
+  const list=document.getElementById('list');list.innerHTML='';
+  let sel=0;R.forEach((_,i)=>{if(isSel(i))sel++;});
+  document.getElementById('selN').textContent=sel;
+  document.getElementById('totN').textContent=R.length;
+  if(ST.filter===99){ renderExisting(list); return; }
+  CATS.forEach((cn,ci)=>{
+    if(ST.filter!==-1&&ST.filter!==ci)return;
+    const items=R.map((r,i)=>({r,i})).filter(x=>x.r.cat===ci);
+    if(!items.length)return;
+    const h=document.createElement('div');h.className='secthead';h.innerHTML='<span>'+cn+'</span><span class="n">('+items.length+'項)</span>';list.appendChild(h);
+    items.forEach(({i})=>list.appendChild(card(i)));
+  });
+}
+function renderExisting(list){
+  const h=document.createElement('div');h.className='secthead';h.innerHTML='<span>📦 現有商店 16 項</span><span class="n">取消勾選=建議下架(會列入匯出)</span>';list.appendChild(h);
+  EXISTING.forEach((e,i)=>{
+    const on=(('e'+i) in ST.keep)?ST.keep['e'+i]:true;
+    const el=document.createElement('div');el.className='card exist'+(on?'':' off');
+    el.innerHTML='<input type="checkbox" class="cb" '+(on?'checked':'')+'><div class="body"><div class="meta"><span class="nm">'+e[0]+' '+e[1]+'</span><span class="pz">💎'+e[2]+'</span></div></div>';
+    el.querySelector('.cb').onchange=ev=>{ST.keep['e'+i]=ev.target.checked;save();el.classList.toggle('off',!ev.target.checked);};
+    list.appendChild(el);
+  });
+}
+function card(i){
+  const c=cur(i);const on=isSel(i);
+  const el=document.createElement('div');el.className='card'+(on?'':' off')+(c.star?' star':'');
+  el.innerHTML='<input type="checkbox" class="cb" '+(on?'checked':'')+'>'+
+    '<div class="body"><div class="meta">'+(c.star?'<span class="tag star">⭐你的原案</span>':'')+
+    '<span class="tag c'+c.cost+'">'+COST[c.cost]+'</span><span class="tag src">'+c.src+'經理</span></div>'+
+    '<div><span class="nm" contenteditable="true" data-k="name">'+c.icon+' '+esc(c.name)+'</span>　<span class="pz" contenteditable="true" data-k="price">💎'+c.price+'</span></div>'+
+    '<div class="ds" contenteditable="true" data-k="desc">'+esc(c.desc)+'</div>'+
+    (c.rule?'<div class="rl">🛡 '+esc(c.rule)+'</div>':'')+
+    (c.note?'<div class="nt">⚠ '+esc(c.note)+'</div>':'')+
+    '</div>';
+  el.querySelector('.cb').onchange=e=>{ST.sel['n'+i]=e.target.checked;save();el.classList.toggle('off',!e.target.checked);render();};
+  el.querySelectorAll('[contenteditable]').forEach(x=>{x.onblur=()=>{
+    if(!ST.edit['n'+i])ST.edit['n'+i]={};
+    const k=x.dataset.k; let v=x.textContent.trim();
+    if(k==='price'){v=parseInt(v.replace(/[^\d]/g,''))||cur(i).price; ST.edit['n'+i].price=v;}
+    else if(k==='name'){ST.edit['n'+i].name=v.replace(/^[^\s]+\s/,'');}
+    else ST.edit['n'+i][k]=v;
+    save();
+  };});
+  return el;
+}
+function esc(s){return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+document.getElementById('exportBtn').onclick=()=>{
+  const add=R.map((_,i)=>i).filter(i=>isSel(i)).map(i=>{const c=cur(i);return {name:c.name,icon:c.icon,price:c.price,desc:c.desc,rule:c.rule,star:!!c.star};});
+  const drop=EXISTING.map((e,i)=>({e,i})).filter(x=>(('e'+x.i) in ST.keep)&&!ST.keep['e'+x.i]).map(x=>x.e[1]);
+  document.getElementById('expN').textContent=add.length;
+  document.getElementById('expTxt').value='以下是我(Jason)選定的實體獎清單，請寫進任務牆商店：\n\n【新上架 '+add.length+' 項】\n'+JSON.stringify(add,null,1)+(drop.length?'\n\n【建議下架現有】'+JSON.stringify(drop):'\n\n【現有 16 項全部保留】');
+  document.getElementById('expModal').classList.add('on');
+};
+document.getElementById('closeExp').onclick=()=>document.getElementById('expModal').classList.remove('on');
+document.getElementById('copyBtn').onclick=async()=>{const t=document.getElementById('expTxt');t.select();try{await navigator.clipboard.writeText(t.value);}catch(e){document.execCommand('copy');}document.getElementById('copyBtn').textContent='已複製 ✓';setTimeout(()=>document.getElementById('copyBtn').textContent='複製到剪貼簿',1500);};
+render();
+</script>
+</body>
+</html>
