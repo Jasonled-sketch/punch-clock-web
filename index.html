@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v5.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2072,6 +2072,7 @@ async function getPayrollLocks(ym) {
 
 async function lockPayroll() {
   if (!_RPT || !_RPT.payrollRows.length) { toast('無資料可鎖定', 'red'); return; }
+  if (!_API_SALARY) { toast('⚠️ 薪資 API 未連線，目前顯示為離線估算值，禁止鎖薪。請稍後重新整理、確認月報無「離線估算」警示後再鎖定。', 'red'); return; }  // 防鎖到 fallback 數字
   if (!confirm(`確定鎖定 ${_RPT.ym} 薪資？\n鎖定後該月以此快照為準，事後改打卡不影響已發薪資。`)) return;
   const F = CONFIG.FID.P;
   const ym = _RPT.ym;
@@ -2129,6 +2130,7 @@ async function viewReport() {
 
     _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
     _API_SALARY = await loadApiSalary(CUR_YEAR, CUR_MONTH + 1);  // 月報薪資改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
+    if (!_API_SALARY) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
       const sh = CONFIG.SHIFTS[w.shift];
