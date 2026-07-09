@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -831,6 +831,7 @@ function applyIdentity(token) {
   const pl = parseJwt(token) || {};
   const email = (pl.email || '').toLowerCase();
   ME = { email, name: pl.name || email, picture: pl.picture || '', isAdmin: CONFIG.ADMIN_EMAILS.includes(email) };
+  ROLE = ME.isAdmin ? 'owner' : 'employee';   // 預設值;/calc/config 回來後 loadRemoteCfg 以 REMOTE_CFG.role 覆蓋
 }
 
 function showApp() {
@@ -893,6 +894,13 @@ function gsiReady() {
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let WORKERS = [];
+// ── 權限四層(owner/hr/deptmgr/employee):預設 ADMIN_EMAILS 命中=owner 否則 employee;/calc/config 載入後以 REMOTE_CFG.role 為準 ──
+let ROLE = 'employee';
+function deptScopeSet() {   // deptmgr 可見範圍:轄下成員(REMOTE_CFG.members)+自己(email 一律小寫比對)
+  const m = (REMOTE_CFG && Array.isArray(REMOTE_CFG.members)) ? REMOTE_CFG.members : [];
+  return new Set(m.map(e => String(e).toLowerCase()).concat(ME ? [String(ME.email).toLowerCase()] : []));
+}
+function deptAllowed(email) { return ROLE !== 'deptmgr' || deptScopeSet().has(String(email || '').toLowerCase()); }
 let OPEN_REC = null;
 let MY_WORKER = null;
 let CUR_TAB = '';
@@ -910,6 +918,7 @@ async function initApp() {
     switchTab('overview');
   } else {
     await loadMyWorker();
+    if (ROLE === 'deptmgr') { renderAdminTabs(); switchTab('overview'); return; }  // cfg 比員工資料先回來:直接進管理者版介面(避免被員工版蓋掉)
     renderWorkerTabs();
     switchTab('punch');
     startPunchReminder();
@@ -1003,7 +1012,7 @@ function renderAdminTabs() {
   document.getElementById('tab-bar').innerHTML =
     tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
     `<button class="tab-btn" id="tab-areq" onclick="switchTab('areq')">補登審核<span class="tab-badge hidden" id="req-badge">0</span></button>` +
-    tab('report','月報') + tab('wrkrs','工讀生') + tab('aleave','請假審核') +
+    tab('report','月報') + (ROLE === 'deptmgr' ? '' : tab('wrkrs','工讀生')) + tab('aleave','請假審核') +   // 工讀生分頁=薪資設定管理,deptmgr 不顯示
     tab('aot','加班審核') + tab('aannounce','公告管理');
   updateBadge();
 }
@@ -1751,12 +1760,12 @@ async function viewOverview() {
         statsHtml = `
           <div class="wk-stat"><span>應出勤</span><span class="v">${workDays} 天</span></div>
           <div class="wk-stat"><span>實出勤</span><span class="v">${attendDays} 天</span></div>
-          <div class="wk-stat"><span>預估薪資</span><span class="v">$${est.toLocaleString()}</span></div>
+          ${ROLE !== 'deptmgr' ? `<div class="wk-stat"><span>預估薪資</span><span class="v">$${est.toLocaleString()}</span></div>` : ''}
           <div class="wk-stat"><span>年資</span><span class="v">${calcSeniority(w.start_date)}</span></div>`;
       } else {
         statsHtml = `
           <div class="wk-stat"><span>工時</span><span class="v">${totH.toFixed(2)} h</span></div>
-          <div class="wk-stat"><span>薪資</span><span class="v">$${totP}</span></div>
+          ${ROLE !== 'deptmgr' ? `<div class="wk-stat"><span>薪資</span><span class="v">$${totP}</span></div>` : ''}
           <div class="wk-stat"><span>打卡</span><span class="v">${wr.length} 次</span></div>`;
       }
       h += `<div class="wk-card" style="border-left-color:${w.color}">
@@ -2116,21 +2125,24 @@ async function viewReport() {
     const payrollRows = [];
     _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
 
+    const showPay = ROLE !== 'deptmgr';   // 部門主管:月報可看出勤,但隱藏一切薪資元素與薪資操作
     let h = `<div class="view">${monthNav(true)}`;
-    const actives = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者');
+    const actives = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者' && deptAllowed(w.email));  // deptmgr 只列轄下成員+自己
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
     const teamUrgent = leaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
+    if (showPay) {   // deptmgr 隱藏:鎖薪/匯出/工資清冊/兩顆對照 按鈕
     h += `<div class="lock-bar">${isLocked
       ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
       : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button><button class="btn btn-sm" style="background:#6b21a8;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportPayrollRegister()">📑 工資清冊</button></div>`;
     // 試點：特休 本地算 vs 單一 API 對照（治本第一步，確認一致後再改吃 API）
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#7c3aed;color:#fff;padding:6px 14px" onclick="annualParityCheck()">🔍 特休 API 對照（驗證兩邊一致）</button><div id="parity-box" style="margin-top:8px"></div></div>`;
     h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#b45309;color:#fff;padding:6px 14px" onclick="salaryParityCheck()">🔍 薪資 API 對照（切薪資前驗證）</button><div id="salary-parity-box" style="margin-top:8px"></div></div>`;
+    }
 
     _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
     _API_SALARY = await loadApiSalary(CUR_YEAR, CUR_MONTH + 1);  // 月報薪資改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
-    if (!_API_SALARY) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪
+    if (!_API_SALARY && showPay) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪（deptmgr 不顯示薪資,免驚擾）
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
       const sh = CONFIG.SHIFTS[w.shift];
@@ -2221,7 +2233,7 @@ async function viewReport() {
         ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
         ${(() => { if (!isFull || !_apiS) return ''; const w1 = _apiS.otMonthH > 46 ? `🔴 本月加班 ${_apiS.otMonthH}h，超過勞基法 46h 上限` : _apiS.otMonthH >= 36 ? `🟠 本月加班 ${_apiS.otMonthH}h，接近 46h 上限` : ''; const w2 = _apiS.consecMax >= 7 ? `🔴 連續出勤 ${_apiS.consecMax} 天，違反七休一` : _apiS.consecMax === 6 ? `🟠 已連續出勤 6 天（七休一預警）` : ''; return (w1 || w2) ? `<div class="rpt-warn">${[w1, w2].filter(Boolean).join('<br>')}</div>` : ''; })()}
         <div class="rpt-grid">
-          ${cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`)}
+          ${showPay ? cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`) : ''}
           ${cell('實際工時', `${totH.toFixed(1)} h`)}
           ${cell('實出勤', `${attendDays} 天`)}
           ${isFull ? cell('曠職', `${absent} 天`, absent>0) : ''}
@@ -2231,16 +2243,16 @@ async function viewReport() {
           ${cell('請假', `${leaveHours} 小時`)}
           ${cell('臨時假', `${urgentCnt} 次`, urgentCnt>0)}
           ${isFull ? cell('本月補休餘額', `${compRemain} 小時`) : ''}
-          ${cell('加班費', `$${otPay.toLocaleString()}${ot.hours?` (${ot.hours}h)`:''}`, otPay>0)}
+          ${showPay ? cell('加班費', `$${otPay.toLocaleString()}${ot.hours?` (${ot.hours}h)`:''}`, otPay>0) : cell('加班', `${ot.hours || 0} h`)}
           ${pendingCnt ? cell('待審請假', `${pendingCnt} 件`, true) : ''}
         </div>
         <div style="text-align:center;font-size:11px;color:#1a73e8;margin-top:8px">👆 點頭像看完整明細</div>
-        <div class="pay-box">
+        ${showPay ? `<div class="pay-box">
           <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
           <div class="pay-detail">
             ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
           </div>
-        </div>
+        </div>` : ''}
       </div>`;
     });
     setView(h + '</div>');
@@ -2333,6 +2345,8 @@ function showReportDetail(email) {
   if (!_RPT) return;
   const w = (WORKERS || []).find(x => x.email === email);
   if (!w) return;
+  if (!deptAllowed(email)) return;              // deptmgr 只能看轄下成員+自己
+  const showPay = ROLE !== 'deptmgr';           // deptmgr:明細隱藏所有薪資元素(金額/時薪/勞健保/離職結算/pay-box)
   const { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
   const _apiS = _API_SALARY && _API_SALARY[String(email || '').toLowerCase()];  // 薪資改吃 bot 單一 API（viewReport 已載入 _API_SALARY；失敗回退本地算）
@@ -2361,7 +2375,7 @@ function showReportDetail(email) {
   const otRows = od.rows.map(r =>
     r.paid <= 0
       ? `${addDay(r.date)}　加班 ${r.orig}h → 補休全抵 ${r.used}h（不計薪）`
-      : `${addDay(r.date)}　加班 ${r.orig}h${r.used ? `（補休抵 ${r.used}h）` : ''} → 計薪 ${r.paid}h${r.weekend ? '(休息日)' : ''}　$${r.pay}`
+      : `${addDay(r.date)}　加班 ${r.orig}h${r.used ? `（補休抵 ${r.used}h）` : ''} → 計薪 ${r.paid}h${r.weekend ? '(休息日)' : ''}${showPay ? `　$${r.pay}` : ''}`
   );
 
   // 補休明細（當月已核准）
@@ -2378,7 +2392,7 @@ function showReportDetail(email) {
     const ded = oneLeaveDeduct(l, hourly);
     const urgent = isUrgentLeave(l) ? '⚡' : '';
     const tr = (l.start_time && l.end_time) ? ` ${l.start_time}-${l.end_time}` : ' 全天';
-    return `<span style="white-space:nowrap">${addDayShort(l.start_date)}${tr}　${l.leave_type}${urgent} ${l.hours}h　扣$${ded}</span>`;
+    return `<span style="white-space:nowrap">${addDayShort(l.start_date)}${tr}　${l.leave_type}${urgent} ${l.hours}h${showPay ? `　扣$${ded}` : ''}</span>`;
   });
 
   // 特休：改吃 bot 單一 API（與員工 LINE 同一份計算），API 沒有才回退本地算
@@ -2517,9 +2531,9 @@ function showReportDetail(email) {
 
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
-    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天 ・ 時薪基準 $${hourly}</div>
+    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${hourly}` : ''}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
-    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）'}` : '遲到早退：時薪制不計'}</div>
+    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
@@ -2527,13 +2541,13 @@ function showReportDetail(email) {
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${_an.remain}</b> 天（≈ ${_an.remainH} 小時）</div></div>` : ''}
     ${isFull && _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()] ? (() => { const a = _API_ANNUAL[String(w.email || '').toLowerCase()]; return `<div class="rd-sec"><div class="rd-title">🤒 病假/事假（今年累積・與員工 LINE 同一份）</div><div class="rd-row">病假已用 <b>${a.sickUsedDisp || '0天'}</b>　事假已用 <b>${a.persUsedDisp || '0天'}</b></div></div>`; })() : ''}
     ${leaveDetailHtml}
-    ${isFull ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
-    ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}`; }), '') : ''}
-    ${isFull && _apiS ? `<div class="rd-sec" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 10px"><div class="rd-title">🧾 離職結算試算（以今日離職計）</div><div class="rd-row">本月應發 <b>$${net.toLocaleString()}</b>　＋　未休特休折發 <b>$${(_apiS.annualCashout || 0).toLocaleString()}</b>（剩 ${_apiS.annualRemainYr || 0} 天）</div><div class="rd-row" style="font-weight:700">合計應付 $${(net + (_apiS.annualCashout || 0)).toLocaleString()}</div><div class="rd-row" style="font-size:11px;color:#999">※ 補休依月結制已併入當月薪資折發；離職結算請於最後工作日當天試算最準。</div></div>` : ''}
-    <div class="pay-box" style="margin-top:14px">
+    ${isFull && showPay ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
+    ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}${showPay ? `　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}` : ''}`; }), '') : ''}
+    ${isFull && _apiS && showPay ? `<div class="rd-sec" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 10px"><div class="rd-title">🧾 離職結算試算（以今日離職計）</div><div class="rd-row">本月應發 <b>$${net.toLocaleString()}</b>　＋　未休特休折發 <b>$${(_apiS.annualCashout || 0).toLocaleString()}</b>（剩 ${_apiS.annualRemainYr || 0} 天）</div><div class="rd-row" style="font-weight:700">合計應付 $${(net + (_apiS.annualCashout || 0)).toLocaleString()}</div><div class="rd-row" style="font-size:11px;color:#999">※ 補休依月結制已併入當月薪資折發；離職結算請於最後工作日當天試算最準。</div></div>` : ''}
+    ${showPay ? `<div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
       <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
-    </div>
+    </div>` : ''}
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
 }
@@ -2562,13 +2576,14 @@ async function viewARec() {
 
 function buildRecsTable(recs) {
   if (!recs.length) return '<div class="loading">本月無打卡紀錄</div>';
-  let h = `<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>日期</th><th>實際工時</th><th>薪資</th></tr></thead><tbody>`;
+  const showPay = ROLE !== 'deptmgr';   // deptmgr 隱藏薪資欄（隱藏所有薪資元素）
+  let h = `<div class="tbl-wrap"><table><thead><tr><th>姓名</th><th>日期</th><th>實際工時</th>${showPay ? '<th>薪資</th>' : ''}</tr></thead><tbody>`;
   recs.forEach(r => {
     const w = (WORKERS || []).find(x => x.email === r.email) || {};
     const wh = realWorkHours(r, CONFIG.SHIFTS[w.shift], w.emp_type === '正式員工', dayOffOf(r.email, r.date, _MD.aleaves, _MD.aot));  // 扣午休+補休/請假
     h += `<tr onclick='showAdminRecDetail(${JSON.stringify(r)})'>
       <td>${r.name}</td><td>${addDay(r.date)}</td>
-      <td>${wh || '—'}</td><td>${r.subtotal ? '$'+r.subtotal : '—'}</td>
+      <td>${wh || '—'}</td>${showPay ? `<td>${r.subtotal ? '$'+r.subtotal : '—'}</td>` : ''}
     </tr>`;
   });
   return h + '</tbody></table></div>';
@@ -2597,7 +2612,7 @@ function showAdminRecDetail(rec) {
     <div class="modal-row"><span class="modal-lbl">下班</span><span>${rec.end_time}</span></div>
     <div class="modal-row"><span class="modal-lbl">休息</span><span>${rec.breaks_minutes||0} 分鐘</span></div>
     <div class="modal-row"><span class="modal-lbl">時數</span><span>${rec.hours} h</span></div>
-    <div class="modal-row"><span class="modal-lbl">薪資</span><span>$${rec.subtotal}</span></div>
+    ${ROLE !== 'deptmgr' ? `<div class="modal-row"><span class="modal-lbl">薪資</span><span>$${rec.subtotal}</span></div>` : ''}
     ${gpsMapLink(rec.location)}
     <div style="font-size:13px;color:#999;margin:12px 0 6px">工作內容</div>
     <div style="white-space:pre-line;background:#f8f9fa;padding:10px;border-radius:8px;font-size:14px">${rec.work_content||'（無）'}</div>
@@ -2643,7 +2658,8 @@ async function viewAReq() {
   setView('<div class="loading">載入中…</div>');
   try {
     const F = CONFIG.FID.Q;
-    const all = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` });
+    const all = (await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` }))
+      .filter(r => deptAllowed(r[F.email]));   // deptmgr 只看轄下成員+自己的補登申請
     const reqs = all.map(r => ({
       ragicId: r._ragicId, email: r[F.email], name: r[F.name],
       date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
@@ -2736,7 +2752,8 @@ async function doReject() {
 async function updateBadge() {
   try {
     const F = CONFIG.FID.Q;
-    const all = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` });
+    const all = (await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${F.status},eq,pending` }))
+      .filter(r => deptAllowed(r[F.email]));   // deptmgr 徽章只數轄下成員+自己
     const badge = document.getElementById('req-badge');
     if (badge) { badge.textContent = all.length; badge.classList.toggle('hidden', !all.length); }
   } catch (e) {}
@@ -2928,7 +2945,15 @@ async function loadRemoteCfg() {
   try {
     const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/config`);
     const d = await res.json().catch(() => ({}));
-    if (res.ok && d.ok) { REMOTE_CFG = d; if (Array.isArray(d.leaveTypes) && d.leaveTypes.length) LEAVE_TYPES = d.leaveTypes; }
+    if (res.ok && d.ok) {
+      REMOTE_CFG = d;
+      if (Array.isArray(d.leaveTypes) && d.leaveTypes.length) LEAVE_TYPES = d.leaveTypes;
+      if (d.role) {                                    // 權限四層:以 Worker 注入的 role 為準
+        const prev = ROLE;
+        ROLE = d.role;
+        if (prev === 'employee' && ROLE === 'deptmgr' && APP_INITED) { renderAdminTabs(); switchTab('overview'); }  // 部門主管:重繪成管理者版 tabs
+      }
+    }
   } catch (e) {}  // 失敗就用預設四假別，不擋任何功能
 }
 const LEAVE_STATUS = { pending:'待審核', approved:'已核准', rejected:'已駁回' };
@@ -3142,7 +3167,7 @@ async function viewLeave() {
 async function viewAdminLeave() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const leaves = await getAllLeaves();
+    const leaves = (await getAllLeaves()).filter(l => deptAllowed(l.email));   // deptmgr 只看轄下成員+自己的申請
     const pending = leaves.filter(l => l.status === 'pending');
     const others  = leaves.filter(l => l.status !== 'pending');
     let h = '<div class="view">';
@@ -3525,7 +3550,7 @@ async function viewOt() {
 async function viewAdminOt() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const list = await getAllOt();
+    const list = (await getAllOt()).filter(o => deptAllowed(o.email));   // deptmgr 只看轄下成員+自己的申請
     const pending = list.filter(o => o.status === 'pending');
     const others  = list.filter(o => o.status !== 'pending');
     let h = '<div class="view">';
