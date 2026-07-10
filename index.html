@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1100,12 +1100,19 @@ async function loadMyKPI() {
   } catch (e) { /* KPI 載入失敗不影響打卡 */ }
 }
 
-// 取「今天」的記錄（含已完成；上下班獨立後一天一筆）
+// v6.3：取「今天」的記錄——回傳「未完成的那段」（支援一天多段，與 LINE LIFF 打卡邏輯一致）
+// 已完成的段存進 TODAY_SEGS 供畫面顯示「今日已完成 N 段」；完成後可再打下一段
+let TODAY_SEGS = [];
 async function getOpenRec() {
   const F = CONFIG.FID.R;
   const today = fmtDate(new Date());
   const recs = await ragicGet(CONFIG.SHEETS.RECORDS, { where:`${F.email},eq,${ME.email}` });
-  const rec = recs.find(r => r[F.date] === today && r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted');
+  const todays = recs.filter(r => r[F.date] === today && r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted');
+  TODAY_SEGS = todays
+    .filter(r => r[F.start_time] && r[F.end_time])
+    .map(r => ({ start: stripSec(r[F.start_time]), end: stripSec(r[F.end_time]), hours: Number(r[F.hours]) || 0 }))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const rec = todays.find(r => !r[F.start_time] || !r[F.end_time]);   // 未完成的那段（沒有＝可打新一段）
   if (!rec) return null;
   return {
     ragicId: rec._ragicId,
@@ -1130,7 +1137,8 @@ function getStatus() {
 
 function buildPunchHTML() {
   const s = getStatus();
-  const labels = { none:'未打卡', work:'上班中', break:'休息中', done:'今日已完成', missin:'⚠️ 漏打上班卡' };
+  const segN = TODAY_SEGS.length;
+  const labels = { none: segN ? `已完成 ${segN} 段，可再上班` : '未打卡', work:'上班中', break:'休息中', done:'今日已完成', missin:'⚠️ 漏打上班卡' };
   const cls = { none:'status-none', work:'status-work', break:'status-break', done:'status-work', missin:'status-none' };
   let h = '<div class="view"><div id="my-kpi"></div>';
 
@@ -1153,6 +1161,16 @@ function buildPunchHTML() {
     ${(s === 'work' || s === 'break') ? '<div class="timer" id="timer">00:00:00</div>' : ''}
   </div>`;
 
+  // v6.3：今日已完成段落摘要（工讀生分段上班：外場一段、內場一段…各自獨立一筆）
+  if (segN) {
+    const totSegH = Math.round(TODAY_SEGS.reduce((t, x) => t + x.hours, 0) * 100) / 100;
+    h += `<div class="card" style="font-size:13.5px;line-height:1.9">
+      <div style="font-weight:600;margin-bottom:4px">📋 今日已完成 ${segN} 段</div>
+      ${TODAY_SEGS.map((x, i) => `<div>第 ${i+1} 段　${x.start} - ${x.end}（${x.hours}h）</div>`).join('')}
+      <div style="color:#1a73e8;font-weight:600;margin-top:4px">合計 ${totSegH}h</div>
+    </div>`;
+  }
+
   // 地點選擇（要打上班卡時：未打卡 或 漏打上班補打）
   if (s === 'none' || s === 'missin') {
     h += `<div class="card"><div style="font-weight:600;margin-bottom:12px">選擇打卡地點</div>`;
@@ -1168,7 +1186,7 @@ function buildPunchHTML() {
   // 動作按鈕
   h += '<div class="btn-grid">';
   if (s === 'none') {
-    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>上班打卡</button>`;
+    h += `<button class="btn btn-green btn-full" id="btn-in" onclick="doPunchIn()" disabled>${segN ? `上班打卡（第 ${segN+1} 段）` : '上班打卡'}</button>`;
     h += `<button class="btn btn-grey btn-full" onclick="showPunchOutModal()" style="margin-top:8px">下班打卡（上班忘打時用）</button>`;
   }
   if (s === 'missin') {
