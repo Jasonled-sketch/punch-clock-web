@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1636,6 +1636,10 @@ async function doSubmitReq() {
   }
   try {
     const F = CONFIG.FID.Q;
+    // v6.4 防重複送出：同日同時段已有待審/已核准的申請 → 擋下（員工重按或重送）
+    const mine = await getMyReqs();
+    const dupq = mine.find(q => q.date === date.replace(/-/g, '/') && q.start_time === start && q.end_time === end && (q.status === 'pending' || q.status === 'approved'));
+    if (dupq) { toast(`此日期時段已有補登申請（${dupq.status === 'approved' ? '已核准' : '待審核'}），無需重複送出`, 'red'); return; }
     await ragicPost(CONFIG.SHEETS.REQUESTS, {
       [F.email]: ME.email, [F.name]: MY_WORKER?.name || ME.name,
       [F.date]: date.replace(/-/g,'/'), [F.start_time]: start, [F.end_time]: end,
@@ -2728,6 +2732,21 @@ function showApproveModal(req) {
 async function doApprove() {
   const req = _MD.req;
   try {
+    // v6.4 防搶核＋防重複核准：先讀這張單的最新狀態（可能已在 LINE 或其他視窗被處理）
+    const FQ0 = CONFIG.FID.Q;
+    const sameEmail = await ragicGet(CONFIG.SHEETS.REQUESTS, { where:`${FQ0.email},eq,${req.email}` });
+    const fresh = sameEmail.find(r => r._ragicId === req.ragicId);
+    if (!fresh || fresh[FQ0.status] !== 'pending') {
+      closeModal(); toast('這張申請已在其他地方處理過（' + (fresh ? ({approved:'已核准',rejected:'已駁回'}[fresh[FQ0.status]] || fresh[FQ0.status]) : '已刪除') + '），未重複執行', 'red');
+      updateBadge(); viewAReq(); return;
+    }
+    // 同日同時段已有另一張「已核准」→ 此張自動駁回，避免打卡紀錄重複寫入
+    const dupA = sameEmail.find(r => r._ragicId !== req.ragicId && r[FQ0.date] === req.date && stripSec(r[FQ0.start_time]) === req.start_time && stripSec(r[FQ0.end_time]) === req.end_time && r[FQ0.status] === 'approved');
+    if (dupA) {
+      await ragicUpdate(CONFIG.SHEETS.REQUESTS, req.ragicId, { [FQ0.status]:'rejected', [FQ0.reviewed_by]: ME.email, [FQ0.reviewed_at]: fmtDateTime(new Date()), [FQ0.review_note]: '重複申請（同日同時段已核准），系統自動駁回' });
+      closeModal(); toast('⚠️ 重複申請：同日同時段已核准過，此張已自動駁回', 'red');
+      updateBadge(); viewAReq(); return;
+    }
     if (!WORKERS.length) WORKERS = await getAllWorkers();
     const worker = WORKERS.find(w => w.email === req.email);
     let hours = 0, subtotal = 0;
