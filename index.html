@@ -81,6 +81,26 @@
     .wk-email{font-size:11px;color:#aaa;margin-bottom:10px}
     .wk-stat{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px}
     .wk-stat .v{font-weight:600}
+    /* ── 即時現況戰情牆 ── */
+    .live-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .live-title{font-size:19px;font-weight:800}
+    .live-sub{font-size:12px;color:#888;margin-left:8px;font-weight:400}
+    .live-refresh{background:#1a73e8;color:#fff;border:none;border-radius:20px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer}
+    .live-refresh:active{opacity:.7}
+    .live-hol{background:#f3e8ff;color:#6b21a8;padding:10px 14px;border-radius:10px;font-weight:700;margin-bottom:14px;text-align:center}
+    .live-chips{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+    .live-chip{flex:1;min-width:80px;background:#fff;border-radius:14px;padding:13px 8px;box-shadow:0 2px 10px rgba(0,0,0,.06);text-align:center;border-top:3px solid #ccc}
+    .live-chip .n{font-size:27px;font-weight:800;line-height:1}
+    .live-chip .l{font-size:12px;color:#666;margin-top:5px}
+    .live-grp{margin-bottom:18px}
+    .live-grp-hd{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin:0 2px 9px}
+    .live-grp-hd .cnt{font-size:12px;color:#fff;border-radius:10px;padding:1px 9px;font-weight:700}
+    .live-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+    .live-p{background:#fff;border-radius:12px;padding:11px 14px;box-shadow:0 1px 8px rgba(0,0,0,.05);display:flex;align-items:center;gap:11px;border-left:4px solid #ccc}
+    .live-p .nm{font-size:15px;font-weight:700}
+    .live-p .dt{font-size:12px;color:#777;margin-top:2px}
+    .live-p .dt.warn{color:#d9480f;font-weight:700}
+    .live-updated{text-align:center;font-size:11px;color:#aaa;margin-top:6px}
     /* ── Calendar ── */
     .cal{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(0,0,0,.06);padding:6px}
     .cal-hd{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid #f0f0f0}
@@ -240,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -915,10 +935,10 @@ async function initApp() {
   loadRemoteCfg();                                   // 背景載入公司設定（假別清單等），失敗用預設
   if (ME.isAdmin) {
     renderAdminTabs();
-    switchTab('overview');
+    switchTab('live');                               // 管理者一開就落在即時現況戰情牆
   } else {
     await loadMyWorker();
-    if (ROLE === 'deptmgr') { renderAdminTabs(); switchTab('overview'); return; }  // cfg 比員工資料先回來:直接進管理者版介面(避免被員工版蓋掉)
+    if (ROLE === 'deptmgr') { renderAdminTabs(); switchTab('live'); return; }  // cfg 比員工資料先回來:直接進管理者版介面(避免被員工版蓋掉)
     renderWorkerTabs();
     switchTab('punch');
     startPunchReminder();
@@ -1010,7 +1030,7 @@ function renderWorkerTabs() {
 
 function renderAdminTabs() {
   document.getElementById('tab-bar').innerHTML =
-    tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
+    tab('live','即時現況') + tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
     `<button class="tab-btn" id="tab-areq" onclick="switchTab('areq')">補登審核<span class="tab-badge hidden" id="req-badge">0</span></button>` +
     tab('report','月報') + (ROLE === 'deptmgr' ? '' : tab('wrkrs','工讀生')) + tab('aleave','請假審核') +   // 工讀生分頁=薪資設定管理,deptmgr 不顯示
     tab('aot','加班審核') + tab('aannounce','公告管理');
@@ -1034,6 +1054,7 @@ function switchTab(t) {
     announce: viewAnnounce,
     leave: viewLeave,
     ot: viewOt,
+    live: viewLive,
     overview: viewOverview,
     acal: viewACal,
     arec: viewARec,
@@ -1762,6 +1783,67 @@ function chgAMonth(d) {
 }
 
 // ─── Admin: Overview ─────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════
+//  即時現況戰情牆（管理者：一眼看全公司此刻狀態）
+//  資料來自 bot 集中計算 /calc/roster-now（判定與群組提醒同源，attendance-sync）；統計由 people[] 自算（deptmgr 過濾後也正確）
+// ═══════════════════════════════════════════════════════════════════════
+const LIVE_META = {
+  missing:    { label: '未打卡',      emoji: '🟡', color: '#F59E0B' },
+  ot:         { label: '加班中',      emoji: '🔵', color: '#2563EB' },
+  working:    { label: '上班中',      emoji: '🟢', color: '#16A34A' },
+  notyet:     { label: '尚未到班',    emoji: '⚪', color: '#9CA3AF' },
+  leave:      { label: '請假中',      emoji: '🌴', color: '#0EA5E9' },
+  done:       { label: '已下班',      emoji: '✅', color: '#6B7280' },
+  holiday:    { label: '休假',        emoji: '💤', color: '#A78BFA' },
+  hourly_off: { label: '未打卡（工讀）', emoji: '⚪', color: '#9CA3AF' }
+};
+const LIVE_ORDER = ['missing', 'ot', 'working', 'notyet', 'leave', 'done', 'holiday', 'hourly_off'];  // 該關注的排前面
+
+async function viewLive() {
+  setView('<div class="loading">載入中…</div>');
+  await renderLive();
+}
+async function renderLive() {
+  try {
+    if (!WORKERS.length) WORKERS = await getAllWorkers();                   // 頭像/顏色用 email 對照本地員工清單
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/roster-now?all=1`);
+    if (!res.ok) throw new Error('讀取失敗 ' + res.status);
+    const d = await res.json();
+    if (!d.ok) throw new Error(d.reason || '讀取失敗');
+    const wBy = {}; WORKERS.forEach(w => { wBy[(w.email || '').toLowerCase()] = w; });
+    const people = d.people || [];
+    const cnt = {}; LIVE_ORDER.forEach(s => cnt[s] = 0);
+    people.forEach(p => { cnt[p.status] = (cnt[p.status] || 0) + 1; });
+    const onDuty = cnt.working + cnt.ot;
+    let h = '<div class="view">';
+    h += `<div class="live-top"><div><span class="live-title">即時現況</span><span class="live-sub">${d.today} · 全公司 ${people.length} 人</span></div>`;
+    h += '<button class="live-refresh" onclick="renderLive()">🔄 重新整理</button></div>';
+    if (d.holiday) h += `<div class="live-hol">💤 今日${d.holidayName || '放假'}　全公司休假</div>`;
+    const chip = (n, l, c) => `<div class="live-chip" style="border-top-color:${c}"><div class="n" style="color:${c}">${n}</div><div class="l">${l}</div></div>`;
+    h += '<div class="live-chips">' +
+      chip(onDuty, '在勤中', '#16A34A') +
+      chip(cnt.missing, '未打卡', cnt.missing ? '#F59E0B' : '#9CA3AF') +
+      chip(cnt.leave, '請假', '#0EA5E9') +
+      chip(cnt.done, '已下班', '#6B7280') + '</div>';
+    for (const st of LIVE_ORDER) {
+      const grp = people.filter(p => p.status === st);
+      if (!grp.length) continue;
+      const m = LIVE_META[st];
+      h += `<div class="live-grp"><div class="live-grp-hd">${m.emoji} ${m.label}<span class="cnt" style="background:${m.color}">${grp.length}</span></div><div class="live-list">`;
+      grp.forEach(p => {
+        const w = wBy[(p.email || '').toLowerCase()] || {};
+        const warn = p.status === 'missing' && p.lateMin > 0;
+        h += `<div class="live-p" style="border-left-color:${m.color}">${makeAvatar(p.name, w.color || '#1a73e8', '', w.photo)}<div><div class="nm">${p.name}</div><div class="dt${warn ? ' warn' : ''}">${p.detail || ''}</div></div></div>`;
+      });
+      h += '</div></div>';
+    }
+    h += `<div class="live-updated">資料更新於 ${d.now}（唯讀畫面，審核請至各分頁；點 🔄 更新）</div>`;
+    setView(h + '</div>');
+  } catch (e) {
+    setView(`<div class="view"><div class="live-top"><span class="live-title">即時現況</span><button class="live-refresh" onclick="renderLive()">🔄 重新整理</button></div><div class="err-box">${e.message}</div></div>`);
+  }
+}
 
 async function viewOverview() {
   setView('<div class="loading">載入中…</div>');
@@ -3004,7 +3086,7 @@ async function loadRemoteCfg() {
       if (d.role) {                                    // 權限四層:以 Worker 注入的 role 為準
         const prev = ROLE;
         ROLE = d.role;
-        if (prev === 'employee' && ROLE === 'deptmgr' && APP_INITED) { renderAdminTabs(); switchTab('overview'); }  // 部門主管:重繪成管理者版 tabs
+        if (prev === 'employee' && ROLE === 'deptmgr' && APP_INITED) { renderAdminTabs(); switchTab('live'); }  // 部門主管:重繪成管理者版 tabs
       }
     }
   } catch (e) {}  // 失敗就用預設四假別，不擋任何功能
