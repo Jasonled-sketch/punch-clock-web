@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1114,7 +1114,6 @@ async function loadMyKPI() {
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
-        <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
       </div>
       ${ab.pending.length ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
       ${teamLifeHtml(teamUrgent)}`;
@@ -2148,19 +2147,6 @@ function showKpiInfo() {
       <div class="rd-row">🔴 非全勤（任一）：曠職、漏打卡 ≥3 次、遲到累積 ≥15 分、請事假</div>
       <div class="rd-row" style="color:#137333;margin-top:4px">病假整年度 10 天內<b>不影響</b>全勤；特休不影響</div>
     </div>
-    <div class="rd-sec"><div class="rd-title">💯 出勤健康度（基礎 75 分・加分制）</div>
-      <div class="rd-row" style="color:#137333">＝ 加分（沒請假的獎勵，請假是權利不扣分）＝</div>
-      <div class="rd-row">本月無臨時假　　　+10 分</div>
-      <div class="rd-row">本月無事假　　　　+5 分</div>
-      <div class="rd-row">本月無病假　　　　+5 分</div>
-      <div class="rd-row">本月無特休/其他假　+5 分　（全達 → 100 分）</div>
-      <div class="rd-row" style="color:#c5221f;margin-top:6px">＝ 扣分（紀律疏失，與請假權利無關）＝</div>
-      <div class="rd-row">曠職　　　　　　−30 分／天</div>
-      <div class="rd-row">漏打卡　　　　　−5 分／次</div>
-      <div class="rd-row">補單逾期（請假後超過 12hr 才補單，每超過 12hr 再扣一次）−5 分／次</div>
-      <div class="rd-row">遲到　−2 分／次　・　早退 −2 分／次</div>
-      <div class="rd-row" style="color:#999;margin-top:6px">請假本身<b>不扣分</b>；90+ 🟢　80~89 🟡　80 以下 🔴</div>
-    </div>
     <div class="rd-sec"><div class="rd-title">❤️ 團隊生命值</div>
       <div class="rd-row">每月 ❤️❤️❤️ 三顆愛心</div>
       <div class="rd-row">每發生一次<b>臨時請假</b>（申請距請假未滿 72hr），全隊 −1 顆</div>
@@ -2172,7 +2158,7 @@ function showKpiInfo() {
       <div class="rd-row"><b>漏打卡</b>：有來上班，但忘了打上班或下班卡</div>
       <div class="rd-row"><b>補單逾期</b>：請假後超過 12hr 才補送假單，每超過 12hr 再扣一次（−5/次）</div>
     </div>
-    <div class="rd-sec"><div class="rd-title">🚦 出勤分數（出勤評比，僅正職，2026/8/1 起適用）</div>
+    <div class="rd-sec"><div class="rd-title">🚦 出勤燈號輔助（分數）｜出勤評比，僅正職，2026/8/1 起適用</div>
       <div class="rd-row">基礎 <b>70</b> 分＋加分 30：遲到早退月合計≤10分鐘 <b>+5</b>｜補登(忘打卡)月≤2次 <b>+5</b>｜無臨時事假 <b>+10</b>（一般+7／急件+4／緊急0）｜出勤率 <b>+10</b>（缺1天+7／缺2天+4／缺3天起0）｜曠職 <b>−15/天</b></div>
       <div class="rd-row">燈號：90-100 🟢｜80-89 🔵｜70-79 🟡｜60-69 🔴｜60以下 ⚪</div>
       <div class="rd-row" style="color:#137333">特休、病假、婚喪假、產假、家庭照顧假、生理假、公傷、公假一律<b>視同出勤</b>不影響分數（法定權利）；臨時申請「特休」也不扣分，臨時分級只計事假</div>
@@ -2337,8 +2323,7 @@ async function viewReport() {
         </div>
         <div class="rpt-kpi">
           <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} ${kpi.lightLabel}</span>
-          <span class="kpi-health ${kpi.hColor}">出勤健康度 ${kpi.health}</span>
-          ${isFull && _apiS && _apiS.attendScore != null ? (() => { const LE = { green: '🟢', blue: '🔵', yellow: '🟡', red: '🔴', gray: '⚪' }; return `<span class="kpi-health" title="出勤評比分數（基礎70+加分30；受保護假視同出勤）">${LE[_apiS.attendLight] || ''} 出勤分數 <b>${_apiS.attendScore}</b></span>`; })() : ''}
+          ${isFull && _apiS && _apiS.attendScore != null ? (() => { const LE = { green: '🟢', blue: '🔵', yellow: '🟡', red: '🔴', gray: '⚪' }; return `<span class="kpi-health" title="出勤評比分數（基礎70+加分30；受保護假視同出勤）">${LE[_apiS.attendLight] || ''} 出勤燈號輔助（分數）<b>${_apiS.attendScore}</b></span>`; })() : ''}
         </div>
         ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
         ${(() => { if (!isFull || !_apiS) return ''; const w1 = _apiS.otMonthH > 46 ? `🔴 本月加班 ${_apiS.otMonthH}h，超過勞基法 46h 上限` : _apiS.otMonthH >= 36 ? `🟠 本月加班 ${_apiS.otMonthH}h，接近 46h 上限` : ''; const w2 = _apiS.consecMax >= 7 ? `🔴 連續出勤 ${_apiS.consecMax} 天，違反七休一` : _apiS.consecMax === 6 ? `🟠 已連續出勤 6 天（七休一預警）` : ''; return (w1 || w2) ? `<div class="rpt-warn">${[w1, w2].filter(Boolean).join('<br>')}</div>` : ''; })()}
