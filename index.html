@@ -240,7 +240,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v6.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2534,6 +2534,15 @@ function showReportDetail(email) {
     .map(o => { const isOt = o.ot_type === '加班', h = parseFloat(o.hours) || 0, done = (o.date || '') <= todayStr2, c = isOt ? '#2e7d32' : '#1565c0'; return `<div style="display:flex"><span style="color:#777;flex:0 0 88px">${addDayShort(o.date)}</span><span style="color:${c};flex:1">${o.start_time && o.end_time ? `${o.start_time}-${o.end_time} ` : ''}${(done ? '已' : '預') + (isOt ? '加班' : '補休')}${h}h</span></div>`; });
 
   // 假別明細（逐筆）：特休依到職週年度、病假/事假依曆年；每筆 日期(星期) 時段 時數 + 小計
+  // 雇主月成本區（僅 owner/hr showPay 可見；先組好字串避免 template 深層巢狀）
+  let empCostHtml = '';
+  if (isFull && _apiS && _apiS.employerCost && showPay) {
+    const e = _apiS.employerCost, m$ = n => '$' + (Number(n) || 0).toLocaleString();
+    empCostHtml = `<div class="rd-sec" style="background:#faf5ff;border:1px dashed #d8b4fe;border-radius:8px;padding:8px 10px"><div class="rd-title" style="color:#6b21a8">👔 公司月成本（雇主總負擔，僅管理層可見）</div>`
+      + `<div class="rd-row">本薪 ${m$(e.base)}` + (e.attendBonus ? `　全勤 ${m$(e.attendBonus)}` : '') + `　勞保 ${m$(e.labor)}　就保 ${m$(e.empIns)}　職災 ${m$(e.accident)}　健保 ${m$(e.health)}` + (e.group ? `　團保 ${m$(e.group)}` : '') + `　勞退6% ${m$(e.pension)}　墊償 ${m$(e.wageFund)}</div>`
+      + `<div class="rd-row" style="font-weight:700;color:#6b21a8">公司總成本 ${m$(e.total)}</div>`
+      + `<div class="rd-row" style="font-size:11px;color:#999">健保含平均眷口×1.56；勞退6%進員工個人專戶。此區僅老闆/HR 可見，員工端不顯示金額。</div></div>`;
+  }
   const leaveDetailHtml = (() => {
     if (!isFull) return '';
     const wd = ['日', '一', '二', '三', '四', '五', '六'];
@@ -2572,9 +2581,10 @@ function showReportDetail(email) {
     ${isFull && showPay ? `<div class="rd-sec"><div class="rd-title">🏥 勞健保自付（投保級距 $${insuranceGrade(w.monthly_salary).toLocaleString()}）</div><div class="rd-row">勞保 $${laborIns}　健保 $${healthIns}${w.dependents ? `（含 ${w.dependents} 眷口）` : '（本人）'}</div></div>` : ''}
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}${showPay ? `　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}` : ''}`; }), '') : ''}
     ${isFull && _apiS && showPay ? `<div class="rd-sec" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 10px"><div class="rd-title">🧾 離職結算試算（以今日離職計）</div><div class="rd-row">本月應發 <b>$${net.toLocaleString()}</b>　＋　未休特休折發 <b>$${(_apiS.annualCashout || 0).toLocaleString()}</b>（剩 ${_apiS.annualRemainYr || 0} 天）</div><div class="rd-row" style="font-weight:700">合計應付 $${(net + (_apiS.annualCashout || 0)).toLocaleString()}</div><div class="rd-row" style="font-size:11px;color:#999">※ 補休依月結制已併入當月薪資折發；離職結算請於最後工作日當天試算最準。</div></div>` : ''}
+    ${empCostHtml}
     ${showPay ? `<div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${(_apiS && _apiS.attendBonus) ? `　＋全勤獎金 $${_apiS.attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
     </div>` : ''}
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
