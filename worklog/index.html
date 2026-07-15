@@ -206,8 +206,8 @@
     <div class="card">
       <div class="sec-t"><span class="n">1</span>基本資訊</div>
       <div class="field">
-        <label class="lb">執行日期<span class="req">*</span></label>
-        <input type="date" id="f_date">
+        <label class="lb">執行日期<span class="req">*</span><span id="dateWeek" style="margin-left:auto;color:var(--sky-d);font-weight:700;font-size:13px"></span></label>
+        <input type="date" id="f_date" onchange="updateWeekday()">
       </div>
       <div class="field">
         <label class="lb">負責主任<span class="req">*</span></label>
@@ -400,8 +400,12 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.6';
+const APP_VERSION='1.7';
 const CHANGELOG=[
+  'v1.7　2026/07/15',
+  '· 執行日期後面顯示星期幾',
+  '· 修正主任連動：切換主任時，舊主任自動取消、只留當前主任',
+  '',
   'v1.6　2026/07/15',
   '· 選負責主任時，自動把該主任勾進協作參與員',
   '· 抵達／返程改 24 小時制：直接打 1420 就是 14:20，免選上下午',
@@ -607,7 +611,18 @@ function buildCoChips(){
   add.onclick=()=>{ const n=(prompt('輸入協做員姓名')||'').trim(); if(!n||S.coworkers.includes(n))return; S.coworkers.push(n); const c=document.createElement('button'); c.type='button'; c.className='chip on'; c.textContent=n; bind(c,n); w.insertBefore(c, add); };
   w.appendChild(add);
 }
-function onLeadPick(v){ if(v && S.coworkers.indexOf(v)<0) S.coworkers.push(v); buildCoChips(); }   // 選主任自動勾選同名協作員(偉智/俊男)
+function onLeadPick(v){   // 選主任自動勾同名協作員;切換主任時移除前一個自動加的(只留當前主任)
+  if(S.autoLead){ const i=S.coworkers.indexOf(S.autoLead); if(i>=0) S.coworkers.splice(i,1); }
+  S.autoLead = v || '';
+  if(v && S.coworkers.indexOf(v)<0) S.coworkers.push(v);
+  buildCoChips();
+}
+function updateWeekday(){   // 執行日期後顯示星期幾
+  const v=($('f_date')||{}).value, w=$('dateWeek'); if(!w) return;
+  if(!v){ w.textContent=''; return; }
+  const d=new Date(v+'T00:00:00'), names=['日','一','二','三','四','五','六'];
+  w.textContent = isNaN(d)? '' : '（星期'+names[d.getDay()]+'）';
+}
 function syncStaff(recs){
   const set=new Set(CFG.STAFF);
   recs.forEach(x=>{
@@ -723,6 +738,8 @@ function buildForm(){
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
   buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
   if(S.pick.lead && S.coworkers.indexOf(S.pick.lead)<0) S.coworkers.push(S.pick.lead);   // 預設主任自動帶入協作員
+  S.autoLead = S.pick.lead || '';
+  updateWeekday();
   buildCoChips();
   buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange);
   renderMain();
