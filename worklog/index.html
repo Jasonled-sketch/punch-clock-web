@@ -229,11 +229,11 @@
       <div class="row2">
         <div class="field">
           <label class="lb">抵達時間<button type="button" class="mini" onclick="setNow('f_arrive')">現在</button></label>
-          <input type="time" id="f_arrive" onchange="calcGrade()">
+          <input type="text" id="f_arrive" inputmode="numeric" maxlength="5" placeholder="例 1420" onchange="onTimeChange(this)">
         </div>
         <div class="field">
           <label class="lb">返程時間<button type="button" class="mini" onclick="setNow('f_leave')">現在</button></label>
-          <input type="time" id="f_leave" onchange="calcGrade()">
+          <input type="text" id="f_leave" inputmode="numeric" maxlength="5" placeholder="例 1620" onchange="onTimeChange(this)">
         </div>
       </div>
     </div>
@@ -333,8 +333,8 @@
 
     <!-- 7 工務評級（外務時顯示）-->
     <div class="card" id="card_grade">
-      <div class="sec-t"><span class="n">7</span>工程補充資訊<span class="opt" style="margin-left:auto;font-weight:500">選填</span></div>
-      <div class="grade-result" style="display:none">
+      <div class="sec-t"><span class="n">7</span>工務評級<span class="opt" style="margin-left:auto;font-weight:500">選填·難度評分</span></div>
+      <div class="grade-result">
         <div class="gr-lv" id="g_lv">Lv.0</div>
         <div class="gr-meta"><span id="g_score">0 分</span><small id="g_breakdown">—</small></div>
       </div>
@@ -358,7 +358,7 @@
         <label class="lb">額外狀況<span class="opt">可複選</span></label>
         <div class="chips" id="gradeExtra"></div>
       </div>
-      <div class="hint">以上為工程補充資訊，有助於後續工時與案場統計。</div>
+      <div class="hint">梯具分數自動取自「使用梯子」、工時取自抵達／返程時間；面積僅屏幕安裝／招牌計入。</div>
     </div>
 
     <!-- 近期 -->
@@ -400,10 +400,12 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.5';
+const APP_VERSION='1.6';
 const CHANGELOG=[
-  'v1.5　2026/07/04',
-  '· 工務評級介面調整中，暫時隱藏（資料持續記錄，穩定後再開放）',
+  'v1.6　2026/07/15',
+  '· 選負責主任時，自動把該主任勾進協作參與員',
+  '· 抵達／返程改 24 小時制：直接打 1420 就是 14:20，免選上下午',
+  '· 工務評級重新顯示（等級＋分數；暫不顯示金額）',
   '',
   'v1.3　2026/07/04',
   '· 梯具分取代高度分：自動抓「使用梯子」欄（同業設備門檻制，吊車案大跳分）',
@@ -502,6 +504,13 @@ function nowRagic(){ const d=new Date(); return d.getFullYear()+'/'+pad(d.getMon
 function dateToRagic(v){ return v? v.replace(/-/g,'/') : ''; }
 function timeToRagic(v){ return v? (v.length===5? v+':00' : v) : ''; }
 function setNow(id){ const d=new Date(); $(id).value=pad(d.getHours())+':'+pad(d.getMinutes()); if(id==='f_arrive'||id==='f_leave') calcGrade(); }
+function normTime(v){   // 24小時制：打 1420→14:20、920→09:20、9→09:00；小時封 23、分封 59
+  const d=String(v||'').replace(/\D/g,'').slice(0,4); if(!d) return '';
+  let hh,mm; if(d.length<=2){ hh=d; mm='00'; } else { hh=d.slice(0,d.length-2); mm=d.slice(-2); }
+  const H=Math.min(23,parseInt(hh,10)||0), M=Math.min(59,parseInt(mm,10)||0);
+  return pad(H)+':'+pad(M);
+}
+function onTimeChange(el){ el.value=normTime(el.value); calcGrade(); }
 function toast(msg, kind){ const t=$('toast'); t.textContent=msg; t.className='show'+(kind?(' '+kind):''); clearTimeout(t._h); t._h=setTimeout(()=>t.className='',2600); }
 function showLoad(txt){ $('loadingTxt').textContent=txt||'處理中…'; $('loading').classList.remove('hidden'); }
 function hideLoad(){ $('loading').classList.add('hidden'); }
@@ -598,6 +607,7 @@ function buildCoChips(){
   add.onclick=()=>{ const n=(prompt('輸入協做員姓名')||'').trim(); if(!n||S.coworkers.includes(n))return; S.coworkers.push(n); const c=document.createElement('button'); c.type='button'; c.className='chip on'; c.textContent=n; bind(c,n); w.insertBefore(c, add); };
   w.appendChild(add);
 }
+function onLeadPick(v){ if(v && S.coworkers.indexOf(v)<0) S.coworkers.push(v); buildCoChips(); }   // 選主任自動勾選同名協作員(偉智/俊男)
 function syncStaff(recs){
   const set=new Set(CFG.STAFF);
   recs.forEach(x=>{
@@ -702,8 +712,8 @@ function calcGrade(){
   let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>8)sC=8;   // 額外 cap 8
   const total=base+sA+sH+sKm+sT+sC;   // 上限 6+30+20+8+8+8=80（分數×100=$8000 天花板）
   S.grade.score=total; S.grade.lv=getLevel(total);
-  if($('g_lv')) $('g_lv').textContent=total;                       // 結果框已隱藏(測試中);S.grade.score 仍算,供背景寫入 Ragic
-  if($('g_score')) $('g_score').textContent='工務分數';
+  if($('g_lv')) $('g_lv').textContent='Lv.'+S.grade.lv;             // 顯示等級
+  if($('g_score')) $('g_score').textContent=total+' 分';           // 顯示分數（不顯示金額）
   if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 梯具'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
 }
 
@@ -711,7 +721,8 @@ function calcGrade(){
 function buildForm(){
   $('f_date').value = todayStr();
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
-  buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任'});
+  buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
+  if(S.pick.lead && S.coworkers.indexOf(S.pick.lead)<0) S.coworkers.push(S.pick.lead);   // 預設主任自動帶入協作員
   buildCoChips();
   buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange);
   renderMain();
@@ -769,8 +780,8 @@ function buildPayload(){
   f.push([F.execDate,dateToRagic($('f_date').value)],[F.execDate2,dateToRagic($('f_date').value)],[F.logTime,nowRagic()],[F.lead,(S.pick.lead||'').trim()]);
   S.coworkers.forEach(n=>f.push([F.coworkers,n]));
   f.push([F.io,S.seg.io],[F.subject,$('f_subject').value.trim()]);
-  if($('f_arrive').value) f.push([F.arrive,timeToRagic($('f_arrive').value)]);
-  if($('f_leave').value)  f.push([F.leave,timeToRagic($('f_leave').value)]);
+  if($('f_arrive').value) f.push([F.arrive,timeToRagic(normTime($('f_arrive').value))]);
+  if($('f_leave').value)  f.push([F.leave,timeToRagic(normTime($('f_leave').value))]);
   if(S.pick.main) f.push([F.main,S.pick.main]);
   if(S.pick.sub)  f.push([F.sub,S.pick.sub]);
   f.push([F.pay, S.seg.pay]);   // 有無收款（1002785）
