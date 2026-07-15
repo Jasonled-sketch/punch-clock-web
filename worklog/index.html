@@ -333,8 +333,8 @@
 
     <!-- 7 工務評級（外務時顯示）-->
     <div class="card" id="card_grade">
-      <div class="sec-t"><span class="n">7</span>工務評級<span class="opt" style="margin-left:auto;font-weight:500">選填·工資參考</span></div>
-      <div class="grade-result">
+      <div class="sec-t"><span class="n">7</span>工程補充資訊<span class="opt" style="margin-left:auto;font-weight:500">選填</span></div>
+      <div class="grade-result" style="display:none">
         <div class="gr-lv" id="g_lv">Lv.0</div>
         <div class="gr-meta"><span id="g_score">0 分</span><small id="g_breakdown">—</small></div>
       </div>
@@ -358,7 +358,7 @@
         <label class="lb">額外狀況<span class="opt">可複選</span></label>
         <div class="chips" id="gradeExtra"></div>
       </div>
-      <div class="hint">梯具分數自動取自上方「使用梯子」（設備門檻制：動用高空車／吊車分數大跳，與同業計價邏輯一致）。</div>
+      <div class="hint">以上為工程補充資訊，有助於後續工時與案場統計。</div>
     </div>
 
     <!-- 近期 -->
@@ -400,11 +400,10 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.4';
+const APP_VERSION='1.5';
 const CHANGELOG=[
-  'v1.4　2026/07/04',
-  '· 評級改「工資參考」制：分數×100＝工資，畫面直接顯示 $ 金額',
-  '· 整體壓低不再偏高：小裝/維修約 $1000~1500，最辛苦封頂 $8000',
+  'v1.5　2026/07/04',
+  '· 工務評級介面調整中，暫時隱藏（資料持續記錄，穩定後再開放）',
   '',
   'v1.3　2026/07/04',
   '· 梯具分取代高度分：自動抓「使用梯子」欄（同業設備門檻制，吊車案大跳分）',
@@ -703,9 +702,8 @@ function calcGrade(){
   let sC=0; CFG.GRADE.EXTRA.forEach(o=>{ if(S.grade.extra[o.k]) sC+=o.p; }); if(sC>8)sC=8;   // 額外 cap 8
   const total=base+sA+sH+sKm+sT+sC;   // 上限 6+30+20+8+8+8=80（分數×100=$8000 天花板）
   S.grade.score=total; S.grade.lv=getLevel(total);
-  const money=total*100;   // 工資參考 = 分數×100（Jason 讀分數發薪）
-  if($('g_lv')) $('g_lv').textContent='$'+money.toLocaleString();
-  if($('g_score')) $('g_score').textContent=total+' 分 · 工資參考';
+  if($('g_lv')) $('g_lv').textContent=total;                       // 結果框已隱藏(測試中);S.grade.score 仍算,供背景寫入 Ragic
+  if($('g_score')) $('g_score').textContent='工務分數';
   if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 梯具'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
 }
 
@@ -783,7 +781,7 @@ function buildPayload(){
     if($('f_height').value) f.push([F.height,$('f_height').value]);
     if($('f_ladder').value) f.push([F.ladder,$('f_ladder').value]);
     if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
-    if(F.workLevel && S.grade.score>0){ const q=S.grade.quick?(S.grade.quick+'｜'):''; f.push([F.workLevel, q+S.grade.score+'分｜≈$'+(S.grade.score*100)]); }
+    if(F.workLevel && S.grade.score>0){ const q=S.grade.quick?(S.grade.quick+'｜'):''; f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）']); }   // 背景持續記錄,畫面不顯示;測試準度用,不含金額
   }
   if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
   if($('f_aar').value.trim())     f.push([F.aar,$('f_aar').value.trim()]);
