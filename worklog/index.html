@@ -407,8 +407,19 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.8';
+/* 白畫面安全網：抓未處理的 JS 錯誤顯示在畫面(手機可截圖回報)，避免全白查無因 */
+function showFatal(msg){
+  var d=document.getElementById('fatalBar');
+  if(!d){ d=document.createElement('div'); d.id='fatalBar'; d.style.cssText='position:fixed;left:0;right:0;top:0;z-index:99999;background:#dc2626;color:#fff;padding:14px 16px;font-size:13px;line-height:1.6;font-family:sans-serif'; (document.body||document.documentElement).appendChild(d); }
+  d.textContent='⚠️ 發生錯誤，請截圖回報：'+String(msg);
+}
+window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
+
+const APP_VERSION='1.9';
 const CHANGELOG=[
+  'v1.9　2026/07/16',
+  '· 白畫面防護：登入若出錯會把錯誤顯示出來（可截圖回報），並在 App 內建瀏覽器提醒改用 Chrome／Safari',
+  '',
   'v1.8　2026/07/16',
   '· 手機版面：協作參與員縮成一排、工務主類別一排、額外狀況整齊三欄',
   '',
@@ -909,6 +920,9 @@ function boot(){
   const v='v'+APP_VERSION;
   if($('appVer')) $('appVer').textContent=v;
   if($('loginVer')) $('loginVer').textContent=v;
+  if(/Line|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent||'')){   // App 內建瀏覽器→Google 登入常白畫面
+    var h=$('loginHint'); if(h) h.innerHTML='⚠️ 你正用 App 內建瀏覽器開啟，Google 登入常會失敗（白畫面）。<br>請點右上角「⋯」選「用其他瀏覽器開啟」，改用 Chrome／Safari。';
+  }
   const s=readSession();
   if(s && s.email && CFG.ALLOWED.indexOf(s.email)>=0){
     S.user={ email:s.email, name:s.name||'', picture:s.picture||'' };
