@@ -105,6 +105,13 @@
     padding:10px 15px;font-size:14px;font-weight:600;font-family:inherit;min-height:42px}
   .chips .chip.on{background:#0ea5e91a;border-color:var(--sky);color:var(--sky-d)}
   .chips .chip.add{border-style:dashed;color:var(--sky)}
+  /* 手機版面：協作參與員一排(橫捲)、主類別一排、額外狀況整齊三欄 */
+  #coChips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #coChips::-webkit-scrollbar{display:none}
+  #coChips .chip{flex:none}
+  #pick_main{grid-template-columns:repeat(4,1fr)}
+  #gradeExtra{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  #gradeExtra .chip{border-radius:12px;padding:9px 4px;font-size:12px;min-height:46px;text-align:center;line-height:1.25}
 
   /* Yes/No 開關列 */
   .chk{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f1f5f9}
@@ -400,8 +407,11 @@
 /* ====================================================================
    USLED 工務行程日誌 — 單檔手機 PWA｜寫入 Ragic Fan28/forms2/18，經 punch-clock-proxy
    ==================================================================== */
-const APP_VERSION='1.7';
+const APP_VERSION='1.8';
 const CHANGELOG=[
+  'v1.8　2026/07/16',
+  '· 手機版面：協作參與員縮成一排、工務主類別一排、額外狀況整齊三欄',
+  '',
   'v1.7　2026/07/15',
   '· 執行日期後面顯示星期幾',
   '· 修正主任連動：切換主任時，舊主任自動取消、只留當前主任',
