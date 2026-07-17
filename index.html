@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -801,14 +801,14 @@ function effShiftBounds(sh, dayLeaves) {
   });
   return { amStart, pmEnd, fullDay };
 }
-// 實際上班工時：上班段(已扣當日補休/請假時段) − 午休(正職)；0.5h 單位
+// 實際上班工時：上班段(已扣當日補休/請假時段) − 午休(正職)；精確到0.01h(不四捨五入)
 function realWorkHours(rec, sh, isFull, dayOff) {
-  if (!rec || !rec.start_time || !rec.end_time) return Math.round((parseFloat(rec && rec.hours) || 0) * 2) / 2;
+  if (!rec || !rec.start_time || !rec.end_time) return Math.round((parseFloat(rec && rec.hours) || 0) * 100) / 100;
   const segs = splitSegs(toMin(rec.start_time), toMin(rec.end_time), dayOff);
   let mins = segs.reduce((s, [a, b]) => s + (b - a), 0);
   if (isFull && sh) { const ls = toMin(sh.am[1]), le = toMin(sh.pm[0]); mins -= segs.reduce((s, [a, b]) => s + Math.max(0, Math.min(b, le) - Math.max(a, ls)), 0); }  // 扣午休(與上班段重疊)
   else mins -= Number(rec.breaks_minutes) || 0;
-  return Math.round(Math.max(0, mins) / 60 * 2) / 2;
+  return Math.round(Math.max(0, mins) / 60 * 100) / 100;  // 實工精確到0.01h(不四捨五入到0.5)
 }
 function splitSegs(inM, outM, dayOff) {  // 打卡時段扣掉休假/補休時段 → 上班段們
   let segs = [[inM, outM]];
@@ -2549,7 +2549,7 @@ function showReportDetail(email) {
     if (recsT.length >= 2) {                                  // 多時段（工讀生分段上班）：合併顯示+加總
       const parts = recsT.map(r => { const i = r.start_time, o = r.end_time; return i ? (o ? `${i}-${o}` : `${i}-進行中`) : ''; }).filter(Boolean);
       segHtml = `<span style="color:#2e7d32">${parts.join('  ')}</span>`;
-      const wh = Math.round(recsT.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOff), 0) * 2) / 2;
+      const wh = Math.round(recsT.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOff), 0) * 100) / 100;
       workTxt = `<span style="color:#2e7d32">實工${wh}h</span>`;
       if (sh && isFull) {                                     // 工讀生不計遲到
         const eff = effShiftBounds(sh, dayOff);
