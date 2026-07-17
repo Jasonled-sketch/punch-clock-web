@@ -415,8 +415,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.9';
+const APP_VERSION='1.10';
 const CHANGELOG=[
+  'v1.10　2026/07/16',
+  '· 新增一位授權帳號可登入使用',
+  '',
   'v1.9　2026/07/16',
   '· 白畫面防護：登入若出錯會把錯誤顯示出來（可截圖回報），並在 App 內建瀏覽器提醒改用 Chrome／Safari',
   '',
@@ -452,7 +455,7 @@ const CFG = {
   WORKER: 'https://punch-clock-proxy.yspe-led.workers.dev',
   PATH: '/forms2/18',
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
-  ALLOWED: ['qaz0989514613@gmail.com','covernself@gmail.com'],   // 前端白名單
+  ALLOWED: ['qaz0989514613@gmail.com','covernself@gmail.com','amaze2349@gmail.com'],   // 前端白名單
   F: {
     execDate:1002615, execDate2:1002585, logTime:1002578,
     lead:1002620, coworkers:1002619, io:1002592, subject:1002618,
