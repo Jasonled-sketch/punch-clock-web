@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2236,9 +2236,7 @@ async function viewReport() {
     h += `<div class="lock-bar">${isLocked
       ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
       : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button><button class="btn btn-sm" style="background:#6b21a8;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportPayrollRegister()">📑 工資清冊</button></div>`;
-    // 試點：特休 本地算 vs 單一 API 對照（治本第一步，確認一致後再改吃 API）
-    h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#7c3aed;color:#fff;padding:6px 14px" onclick="annualParityCheck()">🔍 特休 API 對照（驗證兩邊一致）</button><div id="parity-box" style="margin-top:8px"></div></div>`;
-    h += `<div style="margin:6px 0 10px"><button class="btn btn-sm" style="background:#b45309;color:#fff;padding:6px 14px" onclick="salaryParityCheck()">🔍 薪資 API 對照（切薪資前驗證）</button><div id="salary-parity-box" style="margin-top:8px"></div></div>`;
+    // 對照鈕已下架(2026/07/19 Jason:正式啟用,階段性任務完成)——annualParityCheck/salaryParityCheck 函式保留,需要診斷時 console 手動呼叫
     }
 
     _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
