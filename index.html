@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -938,7 +938,7 @@ async function initApp() {
     switchTab('live');                               // 管理者一開就落在即時現況戰情牆
   } else {
     await loadMyWorker();
-    if (ROLE === 'deptmgr') { renderAdminTabs(); switchTab('live'); return; }  // cfg 比員工資料先回來:直接進管理者版介面(避免被員工版蓋掉)
+    if (ROLE !== 'employee') { renderAdminTabs(); switchTab('live'); return; }  // cfg 比員工資料先回來且是管理職(owner/hr/deptmgr,如 Ragic 員工類型=管理者):直接進管理者版介面
     renderWorkerTabs();
     switchTab('punch');
     startPunchReminder();
@@ -3077,7 +3077,7 @@ async function loadRemoteCfg() {
       if (d.role) {                                    // 權限四層:以 Worker 注入的 role 為準
         const prev = ROLE;
         ROLE = d.role;
-        if (prev === 'employee' && ROLE === 'deptmgr' && APP_INITED) { renderAdminTabs(); switchTab('live'); }  // 部門主管:重繪成管理者版 tabs
+        if (prev === 'employee' && ROLE !== 'employee' && APP_INITED) { renderAdminTabs(); switchTab('live'); }  // 升為管理職(owner/hr/deptmgr,含 Ragic 員工類型=管理者的動態管理員):重繪成管理者版 tabs
       }
     }
   } catch (e) {}  // 失敗就用預設四假別，不擋任何功能
