@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -288,7 +288,7 @@
 const CONFIG = {
   GOOGLE_CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
 
-  ADMIN_EMAILS: ['covernself@gmail.com'],
+  ADMIN_EMAILS: ['covernself@gmail.com', 's0936931932@gmail.com'],   // 陳俊男、陳婉如（管理者介面;實際權限仍以 Worker /calc/config 回的 role 為準）
 
   RAGIC_BASE: 'https://ap10.ragic.com/Fan28',  // 圖片 file.jsp 仍直連 Ragic（公開不需 key）
   WORKER_URL: 'https://punch-clock-proxy.yspe-led.workers.dev',  // Ragic 代理（key 鎖在 Worker secret）
