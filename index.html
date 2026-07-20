@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -854,10 +854,16 @@ function applyIdentity(token) {
   ROLE = ME.isAdmin ? 'owner' : 'employee';   // 預設值;/calc/config 回來後 loadRemoteCfg 以 REMOTE_CFG.role 覆蓋
 }
 
+function renderUserName() {   // 名字旁標示身分（ROLE 由 /calc/config 回來後才定，所以 loadRemoteCfg 也要再叫一次）
+  const el = document.getElementById('tb-user');
+  if (!el) return;
+  const tag = (ROLE === 'owner' || ROLE === 'hr') ? '（管理員）' : ROLE === 'deptmgr' ? '（部門主管）' : '';
+  el.textContent = ME.name + tag;
+}
 function showApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('tb-user').textContent = ME.name;
+  renderUserName();
   if (!APP_INITED) { APP_INITED = true; initApp(); }
 }
 
@@ -3076,6 +3082,7 @@ async function loadRemoteCfg() {
         const prev = ROLE;
         ROLE = d.role;
         if (prev === 'employee' && ROLE !== 'employee' && APP_INITED) { renderAdminTabs(); switchTab('live'); }  // 升為管理職(owner/hr/deptmgr,含 Ragic 員工類型=管理者的動態管理員):重繪成管理者版 tabs
+        renderUserName();                            // 名字旁補（管理員）標示
       }
     }
   } catch (e) {}  // 失敗就用預設四假別，不擋任何功能
@@ -3846,10 +3853,11 @@ async function doOtReview(id, decision) {
 //  ANNOUNCEMENTS
 // ═══════════════════════════════════════════════════════════════════════
 
+let _ANNS = [];   // 最近一次載入的公告（編輯表單直接取資料，不刮 DOM——舊版刮 .ann-meta 但卡片改版後無此元素，點編輯直接炸掉沒反應）
 async function getAllAnnouncements() {
   const all = await ragicGet(CONFIG.SHEETS.ANNOUNCE);
   const F = CONFIG.FID.A;
-  return all
+  _ANNS = all
     .map(r => ({
       ragicId:   r._ragicId,
       title:     r[F.title]     || '',
@@ -3860,6 +3868,7 @@ async function getAllAnnouncements() {
       read_by:   r[F.read_by]   || ''
     }))
     .sort((a, b) => (b.pub_date > a.pub_date ? 1 : -1));
+  return _ANNS;
 }
 
 function buildAnnCard(ann, isAdmin) {
@@ -3943,12 +3952,11 @@ async function markAnnouncementRead(ragicId, btn) {
 
 function showAnnForm(ragicId) {
   const editing = ragicId != null;
-  // 編輯時從 DOM 取現有資料（已渲染在卡片上）
-  const card = editing ? document.getElementById('ann-' + ragicId) : null;
-  const curTitle   = card ? card.querySelector('.ann-title').textContent.trim() : '';
-  const curContent = card ? card.querySelector('.ann-content').textContent.trim() : '';
-  const curDate    = card ? card.querySelector('.ann-meta').textContent.split(' ')[0] : fmtDate(new Date());
-  const curPri     = card ? (card.classList.contains('pri-緊急') ? '緊急' : card.classList.contains('pri-重要') ? '重要' : '一般') : '一般';
+  const ann = editing ? _ANNS.find(a => a.ragicId == ragicId) : null;   // 直接取資料（getAllAnnouncements 已存 _ANNS）
+  const curTitle   = ann ? ann.title : '';
+  const curContent = ann ? ann.content : '';
+  const curDate    = (ann ? String(ann.pub_date).split(' ')[0] : fmtDate(new Date())).replace(/\//g, '-');  // date input 要 YYYY-MM-DD（fmtDate 回斜線格式,新增路徑也要轉）
+  const curPri     = ann ? (ann.priority || '一般') : '一般';
 
   openModal(`
     <div class="modal-title">${editing ? '編輯公告' : '新增公告'}</div>
