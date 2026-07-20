@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -840,7 +840,7 @@ let APP_INITED = false;               // 避免重複初始化（還原登入＋
 const AUTH_KEY = 'pc_auth_v1';        // localStorage 帳號持久化
 let _tokenWaiters = [];               // 等待 token 續期的 resolver
 
-function parseJwt(t) { try { return JSON.parse(atob(String(t).split('.')[1])); } catch (e) { return null; } }
+function parseJwt(t) { try { const b = String(t).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b), c => c.charCodeAt(0)))); } catch (e) { return null; } }  // base64url + UTF-8 解碼（舊版純 atob 會把中文姓名變亂碼——陳婉如踩到）
 function tokenAlive(tok) { const p = parseJwt(tok); return !!(p && p.exp && p.exp * 1000 > Date.now() + 60000); }  // 還有 >60 秒才算有效
 
 function saveAuth() { try { localStorage.setItem(AUTH_KEY, JSON.stringify({ token: ID_TOKEN, email: ME.email, name: ME.name, picture: ME.picture })); } catch (e) {} }
