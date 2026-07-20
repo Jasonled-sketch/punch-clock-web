@@ -134,6 +134,26 @@ select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
 .rrow .n .a{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rrow .n .b{font-size:10.5px;color:var(--tx3);margin-top:2px}
 .rrow .amt{font-weight:800;white-space:nowrap}
+/* 日結 stepper 與表單 */
+.stepper{display:flex;align-items:center;margin:6px 0 14px}
+.step{flex:1;text-align:center;position:relative}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--card);border:1px solid var(--line);
+  display:grid;place-items:center;margin:0 auto 5px;font-size:12px;font-weight:700;color:var(--tx3)}
+.step.done .n{background:var(--brand);color:#04121a;border-color:var(--brand)}
+.step.now .n{background:rgba(45,212,191,.15);color:var(--brand);border-color:var(--brand)}
+.step .lb{font-size:10px;color:var(--tx3)}
+.step.done .lb,.step.now .lb{color:var(--tx)}
+.step::after{content:"";position:absolute;top:13px;left:60%;right:-40%;height:2px;background:var(--line)}
+.step.done::after{background:var(--brand)}
+.step:last-child::after{display:none}
+.balance{display:flex;justify-content:space-between;align-items:center;padding:10px 2px;font-size:13.5px;border-bottom:1px solid var(--line)}
+.balance:last-child{border-bottom:0}
+.balance.diff{font-weight:800}
+.balance .v{font-weight:700}
+input.dcin{width:130px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);
+  font-family:inherit;font-size:14px;padding:8px 10px;text-align:right}
+input.dcin:focus{outline:none;border-color:rgba(45,212,191,.5)}
+input.dcin.wide{width:100%;text-align:left}
 .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);opacity:0;
   background:#1b2334;color:var(--tx);border:1px solid var(--line);border-radius:13px;padding:11px 18px;
   font-size:13px;transition:.25s;pointer-events:none;z-index:99;box-shadow:0 10px 30px -10px #000;max-width:88vw;text-align:center}
@@ -162,6 +182,7 @@ select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
     <button class="tab" data-mode="photo">🖼️ 拍照</button>
     <button class="tab" data-mode="paste">⌨️ 貼碼</button>
     <button class="tab" data-mode="dash">📊 總覽</button>
+    <button class="tab" data-mode="dc">⚖️ 日結</button>
   </div>
 
   <!-- 即時掃描 -->
@@ -212,6 +233,11 @@ select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
     <div id="dashBody" class="card" style="text-align:center;color:var(--tx3);padding:30px 16px">載入中…</div>
   </div>
 
+  <!-- 日結對帳 -->
+  <div data-pane="dc" hidden>
+    <div id="dcBody" class="card" style="text-align:center;color:var(--tx3);padding:30px 16px">載入中…</div>
+  </div>
+
   <!-- QR 槽位狀態 -->
   <div class="slots" id="slotsBar">
     <div class="slot" id="slotL"><span class="led"></span><span>左 QR（固定欄位）</span></div>
@@ -230,7 +256,7 @@ select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.4.0';
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
 // 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
@@ -474,10 +500,11 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
   document.querySelectorAll('[data-pane]').forEach(p => p.hidden = (p.dataset.pane !== t.dataset.mode));
   if (t.dataset.mode !== 'live') stopCamera();
-  const isDash = t.dataset.mode === 'dash';
-  document.getElementById('slotsBar').hidden = isDash;
-  document.getElementById('result').hidden = isDash;
-  if (isDash) loadDashboard();
+  const isView = t.dataset.mode === 'dash' || t.dataset.mode === 'dc';
+  document.getElementById('slotsBar').hidden = isView;
+  document.getElementById('result').hidden = isView;
+  if (t.dataset.mode === 'dash') loadDashboard();
+  if (t.dataset.mode === 'dc') loadDayClose();
 }));
 
 /* ═══════════════ 即時掃描 ═══════════════ */
@@ -990,6 +1017,216 @@ async function loadDashboard(){
   } catch (e) {
     body.innerHTML = '<div style="padding:10px;color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>';
   }
+}
+
+/* ═══════════════ 日結對帳（Odoo 四階段：開帳→營業中→關帳點鈔→過帳） ═══════════════ */
+const RAGIC_DC_URL = 'https://ap10.ragic.com/Fan28/ragicpersonal-finance/8';
+const DC = { serial: '1003145', date: '1003146', shift: '1003147', status: '1003148',
+  opening: '1003149', cashIn: '1003150', cashOut: '1003151', counted: '1003152',
+  diffCat: '1003153', counter: '1003154', note: '1003155' };
+const DIFF_TOLERANCE = 100;   // 差額容許值：超過必須寫備註
+function todayStr(){ const d = new Date(); return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0'); }
+function num(v){ const n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+async function dcFetchAll(route){
+  const r = await fetch(WORKER_URL + '/?sheet=dc&limit=1000', { headers: route.headers });
+  if (r.status === 401) throw new Error('登入過期，請重新登入');
+  if (r.status === 403) throw new Error('帳號未在白名單');
+  const j = await r.json();
+  const recs = [];
+  Object.entries(j).forEach(([k, x]) => {
+    if (!x || typeof x !== 'object' || x._ragicId == null) return;
+    recs.push({
+      rid: x._ragicId,
+      serial: recVal(x, '流水號', DC.serial),
+      date: String(recVal(x, '日期', DC.date)),
+      shift: recVal(x, '班別', DC.shift),
+      status: recVal(x, '狀態', DC.status),
+      opening: num(recVal(x, '期初餘額', DC.opening)),
+      cashIn: num(recVal(x, '本場現金收入', DC.cashIn)),
+      cashOut: num(recVal(x, '本場現金支出', DC.cashOut)),
+      counted: num(recVal(x, '實點金額', DC.counted)),
+      diffCat: recVal(x, '差額歸類', DC.diffCat),
+      counter: recVal(x, '點鈔人', DC.counter),
+      note: recVal(x, '備註', DC.note),
+    });
+  });
+  recs.sort((a, b) => b.rid - a.rid);
+  return recs;
+}
+
+async function loadDayClose(){
+  const body = document.getElementById('dcBody');
+  const route = getApiRoute();
+  if (!route) { body.innerHTML = '<div style="padding:10px">🔐 請先點上方登入</div>'; return; }
+  body.innerHTML = '<div style="padding:10px">⏳ 讀取中…</div>';
+  try {
+    const recs = await dcFetchAll(route);
+    const active = recs.find(r => r.status && r.status !== '已過帳');
+    if (active) renderDcActive(body, active, recs, route);
+    else renderDcOpenForm(body, recs);
+  } catch (e) {
+    body.innerHTML = '<div style="padding:10px;color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>';
+  }
+}
+
+function dcHistoryHtml(recs){
+  const done = recs.filter(r => r.status === '已過帳').slice(0, 5);
+  if (!done.length) return '';
+  return '<div class="sec">歷史場次</div><div class="card" style="padding:4px 14px">' +
+    done.map(r => {
+      const diff = r.counted - (r.opening + r.cashIn - r.cashOut);
+      return `<div class="rrow"><span class="pill ${diff === 0 ? 'ok' : 'warn'}">${diff === 0 ? '平' : (diff > 0 ? '+' : '−') + Math.abs(diff)}</span>
+        <div class="n"><div class="a">${esc(r.date)} ${esc(r.shift)}</div>
+          <div class="b">實點 ${fmt$(r.counted)} · ${esc(r.counter || '')}</div></div></div>`;
+    }).join('') + '</div>';
+}
+
+/* 開帳表單 */
+function renderDcOpenForm(body, recs){
+  const lastDone = recs.find(r => r.status === '已過帳');
+  const defOpening = lastDone ? lastDone.counted : 0;
+  body.style = 'padding:0;background:none;border:0;text-align:left';
+  body.innerHTML = `
+    <div class="stepper">
+      <div class="step now"><div class="n">1</div><div class="lb">開帳點鈔</div></div>
+      <div class="step"><div class="n">2</div><div class="lb">營業中</div></div>
+      <div class="step"><div class="n">3</div><div class="lb">關帳點鈔</div></div>
+      <div class="step"><div class="n">4</div><div class="lb">過帳</div></div>
+    </div>
+    <div class="card">
+      <div class="balance"><span>日期</span><span class="v">${todayStr()}</span></div>
+      <div class="balance"><span>班別</span>
+        <select class="cat" style="width:130px;margin:0" id="dcShift">
+          <option>全日</option><option>早班</option><option>晚班</option></select></div>
+      <div class="balance"><span>期初餘額 <small style="color:var(--tx3)">(上一場實點 ${fmt$(defOpening)})</small></span>
+        <input class="dcin" type="number" id="dcOpening" value="${defOpening}"></div>
+      <div class="balance"><span>點鈔人</span>
+        <input class="dcin" type="text" id="dcCounter" style="text-align:left" value="${esc(currentUser && currentUser.name || '')}"></div>
+      <div class="btnrow"><button class="btn primary" id="dcOpenBtn">🔓 開帳，開始營業</button></div>
+    </div>
+    ${dcHistoryHtml(recs)}`;
+  document.getElementById('dcOpenBtn').addEventListener('click', async ev => {
+    const btn = ev.currentTarget; btn.disabled = true; btn.textContent = '建立中…';
+    try {
+      const route = getApiRoute();
+      if (!route) throw new Error('請先登入');
+      const fd = new FormData();
+      fd.append(DC.date, todayStr());
+      fd.append(DC.shift, document.getElementById('dcShift').value);
+      fd.append(DC.status, '營業中');
+      fd.append(DC.opening, String(num(document.getElementById('dcOpening').value)));
+      fd.append(DC.counter, document.getElementById('dcCounter').value.trim());
+      const r = await fetch(WORKER_URL + '/?sheet=dc', { method: 'POST', headers: route.headers, body: fd });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || j.status !== 'SUCCESS') throw new Error('HTTP ' + r.status);
+      toast('🔓 已開帳，今天加油！');
+      loadDayClose();
+    } catch (e) { toast('❌ 開帳失敗：' + e.message); btn.disabled = false; btn.textContent = '🔓 開帳，開始營業'; }
+  });
+}
+
+/* 營業中／關帳畫面 */
+async function renderDcActive(body, s, recs, route){
+  // 建議值：當日進出項單據合計（可手動改——非現金交易自行剔除）
+  let dayIn = 0, dayOut = 0;
+  try {
+    const r = await fetch(WORKER_URL + '/?sheet=acct&limit=1000', { headers: route.headers });
+    const j = await r.json();
+    Object.values(j).forEach(x => {
+      if (!x || typeof x !== 'object') return;
+      if (String(recVal(x, '日期', F.date)) !== s.date) return;
+      const amt = num(recVal(x, '金額(含稅)', F.total));
+      if (recVal(x, '進/出項別', F.io) === '進項') dayIn += amt; else dayOut += amt;
+    });
+  } catch (_) {}
+  body.style = 'padding:0;background:none;border:0;text-align:left';
+  body.innerHTML = `
+    <div class="stepper">
+      <div class="step done"><div class="n">✓</div><div class="lb">開帳點鈔</div></div>
+      <div class="step done"><div class="n">✓</div><div class="lb">營業中</div></div>
+      <div class="step now"><div class="n">3</div><div class="lb">關帳點鈔</div></div>
+      <div class="step"><div class="n">4</div><div class="lb">過帳</div></div>
+    </div>
+    <div class="card">
+      <div class="balance"><span>${esc(s.date)} ${esc(s.shift)} <small style="color:var(--tx3)">${esc(s.counter || '')}</small></span>
+        <span class="pill warn">營業中</span></div>
+      <div class="balance"><span>期初餘額</span><span class="v">${fmt$(s.opening)}</span></div>
+      <div class="balance"><span>＋ 本場現金收入 <small style="color:var(--tx3)">(當日進項 ${fmt$(dayIn)})</small></span>
+        <input class="dcin" type="number" id="dcCashIn" value="${s.cashIn || dayIn}"></div>
+      <div class="balance"><span>− 本場現金支出 <small style="color:var(--tx3)">(當日出項 ${fmt$(dayOut)})</small></span>
+        <input class="dcin" type="number" id="dcCashOut" value="${s.cashOut || dayOut}"></div>
+      <div class="balance"><span>＝ 理論期末餘額</span><span class="v" id="dcTheory">—</span></div>
+      <div class="balance"><span>收銀台實點金額</span>
+        <input class="dcin" type="number" id="dcCounted" placeholder="點鈔輸入"></div>
+      <div class="balance diff"><span>差額</span><span class="v" id="dcDiff">—</span></div>
+      <div id="dcDiffZone" hidden>
+        <div class="alert err"><div class="ai">!</div>
+          <div class="txt">差額超過容許值 $${DIFF_TOLERANCE}，需歸「現金短溢」並寫原因才能過帳
+            <small>過帳時會自動在進出項單據補一筆現金短溢，帳才對得平</small></div></div>
+        <input class="dcin wide" type="text" id="dcNote" placeholder="差額原因備註（必填）" style="margin-top:10px">
+      </div>
+      <div class="btnrow"><button class="btn primary" id="dcCloseBtn">⚖️ 完成關帳並過帳</button></div>
+    </div>
+    ${dcHistoryHtml(recs)}`;
+
+  const calc = () => {
+    const theory = s.opening + num(dcCashIn.value) - num(dcCashOut.value);
+    document.getElementById('dcTheory').textContent = fmt$(theory);
+    const countedRaw = document.getElementById('dcCounted').value;
+    if (countedRaw === '') { document.getElementById('dcDiff').textContent = '—'; return null; }
+    const diff = num(countedRaw) - theory;
+    const el = document.getElementById('dcDiff');
+    el.textContent = (diff > 0 ? '+' : '') + fmt$(diff).replace('$', '$');
+    el.style.color = diff === 0 ? 'var(--ok)' : 'var(--danger)';
+    document.getElementById('dcDiffZone').hidden = Math.abs(diff) <= DIFF_TOLERANCE;
+    return diff;
+  };
+  const dcCashIn = document.getElementById('dcCashIn'), dcCashOut = document.getElementById('dcCashOut');
+  ['dcCashIn', 'dcCashOut', 'dcCounted'].forEach(id =>
+    document.getElementById(id).addEventListener('input', calc));
+  calc();
+
+  document.getElementById('dcCloseBtn').addEventListener('click', async ev => {
+    const btn = ev.currentTarget;
+    const countedRaw = document.getElementById('dcCounted').value;
+    if (countedRaw === '') return toast('請先輸入收銀台實點金額');
+    const diff = calc();
+    if (Math.abs(diff) > DIFF_TOLERANCE && !document.getElementById('dcNote').value.trim())
+      return toast('差額超過 $' + DIFF_TOLERANCE + '，請填差額原因備註');
+    btn.disabled = true; btn.textContent = '過帳中…';
+    try {
+      const route2 = getApiRoute();
+      if (!route2) throw new Error('請先登入');
+      const fd = new FormData();
+      fd.append(DC.cashIn, String(num(dcCashIn.value)));
+      fd.append(DC.cashOut, String(num(dcCashOut.value)));
+      fd.append(DC.counted, String(num(countedRaw)));
+      fd.append(DC.status, '已過帳');
+      fd.append(DC.diffCat, diff === 0 ? '無' : '現金短溢');
+      const noteEl = document.getElementById('dcNote');
+      if (noteEl && noteEl.value.trim()) fd.append(DC.note, noteEl.value.trim());
+      const r = await fetch(WORKER_URL + '/?sheet=dc&ragicId=' + s.rid, { method: 'POST', headers: route2.headers, body: fd });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || j.status !== 'SUCCESS') throw new Error('HTTP ' + r.status);
+      // 差額 ≠ 0 → 自動補一筆現金短溢進出項（差額必有會計歸宿）
+      if (diff !== 0) {
+        const fa = new FormData();
+        fa.append(F.io, diff > 0 ? '進項' : '出項');
+        fa.append(F.date, s.date);
+        fa.append(F.dedupe, 'DC_' + s.date.replace(/\//g, '') + '_' + s.shift + '_' + s.rid);
+        fa.append(F.category, '現金短溢');
+        fa.append(F.items, '日結差額 ' + s.date + ' ' + s.shift + (noteEl && noteEl.value.trim() ? '：' + noteEl.value.trim() : ''));
+        fa.append(F.total, String(Math.abs(diff)));
+        fa.append(F.tax, '0');
+        fa.append(F.status, '已入帳');
+        fa.append(F.source, '手動');
+        await fetch(WORKER_URL + '/?sheet=acct', { method: 'POST', headers: route2.headers, body: fa }).catch(() => {});
+      }
+      toast(diff === 0 ? '⚖️ 過帳完成，帳平！' : '⚖️ 過帳完成，差額 ' + fmt$(Math.abs(diff)) + ' 已入現金短溢');
+      loadDayClose();
+    } catch (e) { toast('❌ 過帳失敗：' + e.message); btn.disabled = false; btn.textContent = '⚖️ 完成關帳並過帳'; }
+  });
 }
 
 /* ═══════════════ toast ═══════════════ */
