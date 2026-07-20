@@ -630,11 +630,21 @@ function showAiOffer(reasonText){
 }
 
 async function blobToScaledBase64(blob, maxDim){
-  const bmp = await createImageBitmap(blob);
+  const bmp = await createImageBitmap(blob);   // createImageBitmap 會自動套 EXIF 方向
   const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
   const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+// 下半部（金額區）原解析度裁切再縮 → 手寫金額有效解析度加倍
+async function blobToBottomCropBase64(blob, maxDim){
+  const bmp = await createImageBitmap(blob);
+  const top = Math.round(bmp.height * 0.55), ch = bmp.height - top;
+  const scale = Math.min(1, maxDim / Math.max(bmp.width, ch));
+  const w = Math.round(bmp.width * scale), h = Math.round(ch * scale);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, 0, top, bmp.width, ch, 0, 0, w, h);
   return c.toDataURL('image/jpeg', 0.85).split(',')[1];
 }
 
@@ -645,11 +655,12 @@ async function aiRecognize(){
   const btn = document.getElementById('btnAiOcr');
   if (btn) { btn.disabled = true; btn.textContent = '🤖 辨識中…請稍候'; }
   try {
-    const b64 = await blobToScaledBase64(state.photoBlob, 2000);
+    const b64 = await blobToScaledBase64(state.photoBlob, 2576);
+    const b64bottom = await blobToBottomCropBase64(state.photoBlob, 2576);
     const r = await fetch(WORKER_URL + '/ocr', {
       method: 'POST',
       headers: { ...route.headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: b64, media_type: 'image/jpeg' }),
+      body: JSON.stringify({ image: b64, image2: b64bottom, media_type: 'image/jpeg' }),
     });
     if (r.status === 401) throw new Error('登入過期，請重新登入');
     const j = await r.json().catch(() => null);
