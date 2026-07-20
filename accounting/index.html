@@ -112,6 +112,28 @@ label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
   background:rgba(52,211,153,.16);color:var(--ok);font-weight:800}
 .okbox .txt{font-size:12.5px;line-height:1.6}
 .okbox a{color:var(--brand)}
+select.cat{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);
+  font-family:inherit;font-size:13px;padding:9px 10px;margin-top:6px}
+select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.kpi{background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:13px 14px;text-align:left}
+.kpi .lb{font-size:11.5px;color:var(--tx2)}
+.kpi .vl{font-size:20px;font-weight:800;margin-top:6px}
+.chart{display:flex;align-items:flex-end;gap:10px;height:110px;padding:8px 2px 0}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;justify-content:flex-end;height:100%}
+.chart .bars{display:flex;gap:3px;align-items:flex-end;height:100%;width:100%;justify-content:center}
+.chart .bars i{width:9px;border-radius:4px 4px 0 0;display:block;min-height:2px}
+.chart .bi{background:linear-gradient(var(--in),rgba(52,211,153,.3))}
+.chart .bo{background:linear-gradient(var(--out),rgba(251,113,133,.3))}
+.chart .col span{font-size:10px;color:var(--tx3)}
+.legend{display:flex;gap:16px;font-size:11px;color:var(--tx2);margin-top:8px;justify-content:center}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:4px}
+.rrow{display:flex;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+.rrow:last-child{border-bottom:0}
+.rrow .n{flex:1;min-width:0;text-align:left}
+.rrow .n .a{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rrow .n .b{font-size:10.5px;color:var(--tx3);margin-top:2px}
+.rrow .amt{font-weight:800;white-space:nowrap}
 .toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);opacity:0;
   background:#1b2334;color:var(--tx);border:1px solid var(--line);border-radius:13px;padding:11px 18px;
   font-size:13px;transition:.25s;pointer-events:none;z-index:99;box-shadow:0 10px 30px -10px #000;max-width:88vw;text-align:center}
@@ -136,9 +158,10 @@ label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
   </div>
 
   <div class="tabs">
-    <button class="tab on" data-mode="live">📷 即時掃描</button>
-    <button class="tab" data-mode="photo">🖼️ 拍照/選圖</button>
-    <button class="tab" data-mode="paste">⌨️ 貼碼測試</button>
+    <button class="tab on" data-mode="live">📷 掃描</button>
+    <button class="tab" data-mode="photo">🖼️ 拍照</button>
+    <button class="tab" data-mode="paste">⌨️ 貼碼</button>
+    <button class="tab" data-mode="dash">📊 總覽</button>
   </div>
 
   <!-- 即時掃描 -->
@@ -184,8 +207,13 @@ label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
     </div>
   </div>
 
+  <!-- 統計總覽 -->
+  <div data-pane="dash" hidden>
+    <div id="dashBody" class="card" style="text-align:center;color:var(--tx3);padding:30px 16px">載入中…</div>
+  </div>
+
   <!-- QR 槽位狀態 -->
-  <div class="slots">
+  <div class="slots" id="slotsBar">
     <div class="slot" id="slotL"><span class="led"></span><span>左 QR（固定欄位）</span></div>
     <div class="slot" id="slotR"><span class="led"></span><span>右 QR（明細承接）</span></div>
   </div>
@@ -202,7 +230,7 @@ label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
 // 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
@@ -228,7 +256,59 @@ const F = {
   source: '1003142',  // 來源(QR/AI/手動)
   vendor: '1003143',  // 廠商/客戶名
   serial: '1003129',  // 流水號（唯讀）
+  photo: '1003138',   // 憑證照片（檔案欄位）
 };
+
+// ── 歸類科目三層體系（同支出紀錄表：截圖選項＋971筆歷史記錄合併，2026-07-20）──
+const TAXO = {
+  'A-營業成本': {
+    '外包工程款': ['外包工班', '外包承攬'],
+    '直接人工': ['加班薪資', '專案獎金', '車油資運費', '工程補貼'],
+    '材料成本': ['LED字幕模組', '燈飾燈源', '控制卡電源器', '線材五金配件', '包裝資材', '其他材料'],
+  },
+  'B-營業費用': {
+    '人事費用': ['正職員工薪資', '勞健保/勞退提撥', '獎金/津貼', '員工福利', '教育訓練', '團體保險'],
+    '租金辦公支出': ['門市租金', '水電費', '網路/電話費', '文具/辦公用品', '印刷品', '一般維修保養', '保險費用'],
+    '交通與車輛': ['車輛加油費', '車輛維修保養', '車輛保險/稅金', '停車費/過路費', '差旅費'],
+    '財務費用': ['銀行手續費', '營業稅所得稅'],
+    '耗材工具': ['小型工具', '施工耗材', '倉儲耗材'],
+    '行銷推廣': ['廣告行銷', '官網電商平台費用'],
+    '公關交際': ['客戶餐敘', '交際禮品', '贊助費用'],
+    '專業服務費': ['記帳/報稅服務', '專業培訓顧問'],
+  },
+  'C-資本支出': {
+    '機器設備': ['焊接機'], '辦公設備': ['門市設備'],
+    '家具與倉儲': ['辦公桌椅', '倉儲鐵架'], '運輸工具': ['機車'],
+  },
+  'D-折舊攤提': {
+    '設備折舊': ['機器折舊', '工具折舊'], '車輛折舊': ['貨車折舊'], '軟體/開辦費攤提': [],
+  },
+  'E-融資支出': {
+    '貸款本金還款': ['銀行貸款本金'], '股東往來': [], '其他融資支出': ['融資租賃'],
+  },
+};
+// 依品項/賣方關鍵字自動建議（可手動改，只是省點選時間）
+const SUGGEST_RULES = [
+  [/LED|字幕|模組/i, ['A-營業成本', '材料成本', 'LED字幕模組']],
+  [/電源|控制卡/, ['A-營業成本', '材料成本', '控制卡電源器']],
+  [/燈條|燈珠|燈飾|光源|燈管/, ['A-營業成本', '材料成本', '燈飾燈源']],
+  [/線材|電線|五金|螺絲|接頭|端子/, ['A-營業成本', '材料成本', '線材五金配件']],
+  [/包裝|紙箱|氣泡|棧板/, ['A-營業成本', '材料成本', '包裝資材']],
+  [/加油|汽油|柴油|中油|台亞/, ['B-營業費用', '交通與車輛', '車輛加油費']],
+  [/停車|過路|etag|回數/i, ['B-營業費用', '交通與車輛', '停車費/過路費']],
+  [/運費|貨運|宅配|黑貓|郵局|郵資|回頭車|托運/, ['A-營業成本', '直接人工', '車油資運費']],
+  [/茶|咖啡|飲|便當|餐|麵|飯|烏龍|拿鐵|果汁/, ['B-營業費用', '人事費用', '員工福利']],
+  [/文具|影印|紙|筆|辦公用品/, ['B-營業費用', '租金辦公支出', '文具/辦公用品']],
+  [/電費|台電|水費|自來水/, ['B-營業費用', '租金辦公支出', '水電費']],
+  [/電信|網路|寬頻|遠傳|台哥大/, ['B-營業費用', '租金辦公支出', '網路/電話費']],
+  [/工具|鑽頭|鋸|起子|鉗/, ['B-營業費用', '耗材工具', '小型工具']],
+  [/廣告|行銷|推廣/, ['B-營業費用', '行銷推廣', '廣告行銷']],
+];
+function suggestCategory(p){
+  const text = p.items.map(it => it.name).join(' ');
+  for (const [re, path] of SUGGEST_RULES) if (re.test(text)) return path;
+  return null;
+}
 
 /* ═══════════════ 台灣電子發票 QR 解析器（瀏覽器版） ═══════════════
    規格：財政部 v1.9。三大雷點全處理：
@@ -358,7 +438,7 @@ function parseEInvoiceQR(leftRaw, rightRaw){
 function dedupeKey(p){ return `${p.invoiceNumber}_${p.sellerId}`; }
 
 /* ═══════════════ QR 槽位（左/右）與狀態 ═══════════════ */
-const state = { left: null, right: null, io: 'out' };
+const state = { left: null, right: null, io: 'out', photoBlob: null, photoName: '' };
 
 function classifyQR(latin1){
   if (latin1.startsWith('**')) return 'right';
@@ -379,6 +459,7 @@ function acceptQR(latin1){
 
 function resetScan(){
   state.left = null; state.right = null;
+  state.photoBlob = null; state.photoName = '';
   updateSlots();
   document.getElementById('result').innerHTML = '';
 }
@@ -393,6 +474,10 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
   document.querySelectorAll('[data-pane]').forEach(p => p.hidden = (p.dataset.pane !== t.dataset.mode));
   if (t.dataset.mode !== 'live') stopCamera();
+  const isDash = t.dataset.mode === 'dash';
+  document.getElementById('slotsBar').hidden = isDash;
+  document.getElementById('result').hidden = isDash;
+  if (isDash) loadDashboard();
 }));
 
 /* ═══════════════ 即時掃描 ═══════════════ */
@@ -449,6 +534,8 @@ function scanLoop(ts){
   const code = jsQR(img.data, rw, rh, { inversionAttempts: 'dontInvert' });
   if (code && code.binaryData && code.binaryData.length){
     if (acceptQR(bytesToLatin1(Array.from(code.binaryData)))){
+      // 抓到 QR 的當下把整個畫面存成憑證照片（workCanvas 每 tick 都是完整畫面）
+      workCanvas.toBlob(b => { if (b) { state.photoBlob = b; state.photoName = 'live.jpg'; } }, 'image/jpeg', 0.85);
       if (navigator.vibrate) navigator.vibrate(60);
       if (state.left && (state.right || scanFlip > 60)) { /* 兩段齊了就停 */ }
       if (state.left && state.right) stopCamera();
@@ -465,6 +552,7 @@ document.getElementById('fileInput').addEventListener('change', async e => {
   e.target.value = '';
   if (typeof jsQR !== 'function') return toast('掃碼引擎載入失敗，請確認網路後重整');
   resetScan();
+  state.photoBlob = f; state.photoName = f.name || 'invoice.jpg';   // 原圖直接當憑證
   toast('解析照片中…');
   try {
     const found = await scanImageFile(f);
@@ -578,6 +666,14 @@ function renderResult(p){
           <button id="ioOut" class="${state.io === 'out' ? 'on-out' : ''}">出項（支出）</button>
         </div>
       </div>
+      <div class="kv" style="display:block" id="catBlock">
+        <span class="k">歸類科目<span id="catSuggPill"></span></span>
+        <select class="cat" id="catL1"></select>
+        <select class="cat" id="catL2"></select>
+        <select class="cat" id="catL3"></select>
+      </div>
+      <div class="kv"><span class="k">憑證照片</span>
+        <span class="v">${state.photoBlob ? '📎 已附' + (state.photoName === 'live.jpg' ? '掃描畫面' : '原圖') : '<span style="color:var(--tx3)">無（貼碼模式）</span>'}</span></div>
       <div class="alert"><div class="ai">AI</div>
         <div class="txt">AI 提案，尚未寫入 Ragic
           <small>查重通過才寫入 · 冪等鍵防重複入帳</small></div></div>
@@ -587,6 +683,7 @@ function renderResult(p){
       </div>
     </div>`;
 
+  initCatSelectors(suggestCategory(p));
   document.getElementById('ioIn').addEventListener('click', () => setIO('in'));
   document.getElementById('ioOut').addEventListener('click', () => setIO('out'));
   document.getElementById('btnAgain').addEventListener('click', resetScan);
@@ -599,6 +696,34 @@ function setIO(io){
   state.io = io;
   document.getElementById('ioIn').className = io === 'in' ? 'on-in' : '';
   document.getElementById('ioOut').className = io === 'out' ? 'on-out' : '';
+  const cb = document.getElementById('catBlock');
+  if (cb) cb.style.display = io === 'in' ? 'none' : 'block';   // 進項＝營業收入，不用選科目
+}
+
+/* ── 歸類科目三層連動選單 ── */
+function fillSelect(sel, opts, chosen, placeholder){
+  sel.innerHTML = '<option value="">' + placeholder + '</option>' +
+    opts.map(o => `<option value="${esc(o)}"${o === chosen ? ' selected' : ''}>${esc(o)}</option>`).join('');
+  sel.disabled = opts.length === 0;
+}
+function initCatSelectors(sugg){
+  const L1 = document.getElementById('catL1'), L2 = document.getElementById('catL2'), L3 = document.getElementById('catL3');
+  if (!L1) return;
+  const pill = document.getElementById('catSuggPill');
+  if (sugg && pill) pill.innerHTML = ' <span class="pill ok">AI 建議</span>';
+  fillSelect(L1, Object.keys(TAXO), sugg ? sugg[0] : '', '— 大類別 —');
+  const syncL2 = chosen2 => {
+    const subs = TAXO[L1.value] || {};
+    fillSelect(L2, Object.keys(subs), chosen2 || '', '— 分類別 —');
+  };
+  const syncL3 = chosen3 => {
+    const subs = (TAXO[L1.value] || {})[L2.value] || [];
+    fillSelect(L3, subs, chosen3 || '', '— 次類別（可不選）—');
+  };
+  syncL2(sugg ? sugg[1] : ''); syncL3(sugg ? sugg[2] : '');
+  L1.addEventListener('change', () => { syncL2(); syncL3(); });
+  L2.addEventListener('change', () => syncL3());
+  setIO(state.io);   // 進項時隱藏
 }
 
 /* ═══════════════ Google 登入 + 60 天通行證（沿用 ledshow 模式） ═══════════════ */
@@ -748,6 +873,15 @@ async function approveEntry(p, btn){
     fd.append(F.tax, String(p.tax));
     fd.append(F.status, '已入帳');
     fd.append(F.source, 'QR');
+    // 歸類科目：進項＝營業收入；出項＝三層選單組合（同支出紀錄表體系）
+    if (state.io === 'in') fd.append(F.category, '營業收入');
+    else {
+      const cat = ['catL1', 'catL2', 'catL3'].map(id => (document.getElementById(id) || {}).value || '')
+        .filter(Boolean).join(' > ');
+      if (cat) fd.append(F.category, cat);
+    }
+    // 憑證照片：掃描畫面或原圖（Worker formData 原樣轉傳，已實測可過）
+    if (state.photoBlob) fd.append(F.photo, state.photoBlob, state.photoName || 'invoice.jpg');
     const r = await fetch(WORKER_URL + '/?sheet=acct', { method: 'POST', headers: route.headers, body: fd });
     const j = await r.json().catch(() => null);
     if (r.ok && j && j.status === 'SUCCESS') {
@@ -774,6 +908,88 @@ function renderApproved(p, serial, wasDup){
   if (row) row.innerHTML = '<button class="btn primary" id="btnNext">📸 掃下一張</button>';
   document.getElementById('btnNext').addEventListener('click', resetScan);
   if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+}
+
+/* ═══════════════ 統計總覽 ═══════════════ */
+function recVal(r, name, fid){ return r[name] != null && r[name] !== '' ? r[name] : (r[fid] || ''); }
+async function loadDashboard(){
+  const body = document.getElementById('dashBody');
+  const route = getApiRoute();
+  if (!route) {
+    body.innerHTML = '<div style="padding:10px">🔐 請先點上方登入，才能讀取帳務資料</div>';
+    return;
+  }
+  body.innerHTML = '<div style="padding:10px">⏳ 讀取中…</div>';
+  try {
+    const r = await fetch(WORKER_URL + '/?sheet=acct&limit=1000', { headers: route.headers });
+    if (r.status === 401) throw new Error('登入過期，請重新登入');
+    if (r.status === 403) throw new Error('帳號未在白名單');
+    const j = await r.json();
+    const recs = [];
+    Object.values(j).forEach(x => {
+      if (!x || typeof x !== 'object') return;
+      const amt = parseFloat(recVal(x, '金額(含稅)', '1003140')) || 0;
+      const date = String(recVal(x, '日期', '1003131'));         // YYYY/MM/DD
+      if (!date && !amt) return;
+      recs.push({
+        serial: recVal(x, '流水號', '1003129'),
+        io: recVal(x, '進/出項別', '1003130'),
+        date, amt,
+        items: recVal(x, '品項明細', '1003139'),
+        vendor: recVal(x, '廠商/客戶名', '1003143'),
+        cat: recVal(x, '歸類科目', '1003134'),
+      });
+    });
+    // 近 6 個月月度彙總
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push({ key: d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0'), lb: (d.getMonth() + 1) + '月', inSum: 0, outSum: 0 });
+    }
+    const thisKey = months[5].key;
+    let mIn = 0, mOut = 0, mCnt = 0;
+    recs.forEach(rc => {
+      const mk = rc.date.slice(0, 7);
+      const m = months.find(mm => mm.key === mk);
+      const isIn = rc.io === '進項';
+      if (m) { if (isIn) m.inSum += rc.amt; else m.outSum += rc.amt; }
+      if (mk === thisKey) { mCnt++; if (isIn) mIn += rc.amt; else mOut += rc.amt; }
+    });
+    const peak = Math.max(1, ...months.map(m => Math.max(m.inSum, m.outSum)));
+    const bars = months.map(m => `
+      <div class="col"><div class="bars">
+        <i class="bi" style="height:${Math.round(m.inSum / peak * 100)}%"></i>
+        <i class="bo" style="height:${Math.round(m.outSum / peak * 100)}%"></i>
+      </div><span>${m.lb}</span></div>`).join('');
+    const recent = recs.sort((a, b) => String(b.serial).localeCompare(String(a.serial))).slice(0, 10);
+    const rows = recent.map(rc => `
+      <div class="rrow">
+        <span class="pill ${rc.io === '進項' ? 'ok' : 'bad'}">${esc(rc.io || '?')}</span>
+        <div class="n"><div class="a">${esc((rc.vendor || rc.items || '—').slice(0, 24))}</div>
+          <div class="b">${esc(rc.date)} · ${esc(rc.cat || '未歸類')} · #${esc(rc.serial)}</div></div>
+        <span class="amt" style="color:${rc.io === '進項' ? 'var(--in)' : 'var(--out)'}">${rc.io === '進項' ? '+' : '−'}${fmt$(rc.amt)}</span>
+      </div>`).join('') || '<div style="color:var(--tx3);padding:8px">還沒有紀錄</div>';
+    body.style = 'padding:0;background:none;border:0';
+    body.innerHTML = `
+      <div class="kpis">
+        <div class="kpi"><div class="lb">本月進項</div><div class="vl" style="color:var(--in)">${fmt$(mIn)}</div></div>
+        <div class="kpi"><div class="lb">本月出項</div><div class="vl" style="color:var(--out)">${fmt$(mOut)}</div></div>
+        <div class="kpi"><div class="lb">本月淨額</div><div class="vl">${fmt$(mIn - mOut)}</div></div>
+        <div class="kpi"><div class="lb">本月筆數</div><div class="vl">${mCnt} 筆</div></div>
+      </div>
+      <div class="sec">近 6 月 進 / 出 項</div>
+      <div class="card"><div class="chart">${bars}</div>
+        <div class="legend"><b><span class="dot" style="background:var(--in)"></span>進項</b>
+          <b><span class="dot" style="background:var(--out)"></span>出項</b></div></div>
+      <div class="sec">最近 10 筆</div>
+      <div class="card" style="padding:4px 14px">${rows}</div>
+      <div style="text-align:center;margin-top:12px">
+        <a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener" style="color:var(--brand);font-size:12.5px">在 Ragic 開啟完整表格 →</a>
+      </div>`;
+  } catch (e) {
+    body.innerHTML = '<div style="padding:10px;color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>';
+  }
 }
 
 /* ═══════════════ toast ═══════════════ */
