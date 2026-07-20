@@ -210,7 +210,11 @@ input.dcin.wide{width:100%;text-align:left}
       <div class="btnrow" style="margin-top:0">
         <button class="btn primary" id="btnShoot">📸 拍照 / 選圖</button>
       </div>
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn ghost" id="btnAlbum">📁 相簿批次匯入（可多選）</button>
+      </div>
       <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+      <input type="file" id="albumInput" accept="image/*" multiple hidden>
     </div>
   </div>
 
@@ -256,7 +260,7 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.6.0';
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
 // 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
@@ -689,6 +693,162 @@ async function aiRecognize(){
   }
 }
 
+/* ═══════════════ 相簿批次匯入 ═══════════════ */
+const batchState = { items: [], activeIdx: null };
+
+document.getElementById('btnAlbum').addEventListener('click', () =>
+  document.getElementById('albumInput').click());
+document.getElementById('albumInput').addEventListener('change', async e => {
+  const files = [...(e.target.files || [])];
+  e.target.value = '';
+  if (!files.length) return;
+  if (typeof jsQR !== 'function') return toast('掃碼引擎載入失敗，請確認網路後重整');
+  const route = getApiRoute();
+  if (!route) { toast('請先 Google 登入才能批次匯入'); showGoogleSignIn(); return; }
+  resetScan();
+  batchState.items = files.map(f => ({ file: f, name: f.name || '照片', status: 'pending', p: null, serial: '', err: '' }));
+  batchState.activeIdx = null;
+  renderBatch('準備中…');
+  // ① 先撈既有冪等鍵（一次 GET，之後全本地比對——已入帳的不再記錄）
+  let existing = new Set();
+  try { existing = await fetchExistingKeys(route); }
+  catch (err) { toast('讀取既有紀錄失敗：' + err.message); renderBatch(); return; }
+  // ② 逐張掃 QR＋查重（同一批裡拍到兩次的也擋）
+  const seenInBatch = new Set();
+  for (let i = 0; i < batchState.items.length; i++) {
+    const it = batchState.items[i];
+    renderBatch(`掃描中 ${i + 1}/${batchState.items.length}`);
+    try {
+      const p = await scanBlobQR(it.file);
+      if (p && p.ok) {
+        it.p = p;
+        const k = dedupeKey(p);
+        if (existing.has(k)) it.status = 'dup';
+        else if (seenInBatch.has(k)) { it.status = 'dup'; it.err = '同批重複'; }
+        else { it.status = 'new'; seenInBatch.add(k); }
+      } else it.status = 'noqr';
+    } catch (err) { it.status = 'fail'; it.err = err.message; }
+  }
+  renderBatch();
+});
+
+async function fetchExistingKeys(route){
+  const r = await fetch(WORKER_URL + '/?sheet=acct&limit=1000', { headers: route.headers });
+  if (r.status === 401) throw new Error('登入過期，請重新登入');
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  const s = new Set();
+  Object.values(j).forEach(x => {
+    if (x && typeof x === 'object') { const k = recVal(x, '冪等鍵', F.dedupe); if (k) s.add(k); }
+  });
+  return s;
+}
+
+// 單檔靜默掃 QR（不動全域 state），左段找到就解析
+async function scanBlobQR(file){
+  const bmp = await createImageBitmap(file);
+  let left = null, right = null;
+  for (const maxW of [1200, 1800]) {
+    const scale = Math.min(1, maxW / bmp.width);
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    workCanvas.width = w; workCanvas.height = h;
+    workCtx.drawImage(bmp, 0, 0, w, h);
+    const regions = [[0, 0, w, h], [0, 0, Math.ceil(w / 2), h], [Math.floor(w / 2), 0, Math.ceil(w / 2), h]];
+    for (const [rx, ry, rw, rh] of regions) {
+      const img = workCtx.getImageData(rx, ry, rw, rh);
+      const code = jsQR(img.data, rw, rh, { inversionAttempts: 'attemptBoth' });
+      if (code && code.binaryData && code.binaryData.length) {
+        const s = bytesToLatin1(Array.from(code.binaryData));
+        const kind = classifyQR(s);
+        if (kind === 'left' && !left) left = s;
+        if (kind === 'right' && !right) right = s;
+      }
+      if (left && right) break;
+    }
+    if (left) break;
+  }
+  return left ? parseEInvoiceQR(left, right) : null;
+}
+
+function renderBatch(progress){
+  const box = document.getElementById('result');
+  const items = batchState.items;
+  const counts = { new: 0, dup: 0, noqr: 0, fail: 0, done: 0, pending: 0 };
+  items.forEach(it => counts[it.status]++);
+  const rows = items.map((it, i) => {
+    const pill =
+      it.status === 'pending' ? '<span class="pill gray">…</span>' :
+      it.status === 'new' ? '<span class="pill ok">新</span>' :
+      it.status === 'dup' ? '<span class="pill gray">已入帳</span>' :
+      it.status === 'done' ? `<span class="pill ok">✓ ${esc(it.serial)}</span>` :
+      it.status === 'noqr' ? `<button class="pill warn" style="border:0;cursor:pointer;font-family:inherit" data-ai="${i}">🤖 AI 辨識</button>` :
+      '<span class="pill bad">失敗</span>';
+    const label = it.p
+      ? `${esc(it.p.invoiceNumber)} · ${esc(it.p.date || '')} · ${fmt$(it.p.totalAmount)}`
+      : esc(it.name);
+    return `<div class="rrow"><div class="n"><div class="a">${label}</div>
+      ${it.err ? `<div class="b">${esc(it.err)}</div>` : ''}</div>${pill}</div>`;
+  }).join('');
+  box.innerHTML = `<div class="sec">📁 相簿批次匯入（${items.length} 張）${progress ? '・' + esc(progress) : ''}</div>
+    <div class="card" style="padding:4px 14px">${rows}</div>
+    ${!progress && counts.new ? `<div class="btnrow"><button class="btn primary" id="btnBatchWrite">✓ 一鍵入帳 ${counts.new} 張新發票</button></div>` : ''}
+    ${!progress && counts.noqr ? `<div style="font-size:11.5px;color:var(--tx3);margin-top:8px;text-align:center">沒有 QR 的 ${counts.noqr} 張：點該列「🤖 AI 辨識」逐張處理（約 NT$2/張）</div>` : ''}
+    ${!progress && counts.dup ? `<div style="font-size:11.5px;color:var(--tx3);margin-top:4px;text-align:center">「已入帳」的 ${counts.dup} 張已自動跳過，不會重複記錄</div>` : ''}`;
+  if (!progress) {
+    const bw = document.getElementById('btnBatchWrite');
+    if (bw) bw.addEventListener('click', batchWrite);
+    box.querySelectorAll('[data-ai]').forEach(b =>
+      b.addEventListener('click', () => batchAi(parseInt(b.dataset.ai, 10))));
+  }
+}
+
+async function batchWrite(){
+  const route = getApiRoute();
+  if (!route) return toast('請先登入');
+  const btn = document.getElementById('btnBatchWrite');
+  btn.disabled = true;
+  let ok = 0, fail = 0;
+  for (const it of batchState.items) {   // 逐張序列寫入（避開 Ragic 限流）
+    if (it.status !== 'new') continue;
+    try {
+      const p = it.p;
+      const io = (OUR_TAX_ID && p.sellerId === OUR_TAX_ID) ? 'in' : 'out';
+      const fd = new FormData();
+      fd.append(F.io, io === 'in' ? '進項' : '出項');
+      if (p.date) fd.append(F.date, p.date.replace(/-/g, '/'));
+      fd.append(F.dedupe, dedupeKey(p));
+      fd.append(F.invNo, p.invoiceNumber);
+      fd.append(F.seller, p.sellerId);
+      if (p.buyerId) fd.append(F.buyer, p.buyerId);
+      fd.append(F.items, p.items.map(x => `${x.name}×${x.qty}@${x.price}`).join('；'));
+      fd.append(F.total, String(p.totalAmount));
+      fd.append(F.tax, String(p.tax));
+      fd.append(F.status, '已入帳');
+      fd.append(F.source, 'QR');
+      const cat = io === 'in' ? '營業收入' : (suggestCategory(p) || []).filter(Boolean).join(' > ');
+      if (cat) fd.append(F.category, cat);
+      fd.append(F.photo, it.file, it.file.name || 'invoice.jpg');
+      const r = await fetch(WORKER_URL + '/?sheet=acct', { method: 'POST', headers: route.headers, body: fd });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j && j.status === 'SUCCESS') {
+        it.status = 'done'; it.serial = (j.data && j.data[F.serial]) || ''; ok++;
+      } else throw new Error('HTTP ' + r.status + '／' + ((j && (j.reason || j.status)) || '未知'));
+    } catch (e) { it.status = 'fail'; it.err = '寫入失敗：' + e.message; fail++; }
+    renderBatch(`入帳中… 完成 ${ok + fail}`);
+  }
+  renderBatch();
+  toast(`✓ 批次入帳完成 ${ok} 張` + (fail ? `，失敗 ${fail} 張` : ''));
+  if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+}
+
+function batchAi(i){
+  const it = batchState.items[i];
+  batchState.activeIdx = i;
+  state.photoBlob = it.file;
+  state.photoName = it.file.name || 'invoice.jpg';
+  aiRecognize();
+}
+
 /* ═══════════════ 貼碼測試 ═══════════════ */
 document.getElementById('btnParse').addEventListener('click', () => {
   const L = document.getElementById('pasteLeft').value.trim();
@@ -1040,8 +1200,22 @@ function renderApproved(p, serial, wasDup){
       <div class="txt"><b>${wasDup ? '這張發票之前已入帳，未重複寫入' : '已寫入 Ragic 進出項單據'}</b>${serial ? '<br>流水號 ' + esc(serial) : ''}
         <br><a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener">在 Ragic 開啟進出項單據 →</a></div></div>`;
   const row = card.querySelector('.btnrow');
-  if (row) row.innerHTML = '<button class="btn primary" id="btnNext">📸 掃下一張</button>';
-  document.getElementById('btnNext').addEventListener('click', resetScan);
+  if (batchState.activeIdx != null) {
+    // 批次模式：把這張標記完成，回批次清單繼續
+    const it = batchState.items[batchState.activeIdx];
+    it.status = wasDup ? 'dup' : 'done';
+    it.serial = serial || '';
+    it.p = p;
+    batchState.activeIdx = null;
+    if (row) row.innerHTML = '<button class="btn primary" id="btnBackBatch">↩ 回批次清單</button>';
+    document.getElementById('btnBackBatch').addEventListener('click', () => {
+      document.getElementById('result').innerHTML = '';
+      renderBatch();
+    });
+  } else {
+    if (row) row.innerHTML = '<button class="btn primary" id="btnNext">📸 掃下一張</button>';
+    document.getElementById('btnNext').addEventListener('click', resetScan);
+  }
   if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
 }
 
