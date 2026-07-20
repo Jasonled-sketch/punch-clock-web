@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e17">
+<title>USLED 記帳 · 拍照入帳</title>
+<style>
+:root{
+  --bg:#0a0e17; --bg2:#111725; --card:#161d2e; --card2:#1b2334;
+  --line:#26304a; --tx:#e7ecf5; --tx2:#93a0bd; --tx3:#5f6c8a;
+  --brand:#2dd4bf; --brand2:#38bdf8; --in:#34d399; --out:#fb7185;
+  --warn:#fbbf24; --danger:#f43f5e; --ok:#34d399;
+  --glow:0 0 0 1px rgba(45,212,191,.25), 0 8px 30px -8px rgba(45,212,191,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  background:radial-gradient(1200px 800px at 20% -10%,#132033 0%,#070a12 55%);color:var(--tx);min-height:100vh}
+.wrap{max-width:520px;margin:0 auto;padding:18px 16px 60px}
+.hd{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+  display:grid;place-items:center;font-weight:800;color:#04121a;font-size:19px;box-shadow:var(--glow)}
+.hd h1{font-size:18px;margin:0;letter-spacing:.3px}
+.hd .sub{color:var(--tx2);font-size:12px;margin-top:2px}
+.ver{margin-left:auto;font-size:11px;color:var(--brand);border:1px solid rgba(45,212,191,.3);
+  padding:4px 10px;border-radius:20px;background:rgba(45,212,191,.07);white-space:nowrap}
+
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tab{flex:1;padding:10px 4px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--tx2);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.tab.on{background:rgba(45,212,191,.13);color:var(--brand);border-color:rgba(45,212,191,.35)}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.sec{margin:16px 2px 9px;font-size:12px;color:var(--tx3);font-weight:700;letter-spacing:.5px}
+
+/* camera / scan area */
+.cam{position:relative;border-radius:18px;overflow:hidden;margin-top:4px;background:#0d1422;
+  display:grid;place-items:center;border:1px solid var(--line);min-height:220px}
+.cam video{width:100%;display:block;max-height:340px;object-fit:cover;background:#000}
+.cam .overlay{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none}
+.frameq{width:200px;height:120px;border-radius:12px;position:relative}
+.frameq::before,.frameq::after{content:"";position:absolute;width:30px;height:30px;border:3px solid var(--brand)}
+.frameq::before{top:0;left:0;border-right:0;border-bottom:0;border-radius:8px 0 0 0}
+.frameq::after{bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 8px 0}
+.scanline{position:absolute;left:8px;right:8px;height:2px;background:linear-gradient(90deg,transparent,var(--brand),transparent);
+  top:10px;animation:scan 2.2s ease-in-out infinite}
+@keyframes scan{0%,100%{top:12px}50%{top:106px}}
+.camhint{position:absolute;bottom:10px;left:0;right:0;text-align:center;font-size:12px;color:var(--brand);text-shadow:0 1px 4px #000}
+.camhint .mini{color:#cbd5e1;font-size:11px;margin-top:2px}
+.camoff{padding:34px 18px;text-align:center;color:var(--tx3);font-size:13px;line-height:1.8}
+
+/* slot indicators */
+.slots{display:flex;gap:10px;margin-top:12px}
+.slot{flex:1;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);
+  border-radius:13px;padding:10px 12px;font-size:12.5px;color:var(--tx3)}
+.slot .led{width:10px;height:10px;border-radius:50%;background:#2a3550;flex:0 0 auto}
+.slot.got{color:var(--tx);border-color:rgba(52,211,153,.4)}
+.slot.got .led{background:var(--ok);box-shadow:0 0 8px rgba(52,211,153,.7)}
+
+.btnrow{display:flex;gap:10px;margin-top:14px}
+.btn{flex:1;padding:13px;border-radius:13px;border:0;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#04121a}
+.btn.ghost{background:var(--card);color:var(--tx);border:1px solid var(--line)}
+.btn.warn{background:rgba(251,191,36,.14);color:var(--warn);border:1px solid rgba(251,191,36,.35)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+textarea{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--tx);
+  font-family:ui-monospace,Consolas,monospace;font-size:12px;padding:10px;min-height:64px;resize:vertical}
+textarea:focus{outline:none;border-color:rgba(45,212,191,.5)}
+label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
+
+/* recognized card */
+.pill{font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:700}
+.pill.ok{background:rgba(52,211,153,.14);color:var(--ok)}
+.pill.warn{background:rgba(251,191,36,.16);color:var(--warn)}
+.pill.bad{background:rgba(244,63,94,.14);color:var(--danger)}
+.pill.gray{background:#222c42;color:var(--tx2)}
+.recog .head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.recog .head .st{font-size:12px;color:var(--brand);font-weight:700}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:9px 2px;border-bottom:1px dashed var(--line);font-size:13px}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--tx2);flex:0 0 auto}
+.kv .v{font-weight:600;text-align:right;word-break:break-all}
+.kv .v.big{color:var(--in);font-size:16px}
+.src{font-size:9.5px;color:var(--tx3);margin-left:5px}
+.items{margin-top:4px}
+.item{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:6px 2px;color:var(--tx)}
+.item .q{color:var(--tx3);flex:0 0 auto}
+.alert{display:flex;gap:11px;align-items:flex-start;border-radius:14px;padding:12px 13px;margin-top:12px;
+  background:linear-gradient(120deg,rgba(251,191,36,.13),rgba(251,191,36,.03));border:1px solid rgba(251,191,36,.3)}
+.alert.err{background:linear-gradient(120deg,rgba(244,63,94,.14),rgba(244,63,94,.04));border-color:rgba(244,63,94,.32)}
+.alert .ai{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  background:rgba(251,191,36,.16);color:var(--warn);font-weight:800;font-size:12px}
+.alert.err .ai{background:rgba(244,63,94,.18);color:var(--danger)}
+.alert .txt{font-size:12px;line-height:1.55;color:var(--tx)}
+.alert .txt small{color:var(--tx2);display:block;margin-top:2px}
+
+/* in/out toggle */
+.iotoggle{display:flex;gap:8px}
+.iotoggle button{flex:1;padding:9px;border-radius:11px;font-family:inherit;font-size:13px;font-weight:700;
+  background:var(--bg2);color:var(--tx3);border:1px solid var(--line);cursor:pointer}
+.iotoggle button.on-in{background:rgba(52,211,153,.14);color:var(--in);border-color:rgba(52,211,153,.4)}
+.iotoggle button.on-out{background:rgba(251,113,133,.14);color:var(--out);border-color:rgba(251,113,133,.4)}
+
+.authbar{margin-bottom:12px}
+.authchip{width:100%;padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--tx2);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}
+.authchip.ok{color:var(--in);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.07)}
+.okbox{display:flex;gap:11px;align-items:flex-start;border-radius:14px;padding:12px 13px;margin-top:12px;
+  background:linear-gradient(120deg,rgba(52,211,153,.14),rgba(52,211,153,.03));border:1px solid rgba(52,211,153,.35)}
+.okbox .ai{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  background:rgba(52,211,153,.16);color:var(--ok);font-weight:800}
+.okbox .txt{font-size:12.5px;line-height:1.6}
+.okbox a{color:var(--brand)}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:#1b2334;color:var(--tx);border:1px solid var(--line);border-radius:13px;padding:11px 18px;
+  font-size:13px;transition:.25s;pointer-events:none;z-index:99;box-shadow:0 10px 30px -10px #000;max-width:88vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.foot{text-align:center;color:var(--tx3);font-size:11px;margin-top:26px;line-height:1.8}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <div class="logo">U</div>
+    <div>
+      <h1>拍照入帳</h1>
+      <div class="sub">電子發票雙 QR 解析 · AI 提案卡片</div>
+    </div>
+    <div class="ver" id="verTag">v0.0.0</div>
+  </div>
+
+  <div class="authbar" id="authBar">
+    <button class="authchip" id="authChip">🔐 未登入 · 點我 Google 登入</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-mode="live">📷 即時掃描</button>
+    <button class="tab" data-mode="photo">🖼️ 拍照/選圖</button>
+    <button class="tab" data-mode="paste">⌨️ 貼碼測試</button>
+  </div>
+
+  <!-- 即時掃描 -->
+  <div data-pane="live">
+    <div class="cam">
+      <video id="video" playsinline muted hidden></video>
+      <div class="camoff" id="camOff">按下方「開啟相機」開始掃描<br>對準發票左右兩段 QR，會自動拼接</div>
+      <div class="overlay" id="camOverlay" hidden>
+        <div class="frameq"><div class="scanline"></div></div>
+        <div class="camhint">對準電子發票證明聯<div class="mini">左右兩段 QR 自動拼接 · 免打字</div></div>
+      </div>
+    </div>
+    <div class="btnrow">
+      <button class="btn primary" id="btnCam">開啟相機</button>
+      <button class="btn ghost" id="btnCamStop" hidden>停止</button>
+    </div>
+  </div>
+
+  <!-- 拍照/選圖 -->
+  <div data-pane="photo" hidden>
+    <div class="card" style="text-align:center;padding:26px 16px">
+      <div style="font-size:34px">🧾</div>
+      <div style="font-size:13px;color:var(--tx2);margin:10px 0 16px;line-height:1.7">
+        手機會直接開相機，電腦則選擇發票照片。<br>一張照片同時拍到左右兩個 QR 最好。</div>
+      <div class="btnrow" style="margin-top:0">
+        <button class="btn primary" id="btnShoot">📸 拍照 / 選圖</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+    </div>
+  </div>
+
+  <!-- 貼碼測試 -->
+  <div data-pane="paste" hidden>
+    <div class="card">
+      <label class="lb" style="margin-top:0">左 QR 原文（77 碼固定欄位＋明細）</label>
+      <textarea id="pasteLeft" placeholder="AB123456781150716…"></textarea>
+      <label class="lb">右 QR 原文（以 ** 起始，可留空）</label>
+      <textarea id="pasteRight" placeholder="**:電源供應器:1:640…"></textarea>
+      <div class="btnrow">
+        <button class="btn warn" id="btnSample">填入範例</button>
+        <button class="btn primary" id="btnParse">解析</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR 槽位狀態 -->
+  <div class="slots">
+    <div class="slot" id="slotL"><span class="led"></span><span>左 QR（固定欄位）</span></div>
+    <div class="slot" id="slotR"><span class="led"></span><span>右 QR（明細承接）</span></div>
+  </div>
+
+  <!-- 解析結果：AI 提案卡片 -->
+  <div id="result"></div>
+
+  <div class="foot">USLED 譽昇光電 · 記帳系統 步驟 2 原型<br>QR 純解碼零成本 · 尚未接 Ragic 寫入</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+'use strict';
+const APP_VERSION = '0.2.0';
+document.getElementById('verTag').textContent = 'v' + APP_VERSION;
+
+// 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
+const OUR_TAX_ID = '54825796';
+
+// ── Ragic 寫入（經 usled-ragic-proxy Worker，?sheet=acct → Fan28/ragicpersonal-finance/7）──
+const WORKER_URL = 'https://usled-ragic-proxy.yspe-led.workers.dev';
+const GOOGLE_CLIENT_ID = '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com';
+const RAGIC_SHEET_URL = 'https://ap10.ragic.com/Fan28/ragicpersonal-finance/7';
+// 進出項單據 欄位 ID（2026-07-20 API 實測探測）
+const F = {
+  io: '1003130',      // 進/出項別
+  date: '1003131',    // 日期 YYYY/MM/DD
+  dedupe: '1003132',  // 冪等鍵
+  invNo: '1003133',   // 發票號碼
+  category: '1003134',// 歸類科目
+  seller: '1003135',  // 賣方統編
+  status: '1003136',  // 狀態(已入帳/待補) 選單
+  buyer: '1003137',   // 買方統編
+  items: '1003139',   // 品項明細
+  total: '1003140',   // 金額(含稅) 數值
+  tax: '1003141',     // 稅額 數值
+  source: '1003142',  // 來源(QR/AI/手動)
+  vendor: '1003143',  // 廠商/客戶名
+  serial: '1003129',  // 流水號（唯讀）
+};
+
+/* ═══════════════ 台灣電子發票 QR 解析器（瀏覽器版） ═══════════════
+   規格：財政部 v1.9。三大雷點全處理：
+   1. 銷售額/總計額為 8 碼十六進位 → parseInt(hex,16)
+   2. 完整明細橫跨左右兩段 QR；右段固定 "**" 起始，去掉後接在左段之後
+   3. 中文編碼參數 0=Big5 / 1=UTF-8 / 2=Base64 / 3=UTF-8(境外)
+   輸入一律用「每 byte 一字元」的 latin1 字串承載，品名再依編碼參數還原。 */
+
+function bytesToLatin1(bytes){
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 4096)
+    s += String.fromCharCode.apply(null, bytes.slice(i, i + 4096));
+  return s;
+}
+function latin1ToBytes(str){
+  const b = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) b[i] = str.charCodeAt(i) & 0xff;
+  return b;
+}
+function tryDecode(bytes, enc){
+  try { return new TextDecoder(enc, { fatal: true }).decode(bytes); } catch (_) { return null; }
+}
+// 掃碼來的字串是「每 byte 一字元」；貼上的字串已是解好的文字（含 >0xFF 字元）不可再過 byte 解碼
+function isByteString(s){
+  for (let i = 0; i < s.length; i++) if (s.charCodeAt(i) > 0xff) return false;
+  return true;
+}
+
+function rocToISO(roc){
+  if (!/^\d{7}$/.test(roc)) return null;
+  const y = parseInt(roc.slice(0, 3), 10) + 1911;
+  return `${y}-${roc.slice(3, 5)}-${roc.slice(5, 7)}`;
+}
+
+function decodeItemName(raw, encodingParam){
+  try {
+    let v = null, needsBig5 = false;
+    const rawIsBytes = isByteString(raw) && /[\x80-\xff]/.test(raw);
+    if (encodingParam === 1 || encodingParam === 3) {
+      v = rawIsBytes ? (tryDecode(latin1ToBytes(raw), 'utf-8') ?? raw) : raw;
+    } else if (encodingParam === 2) {
+      v = tryDecode(latin1ToBytes(atob(raw)), 'utf-8') ?? raw;
+    } else if (encodingParam === 0) {
+      if (rawIsBytes) {
+        const d = tryDecode(latin1ToBytes(raw), 'big5');
+        if (d != null) v = d; else { v = raw; needsBig5 = true; }
+      } else v = raw;
+    } else {
+      v = raw;
+    }
+    // 部分 POS 品名走 URL 編碼（%E9%9B%BB…）→ 再解一層
+    if (/%[0-9A-Fa-f]{2}/.test(v)) { try { v = decodeURIComponent(v); } catch (_) {} }
+    return { value: v, needsBig5Decode: needsBig5 };
+  } catch (_) {
+    return { value: raw, needsBig5Decode: encodingParam === 0 };
+  }
+}
+
+function parseEInvoiceQR(leftRaw, rightRaw){
+  if (typeof leftRaw !== 'string' || leftRaw.length < 77)
+    return { ok: false, error: 'LEFT_QR_TOO_SHORT' };
+
+  let rightTail = '';
+  if (typeof rightRaw === 'string' && rightRaw.length > 0) {
+    if (!rightRaw.startsWith('**')) return { ok: false, error: 'RIGHT_QR_BAD_PREFIX' };
+    rightTail = rightRaw.slice(2);
+  }
+  const combined = leftRaw + rightTail;
+
+  const fixed = combined.slice(0, 77);
+  const invoiceNumber = fixed.slice(0, 10);
+  const dateRoc       = fixed.slice(10, 17);
+  const randomCode    = fixed.slice(17, 21);
+  const salesHex      = fixed.slice(21, 29);
+  const totalHex      = fixed.slice(29, 37);
+  const buyerId       = fixed.slice(37, 45);
+  const sellerId      = fixed.slice(45, 53);
+  const encryptVerify = fixed.slice(53, 77);
+
+  const salesAmount = parseInt(salesHex, 16);   // ☠️ hex → 十進位
+  const totalAmount = parseInt(totalHex, 16);   // ☠️ hex → 十進位
+
+  const rest = combined.slice(77);
+  const items = [];
+  let encodingParam = null, encodingName = null, detailConfidence = 'high';
+  let declaredTotal = null;
+
+  if (rest.length > 0) {
+    const seg = rest.split(':');
+    // 規格順序：'' , 自訂區10碼 , 完整品目總筆數 , 本張品目筆數 , 中文編碼參數 , 品名 , 數量 , 單價 , …
+    // ⚠️ 總筆數是 2 或 3 時也符合 /^[0-3]$/，不能用「第一個 0–3 欄位」猜編碼參數 → 先照規格定位
+    let encIdx = -1;
+    if (seg.length >= 5 && /^\d+$/.test(seg[2]) && /^\d+$/.test(seg[3]) && /^[0-3]$/.test(seg[4])) {
+      encIdx = 4;
+      declaredTotal = parseInt(seg[2], 10);
+    } else {
+      encIdx = seg.findIndex((s, i) => i > 0 && /^[0-3]$/.test(s)); // 非標準自訂區的退路
+    }
+    if (encIdx >= 0) {
+      encodingParam = parseInt(seg[encIdx], 10);
+      encodingName = { 0: 'Big5', 1: 'UTF-8', 2: 'Base64', 3: 'UTF-8(境外電商)' }[encodingParam];
+      const detail = seg.slice(encIdx + 1).filter(s => s.length > 0);
+      for (let i = 0; i + 2 < detail.length; i += 3) {
+        const name = decodeItemName(detail[i], encodingParam);
+        if (name == null) continue;
+        items.push({ name: name.value, qty: detail[i + 1], price: detail[i + 2],
+                     needsBig5Decode: name.needsBig5Decode });
+      }
+      if (items.some(it => it.needsBig5Decode)) detailConfidence = 'low_big5_undecoded';
+      else if (declaredTotal != null && items.length < declaredTotal)
+        detailConfidence = rightRaw ? 'count_mismatch' : 'missing_right_qr';
+    } else {
+      detailConfidence = 'no_encoding_param';
+    }
+  }
+
+  return {
+    ok: true,
+    source: rightRaw ? 'dual-qr' : 'left-qr-only',
+    invoiceNumber, date: rocToISO(dateRoc), dateRoc, randomCode,
+    sellerId, buyerId: buyerId === '00000000' ? null : buyerId,
+    salesAmount, totalAmount, tax: totalAmount - salesAmount,
+    encryptVerify, items, declaredTotal, encodingParam, encodingName, detailConfidence,
+  };
+}
+
+function dedupeKey(p){ return `${p.invoiceNumber}_${p.sellerId}`; }
+
+/* ═══════════════ QR 槽位（左/右）與狀態 ═══════════════ */
+const state = { left: null, right: null, io: 'out' };
+
+function classifyQR(latin1){
+  if (latin1.startsWith('**')) return 'right';
+  if (latin1.length >= 77 && /^[A-Z]{2}\d{8}\d{7}/.test(latin1)) return 'left';
+  return 'unknown';
+}
+
+function acceptQR(latin1){
+  const kind = classifyQR(latin1);
+  if (kind === 'unknown') return false;
+  if (state[kind] === latin1) return false;   // 同一顆重複掃到
+  state[kind] = latin1;
+  updateSlots();
+  if (state.left) renderResult(parseEInvoiceQR(state.left, state.right));
+  else toast('已掃到右段 QR，請再對準左段（含發票號碼那顆）');
+  return true;
+}
+
+function resetScan(){
+  state.left = null; state.right = null;
+  updateSlots();
+  document.getElementById('result').innerHTML = '';
+}
+
+function updateSlots(){
+  document.getElementById('slotL').classList.toggle('got', !!state.left);
+  document.getElementById('slotR').classList.toggle('got', !!state.right);
+}
+
+/* ═══════════════ 分頁切換 ═══════════════ */
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+  document.querySelectorAll('[data-pane]').forEach(p => p.hidden = (p.dataset.pane !== t.dataset.mode));
+  if (t.dataset.mode !== 'live') stopCamera();
+}));
+
+/* ═══════════════ 即時掃描 ═══════════════ */
+const video = document.getElementById('video');
+let stream = null, rafId = null, lastScanAt = 0, scanFlip = 0;
+const workCanvas = document.createElement('canvas');
+const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+document.getElementById('btnCam').addEventListener('click', startCamera);
+document.getElementById('btnCamStop').addEventListener('click', stopCamera);
+
+async function startCamera(){
+  if (typeof jsQR !== 'function') return toast('掃碼引擎載入失敗，請確認網路後重整');
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+  } catch (e) {
+    return toast('無法開啟相機：' + (e.name === 'NotAllowedError' ? '請允許相機權限' : e.message));
+  }
+  video.srcObject = stream;
+  await video.play();
+  video.hidden = false;
+  document.getElementById('camOff').hidden = true;
+  document.getElementById('camOverlay').hidden = false;
+  document.getElementById('btnCam').hidden = true;
+  document.getElementById('btnCamStop').hidden = false;
+  rafId = requestAnimationFrame(scanLoop);
+}
+
+function stopCamera(){
+  if (rafId) cancelAnimationFrame(rafId), rafId = null;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.hidden = true; video.srcObject = null;
+  document.getElementById('camOff').hidden = false;
+  document.getElementById('camOverlay').hidden = true;
+  document.getElementById('btnCam').hidden = false;
+  document.getElementById('btnCamStop').hidden = true;
+}
+
+function scanLoop(ts){
+  rafId = requestAnimationFrame(scanLoop);
+  if (ts - lastScanAt < 160 || video.readyState < 2) return;
+  lastScanAt = ts;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw) return;
+  const scale = Math.min(1, 800 / vw);
+  const w = Math.round(vw * scale), h = Math.round(vh * scale);
+  workCanvas.width = w; workCanvas.height = h;
+  workCtx.drawImage(video, 0, 0, w, h);
+  // 輪流掃：整張 → 左半 → 右半，讓兩顆 QR 都有機會被抓到
+  const regions = [[0, 0, w, h], [0, 0, Math.ceil(w / 2), h], [Math.floor(w / 2), 0, Math.ceil(w / 2), h]];
+  const [rx, ry, rw, rh] = regions[scanFlip++ % 3];
+  const img = workCtx.getImageData(rx, ry, rw, rh);
+  const code = jsQR(img.data, rw, rh, { inversionAttempts: 'dontInvert' });
+  if (code && code.binaryData && code.binaryData.length){
+    if (acceptQR(bytesToLatin1(Array.from(code.binaryData)))){
+      if (navigator.vibrate) navigator.vibrate(60);
+      if (state.left && (state.right || scanFlip > 60)) { /* 兩段齊了就停 */ }
+      if (state.left && state.right) stopCamera();
+    }
+  }
+}
+
+/* ═══════════════ 拍照 / 選圖 ═══════════════ */
+document.getElementById('btnShoot').addEventListener('click', () =>
+  document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  e.target.value = '';
+  if (typeof jsQR !== 'function') return toast('掃碼引擎載入失敗，請確認網路後重整');
+  resetScan();
+  toast('解析照片中…');
+  try {
+    const found = await scanImageFile(f);
+    if (!found) toast('照片裡找不到可辨識的 QR，請靠近一點、對焦後再拍');
+    else if (!state.left) toast('只掃到右段 QR，請補拍含發票號碼的左段');
+  } catch (err) { toast('照片解析失敗：' + err.message); }
+});
+
+async function scanImageFile(file){
+  const bmp = await createImageBitmap(file);
+  let hit = false;
+  // 多尺度 × 多區域：整張、左半、右半（半張再放大一級補小 QR）
+  for (const maxW of [1200, 1800]) {
+    const scale = Math.min(1, maxW / bmp.width);
+    const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+    workCanvas.width = w; workCanvas.height = h;
+    workCtx.drawImage(bmp, 0, 0, w, h);
+    const regions = [[0, 0, w, h], [0, 0, Math.ceil(w / 2), h], [Math.floor(w / 2), 0, Math.ceil(w / 2), h]];
+    for (const [rx, ry, rw, rh] of regions) {
+      const img = workCtx.getImageData(rx, ry, rw, rh);
+      const code = jsQR(img.data, rw, rh, { inversionAttempts: 'attemptBoth' });
+      if (code && code.binaryData && code.binaryData.length)
+        hit = acceptQR(bytesToLatin1(Array.from(code.binaryData))) || hit;
+      if (state.left && state.right) return true;
+    }
+    if (state.left) break; // 左段到手，右段掃不到也先出卡片
+  }
+  return hit || !!state.left || !!state.right;
+}
+
+/* ═══════════════ 貼碼測試 ═══════════════ */
+document.getElementById('btnParse').addEventListener('click', () => {
+  const L = document.getElementById('pasteLeft').value.trim();
+  const R = document.getElementById('pasteRight').value.trim();
+  if (!L) return toast('請先貼左 QR 原文');
+  resetScan();
+  if (classifyQR(L) !== 'left') return toast('左 QR 格式不對（要 2 碼字軌＋8 碼號碼開頭、至少 77 碼）');
+  state.left = L;
+  if (R) { if (!R.startsWith('**')) return toast('右 QR 要以 ** 起始'); state.right = R; }
+  updateSlots();
+  renderResult(parseEInvoiceQR(state.left, state.right));
+});
+document.getElementById('btnSample').addEventListener('click', () => {
+  document.getElementById('pasteLeft').value =
+    'AB12345678' + '1150716' + '3842' + '00000546' + '0000058A' + '00000000' + '53312498' +
+    'ABCDEFGHIJKLMNOPQRSTUVWX' + ':**********:2:1:1:LED電源供應器:2:640';
+  document.getElementById('pasteRight').value = '**:防水接頭:5:14';
+  toast('已填入範例（未稅 0x546=1350、總計 0x58A=1418）');
+});
+
+/* ═══════════════ AI 提案卡片 ═══════════════ */
+function fmt$(n){ return isFinite(n) ? '$' + n.toLocaleString('zh-TW') : '—'; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+
+function renderResult(p){
+  const box = document.getElementById('result');
+  if (!p.ok) {
+    box.innerHTML = `<div class="sec">解析結果</div>
+      <div class="alert err"><div class="ai">✕</div>
+        <div class="txt">QR 解析失敗（${esc(p.error)}）
+          <small>${p.error === 'RIGHT_QR_BAD_PREFIX' ? '右段要以 ** 起始，可能左右掃反了' : '左段至少 77 碼固定欄位'}</small>
+        </div></div>`;
+    return;
+  }
+  state.io = (OUR_TAX_ID && p.sellerId === OUR_TAX_ID) ? 'in' : 'out';
+
+  const confPill =
+    p.detailConfidence === 'high' ? '<span class="pill ok">明細完整</span>' :
+    p.detailConfidence === 'low_big5_undecoded' ? '<span class="pill warn">Big5 未解碼</span>' :
+    p.detailConfidence === 'missing_right_qr' ? `<span class="pill warn">缺右段（${p.items.length}/${p.declaredTotal} 筆）</span>` :
+    p.detailConfidence === 'count_mismatch' ? `<span class="pill warn">筆數不符（${p.items.length}/${p.declaredTotal}）</span>` :
+    '<span class="pill gray">無標準明細</span>';
+  const srcPill = p.source === 'dual-qr'
+    ? '<span class="pill ok">雙 QR 拼接</span>'
+    : '<span class="pill warn">僅左 QR</span>';
+
+  const itemsHtml = p.items.length
+    ? p.items.map(it => `<div class="item"><span>${esc(it.name)}</span>
+        <span class="q">×${esc(it.qty)}｜單價 ${esc(it.price)}</span></div>`).join('')
+    : '<div class="item" style="color:var(--tx3)">（此段 QR 未帶品項明細）</div>';
+
+  box.innerHTML = `
+    <div class="sec">AI 提案 · 待核准</div>
+    <div class="recog card">
+      <div class="head"><div class="st">✓ QR 解析成功</div>
+        <span style="margin-left:auto;display:flex;gap:6px">${srcPill}<span class="pill ok">零成本解碼</span></span></div>
+      <div class="kv"><span class="k">發票號碼<span class="src">左QR</span></span>
+        <span class="v">${esc(p.invoiceNumber.slice(0, 2))}-${esc(p.invoiceNumber.slice(2))}</span></div>
+      <div class="kv"><span class="k">開立日期<span class="src">民國 ${esc(p.dateRoc.slice(0, 3))}</span></span>
+        <span class="v">${esc(p.date ?? p.dateRoc)}</span></div>
+      <div class="kv"><span class="k">賣方統編</span><span class="v">${esc(p.sellerId)}</span></div>
+      <div class="kv"><span class="k">買方統編</span>
+        <span class="v">${p.buyerId ? esc(p.buyerId) : '<span style="color:var(--tx3)">一般消費者</span>'}</span></div>
+      <div class="kv"><span class="k">銷售額（未稅）<span class="src">hex→十進位</span></span>
+        <span class="v">${fmt$(p.salesAmount)}</span></div>
+      <div class="kv"><span class="k">稅額</span><span class="v">${fmt$(p.tax)}</span></div>
+      <div class="kv"><span class="k">總計（含稅）<span class="src">入帳用</span></span>
+        <span class="v big">${fmt$(p.totalAmount)}</span></div>
+      <div class="kv" style="display:block">
+        <span class="k">品項${p.encodingName ? `<span class="src">${esc(p.encodingName)}</span>` : ''}
+          <span style="float:right">${confPill}</span></span>
+        <div class="items">${itemsHtml}</div>
+      </div>
+      <div class="kv"><span class="k">冪等鍵<span class="src">發票號碼＋賣方統編</span></span>
+        <span class="v" style="font-family:ui-monospace,Consolas,monospace;font-size:11.5px">${esc(dedupeKey(p))}</span></div>
+      <div class="kv" style="display:block">
+        <span class="k" style="display:block;margin-bottom:8px">記帳方向</span>
+        <div class="iotoggle">
+          <button id="ioIn"  class="${state.io === 'in' ? 'on-in' : ''}">進項（收入）</button>
+          <button id="ioOut" class="${state.io === 'out' ? 'on-out' : ''}">出項（支出）</button>
+        </div>
+      </div>
+      <div class="alert"><div class="ai">AI</div>
+        <div class="txt">AI 提案，尚未寫入 Ragic
+          <small>查重通過才寫入 · 冪等鍵防重複入帳</small></div></div>
+      <div class="btnrow">
+        <button class="btn ghost" id="btnAgain">↻ 重新掃描</button>
+        <button class="btn primary" id="btnApprove">✓ 核准入帳</button>
+      </div>
+    </div>`;
+
+  document.getElementById('ioIn').addEventListener('click', () => setIO('in'));
+  document.getElementById('ioOut').addEventListener('click', () => setIO('out'));
+  document.getElementById('btnAgain').addEventListener('click', resetScan);
+  document.getElementById('btnApprove').addEventListener('click', ev =>
+    approveEntry(p, ev.currentTarget));
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function setIO(io){
+  state.io = io;
+  document.getElementById('ioIn').className = io === 'in' ? 'on-in' : '';
+  document.getElementById('ioOut').className = io === 'out' ? 'on-out' : '';
+}
+
+/* ═══════════════ Google 登入 + 60 天通行證（沿用 ledshow 模式） ═══════════════ */
+let currentUser = null;
+try { currentUser = JSON.parse(localStorage.getItem('acct_user') || 'null'); } catch (_) {}
+
+function updateAuthUI(){
+  const chip = document.getElementById('authChip');
+  const sess = getSavedSession();
+  if (currentUser) {
+    chip.classList.add('ok');
+    chip.textContent = '✅ ' + currentUser.email + (sess ? ' · 60天通行證有效' : ' · 待換發通行證');
+  } else {
+    chip.classList.remove('ok');
+    chip.textContent = '🔐 未登入 · 點我 Google 登入';
+  }
+}
+document.getElementById('authChip').addEventListener('click', () => {
+  if (!currentUser) showGoogleSignIn();
+  else if (confirm('要登出 ' + currentUser.email + ' 嗎？')) {
+    currentUser = null;
+    localStorage.removeItem('acct_user');
+    localStorage.removeItem('acct_session');
+    updateAuthUI();
+  }
+});
+
+function initGoogleSignIn(){
+  function tryInit(){
+    if (typeof google === 'undefined' || !google.accounts) { setTimeout(tryInit, 500); return; }
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleGoogleSignIn,
+      auto_select: true,          // 登過的帳號自動發新 token（pitfall #10）
+      itp_support: true,
+      cancel_on_tap_outside: false,
+    });
+    // 有登過但通行證缺/快到期 → 背景補
+    if (currentUser && !getSavedSession()) google.accounts.id.prompt();
+  }
+  tryInit();
+}
+function showGoogleSignIn(){
+  if (typeof google === 'undefined' || !google.accounts) return toast('Google 載入中，稍後再試');
+  google.accounts.id.prompt(n => {
+    if (n.isNotDisplayed && (n.isNotDisplayed() || n.isSkippedMoment())) {
+      const btn = document.createElement('div');
+      document.body.appendChild(btn);
+      google.accounts.id.renderButton(btn, { theme: 'filled_blue', size: 'large' });
+      btn.style.cssText = 'position:fixed;top:60px;right:20px;z-index:9999;background:#fff;padding:10px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+      setTimeout(() => btn.remove(), 30000);
+    }
+  });
+}
+function handleGoogleSignIn(response){
+  try {
+    const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    currentUser = {
+      email: (payload.email || '').toLowerCase(),
+      name: payload.name || '',
+      idToken: response.credential,
+      tokenExp: (parseInt(payload.exp, 10) || 0) * 1000,
+    };
+    localStorage.setItem('acct_user', JSON.stringify(currentUser));
+    updateAuthUI();
+    toast('👋 ' + (currentUser.name || currentUser.email) + ' 已登入');
+    exchangeSession();
+  } catch (e) { toast('登入解析失敗：' + e.message); }
+}
+
+function getSavedSession(){
+  try {
+    const s = JSON.parse(localStorage.getItem('acct_session') || 'null');
+    if (s && s.session && s.exp > Date.now() && currentUser && s.email === currentUser.email) return s;
+  } catch (_) {}
+  return null;
+}
+let _sessExchanging = false;
+function exchangeSession(){
+  if (_sessExchanging || !currentUser || !currentUser.idToken) return;
+  if (currentUser.tokenExp && currentUser.tokenExp < Date.now()) return;
+  _sessExchanging = true;
+  fetch(WORKER_URL + '/auth/session', { method: 'POST', headers: { 'X-Google-Token': currentUser.idToken } })
+    .then(r => r.json())
+    .then(j => {
+      if (j && j.status === 'SUCCESS' && j.session) {
+        localStorage.setItem('acct_session', JSON.stringify({ session: j.session, exp: j.exp, email: (j.email || currentUser.email).toLowerCase() }));
+        updateAuthUI();
+      } else toast('⚠ 通行證換發失敗：' + ((j && (j.reason || j.status)) || '未知'));
+    })
+    .catch(e => toast('⚠ 通行證換發失敗（網路）'))
+    .then(() => { _sessExchanging = false; });
+}
+function getApiRoute(){
+  const s = getSavedSession();
+  if (s) {
+    if (s.exp - Date.now() < 7 * 864e5) exchangeSession();  // 快到期背景換新
+    return { headers: { 'X-Session-Token': s.session } };
+  }
+  if (currentUser && currentUser.idToken && (!currentUser.tokenExp || currentUser.tokenExp > Date.now()))
+    return { headers: { 'X-Google-Token': currentUser.idToken } };
+  return null;
+}
+updateAuthUI();
+initGoogleSignIn();
+
+/* ═══════════════ 核准入帳：查重 → 寫入 Ragic ═══════════════ */
+async function approveEntry(p, btn){
+  const route = getApiRoute();
+  if (!route) { toast('請先 Google 登入才能寫入 Ragic'); showGoogleSignIn(); return; }
+  btn.disabled = true;
+  const key = dedupeKey(p);
+  try {
+    // ⓪ 防呆：Worker 沒有 acct 路由時 ?sheet=acct 會 fallback 到報價表 sheet 17 → 絕不能寫
+    if (!window._acctRouteOK) {
+      const h = await fetch(WORKER_URL + '/').then(r => r.json()).catch(() => null);
+      if (!h || !h.ragic_url_acct_configured)
+        throw new Error('Worker 尚未部署記帳路由（sheet=acct），暫停寫入以免誤寫報價表');
+      window._acctRouteOK = true;
+    }
+    // ① 冪等查重：同發票號碼＋賣方統編不重複入帳（pitfall #11）
+    btn.textContent = '查重中…';
+    const q = await fetch(WORKER_URL + '/?sheet=acct&where=' + encodeURIComponent('1003132,eq,' + key) + '&limit=5',
+      { headers: route.headers });
+    if (q.status === 401) throw Object.assign(new Error('登入過期，請重新登入'), { auth: true });
+    if (q.status === 403) throw new Error('此帳號未在 Worker 白名單');
+    const qj = await q.json().catch(() => ({}));
+    let dup = null;   // naming=fid 在此表不生效 → 中文名/fid 兩種 key 都容錯（pitfall #14）
+    Object.values(qj).forEach(r => {
+      if (r && typeof r === 'object' && (r['1003132'] === key || r['冪等鍵'] === key)) dup = r;
+    });
+    if (dup) {
+      renderApproved(p, dup['流水號'] || dup['1003129'] || '', true);
+      return;
+    }
+    // ② 寫入（欄位一律用 ID；數值純數字；日期 YYYY/MM/DD）
+    btn.textContent = '寫入中…';
+    const fd = new FormData();
+    fd.append(F.io, state.io === 'in' ? '進項' : '出項');
+    if (p.date) fd.append(F.date, p.date.replace(/-/g, '/'));
+    fd.append(F.dedupe, key);
+    fd.append(F.invNo, p.invoiceNumber);
+    fd.append(F.seller, p.sellerId);
+    if (p.buyerId) fd.append(F.buyer, p.buyerId);
+    fd.append(F.items, p.items.map(it => `${it.name}×${it.qty}@${it.price}`).join('；'));
+    fd.append(F.total, String(p.totalAmount));
+    fd.append(F.tax, String(p.tax));
+    fd.append(F.status, '已入帳');
+    fd.append(F.source, 'QR');
+    const r = await fetch(WORKER_URL + '/?sheet=acct', { method: 'POST', headers: route.headers, body: fd });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.status === 'SUCCESS') {
+      renderApproved(p, (j.data && j.data[F.serial]) || '', false);
+    } else {
+      throw new Error('HTTP ' + r.status + '／' + ((j && (j.reason || j.status)) || '未知回應'));
+    }
+  } catch (e) {
+    toast('❌ 入帳失敗：' + e.message);
+    if (e.auth) showGoogleSignIn();
+    btn.disabled = false;
+    btn.textContent = '✓ 核准入帳';
+  }
+}
+
+function renderApproved(p, serial, wasDup){
+  const card = document.querySelector('#result .recog');
+  const zone = card.querySelector('.alert');
+  if (zone) zone.outerHTML = `
+    <div class="okbox"><div class="ai">✓</div>
+      <div class="txt"><b>${wasDup ? '這張發票之前已入帳，未重複寫入' : '已寫入 Ragic 進出項單據'}</b>${serial ? '<br>流水號 ' + esc(serial) : ''}
+        <br><a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener">在 Ragic 開啟進出項單據 →</a></div></div>`;
+  const row = card.querySelector('.btnrow');
+  if (row) row.innerHTML = '<button class="btn primary" id="btnNext">📸 掃下一張</button>';
+  document.getElementById('btnNext').addEventListener('click', resetScan);
+  if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+}
+
+/* ═══════════════ toast ═══════════════ */
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+</script>
+</body>
+</html>
