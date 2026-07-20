@@ -256,7 +256,7 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.5.0';
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
 // 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
@@ -583,8 +583,7 @@ document.getElementById('fileInput').addEventListener('change', async e => {
   toast('解析照片中…');
   try {
     const found = await scanImageFile(f);
-    if (!found) toast('照片裡找不到可辨識的 QR，請靠近一點、對焦後再拍');
-    else if (!state.left) toast('只掃到右段 QR，請補拍含發票號碼的左段');
+    if (!state.left) showAiOffer(found ? '只掃到右段 QR' : '照片裡找不到 QR');
   } catch (err) { toast('照片解析失敗：' + err.message); }
 });
 
@@ -608,6 +607,75 @@ async function scanImageFile(file){
     if (state.left) break; // 左段到手，右段掃不到也先出卡片
   }
   return hit || !!state.left || !!state.right;
+}
+
+/* ═══════════════ AI 辨識（三聯式/手寫/無QR 發票） ═══════════════ */
+function showAiOffer(reasonText){
+  const box = document.getElementById('result');
+  box.innerHTML = `<div class="sec">找不到電子發票 QR</div>
+    <div class="card" style="text-align:center;padding:20px 16px">
+      <div style="font-size:13px;color:var(--tx2);line-height:1.7;margin-bottom:14px">
+        ${esc(reasonText)}。<br>手開三聯式／二聯式／收據可以改用 AI 辨識。</div>
+      <div class="btnrow" style="margin-top:0">
+        <button class="btn ghost" id="btnRetryShot">重拍</button>
+        <button class="btn primary" id="btnAiOcr">🤖 AI 辨識</button>
+      </div>
+      <div style="font-size:11px;color:var(--tx3);margin-top:10px">AI 辨識約需 20–60 秒，結果務必人工核對</div>
+    </div>`;
+  document.getElementById('btnRetryShot').addEventListener('click', () => {
+    resetScan(); document.getElementById('fileInput').click();
+  });
+  document.getElementById('btnAiOcr').addEventListener('click', aiRecognize);
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function blobToScaledBase64(blob, maxDim){
+  const bmp = await createImageBitmap(blob);
+  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+  const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+  return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+async function aiRecognize(){
+  const route = getApiRoute();
+  if (!route) { toast('請先 Google 登入才能使用 AI 辨識'); showGoogleSignIn(); return; }
+  if (!state.photoBlob) return toast('沒有照片可辨識，請先拍照');
+  const btn = document.getElementById('btnAiOcr');
+  if (btn) { btn.disabled = true; btn.textContent = '🤖 辨識中…請稍候'; }
+  try {
+    const b64 = await blobToScaledBase64(state.photoBlob, 2000);
+    const r = await fetch(WORKER_URL + '/ocr', {
+      method: 'POST',
+      headers: { ...route.headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: b64, media_type: 'image/jpeg' }),
+    });
+    if (r.status === 401) throw new Error('登入過期，請重新登入');
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !j || j.status !== 'SUCCESS') throw new Error((j && j.reason) || ('HTTP ' + r.status));
+    const d = j.data;
+    // AI 判進出項：買方=我們 → 出項(支出)；否則視為我們開的發票 → 進項(收入)，賣方補公司統編
+    const sellerId = d.sellerId || (d.buyerId && d.buyerId !== OUR_TAX_ID ? OUR_TAX_ID : '');
+    const y = parseInt(String(d.date).slice(0, 4), 10);
+    const p = {
+      ok: true, source: 'ai',
+      invoiceNumber: d.invoiceNumber || '', date: d.date || '',
+      dateRoc: isFinite(y) ? String(y - 1911) : '—',
+      sellerId: sellerId || 'NA',
+      buyerId: d.buyerId || null,
+      buyerName: d.buyerName || '',
+      salesAmount: d.salesAmount, totalAmount: d.totalAmount, tax: d.taxAmount,
+      items: (d.items || []).map(it => ({ name: it.name, qty: it.qty, price: it.price })),
+      declaredTotal: null, encodingParam: null, encodingName: null,
+      detailConfidence: 'ai', uncertain: d.uncertain || [], invoiceType: d.invoiceType || '',
+    };
+    renderResult(p);
+    toast('🤖 AI 辨識完成，請核對欄位（可直接修改）再核准');
+  } catch (e) {
+    toast('❌ AI 辨識失敗：' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 AI 辨識'; }
+  }
 }
 
 /* ═══════════════ 貼碼測試 ═══════════════ */
@@ -647,15 +715,23 @@ function renderResult(p){
   }
   state.io = (OUR_TAX_ID && p.sellerId === OUR_TAX_ID) ? 'in' : 'out';
 
+  const isAI = p.source === 'ai';
   const confPill =
     p.detailConfidence === 'high' ? '<span class="pill ok">明細完整</span>' :
+    p.detailConfidence === 'ai' ? '<span class="pill warn">AI 辨識・請核對</span>' :
     p.detailConfidence === 'low_big5_undecoded' ? '<span class="pill warn">Big5 未解碼</span>' :
     p.detailConfidence === 'missing_right_qr' ? `<span class="pill warn">缺右段（${p.items.length}/${p.declaredTotal} 筆）</span>` :
     p.detailConfidence === 'count_mismatch' ? `<span class="pill warn">筆數不符（${p.items.length}/${p.declaredTotal}）</span>` :
     '<span class="pill gray">無標準明細</span>';
-  const srcPill = p.source === 'dual-qr'
-    ? '<span class="pill ok">雙 QR 拼接</span>'
-    : '<span class="pill warn">僅左 QR</span>';
+  const srcPill = isAI
+    ? `<span class="pill warn">🤖 AI 辨識${p.invoiceType ? '・' + esc(p.invoiceType) : ''}</span>`
+    : p.source === 'dual-qr'
+      ? '<span class="pill ok">雙 QR 拼接</span>'
+      : '<span class="pill warn">僅左 QR</span>';
+  // AI 模式：關鍵欄位做成可修改的輸入框（手寫辨識可能出錯）
+  const edit = (id, val, type) => isAI
+    ? `<input class="dcin" style="width:150px" type="${type || 'text'}" id="${id}" value="${esc(val ?? '')}">`
+    : null;
 
   const itemsHtml = p.items.length
     ? p.items.map(it => `<div class="item"><span>${esc(it.name)}</span>
@@ -666,19 +742,25 @@ function renderResult(p){
     <div class="sec">AI 提案 · 待核准</div>
     <div class="recog card">
       <div class="head"><div class="st">✓ QR 解析成功</div>
-        <span style="margin-left:auto;display:flex;gap:6px">${srcPill}<span class="pill ok">零成本解碼</span></span></div>
-      <div class="kv"><span class="k">發票號碼<span class="src">左QR</span></span>
-        <span class="v">${esc(p.invoiceNumber.slice(0, 2))}-${esc(p.invoiceNumber.slice(2))}</span></div>
-      <div class="kv"><span class="k">開立日期<span class="src">民國 ${esc(p.dateRoc.slice(0, 3))}</span></span>
-        <span class="v">${esc(p.date ?? p.dateRoc)}</span></div>
-      <div class="kv"><span class="k">賣方統編</span><span class="v">${esc(p.sellerId)}</span></div>
+        <span style="margin-left:auto;display:flex;gap:6px">${srcPill}${isAI ? '' : '<span class="pill ok">零成本解碼</span>'}</span></div>
+      <div class="kv"><span class="k">發票號碼<span class="src">${isAI ? 'AI' : '左QR'}</span></span>
+        ${edit('aiInv', p.invoiceNumber) ?? `<span class="v">${esc(p.invoiceNumber.slice(0, 2))}-${esc(p.invoiceNumber.slice(2))}</span>`}</div>
+      <div class="kv"><span class="k">開立日期<span class="src">民國 ${esc(String(p.dateRoc).slice(0, 3))}</span></span>
+        ${edit('aiDate', p.date, 'date') ?? `<span class="v">${esc(p.date ?? p.dateRoc)}</span>`}</div>
+      <div class="kv"><span class="k">賣方統編</span>
+        ${edit('aiSeller', p.sellerId === 'NA' ? '' : p.sellerId) ?? `<span class="v">${esc(p.sellerId)}</span>`}</div>
       <div class="kv"><span class="k">買方統編</span>
-        <span class="v">${p.buyerId ? esc(p.buyerId) : '<span style="color:var(--tx3)">一般消費者</span>'}</span></div>
-      <div class="kv"><span class="k">銷售額（未稅）<span class="src">hex→十進位</span></span>
-        <span class="v">${fmt$(p.salesAmount)}</span></div>
-      <div class="kv"><span class="k">稅額</span><span class="v">${fmt$(p.tax)}</span></div>
+        ${edit('aiBuyer', p.buyerId || '') ?? `<span class="v">${p.buyerId ? esc(p.buyerId) : '<span style="color:var(--tx3)">一般消費者</span>'}</span>`}</div>
+      ${isAI ? `<div class="kv"><span class="k">廠商/客戶名</span>${edit('aiVendor', p.buyerName)}</div>` : ''}
+      <div class="kv"><span class="k">稅額</span>
+        ${edit('aiTax', p.tax, 'number') ?? `<span class="v">${fmt$(p.tax)}</span>`}</div>
       <div class="kv"><span class="k">總計（含稅）<span class="src">入帳用</span></span>
-        <span class="v big">${fmt$(p.totalAmount)}</span></div>
+        ${edit('aiTotal', p.totalAmount, 'number') ?? `<span class="v big">${fmt$(p.totalAmount)}</span>`}</div>
+      ${!isAI ? `<div class="kv"><span class="k">銷售額（未稅）<span class="src">hex→十進位</span></span>
+        <span class="v">${fmt$(p.salesAmount)}</span></div>` : ''}
+      ${isAI && p.uncertain && p.uncertain.length ? `
+      <div class="alert" style="margin-top:10px"><div class="ai">⚠</div>
+        <div class="txt">AI 對這些欄位沒把握，請特別核對：<b>${esc(p.uncertain.join('、'))}</b></div></div>` : ''}
       <div class="kv" style="display:block">
         <span class="k">品項${p.encodingName ? `<span class="src">${esc(p.encodingName)}</span>` : ''}
           <span style="float:right">${confPill}</span></span>
@@ -862,6 +944,20 @@ async function approveEntry(p, btn){
   const route = getApiRoute();
   if (!route) { toast('請先 Google 登入才能寫入 Ragic'); showGoogleSignIn(); return; }
   btn.disabled = true;
+  // AI 模式：先把使用者修正過的欄位讀回來，再算冪等鍵
+  if (p.source === 'ai') {
+    const gv = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+    p.invoiceNumber = gv('aiInv') || p.invoiceNumber;
+    p.date = gv('aiDate') || p.date;
+    p.sellerId = gv('aiSeller') || (state.io === 'in' ? OUR_TAX_ID : 'NA');
+    p.buyerId = gv('aiBuyer') || null;
+    p.buyerName = gv('aiVendor') || p.buyerName;
+    p.totalAmount = num(gv('aiTotal')) || p.totalAmount;
+    p.tax = num(gv('aiTax'));
+    p.salesAmount = p.totalAmount - p.tax;
+    if (!p.invoiceNumber) { toast('請填發票號碼（防重複入帳要用）'); btn.disabled = false; return; }
+    if (!p.totalAmount) { toast('請確認總計金額'); btn.disabled = false; return; }
+  }
   const key = dedupeKey(p);
   try {
     // ⓪ 防呆：Worker 沒有 acct 路由時 ?sheet=acct 會 fallback 到報價表 sheet 17 → 絕不能寫
@@ -899,7 +995,8 @@ async function approveEntry(p, btn){
     fd.append(F.total, String(p.totalAmount));
     fd.append(F.tax, String(p.tax));
     fd.append(F.status, '已入帳');
-    fd.append(F.source, 'QR');
+    fd.append(F.source, p.source === 'ai' ? 'AI' : 'QR');
+    if (p.buyerName) fd.append(F.vendor, p.buyerName);
     // 歸類科目：進項＝營業收入；出項＝三層選單組合（同支出紀錄表體系）
     if (state.io === 'in') fd.append(F.category, '營業收入');
     else {
