@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -791,6 +791,7 @@ function addDayShort(s) {  // 短日期 26/06/05(五)，手機單行用
 }
 // 扣除當日已核准請假後的「應出勤」上下班分鐘界線（修遲到/早退誤判：請假時段不算遲到早退）
 function effShiftBounds(sh, dayLeaves) {
+  if (!sh) return { amStart: 0, pmEnd: 1440, fullDay: true };  // 未設班別(工讀常見)→視同全天、不計遲到早退；防 sh.am undefined 讓明細開不了(薛翊揚踩到)
   let amStart = toMin(sh.am[0]), pmEnd = toMin(sh.pm[1]), fullDay = false;
   (dayLeaves || []).forEach(l => {
     const s = l.s || l.start_time, e = l.e || l.end_time;       // 兼容 {s,e}(補休/dayOff) 與 {start_time,end_time}(請假)
@@ -2071,6 +2072,7 @@ function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
     if (dow === 0 || dow === 6) continue;                              // 週末非應出勤
     const dt = new Date(year, month - 1, d, inH, inM);                 // 該日上班時間起算
     if (dt > now) continue;                                            // 未來
+    if (new Date(year, month - 1, d).toDateString() === now.toDateString()) continue;  // 今天不標「缺席待補單」(可能還在上班中/當天還會打卡)，隔天起才算(Jason 要求；不影響曠職計時，那個吃 elapsed>30hr)
     if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
     const ds = `${ym}/${pad(d)}`;
     if (specialSet && specialSet.has(ds)) continue;                    // 特殊日(國定假/颱風/全特休)不計缺席
