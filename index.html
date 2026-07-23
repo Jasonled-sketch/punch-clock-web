@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3855,6 +3855,7 @@ async function doOtReview(id, decision) {
 //  ANNOUNCEMENTS
 // ═══════════════════════════════════════════════════════════════════════
 
+const WEEKLY_TITLE = '【每週公告】';   // 公告表裡「本週公告」那列的固定標題標記；每週一/四由 bot 自動推群組、不列入一般公告
 let _ANNS = [];   // 最近一次載入的公告（編輯表單直接取資料，不刮 DOM——舊版刮 .ann-meta 但卡片改版後無此元素，點編輯直接炸掉沒反應）
 async function getAllAnnouncements() {
   const all = await ragicGet(CONFIG.SHEETS.ANNOUNCE);
@@ -3909,7 +3910,7 @@ function toggleAnnContent(uid) {
 async function viewAnnounce() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const anns = await getAllAnnouncements();
+    const anns = (await getAllAnnouncements()).filter(a => a.title !== WEEKLY_TITLE);  // 本週公告走群組推,不列入
     if (!anns.length) {
       setView('<div class="view"><p style="color:#999;text-align:center;margin-top:40px">目前沒有公告</p></div>');
       return;
@@ -3921,9 +3922,18 @@ async function viewAnnounce() {
 async function viewAdminAnnounce() {
   setView('<div class="loading">載入中…</div>');
   try {
-    const anns = await getAllAnnouncements();
-    const list = anns.map(a => buildAnnCard(a, true)).join('');
+    await getAllAnnouncements();
+    const cards = _ANNS.filter(a => a.title !== WEEKLY_TITLE);            // 本週公告不當一般公告卡
+    const list = cards.map(a => buildAnnCard(a, true)).join('');
+    const weekly = _ANNS.find(a => a.title === WEEKLY_TITLE);
+    const weeklyContent = weekly ? weekly.content : '';
     setView(`<div class="view">
+      <div class="rd-sec" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;margin-bottom:16px">
+        <div style="font-weight:700;color:#1d4ed8;margin-bottom:4px">📢 本週公告（每週一、四 09:00 自動發到 LINE 群組）</div>
+        <div style="font-size:12px;color:#666;margin-bottom:8px">填寫本週要提醒同仁的事項；清空則當週不發。改完按儲存即生效。</div>
+        <textarea id="weekly-notice" rows="4" style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:8px;font-size:14px" placeholder="例：本週五全體大掃除 16:00 開始；下週一國定假日休假一天。">${escHtml(weeklyContent)}</textarea>
+        <div style="text-align:right;margin-top:8px"><button class="btn" onclick="saveWeeklyNotice()">儲存本週公告</button></div>
+      </div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
         <button class="btn" onclick="showAnnForm()">＋ 新增公告</button>
       </div>
@@ -4003,6 +4013,24 @@ async function saveAnnouncement(ragicId) {
     await ragicPost(sheet, fields);
     closeModal();
     toast('公告已儲存 ✓', 'green');
+    viewAdminAnnounce();
+  } catch (e) { toast('儲存失敗：' + e.message, 'red'); }
+}
+
+async function saveWeeklyNotice() {   // 存/更新公告表的「本週公告」標記列（bot 每週一四推群組）
+  const content = document.getElementById('weekly-notice').value.trim();
+  const F = CONFIG.FID.A;
+  const existing = _ANNS.find(a => a.title === WEEKLY_TITLE);
+  const fields = {
+    [F.title]:     WEEKLY_TITLE,
+    [F.content]:   content,
+    [F.pub_date]:  fmtDate(new Date()),
+    [F.priority]:  '一般',
+    [F.publisher]: ME.name || ME.email
+  };
+  try {
+    await ragicPost(existing ? CONFIG.SHEETS.ANNOUNCE + '/' + existing.ragicId : CONFIG.SHEETS.ANNOUNCE, fields);
+    toast(content ? '本週公告已儲存 ✓（週一、四 09:00 自動發群組）' : '已清空本週公告（當週不發）', 'green');
     viewAdminAnnounce();
   } catch (e) { toast('儲存失敗：' + e.message, 'red'); }
 }
