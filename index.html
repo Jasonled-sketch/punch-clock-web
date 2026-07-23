@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2656,7 +2656,7 @@ function showReportDetail(email) {
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
-    ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${r.work_content==='外勤'?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
+    ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段・含工作內容）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${String(r.work_content||'').indexOf('外')>=0?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
