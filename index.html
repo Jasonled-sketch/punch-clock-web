@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -493,7 +493,7 @@ async function authedFetch(url, opts = {}) {
   const build = () => ({ ...opts, headers: { ...(opts.headers || {}), ...TOKEN_HDR() } });
   let res = await fetch(url, build());
   if (res.status === 401) {
-    try { await refreshToken(); } catch (e) { logout(); throw new Error('登入已逾期，請重新登入'); }
+    try { await refreshToken(); } catch (e) { throw new Error('登入階段已過期，請點右上角 Google 一鍵續期（帳號仍記住、不需重填）'); }  // ⚠️不再 logout 清掉記住的帳號（避免一次續期失敗就整個要重登，刷新一直跳登入）
     res = await fetch(url, build());
   }
   return res;
@@ -903,9 +903,13 @@ function gsiReady() {
     theme:'outline', size:'large', width:280
   });
 
-  // ① 有存檔且 token 未過期 → 立刻進 App（免等 Google、免點擊）
+  // ① 有存檔就先進 App（免登入畫面、免點）；token 過期則背景靜默續期，API 會自動用新 token（不清帳號）
   const saved = loadAuth();
-  if (saved && tokenAlive(saved.token)) { applyIdentity(saved.token); showApp(); }
+  if (saved && saved.token) {
+    applyIdentity(saved.token);
+    showApp();
+    if (!tokenAlive(saved.token)) refreshToken().catch(() => {});   // 過期→背景續期（One Tap；多帳號時 auto_select 可能仍需點一下，但畫面已在 App 不卡登入）
+  }
 
   // ② 一律靜默續期（更新 token；若還沒進 App，這步成功就會自動登入）
   google.accounts.id.prompt();
