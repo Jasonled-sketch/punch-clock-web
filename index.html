@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2603,7 +2603,7 @@ function showReportDetail(email) {
       restHtml = `<span style="color:${unpaid ? '#e65100' : '#1565c0'}">${icon}${sp.note || sp.type}（${unpaid ? '放假·不支薪' : '放假'}）</span>`;
     }
     else if (isHol) continue;                                 // 純週末(無特殊日設定) → 不列
-    else if (dMs < todayMs) { restHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }  // 未打卡 → 日期下一行
+    else if (dMs < todayMs) { if (isCheng) continue; restHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }  // 未打卡 → 日期下一行（承攬無固定班表,不列未打卡日）
     else continue;
     dailyRows.push(`<div style="display:flex"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div></div>`);
   }
