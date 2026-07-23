@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v7.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1888,7 +1888,7 @@ async function viewOverview() {
           <div class="wk-hd-info">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
               <span class="wk-name">${w.name}</span>
-              <span style="font-size:10px;padding:1px 6px;border-radius:8px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式員工':'工讀生'}</span>
+              <span style="font-size:10px;padding:1px 6px;border-radius:8px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式員工':(w.emp_type==='承攬'?'承攬':'工讀生')}</span>
             </div>
             <div class="wk-email">${w.email}</div>
           </div>
@@ -2330,7 +2330,7 @@ async function viewReport() {
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:6px">
               <span class="rpt-name">${w.name}</span>
-              <span class="rpt-type" style="background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':'工讀'}</span>
+              <span class="rpt-type" style="background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':(w.emp_type==='承攬'?'承攬':'工讀')}</span>
               ${shiftTag}
             </div>
             <div class="rpt-email">${w.email}</div>
@@ -2460,6 +2460,7 @@ function showReportDetail(email) {
   const showPay = ROLE !== 'deptmgr';           // deptmgr:明細隱藏所有薪資元素(金額/時薪/勞健保/離職結算/pay-box)
   const { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
+  const isCheng = w.emp_type === '承攬';   // 承攬:時薪·內勤/外勤逐段自選費率
   const _apiS = _API_SALARY && _API_SALARY[String(email || '').toLowerCase()];  // 薪資改吃 bot 單一 API（viewReport 已載入 _API_SALARY；失敗回退本地算）
   const sh = CONFIG.SHIFTS[w.shift];
   const shHours = sh ? sh.hours : 8;
@@ -2651,10 +2652,11 @@ function showReportDetail(email) {
 
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
-    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : '工讀'}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${hourly}` : ''}</div>
+    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : (w.emp_type==='承攬'?'承攬':'工讀')}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${hourly}` : ''}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
+    ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${r.work_content==='外勤'?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
@@ -2913,7 +2915,7 @@ async function viewWrkrs() {
           ${makeAvatar(w.name, w.color, '', w.photo)}
           <div>
             <div style="font-weight:500">${w.name}
-              <span style="font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':'工讀'}</span>
+              <span style="font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':(w.emp_type==='承攬'?'承攬':'工讀')}</span>
               ${inactive ? '<span style="font-size:11px;color:#ea4335;margin-left:4px">停用</span>' : ''}
             </div>
             <div style="font-size:12px;color:#999">${w.email}</div>
@@ -2931,6 +2933,7 @@ function showWrkrForm(w) {
   _MD.wrkr = w;
   const isFullTime = w?.emp_type === '正式員工';
   const isMgr = w?.emp_type === '管理者';
+  const isCheng = w?.emp_type === '承攬';   // 承攬:時薪制,費率依打卡自選內勤/外勤(兩個時薪欄=內勤/外勤費率)
   const photoUrl = getPhotoUrl(w?.photo);
   openModal(`
     <div class="modal-title">${w ? '編輯員工' : '新增員工'}</div>
@@ -2948,8 +2951,9 @@ function showWrkrForm(w) {
 
     <div class="ff"><label>員工類型</label>
       <select id="wf-type" onchange="toggleEmpTypeFields(this.value)">
-        <option value="工讀生" ${(!isFullTime&&!isMgr)?'selected':''}>工讀生（時薪制）</option>
+        <option value="工讀生" ${(!isFullTime&&!isMgr&&!isCheng)?'selected':''}>工讀生（時薪制）</option>
         <option value="正式員工" ${isFullTime?'selected':''}>正式員工（月薪制）</option>
+        <option value="承攬" ${isCheng?'selected':''}>承攬（時薪·打卡自選內勤/外勤費率）</option>
         <option value="管理者" ${isMgr?'selected':''}>管理者（不打卡 / 不計薪 / 免提醒）</option>
       </select>
     </div>
@@ -2957,8 +2961,9 @@ function showWrkrForm(w) {
     <div class="ff"><label>姓名</label><input id="wf-name" value="${w?.name||''}"></div>
 
     <div id="wf-hourly-fields" style="${(isFullTime||isMgr)?'display:none':''}">
-      <div class="ff"><label>平日時薪（元）</label><input id="wf-wd" type="number" value="${w?.weekday_rate||''}"></div>
-      <div class="ff"><label>假日時薪（元）</label><input id="wf-we" type="number" value="${w?.weekend_rate||''}"></div>
+      <div class="ff"><label id="wf-wd-label">${isCheng?'內勤費率（元/時）':'平日時薪（元）'}</label><input id="wf-wd" type="number" value="${w?.weekday_rate||''}"></div>
+      <div class="ff"><label id="wf-we-label">${isCheng?'外勤費率（元/時）':'假日時薪（元）'}</label><input id="wf-we" type="number" value="${w?.weekend_rate||''}"></div>
+      <div id="wf-cheng-hint" style="font-size:12px;color:#2563eb;margin-top:-4px;${isCheng?'':'display:none'}">承攬：員工打上班卡時自選「內勤／外勤」，該段即用對應費率算薪（可多段）。</div>
     </div>
 
     <div id="wf-monthly-fields" style="${isFullTime?'':'display:none'}">
@@ -3005,8 +3010,12 @@ function previewWfPhoto(input) {
 function toggleEmpTypeFields(type) {
   const isFull = type === '正式員工';
   const isMgr = type === '管理者';
+  const isCheng = type === '承攬';
   document.getElementById('wf-hourly-fields').style.display = (isFull || isMgr) ? 'none' : '';
   document.getElementById('wf-monthly-fields').style.display = isFull ? '' : 'none';
+  document.getElementById('wf-wd-label').textContent = isCheng ? '內勤費率（元/時）' : '平日時薪（元）';
+  document.getElementById('wf-we-label').textContent = isCheng ? '外勤費率（元/時）' : '假日時薪（元）';
+  const hint = document.getElementById('wf-cheng-hint'); if (hint) hint.style.display = isCheng ? '' : 'none';
 }
 
 async function doReactivateWrkr() {
