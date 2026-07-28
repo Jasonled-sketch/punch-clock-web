@@ -415,8 +415,12 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.10';
+const APP_VERSION='1.11';
 const CHANGELOG=[
+  'v1.11　2026/07/17',
+  '· 【修正登入失敗】中文姓名帳號會出現「invalid characters」無法登入的問題（JWT 改 base64url＋UTF-8 解碼）',
+  '· 加大「App 內建瀏覽器」偵測，提醒改用 Safari',
+  '',
   'v1.10　2026/07/16',
   '· 新增一位授權帳號可登入使用',
   '',
@@ -555,9 +559,19 @@ function initGoogle(){
 function saveSession(u){ try{ localStorage.setItem('wl_session', JSON.stringify({email:u.email,name:u.name||'',picture:u.picture||''})); }catch(e){} }
 function readSession(){ try{ return JSON.parse(localStorage.getItem('wl_session')||'null'); }catch(e){ return null; } }
 function clearSession(){ try{ localStorage.removeItem('wl_session'); }catch(e){} }
+/* JWT 解碼：Google 用 base64url(-/_)，且中文名要 UTF-8 解碼。
+   ⚠ 舊版直接 atob() 會噴「The string contains invalid characters」導致中文名帳號登不進去 */
+function parseJwt(tok){
+  const b=String(tok||'').split('.')[1]||'';
+  let s=b.replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length%4) s+='=';
+  const bin=atob(s), n=bin.length, arr=new Uint8Array(n);
+  for(let i=0;i<n;i++) arr[i]=bin.charCodeAt(i);
+  return JSON.parse(new TextDecoder('utf-8').decode(arr));   // UTF-8 解碼,中文名不亂碼
+}
 function onSignIn(resp){
   try{
-    const p = JSON.parse(atob(resp.credential.split('.')[1]));
+    const p = parseJwt(resp.credential);
     const email=(p.email||'').toLowerCase();
     if(CFG.ALLOWED.length && CFG.ALLOWED.indexOf(email)<0){
       S.user={ email, name:p.name||'', picture:p.picture||'' }; clearSession(); showDeny(); return;
@@ -923,8 +937,10 @@ function boot(){
   const v='v'+APP_VERSION;
   if($('appVer')) $('appVer').textContent=v;
   if($('loginVer')) $('loginVer').textContent=v;
-  if(/Line|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent||'')){   // App 內建瀏覽器→Google 登入常白畫面
-    var h=$('loginHint'); if(h) h.innerHTML='⚠️ 你正用 App 內建瀏覽器開啟，Google 登入常會失敗（白畫面）。<br>請點右上角「⋯」選「用其他瀏覽器開啟」，改用 Chrome／Safari。';
+  var _ua=navigator.userAgent||'';   // 偵測 App 內建瀏覽器/webview(Google 登入會白畫面)
+  var _inApp = /Line|FBAN|FBAV|Instagram|MicroMessenger|; wv\)/i.test(_ua) || (/iPhone|iPad|iPod/i.test(_ua) && !/Safari/.test(_ua) && !/CriOS|FxiOS|EdgiOS/.test(_ua));
+  if(_inApp){
+    var h=$('loginHint'); if(h) h.innerHTML='⚠️ 你正用「App 內建瀏覽器」開啟，Google 在這裡<b>不給登入</b>（所以會白畫面）。<br><b>請改用 Safari 開啟本頁</b>：點畫面上的「⋯」或「分享」找「在 Safari 中打開」；找不到就回桌面打開 Safari🧭 重新進入。';
   }
   const s=readSession();
   if(s && s.email && CFG.ALLOWED.indexOf(s.email)>=0){
