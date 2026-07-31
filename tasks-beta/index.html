@@ -3,11 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#f0a500">
+<meta name="theme-color" content="#11151c">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>USLED 任務牆 · 譽昇光電</title>
+<!-- PWA：加到主畫面=獨立APP體驗(全螢幕/自己的圖示/秒開) -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="任務牆">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 /* ===================================================================
@@ -834,8 +841,19 @@ function renderBoard(){
   const q = CONFIG.QUADRANTS.find(x=>x.id===STATE.activeQuad) || CONFIG.QUADRANTS[0];
   const tasks = STATE.tasks.filter(t=>t.quadrant===STATE.activeQuad);
   const open = tasks.filter(t=>t.status!=='done');
-  const done = tasks.filter(t=>t.status==='done');
-  const ordered = [...open, ...done];
+  const done = tasks.filter(t=>t.status==='done').sort((a,b)=>new Date(b.approvedAt||b.submittedAt||b.createdAt||0)-new Date(a.approvedAt||a.submittedAt||a.createdAt||0));
+  /* 🏆 戰績庫：完成卡不再無限堆疊,收進抽屜(預設收合);資料照留(等級/鑽石靠它衍生),只是視覺收納 */
+  STATE.doneOpen = STATE.doneOpen||{};
+  const dOpen = !!STATE.doneOpen[STATE.activeQuad];
+  const glowN = done.filter(t=>t.glow).length;
+  let doneHtml='';
+  if(done.length){
+    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#1e2230);border-left:4px solid #22c55e;border-radius:12px;min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:#22c55e;font-size:15px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:17px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
+    if(dOpen){
+      doneHtml += done.slice(0,5).map(renderTaskCard).join('');
+      if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#151823);border:1px solid var(--line,#2a2f3f);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
+    }
+  }
   board.innerHTML = `
     <div class="quad-tabs">${tabs}</div>
     <div class="quad-panel" style="border-top:3px solid ${q.color}">
@@ -843,8 +861,32 @@ function renderBoard(){
         <div class="qp-title" style="color:${q.color}">${q.title}<span class="qp-sub">${q.sub}</span></div>
         ${sup?`<button class="q-add" onclick="openTaskModal(null,'${STATE.activeQuad}')">＋</button>`:''}
       </div>
-      <div class="task-list">${ordered.length? ordered.map(renderTaskCard).join('') : '<div class="empty">（這個分類目前沒有任務）</div>'}</div>
+      <div class="task-list">${open.length? open.map(renderTaskCard).join('') : (done.length?'':'<div class="empty">（這個分類目前沒有任務）</div>')}${doneHtml}</div>
     </div>`;
+}
+function toggleDoneDrawer(qid){ STATE.doneOpen=STATE.doneOpen||{}; STATE.doneOpen[qid]=!STATE.doneOpen[qid]; renderBoard(); }
+/* 全部戰績彈窗：按月分組精簡列(40+件也不會長),點行開詳情 */
+function showDoneHistory(qid){
+  const old=document.getElementById('doneHistModal'); if(old)old.remove();
+  const done=STATE.tasks.filter(t=>t.quadrant===qid&&t.status==='done').sort((a,b)=>new Date(b.approvedAt||b.submittedAt||b.createdAt||0)-new Date(a.approvedAt||a.submittedAt||a.createdAt||0));
+  const byM={};
+  done.forEach(t=>{ const d=new Date(t.submittedAt||t.approvedAt||t.createdAt||0); const k=d.getFullYear()+'年'+(d.getMonth()+1)+'月'; (byM[k]=byM[k]||[]).push(t); });
+  const pts=t=>t.earnedPoints!=null?t.earnedPoints:(t.points||0);
+  const rows=Object.keys(byM).map(m=>{
+    const list=byM[m], sum=list.reduce((s,t)=>s+pts(t),0);
+    return `<div style="font-size:13px;color:var(--muted);margin-top:18px;padding-bottom:4px;border-bottom:1px solid var(--line,#2a2f3f)">${m} ── ${list.length} 件 ・ ＋${sum} 點</div>`+
+      list.map(t=>{ const d=new Date(t.submittedAt||t.approvedAt||t.createdAt||0);
+        return `<div style="min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px dashed var(--line,#2a2f3f)33" onclick="showTaskDetail('${t.id}')">
+          <span>✅</span>${t.glow?'<span>🌃</span>':''}<span style="flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
+          <span style="font-size:12px;color:var(--muted)">${(d.getMonth()+1)}/${d.getDate()}</span><span style="font-size:13px;color:#fbbf24;font-weight:700">＋${pts(t)}</span></div>`;
+      }).join('');
+  }).join('');
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='doneHistModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="max-height:86vh;overflow:auto">
+    <div style="display:flex;align-items:center"><h3 style="margin:0">🏆 本象限戰績</h3><button class="modal-x" style="margin-left:auto" onclick="document.getElementById('doneHistModal').remove()">✕</button></div>
+    ${rows||'<div class="empty">還沒有完成紀錄</div>'}
+  </div>`;
+  mask.onclick=()=>mask.remove(); document.body.appendChild(mask);
 }
 function switchQuad(qid){ STATE.activeQuad=qid; renderBoard(); }
 
@@ -1115,7 +1157,7 @@ async function approveTask(id){ let t=STATE.tasks.find(x=>x.id===id); if(!t) ret
   // 重讀確認還在待審核(競態防護,比照 acceptTask)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
   t=STATE.tasks.find(x=>x.id===id)||t;
-  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點'); checkLevelUp(); }
+  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); checkLevelUp(); }
 async function rejectTask(id){
   let t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   // 重讀確認還在待審核(競態防護,比照 acceptTask)；要在 vPrompt 之前,避免填完理由才發現變了
@@ -3281,7 +3323,8 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.10';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.11';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
