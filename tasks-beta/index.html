@@ -537,6 +537,7 @@ img{display:block}
         <div class="avatar" id="meAvatar"></div>
         <span class="nm" id="meName"></span>
       </div>
+      <button class="btn-logout" id="pushBell" onclick="togglePush()" title="任務提醒" style="filter:grayscale(1);opacity:.45">🔔</button>
       <button class="btn-logout" onclick="logout()">登出</button>
     </div>
   </div>
@@ -588,6 +589,12 @@ const CONFIG = {
     },
     QUAD2RAGIC: { q1:'重要又緊急', q2:'重要不緊急', q3:'不重要但緊急', q4:'不重要不緊急' },
     STATUS2RAGIC: { open:'待處理', submitted:'待審核', done:'已完成' },
+  },
+
+  // ===== Web Push 系統提醒（工單 B4：專用 taskwall-push Worker）=====
+  PUSH: {
+    WORKER: 'https://taskwall-push.usled.workers.dev',
+    VAPID_PUB: 'BGdMkSz8g5h1Mb7yLDYgtOGwc4V24_7dnBiAV_QdMljYUCmd_0cLAALaTiefQxng56wSE3YFJ6MvG-9raBSM3PQ',
   },
 };
 
@@ -776,6 +783,7 @@ async function login(uid){
   renderBoard();
   initSwipe();
   checkOverdue();
+  refreshBellState();   // 🔔 非同步刷新訂閱鈴狀態（不 await，不擋登入流程）
   await loadGameState();
   checkLevelUp();
   showMonthlyReview(false);   // 每月首次登入彈上月回顧
@@ -822,6 +830,55 @@ function logout(){
   document.getElementById('appView').classList.add('hidden');
   document.getElementById('loginView').classList.remove('hidden');
   renderLogin();
+}
+
+/* ===================================================================
+   Web Push 系統提醒（工單 B4）—— 訂閱 UI + 通知 helper
+   =================================================================== */
+function pushSupported(){ return typeof Notification!=='undefined' && 'serviceWorker' in navigator && 'PushManager' in window; }
+function urlB64ToUint8Array(s){ const p='='.repeat((4-s.length%4)%4); const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); const out=new Uint8Array(b.length); for(let i=0;i<b.length;i++) out[i]=b.charCodeAt(i); return out; }
+function setBellState(on){ const b=document.getElementById('pushBell'); if(!b) return; b.style.filter=on?'none':'grayscale(1)'; b.style.opacity=on?'1':'.45'; b.title=on?'任務提醒已開啟（點擊關閉）':'開啟任務提醒'; }
+async function refreshBellState(){
+  try{
+    if(!pushSupported()){ setBellState(false); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    setBellState(!!sub);
+  }catch(e){ setBellState(false); }
+}
+async function togglePush(){
+  if(!pushSupported()){ toast('iPhone 請先「加入主畫面」後從主畫面開啟再開提醒'); return; }
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){
+      if(!await vConfirm({icon:'🔕',title:'關閉提醒',msg:'關閉後將收不到任務指派/審核等系統通知，確定關閉？',okText:'關閉提醒'})) return;
+      try{ await sub.unsubscribe(); }catch(e){}
+      try{ fetch(CONFIG.PUSH.WORKER+'/unsubscribe',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:'{}'}).catch(()=>{}); }catch(e){}
+      setBellState(false); toast('🔕 提醒已關閉');
+    }else{
+      await enablePush();
+    }
+  }catch(e){ toast('操作失敗：'+e.message); }
+}
+async function enablePush(){
+  if(!pushSupported()){ toast('iPhone 請先「加入主畫面」後從主畫面開啟再開提醒'); return; }
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ toast('沒有取得通知權限，請到瀏覽器設定開啟'); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlB64ToUint8Array(CONFIG.PUSH.VAPID_PUB) });
+    const r=await fetch(CONFIG.PUSH.WORKER+'/subscribe',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON()})});
+    if(!r.ok){ try{ await sub.unsubscribe(); }catch(e2){} setBellState(false); throw new Error('HTTP '+r.status); }   // 後端沒存到→清掉本機孤兒訂閱,鈴鐺不誤亮
+    setBellState(true); toast('🔔 提醒已開啟');
+  }catch(e){ toast('開啟提醒失敗：'+e.message); }
+}
+/* 通知 helper：fire-and-forget（絕不 await、絕不影響任務主流程；sandbox 測試模式不發） */
+function pushNotify(to, title, body){
+  if(STATE.sandbox) return;   // 🧪 測試模式：不發通知
+  try{
+    fetch(CONFIG.PUSH.WORKER+'/notify',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({to,title,body})}).catch(()=>{});
+  }catch(e){}
 }
 
 /* ===================================================================
@@ -1148,16 +1205,20 @@ async function saveTask(){
   }
   const wasEdit = !!editingId;
   closeModal(); renderBoard();
-  try{ await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務'); }
+  try{
+    await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務');
+    if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],'📌 新任務指派給你', title); }   // 🔔 B4-1 新增且指派他人
+  }
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
-async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); }
+async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
 async function approveTask(id){ let t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; }
   // 重讀確認還在待審核(競態防護,比照 acceptTask)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
   t=STATE.tasks.find(x=>x.id===id)||t;
-  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); checkLevelUp(); }
+  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); { const au=userById(t.assigneeId); if(au&&au.email) pushNotify([au.email],'✅ 任務核准 +'+t.earnedPoints+'點', t.title); }   // 🔔 B4-3
+  checkLevelUp(); }
 async function rejectTask(id){
   let t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   // 重讀確認還在待審核(競態防護,比照 acceptTask)；要在 vPrompt 之前,避免填完理由才發現變了
@@ -1168,6 +1229,7 @@ async function rejectTask(id){
   t.status='open'; t.rejectNote=reason||'（未填原因）'; t.submittedAt=null; t.earnedPoints=null; t.approvedAt=null;
   if(t.dueAt && new Date(t.dueAt).getTime() < Date.now()+24*3600000) t.dueAt=new Date(Date.now()+24*3600000).toISOString();   // 至少 24 小時重做寬限,不被舊逾期繼續打折
   renderBoard(); await dbUpsert(t); toast('已退回，給了 24 小時寬限');
+  { const au=userById(t.assigneeId); if(au&&au.email) pushNotify([au.email],'↩️ 任務被退回', t.rejectNote); }   // 🔔 B4-4
 }
 function closeModal(){ const m=document.getElementById('taskModal'); if(m)m.remove(); editingId=null; }
 
@@ -1698,7 +1760,7 @@ async function requestRedeem(rid){
   GS.redeem.push({id:'rd'+Date.now(), rid, price:it.price, st:'pending', at:new Date().toISOString()});
   GS.spent+=it.price;   // 先扣住，婉拒/取消退回
   if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：存檔失敗就重載雲端，丟棄本地未存動作
-  toast('已送出兌換申請 ✓'); refreshGameUI();
+  toast('已送出兌換申請 ✓'); pushNotify('supervisors','🎁 有兌換待核准', STATE.user.name+'申請兌換「'+it.name+'」'); refreshGameUI();   // 🔔 B4-5
 }
 async function cancelRedeem(id){
   const r=(GS.redeem||[]).find(x=>x.id===id); if(!r||r.st!=='pending') return;
@@ -1729,6 +1791,7 @@ async function decideRedeem(pi, redId, ok){
   if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
   if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
+  if((STATE.user.email||'').toLowerCase()!==p.email){ const rw=rewardDef(r.rid); pushNotify([p.email],'🎁 兌換'+(ok?'已核准':'已婉拒'), rw?rw.name:''); }   // 🔔 B4-6 跨員工才通知
   toast(ok?'已核准 ✓ 記得兌現給員工 🎁':'已婉拒，幣已退回'); refreshGameUI();
 }
 async function writeOtherGS(p){
@@ -3323,7 +3386,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.11';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.12';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
