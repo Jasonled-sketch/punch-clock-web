@@ -2698,6 +2698,7 @@ async function loadGameState(){
     if(best){ GS=Object.assign(blankGS(), best.pst); GS._ragicId=best.rec._ragicId; }
     STATE.allPlayers=Object.values(byEmail);
     const me=STATE.allPlayers.find(p=>p.email===email); if(me){ me.save=GS; if(GS._ragicId!=null) me.ragicId=GS._ragicId; }
+    if(!STATE.allPlayers.length){ STATE.gsLoadFailed=true; return; }   // 公司必有存檔,讀到全空=上游異常(如代理壞)→視同載入失敗,防誤發起步禮/建新檔(2026-08 事故防線)
     STATE.gsLoadFailed=false;   // A1：成功載入 → 清旗標
   }catch(e){ STATE.gsLoadFailed=true; /* A1：載入失敗 → 舉旗，擋掉建新檔/起步禮誤發 */ }
 }
@@ -3544,7 +3545,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.22';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.23';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
