@@ -561,7 +561,8 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
 <!-- ============ 主畫面 ============ -->
 <div id="appView" class="hidden">
   <div id="topbar">
-    <div style="display:flex;align-items:center;gap:10px">
+    <div id="tbMain" style="display:flex;width:100%;align-items:center;justify-content:space-between;gap:6px;flex-wrap:nowrap">
+    <div style="display:flex;align-items:center;gap:8px;min-width:0">
       <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
       <button class="growth-btn" onclick="showGrowth()" title="成長">📈<span class="bt-txt"> 成長</span></button>
       <button class="growth-btn" onclick="showTeam()" title="團隊">👥<span class="bt-txt"> 團隊</span></button>
@@ -574,6 +575,7 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
         <span class="nm" id="meName"></span>
       </div>
       <button id="pushBell" class="bell-off" onclick="togglePush()" title="開啟任務提醒">🔔</button>
+    </div>
     </div>
     <!-- 搜尋列(設計經理規格 v2):就地滑出,結果直接在看板即時過濾 -->
     <div id="searchBar" style="width:100%;order:99;max-height:0;overflow:hidden;transition:max-height .18s ease;display:flex;align-items:center;gap:8px">
@@ -2127,7 +2129,11 @@ function showFavor(){
     <div class="detail-label" style="margin-top:14px">✍️ 提出請求</div>
     <div class="fv-form">
       <select id="fvTo" class="fv-in">${ppl.map(u=>`<option value="${u.id}">${u.name}（${u.title}）</option>`).join('')}</select>
-      ${sup?`<select id="fvKind" class="fv-in" style="padding:8px 10px"><option value="borrow">🙏 請他幫我一個忙（花我的人情點）</option><option value="assign">🎁 派個忙請他幫（送他人情點）</option></select>`:`<input type="hidden" id="fvKind" value="borrow"><div class="fv-hint" style="font-size:12px">🙏 花你的人情點，請同事或主管幫個忙</div>`}
+      ${sup?`<input type="hidden" id="fvKind" value="borrow">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button type="button" data-fk="borrow" onclick="pickFvKind('borrow')" style="height:38px;border-radius:10px;font-size:13px;text-align:left;padding:0 12px;cursor:pointer;border:2px solid var(--sky,#0b72c4);background:var(--sky,#0b72c4);color:#fff">🙏 請他幫我一個忙（花我的人情點）</button>
+        <button type="button" data-fk="assign" onclick="pickFvKind('assign')" style="height:38px;border-radius:10px;font-size:13px;text-align:left;padding:0 12px;cursor:pointer;border:2px solid var(--border,#c2d8ea);background:var(--surface,#fff);color:var(--text,#16324a)">🎁 派個忙請他幫（送他人情點）</button>
+      </div>`:`<input type="hidden" id="fvKind" value="borrow"><div class="fv-hint" style="font-size:12px">🙏 花你的人情點，請同事或主管幫個忙</div>`}
       <input id="fvDesc" class="fv-in" placeholder="事由，例：想借公司投影機週末用">
       <input id="fvAmt" class="fv-in" type="number" min="1" value="1" placeholder="人情點">
       <button class="buy-btn" style="width:100%;padding:11px" onclick="sendFavorReq()">送出請求</button>
@@ -2138,6 +2144,16 @@ function showFavor(){
   mask.onclick=closeFavor; document.body.appendChild(mask);
 }
 function closeFavor(){ const m=document.getElementById('favorModal'); if(m) m.remove(); }
+/* 人情種類膠囊(取代原生 select:安卓系統選單字太大,Jason 要一行小字) */
+function pickFvKind(k){
+  const inp=document.getElementById('fvKind'); if(inp) inp.value=k;
+  document.querySelectorAll('[data-fk]').forEach(b=>{
+    const on=b.dataset.fk===k;
+    b.style.borderColor=on?'var(--sky,#0b72c4)':'var(--border,#c2d8ea)';
+    b.style.background=on?'var(--sky,#0b72c4)':'var(--surface,#fff)';
+    b.style.color=on?'#fff':'var(--text,#16324a)';
+  });
+}
 function refreshFavorUI(){ const m=document.getElementById('favorModal'); if(m){ closeFavor(); showFavor(); } }
 /* 感謝卡（純情感水平認可，零鑽石零點數，每週限量防互刷） */
 const KUDOS_WEEK_CAP=3;
@@ -3612,7 +3628,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.27';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.28';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
