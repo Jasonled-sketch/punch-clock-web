@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -606,6 +606,14 @@ function calcSeniority(startDateStr) {
   return y > 0 ? `${y}年${m}個月` : `${m}個月`;
 }
 
+// 平日每小時工資額（勞基法）＝ 月薪 ÷ 30 ÷ 該員每日正常工時；與 bot lib/attCalc.js 同一基準
+// ⚠️ 舊版寫死 /240（=30×8h），對 C 班（每日 7h）低估時薪（李尹蘋事假整天只扣 756、應 860）。不先 round，乘完再 round。
+function hourlyOf(w) {
+  if (!w) return 0;
+  if (w.emp_type !== '正式員工') return Number(w.weekday_rate) || 0;
+  const sh = CONFIG.SHIFTS[w.shift];
+  return (Number(w.monthly_salary) || 0) / (30 * (sh ? sh.hours : 8));
+}
 function calcAnnualLeave(startDateStr) {
   if (!startDateStr) return 0;
   const start = new Date(startDateStr.replace(/\//g, '-'));
@@ -2389,7 +2397,7 @@ async function viewReport() {
       const pendingAbsent = ab.pending.length;
       // ── 勞基法薪資計算：改吃 bot 單一 API（_apiS 有值就用，載入失敗才用本地算；數字已對照驗證一致）──
       const _apiS = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
-      const hourly = isFull ? Math.round(w.monthly_salary / 240) : w.weekday_rate;
+      const hourly = hourlyOf(w);
       const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);  // ot.hours 顯示用；金額改吃 API
       // 遲到/早退：月累計 ≤15 分免責，>15 分扣全部
       const latePen  = lateMin  > 15 ? lateMin  : 0;
@@ -2403,7 +2411,7 @@ async function viewReport() {
       const laborIns  = _apiS ? _apiS.laborIns  : (isFull ? laborInsuranceEE(w.monthly_salary) : 0);
       const healthIns = _apiS ? _apiS.healthIns : (isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0);
       // 國定假日 + 週日例假 出勤加倍：僅正職加發一日工資（時數×時薪）。工讀生已分平日/假日時薪不重複加
-      const hrly = isFull ? Math.round(w.monthly_salary / 240) : 0;
+      const hrly = isFull ? hourlyOf(w) : 0;
       const isDoublePay = ds => holidaySet.has(ds) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
       const holidayBonus = _apiS ? _apiS.holidayBonus : (isFull
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
@@ -2482,7 +2490,7 @@ function exportMonthDetail() {
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
     const sh = CONFIG.SHIFTS[w.shift];
     const isFull = w.emp_type === '正式員工';
-    const hourly = isFull ? Math.round(w.monthly_salary / 240) : Number(w.weekday_rate) || 0;
+    const hourly = hourlyOf(w);
     const dim = new Date(year, month, 0).getDate();
     for (let d = 1; d <= dim; d++) {
       const ds = `${year}/${pad(month)}/${pad(d)}`;
@@ -2512,7 +2520,7 @@ function exportMonthDetail() {
       let addPay = 0;
       if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourly, isWknd));
       const dayRawH = dayRecs.reduce((s, r) => s + (parseFloat(r.hours) || 0), 0);
-      if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * Math.round(w.monthly_salary / 240));
+      if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * hourlyOf(w));
       let dedPay = 0;
       dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
       if (isDisasterAbsent) dedPay += Math.round(w.monthly_salary / 30);  // 天災假不支薪扣一日
@@ -2567,7 +2575,7 @@ function showReportDetail(email) {
   const _apiS = _API_SALARY && _API_SALARY[String(email || '').toLowerCase()];  // 薪資改吃 bot 單一 API（viewReport 已載入 _API_SALARY；失敗回退本地算）
   const sh = CONFIG.SHIFTS[w.shift];
   const shHours = sh ? sh.hours : 8;
-  const hourly = isFull ? Math.round(w.monthly_salary / 240) : w.weekday_rate;
+  const hourly = hourlyOf(w);
   const wr = recs.filter(r => r.email === email);
 
   // 遲到 / 早退逐筆
@@ -2625,7 +2633,7 @@ function showReportDetail(email) {
   const base = _apiS ? _apiS.base : (isFull ? w.monthly_salary : totP);
   const laborIns  = _apiS ? _apiS.laborIns : (isFull ? laborInsuranceEE(w.monthly_salary) : 0);
   const healthIns = _apiS ? _apiS.healthIns : (isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0);
-  const hrly = isFull ? Math.round(w.monthly_salary / 240) : 0;
+  const hrly = isFull ? hourlyOf(w) : 0;
   const isDoublePay = ds => (holidaySet && holidaySet.has(ds)) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
   const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = _apiS ? _apiS.holidayBonus : holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
