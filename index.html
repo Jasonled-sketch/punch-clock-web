@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -584,7 +584,7 @@ function calcAnnualLeave(startDateStr) {
   if (years < 3)  return 10;
   if (years < 5)  return 14;
   if (years < 10) return 15;
-  return Math.min(15 + Math.floor(years - 10), 30);
+  return Math.min(15 + Math.floor(years - 9), 30);  // 滿10年16天起逐年+1(勞基法;深掃修正:原 -10 少一天,與 bot A_ANNUAL_YR 對齊)
 }
 // 日期→YYYYMMDD 整數（容錯 / 或 - 分隔、時間後綴）；與 LINE bot ymd 一致，純整數比對避免時區
 function ymdInt(ds) { const p = String(ds || '').replace(/\//g, '-').split('T')[0].split(' ')[0].split('-').map(Number); return p.length >= 3 ? p[0] * 10000 + p[1] * 100 + p[2] : 0; }
@@ -1974,8 +1974,8 @@ function calcLeaveDeduct(apprLeaves, hourly) {
 // 單筆請假扣薪（給明細用）
 function oneLeaveDeduct(l, hourly) {
   const h = parseFloat(l.hours) || 0;
-  if (l.leave_type === '特休') return 0;
-  if (l.leave_type === '病假') return Math.round(h * hourly * 0.5);
+  if (l.leave_type === '特休' || FULLPAY_LEAVES.includes(l.leave_type)) return 0;   // 全薪假不扣(深掃修正:原漏查→喪假/公假逐筆誤顯示全扣,員工看了恐慌)
+  if (l.leave_type === '病假' || l.leave_type === '生理假') return Math.round(h * hourly * 0.5);  // 生理假半薪(深掃修正)
   return Math.round(h * hourly);
 }
 
@@ -2248,7 +2248,7 @@ async function viewReport() {
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
     if (showPay) {   // deptmgr 隱藏:鎖薪/匯出/工資清冊/兩顆對照 按鈕
     h += `<div class="lock-bar">${isLocked
-      ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span>`
+      ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#b45309;margin-top:4px">⚠️ 以下為即時重算數字；若鎖薪後有補核准的單據，實發以「鎖定當時」快照為準，勿以此畫面重發薪。</div>`
       : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button><button class="btn btn-sm" style="background:#6b21a8;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportPayrollRegister()">📑 工資清冊</button></div>`;
     // 對照鈕已下架(2026/07/19 Jason:正式啟用,階段性任務完成)——annualParityCheck/salaryParityCheck 函式保留,需要診斷時 console 手動呼叫
     }
