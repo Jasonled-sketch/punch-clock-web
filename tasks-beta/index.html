@@ -3527,7 +3527,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.19';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.20';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3545,7 +3545,8 @@ renderLogin();
    正規繞法:改在「每次使用者觸碰畫面」時補建攔截層(有真手勢的 entry 不會被跳過);三星不回報 standalone→安卓一律啟用 */
 if(/Android/i.test(navigator.userAgent) || location.search.indexOf('bkdbg')>=0){   // bkdbg=桌面測試開關
   window._bkStat={pd:0,push:0,pop:0};
-  const _bkUpd=()=>{ const d=document.getElementById('bkDbg'); if(d) d.textContent='BK 觸'+_bkStat.pd+' 推'+_bkStat.push+' 攔'+_bkStat.pop+(history.state&&history.state.tw===1?' ●':' ○'); };
+  const _bkBr=/SamsungBrowser/i.test(navigator.userAgent)?'SI':(/Chrome/i.test(navigator.userAgent)?'CR':'?');   // SI=三星瀏覽器(返回鍵不走history,無解要改用Chrome裝) CR=Chrome
+  const _bkUpd=()=>{ const d=document.getElementById('bkDbg'); if(d) d.textContent='BK['+_bkBr+'] 觸'+_bkStat.pd+' 推'+_bkStat.push+' 攔'+_bkStat.pop+(history.state&&history.state.tw===1?' ●':' ○'); };
   if(isBeta()){ const d=document.createElement('div'); d.id='bkDbg'; d.style.cssText='position:fixed;bottom:4px;right:6px;z-index:99998;font-size:10px;background:rgba(0,0,0,.45);color:#fff;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:monospace'; document.body.appendChild(d); _bkUpd(); }
   document.addEventListener('pointerdown', ()=>{
     _bkStat.pd++;
