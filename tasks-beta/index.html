@@ -52,7 +52,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:linear-gradient(180deg,#cfe6f9 0%,#e2f0fb 45%,#eef6fd 100%) fixed;color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
 body{min-height:100vh}
-html,body{overflow-x:hidden;max-width:100vw}   /* 鎖橫向捲動:防 standalone 版面左右移 */
+html,body{overflow-x:clip;max-width:100vw}   /* 鎖橫向捲動:防版面左右移;用 clip 不用 hidden——hidden 會讓 sticky topbar 失效(Jason:頂排要固定) */
 button{font-family:inherit;cursor:pointer;border:none;font-size:15px}
 img{display:block}
 .hidden{display:none!important}
@@ -155,10 +155,10 @@ img{display:block}
 .empty{text-align:center;color:var(--muted);font-size:13px;padding:18px 0}
 
 /* ---------- 任務卡 ---------- */
-.task{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:11px;border-left:3px solid var(--border)}
+.task{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px 10px;border-left:3px solid var(--border)}   /* 上下縮(Jason:太多空間) */
 .task.done{opacity:.55}
 .task .t-title{font-weight:600;font-size:15px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
-.task.done .t-title{text-decoration:line-through}
+.task.done .t-title{}   /* 刪除線移除(Jason 定案:完成不劃線) */
 .task .t-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:7px;font-size:12px;color:var(--muted);align-items:center}
 .task .t-assignee{display:inline-flex;align-items:center;gap:5px}
 .mini-avatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#000}
@@ -960,13 +960,13 @@ function renderBoard(){
   const glowN = done.filter(t=>t.glow).length;
   let doneHtml='';
   if(done.length){
-    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:44px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:13px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:15px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
+    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:40px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:12px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:13px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
     if(dOpen){
       /* 單行精簡列:✓ 標題(刪除線) … 頭像＋詳情;主管「長按」整行=撤回(Jason 指定,不佔版面標題不截斷) */
       doneHtml += done.slice(0,5).map(t=>{ const a=userById(t.assigneeId);
         return `<div data-doneid="${t.id}" style="min-height:44px;display:flex;align-items:center;gap:8px;background:var(--card2,#eef6fd);border:1px solid var(--line,#c2d8ea);border-radius:10px;padding:0 10px;margin-top:6px;cursor:pointer;user-select:none;-webkit-user-select:none" onclick="if(!window._lpFired)showTaskDetail('${t.id}')">
           <span style="color:var(--ok,#15803d);font-weight:900">✓</span>
-          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:line-through;color:var(--muted);font-size:14px">${esc(t.title)}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:13px">${esc(t.title)}</span>
           ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
           <span style="font-size:12px;color:var(--accent);flex:0 0 auto">詳情 ▾</span>
         </div>`; }).join('');
@@ -1098,9 +1098,9 @@ function renderTaskCard(t){
   return `<div class="swipe-row">
     ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
     <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
-      <div style="display:flex;align-items:center;gap:8px;min-height:40px">
+      <div style="display:flex;align-items:center;gap:8px;min-height:34px">
         ${t.status==='done'?`<span style="color:var(--ok);font-weight:900;flex:0 0 auto">✓</span>`:dueDot(t)}
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'text-decoration:line-through;color:var(--muted);font-weight:400':''}">${esc(t.title)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'color:var(--muted);font-weight:400':''}">${esc(t.title)}</span>
         ${t.rejectNote&&t.status==='open'?`<span title="退回：${esc(t.rejectNote)}" style="flex:0 0 auto">↩️</span>`:''}
         ${t.status==='submitted'?'<span style="font-size:11px;color:var(--sky);flex:0 0 auto">📮審核中</span>':''}
         ${a?`<span class="mini-avatar" style="background:${a.color};flex:0 0 auto" title="${a.name}">${a.name.slice(-1)}</span>`:''}
@@ -1130,7 +1130,7 @@ function renderSearch(){
   const row=t=>{ const qd=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant);
     return `<div style="min-height:42px;display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--line,#c2d8ea);cursor:pointer;padding:2px 0" onclick="document.getElementById('searchModal').remove();showTaskDetail('${t.id}')">
       ${t.status==='done'?'<span style="color:var(--ok);font-weight:900">✓</span>':dueDot(t)}
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;${t.status==='done'?'text-decoration:line-through;color:var(--muted)':''}">${esc(t.title)}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;${t.status==='done'?'color:var(--muted)':''}">${esc(t.title)}</span>
       <span style="font-size:11px;color:${qd.color};flex:0 0 auto">${qd.title}</span></div>`; };
   box.innerHTML=[['open','⏳ 進行中'],['submitted','📮 待審核'],['done','🏆 已完成']]
     .filter(([k])=>grp[k].length)
@@ -1176,7 +1176,10 @@ function openTaskModal(taskId, presetQuad){
       </div>
     </div>
     <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" oninput="autoGrow(this)" style="overflow:hidden;resize:none" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
-    <div class="field"><label>指派給</label><select id="f_assignee">${empOpts}</select></div>
+    <div class="field"><label>指派給（空白＝開放接單，誰主動誰執行）</label>
+      <input type="hidden" id="f_assignee" value="${t?(t.assigneeId||''):''}">
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="assignBubbles">${[{id:'',nick:'空白',color:'#94a3b8'}].concat(CONFIG.USERS.map(u=>({id:u.id,nick:u.nick,color:u.color}))).map(b=>{const on=(t?(t.assigneeId||''):'')===b.id;return `<button type="button" data-aid="${b.id}" onclick="pickAssignee('${b.id}')" style="width:44px;height:44px;border-radius:50%;font-size:15px;font-weight:700;cursor:pointer;border:2px solid ${b.color};${on?`background:${b.color};color:#fff`:`background:var(--surface);color:${b.color}`}">${b.nick}</button>`;}).join('')}</div>
+    </div>
     <div class="field"><label>截止時間</label>
       <div class="due-quick" id="dueQuick"></div>
       <input type="datetime-local" id="f_due" value="${dueVal}">
@@ -1211,8 +1214,18 @@ function openTaskModal(taskId, presetQuad){
   renderDueQuick();
   applyCatColors();
   autoGrow(document.getElementById('f_note'));   // 既有備註直接展開(手機打字人性化)
-  if(!editingId && modalUrgent) setDueQuick('1h');
+  if(!editingId) applyDefaultDue();   // 新增:依分類自動帶預設截止(Jason 規則)
 }
+/* 指派泡泡(Jason 指定):點選寫入 hidden f_assignee,saveTask 照舊讀 */
+function pickAssignee(id){
+  const inp=document.getElementById('f_assignee'); if(inp) inp.value=id;
+  document.querySelectorAll('#assignBubbles [data-aid]').forEach(b=>{
+    const on=b.dataset.aid===id; const c=b.style.borderColor;
+    b.style.background=on?c:'var(--surface)'; b.style.color=on?'#fff':c;
+  });
+}
+/* 預設截止(Jason 規則):重要+緊急=今天下班前/只重要=下週完成/只緊急=當週完成/都沒有=不限時間 */
+function applyDefaultDue(){ const q=computeQuad(); setDueQuick(q==='q1'?'today':(q==='q2'?'nextweek':(q==='q3'?'week':'none'))); }
 /* 備註框自動延展(人性化鐵則:手機打字不捲小框) */
 function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight+2,420)+'px'; }
 function toggleCat(which){
@@ -1222,7 +1235,7 @@ function toggleCat(which){
   if(cu) cu.classList.toggle('on', modalUrgent);
   applyCatColors();
   renderDueQuick();
-  if(which==='urgent' && modalUrgent) setDueQuick('1h');
+  if(!editingId) applyDefaultDue();   // 切分類即時套預設截止(編輯既有任務不動)
 }
 /* 分類勾選變色(Jason 規格,與象限同色):都勾=兩框紅粗(q1)/只重要=橘(q2)/只緊急=綠(q3)/都不勾=灰(存為q4藍) */
 function applyCatColors(){
@@ -1344,7 +1357,9 @@ async function saveTask(){
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); closeDetail(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }   // 連底下的詳情一起關(任務已不存在)
-async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; }
+  { const st=noteSteps(t); if(st.total && st.done<st.total){ toast('還有 '+(st.total-st.done)+' 個步驟未勾選，全部完成才能提交 ✅'); showTaskDetail(id); return; } }   // 步驟全勾才能送(Jason 規則)
+  t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
 /* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
 async function reopenTask(id){
   if(!isAdmin()){ toast('只有經理能撤回已完成的任務'); return; }
@@ -1438,7 +1453,7 @@ function showTaskDetail(id){
         ${t.points?` ｜ <b style="color:${ep<t.points&&t.status!=='done'?'var(--q1)':'var(--accent)'}">＋${ptsTxt} 點</b>${ep<t.points&&t.status!=='done'?`<span style="text-decoration:line-through;opacity:.5;margin-left:4px">${t.points}</span>`:''}`:''}
       </div>
     </div>
-    ${t.note?`<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項</div><div class="t-note" style="border-left-color:var(--accent);font-size:14px;color:var(--text)">${esc(t.note)}</div></div>`:''}
+    ${t.note?(()=>{const st=noteSteps(t);return `<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項${st.total?`　<b style="color:${st.done>=st.total?'var(--ok)':'var(--accent)'}">${st.done}/${st.total}</b>`:''}${t.status==='open'&&t.assigneeId===STATE.user.id?'<span style="font-size:11px;color:var(--muted)">（點一項勾一項，全勾才能提交）</span>':''}</div><div>${noteChecklistHtml(t)}</div></div>`;})():''}
     ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
     ${sup?`<div class="detail-section"><div class="detail-label">📂 移到其他分類</div><div class="move-quad-row">${CONFIG.QUADRANTS.map(qq=>`<button class="move-quad-btn" style="border-color:${qq.color};${qq.id===t.quadrant?'background:'+qq.color+';color:#fff':'color:'+qq.color}" onclick="moveTaskQuad('${t.id}','${qq.id}')">${qq.title}</button>`).join('')}</div></div>`:''}
     ${actions?`<div class="modal-actions">${actions}</div>`:''}
@@ -1447,6 +1462,24 @@ function showTaskDetail(id){
   document.body.appendChild(mask);
 }
 function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
+/* 步驟 checklist(Jason:接單者逐項勾,全勾才能送完成)。勾選狀態=note 行首「✓ 」前綴,寫回 Ragic 主管也看得到進度 */
+function noteSteps(t){ const lines=(t.note||'').split('\n').filter(l=>l.trim()); return {total:lines.length, done:lines.filter(l=>/^\s*✓/.test(l)).length, lines}; }
+function noteChecklistHtml(t){
+  const {lines}=noteSteps(t);
+  const can = t.status==='open' && t.assigneeId===STATE.user.id;
+  return lines.map((l,i)=>{ const d=/^\s*✓/.test(l); const txt=l.replace(/^\s*✓\s*/,'');
+    return `<div style="display:flex;align-items:flex-start;gap:9px;min-height:38px;padding:5px 0;border-bottom:1px dashed var(--border);${can?'cursor:pointer':''}" ${can?`onclick="toggleStep('${t.id}',${i})"`:''}>
+      <span style="width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;${d?'background:var(--ok);color:#fff;border:2px solid var(--ok)':'border:2px solid var(--border);color:transparent'}">✓</span>
+      <span style="flex:1;font-size:14px;line-height:1.5;${d?'color:var(--muted)':''}">${esc(txt)}</span></div>`; }).join('');
+}
+async function toggleStep(id,idx){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'||t.assigneeId!==STATE.user.id) return;
+  const lines=(t.note||'').split('\n'); let k=-1;
+  for(let i=0;i<lines.length;i++){ if(lines[i].trim()){ k++; if(k===idx){ lines[i]=/^\s*✓/.test(lines[i])? lines[i].replace(/^(\s*)✓\s*/,'$1') : '✓ '+lines[i]; break; } } }
+  t.note=lines.join('\n');
+  closeDetail(); showTaskDetail(id);
+  try{ await dbUpsert(t); }catch(e){ toast('雲端寫入失敗：'+e.message); }
+}
 async function moveTaskQuad(id, qid){
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   closeDetail();
@@ -3550,7 +3583,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.24';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.25';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
