@@ -239,7 +239,7 @@ img{display:block}
 /* 左滑快捷 */
 .swipe-row{position:relative;overflow:hidden;border-radius:10px}
 .swipe-actions{position:absolute;top:0;right:0;height:100%;display:flex;z-index:0}
-.swipe-btn{border:none;color:#fff;font-weight:700;font-size:14px;width:75px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.swipe-btn{border:none;color:#fff;font-weight:700;font-size:13px;width:56px;display:flex;align-items:center;justify-content:center;cursor:pointer}   /* 75→56:左滑幅度縮30%(Jason) */
 .swipe-btn.accept{background:#3b82f6}
 .swipe-btn.submit{background:#22c55e}
 .swipe-btn.edit{background:#6b7280}
@@ -960,11 +960,11 @@ function renderBoard(){
   const glowN = done.filter(t=>t.glow).length;
   let doneHtml='';
   if(done.length){
-    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:40px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:12px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:13px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
+    doneHtml = `<div class="done-drawer" style="margin-top:12px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:10px;min-height:30px;display:flex;align-items:center;padding:2px 10px;cursor:pointer;font-weight:700;color:var(--ok);font-size:12px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:13px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
     if(dOpen){
       /* 單行精簡列:✓ 標題(刪除線) … 頭像＋詳情;主管「長按」整行=撤回(Jason 指定,不佔版面標題不截斷) */
       doneHtml += done.slice(0,5).map(t=>{ const a=userById(t.assigneeId);
-        return `<div data-doneid="${t.id}" style="min-height:44px;display:flex;align-items:center;gap:8px;background:var(--card2,#eef6fd);border:1px solid var(--line,#c2d8ea);border-radius:10px;padding:0 10px;margin-top:6px;cursor:pointer;user-select:none;-webkit-user-select:none" onclick="if(!window._lpFired)showTaskDetail('${t.id}')">
+        return `<div data-doneid="${t.id}" style="min-height:34px;display:flex;align-items:center;gap:8px;background:var(--card2,#eef6fd);border:1px solid var(--line,#c2d8ea);border-radius:9px;padding:0 10px;margin-top:5px;cursor:pointer;user-select:none;-webkit-user-select:none" onclick="if(!window._lpFired)showTaskDetail('${t.id}')">
           <span style="color:var(--ok,#15803d);font-weight:900">✓</span>
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:13px">${esc(t.title)}</span>
           ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
@@ -1030,8 +1030,9 @@ function swipeStart(e){
   if(e.target.closest('.swipe-actions')) return;
   if(!task.parentElement.querySelector('.swipe-actions')) return; // 無快捷的卡片不滑
   const p=_pt(e);
-  const startTx = task.classList.contains('swiped') ? -150 : 0;
-  swipeCtx={ task, startX:p.clientX, startY:p.clientY, startTx, dx:startTx, moved:false };
+  const swd = parseInt(task.dataset.swd)||112;   // 依按鈕數的實際寬度滑(1顆=56,2顆=112)
+  const startTx = task.classList.contains('swiped') ? -swd : 0;
+  swipeCtx={ task, swd, startX:p.clientX, startY:p.clientY, startTx, dx:startTx, moved:false };
   document.querySelectorAll('.task.swiped').forEach(t=>{ if(t!==task){ t.style.transform=''; t.classList.remove('swiped'); } });
 }
 function swipeMove(e){
@@ -1040,7 +1041,7 @@ function swipeMove(e){
   if(!swipeCtx.moved && Math.abs(dx)>Math.abs(dy) && Math.abs(dx)>8) swipeCtx.moved=true;
   if(swipeCtx.moved){
     if(e.cancelable) e.preventDefault();
-    swipeCtx.dx = Math.max(-150, Math.min(0, swipeCtx.startTx+dx));
+    swipeCtx.dx = Math.max(-swipeCtx.swd, Math.min(0, swipeCtx.startTx+dx));
     swipeCtx.task.style.transform='translateX('+swipeCtx.dx+'px)';
   }
 }
@@ -1048,7 +1049,7 @@ function swipeEnd(){
   if(!swipeCtx) return;
   if(swipeCtx.moved){
     lastSwipeEnd=Date.now();
-    if(swipeCtx.dx < -60){ swipeCtx.task.style.transform='translateX(-150px)'; swipeCtx.task.classList.add('swiped'); }
+    if(swipeCtx.dx < -swipeCtx.swd*0.4){ swipeCtx.task.style.transform='translateX(-'+swipeCtx.swd+'px)'; swipeCtx.task.classList.add('swiped'); }
     else { swipeCtx.task.style.transform=''; swipeCtx.task.classList.remove('swiped'); }
   }
   swipeCtx=null;
@@ -1095,14 +1096,16 @@ function renderTaskCard(t){
     }
   }
   /* 單行卡(Jason 人性化定案):時間圓點+標題+審核icon+頭像;不放狀態徽章/倒數字/滑動提示(熟了就會長按滑動);細節進詳情 */
+  const swN=(swipe.match(/swipe-btn/g)||[]).length;   // 按鈕數→滑動距離剛好等寬,不再出現空白欄
   return `<div class="swipe-row">
     ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
-    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" data-swd="${swN*56}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
       <div style="display:flex;align-items:center;gap:8px;min-height:34px">
         ${t.status==='done'?`<span style="color:var(--ok);font-weight:900;flex:0 0 auto">✓</span>`:dueDot(t)}
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'color:var(--muted);font-weight:400':''}">${esc(t.title)}</span>
         ${t.rejectNote&&t.status==='open'?`<span title="退回：${esc(t.rejectNote)}" style="flex:0 0 auto">↩️</span>`:''}
         ${t.status==='submitted'?'<span style="font-size:11px;color:var(--sky);flex:0 0 auto">📮審核中</span>':''}
+        ${!a&&t.status==='open'?`<button style="flex:0 0 auto;background:var(--accent-bg,#f0a500);color:var(--accent-ink,#241603);border:none;border-radius:14px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer" onclick="event.stopPropagation();acceptTask('${t.id}')">🙋 接單</button>`:''}
         ${a?`<span class="mini-avatar" style="background:${a.color};flex:0 0 auto" title="${a.name}">${a.name.slice(-1)}</span>`:''}
       </div>
     </div>
@@ -1428,6 +1431,7 @@ function showTaskDetail(id){
   const media=(t.images||[]);
   const stMap={open:'待處理',submitted:'待主管審核',done:'已完成'};
   let actions='';
+  if(t.status==='open'&&!mine) actions+=`<button class="btn-primary" onclick="acceptTask('${t.id}');closeDetail()">🙋 我來接單</button>`;
   if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
   if(t.status==='submitted'&&mine) actions+=`<button class="btn-soft" onclick="unsubmitTask('${t.id}');closeDetail()">↩️ 撤回重做</button>`;
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
@@ -1455,7 +1459,7 @@ function showTaskDetail(id){
     </div>
     ${t.note?(()=>{const st=noteSteps(t);return `<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項${st.total?`　<b style="color:${st.done>=st.total?'var(--ok)':'var(--accent)'}">${st.done}/${st.total}</b>`:''}${t.status==='open'&&t.assigneeId===STATE.user.id?'<span style="font-size:11px;color:var(--muted)">（點一項勾一項，全勾才能提交）</span>':''}</div><div>${noteChecklistHtml(t)}</div></div>`;})():''}
     ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
-    ${sup?`<div class="detail-section"><div class="detail-label">📂 移到其他分類</div><div class="move-quad-row">${CONFIG.QUADRANTS.map(qq=>`<button class="move-quad-btn" style="border-color:${qq.color};${qq.id===t.quadrant?'background:'+qq.color+';color:#fff':'color:'+qq.color}" onclick="moveTaskQuad('${t.id}','${qq.id}')">${qq.title}</button>`).join('')}</div></div>`:''}
+    ${sup?`<div class="detail-section"><div class="detail-label" style="cursor:pointer;user-select:none" onclick="const b=document.getElementById('mvQuadBox');const o=b.style.display==='none';b.style.display=o?'block':'none';this.querySelector('span').textContent=o?'▾':'▸'">📂 移到其他分類 <span>▸</span></div><div id="mvQuadBox" style="display:none"><div class="move-quad-row">${CONFIG.QUADRANTS.map(qq=>`<button class="move-quad-btn" style="border-color:${qq.color};${qq.id===t.quadrant?'background:'+qq.color+';color:#fff':'color:'+qq.color}" onclick="moveTaskQuad('${t.id}','${qq.id}')">${qq.title}</button>`).join('')}</div></div></div>`:''}
     ${actions?`<div class="modal-actions">${actions}</div>`:''}
   </div>`;
   mask.onclick=closeDetail;
@@ -2098,7 +2102,7 @@ function showFavor(){
     <div class="detail-label" style="margin-top:14px">✍️ 提出請求</div>
     <div class="fv-form">
       <select id="fvTo" class="fv-in">${ppl.map(u=>`<option value="${u.id}">${u.name}（${u.title}）</option>`).join('')}</select>
-      ${sup?`<select id="fvKind" class="fv-in"><option value="borrow">我想向他借用／求助（付出我的人情）</option><option value="assign">我請他幫忙、給他人情（指派）</option></select>`:`<input type="hidden" id="fvKind" value="borrow"><div class="fv-hint">用你累積的人情點，向同事或主管提出借用／求助</div>`}
+      ${sup?`<select id="fvKind" class="fv-in" style="padding:8px 10px"><option value="borrow">🙏 請他幫我一個忙（花我的人情點）</option><option value="assign">🎁 派個忙請他幫（送他人情點）</option></select>`:`<input type="hidden" id="fvKind" value="borrow"><div class="fv-hint" style="font-size:12px">🙏 花你的人情點，請同事或主管幫個忙</div>`}
       <input id="fvDesc" class="fv-in" placeholder="事由，例：想借公司投影機週末用">
       <input id="fvAmt" class="fv-in" type="number" min="1" value="1" placeholder="人情點">
       <button class="buy-btn" style="width:100%;padding:11px" onclick="sendFavorReq()">送出請求</button>
@@ -3583,7 +3587,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.25';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.26';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
