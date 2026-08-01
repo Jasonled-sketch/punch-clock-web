@@ -683,6 +683,9 @@ function emailToUserId(email){ const u=CONFIG.USERS.find(x=>x.email===email); re
 function parseImages(s){ if(!s) return []; return String(s).split('\n').filter(x=>x.trim()).map(u=>({type:/\.(mp4|mov|webm)/i.test(u)?'video':'image', src:u.trim()})); }
 
 async function ragicFetch(suffix, opts){
+  const s=wsess();   // 有 7 天通行證→走 taskwall-push 代理(免 Google token);401(過期/被撤)清掉 fallback 舊路
+  if(s){ try{ const r=await fetch(CONFIG.PUSH.WORKER+'/ragic'+CONFIG.RAGIC.PATH+suffix, Object.assign({}, opts, { headers: Object.assign({'X-Session-Token':s.token},(opts&&opts.headers)||{}) }));
+    if(r.status!==401) return r; localStorage.removeItem('usled_wsess'); }catch(e){} }
   const url = CONFIG.RAGIC.WORKER + CONFIG.RAGIC.PATH + suffix;
   const headers = Object.assign({ 'X-Google-Token': STATE.googleToken||'' }, (opts&&opts.headers)||{});
   return await fetch(url, Object.assign({}, opts, { headers }));
@@ -769,6 +772,15 @@ function renderLogin(){
 }
 /* 記住登入：本地存使用者身份 + 時間戳，30 天內免重登（背景靜默換新 Google token） */
 const SESSION_MAX_DAYS = 30;
+/* 7 天通行證(自家 session):Google 登入一次→taskwall-push /session 換 7 天 token→期間開 APP 完全不彈 Google 條 */
+function wsess(){ try{ const s=JSON.parse(localStorage.getItem('usled_wsess')||'null'); if(s&&s.token&&s.exp-Date.now()>60000) return s; }catch(e){} return null; }
+async function ensureSession(){
+  if(CONFIG.MODE!=='CLOUD') return;
+  const s=wsess(); if(s && s.exp-Date.now()>86400000) return;   // 剩超過 1 天不用換
+  if(!STATE.googleToken) return;                                 // 沒 Google token 換不了(到期那次會彈一次條)
+  try{ const r=await fetch(CONFIG.PUSH.WORKER+'/session',{method:'POST',headers:{'X-Google-Token':STATE.googleToken}});
+    if(r.ok){ const j=await r.json(); if(j.token) localStorage.setItem('usled_wsess', JSON.stringify({token:j.token, exp:j.exp})); } }catch(e){}
+}
 function saveSession(u){ if(CONFIG.MODE!=='CLOUD'||!u) return; try{ localStorage.setItem('usled_session', JSON.stringify({id:u.id, email:u.email, name:u.name, at:Date.now()})); }catch(e){} }
 function cachedSession(){ if(CONFIG.MODE!=='CLOUD') return null; try{ const s=JSON.parse(localStorage.getItem('usled_session')||'null'); if(s&&s.id&&userById(s.id)&&(Date.now()-(s.at||0)<SESSION_MAX_DAYS*86400000)) return s; }catch(e){} return null; }
 function clearSession(){ try{ localStorage.removeItem('usled_session'); }catch(e){} }
@@ -790,7 +802,7 @@ function renderGoogleButton(){
   google.accounts.id.initialize(Object.assign({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false, use_fedcm_for_prompt:true, itp_support:true }, (_sess&&_sess.email)?{login_hint:_sess.email}:{}));
   const el = document.getElementById('gbtn');
   if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
-  if(!STATE.googleToken) google.accounts.id.prompt();   // token 快取還有效(50分內秒進)就不彈 Google 條——彈條只在約每小時第一次開啟(Jason:不要每次詢問)
+  if(!STATE.googleToken && !wsess()) google.accounts.id.prompt();   // 通行證(7天)或 Google token 有效就不彈條——彈條=約 7 天一次(Jason:不要每次詢問)
 }
 function handleGoogleSignIn(resp){
   try{
@@ -813,6 +825,7 @@ async function login(uid){
   const a = document.getElementById('meAvatar');
   a.textContent = STATE.user.name.slice(-1); a.style.background = STATE.user.color;
   document.getElementById('meName').textContent = STATE.user.name;
+  ensureSession();   // 背景換/續 7 天通行證(有 Google token 時);不阻塞,本次讀寫雙軌自動選路
   try{ STATE.tasks = await dbLoadTasks(); }
   catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
   renderBoard();
@@ -860,7 +873,7 @@ function checkApprovals(){
 }
 function logout(){
   STATE.user = null; STATE.googleToken=null;
-  try{ localStorage.removeItem('usled_gtoken'); }catch(e){}   // 清 token 快取
+  try{ localStorage.removeItem('usled_gtoken'); localStorage.removeItem('usled_wsess'); }catch(e){}   // 清 token/通行證快取
   clearSession();                                        // 清掉記住的登入
   try{ google.accounts.id.disableAutoSelect(); }catch(e){}   // 下次需重新選帳號
   document.getElementById('appView').classList.add('hidden');
@@ -890,7 +903,7 @@ async function togglePush(){
     if(sub){
       if(!await vConfirm({icon:'🔕',title:'關閉提醒',msg:'關閉後將收不到任務指派/審核等系統通知，確定關閉？',okText:'關閉提醒'})) return;
       try{ await sub.unsubscribe(); }catch(e){}
-      try{ fetch(CONFIG.PUSH.WORKER+'/unsubscribe',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:'{}'}).catch(()=>{}); }catch(e){}
+      try{ fetch(CONFIG.PUSH.WORKER+'/unsubscribe',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:'{}'}).catch(()=>{}); }catch(e){}
       setBellState(false); toast('🔕 提醒已關閉');
     }else{
       await enablePush();
@@ -904,7 +917,7 @@ async function enablePush(){
     if(perm!=='granted'){ toast('沒有取得通知權限，請到瀏覽器設定開啟'); return; }
     const reg=await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:urlB64ToUint8Array(CONFIG.PUSH.VAPID_PUB) });
-    const r=await fetch(CONFIG.PUSH.WORKER+'/subscribe',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON()})});
+    const r=await fetch(CONFIG.PUSH.WORKER+'/subscribe',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON()})});
     if(!r.ok){ try{ await sub.unsubscribe(); }catch(e2){} setBellState(false); throw new Error('HTTP '+r.status); }   // 後端沒存到→清掉本機孤兒訂閱,鈴鐺不誤亮
     setBellState(true); toast('🔔 提醒已開啟');
     pushNotify('self','🔔 提醒測試','通知功能正常！之後任務指派/審核會像這樣通知你');   // 端到端自我測試:幾秒內手機應跳這則
@@ -914,7 +927,7 @@ async function enablePush(){
 function pushNotify(to, title, body){
   if(STATE.sandbox) return;   // 🧪 測試模式：不發通知
   try{
-    fetch(CONFIG.PUSH.WORKER+'/notify',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({to,title,body})}).catch(()=>{});
+    fetch(CONFIG.PUSH.WORKER+'/notify',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({to,title,body})}).catch(()=>{});
   }catch(e){}
 }
 
@@ -1318,13 +1331,14 @@ async function saveTask(){
   }
   const wasEdit = !!editingId;
   closeModal(); renderBoard();
+  if(wasEdit && document.getElementById('detailModal')){ closeDetail(); showTaskDetail(task.id); }   // 編輯疊在詳情上:存檔後刷新底下的詳情(不然顯示舊資料)
   try{
     await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務');
     if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],(quad==='q1'?'🔴 緊急任務指派給你':'📌 新任務指派給你'), title); }   // 🔔 B4-1 新增且指派他人;重要又緊急標紅
   }
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
-async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
+async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); closeDetail(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }   // 連底下的詳情一起關(任務已不存在)
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
 /* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
 async function reopenTask(id){
@@ -1399,7 +1413,7 @@ function showTaskDetail(id){
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
   if(t.status==='done'&&sup) actions+=`<button class="btn-soft" onclick="duplicateTask('${t.id}')">📋 複製為新任務</button>`;
   if(t.status==='done'&&isAdmin()) actions+=`<button class="btn-soft" onclick="reopenTask('${t.id}');closeDetail()">↩️ 撤回完成（重啟）</button>`;
-  if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
+  if(sup) actions+=`<button class="btn-soft" onclick="openTaskModal('${t.id}')">編輯</button>`;   // 疊在詳情上,返回=編輯→詳情→列表(恢復上一動)
   const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='detailModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
@@ -2657,6 +2671,9 @@ async function resetGame(){
 }
 function lvOK(min){ return isBeta() || userGameLevel(STATE.user.id) >= (min||0); }   // beta 全解鎖
 async function ragicFetchGS(suffix, opts){
+  const s=wsess();   // 同 ragicFetch:通行證優先,401 fallback
+  if(s){ try{ const r=await fetch(CONFIG.PUSH.WORKER+'/ragic'+GAME_STORE.PATH+suffix, Object.assign({},opts,{headers:Object.assign({'X-Session-Token':s.token},(opts&&opts.headers)||{})}));
+    if(r.status!==401) return r; localStorage.removeItem('usled_wsess'); }catch(e){} }
   const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
   const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
   return await fetch(url, Object.assign({},opts,{headers}));
@@ -3527,7 +3544,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.21';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.22';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3535,7 +3552,8 @@ document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機
 { const _s=cachedSession();
   if(_s){
     let gt=null; try{ gt=JSON.parse(localStorage.getItem('usled_gtoken')||'null'); }catch(e){}
-    if(gt && gt.cred && (gt.exp-Date.now())>5*60000){ STATE.googleToken=gt.cred; login(_s.id); }   // token 還有效(>5分)→秒進,完全不等 Google
+    if(wsess()){ login(_s.id); }   // 7 天通行證有效→秒進,Google 條 7 天只彈一次
+    else if(gt && gt.cred && (gt.exp-Date.now())>5*60000){ STATE.googleToken=gt.cred; login(_s.id); }   // Google token 還有效(50分內)→秒進
     else { enterAppShell(userById(_s.id)); STATE._reloginTimer=setTimeout(()=>{ if(!STATE.googleToken) forceRelogin(); },8000); }   // 等 GIS 靜默;8秒沒完成自動回登入頁(解卡死)
   }
 }
