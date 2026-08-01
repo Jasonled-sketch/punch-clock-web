@@ -790,7 +790,7 @@ function renderGoogleButton(){
   google.accounts.id.initialize(Object.assign({ client_id: CONFIG.RAGIC.GOOGLE_CLIENT_ID, callback: handleGoogleSignIn, auto_select:true, cancel_on_tap_outside:false, use_fedcm_for_prompt:true, itp_support:true }, (_sess&&_sess.email)?{login_hint:_sess.email}:{}));
   const el = document.getElementById('gbtn');
   if(el) google.accounts.id.renderButton(el, { theme:'filled_blue', size:'large', text:'signin_with', shape:'pill', width:260 });
-  google.accounts.id.prompt();   // 自動以上次帳號登入（記住，不用每次點）
+  if(!STATE.googleToken) google.accounts.id.prompt();   // token 快取還有效(50分內秒進)就不彈 Google 條——彈條只在約每小時第一次開啟(Jason:不要每次詢問)
 }
 function handleGoogleSignIn(resp){
   try{
@@ -990,7 +990,7 @@ function showDoneHistory(qid){
   </div>`;
   mask.onclick=()=>mask.remove(); document.body.appendChild(mask);
 }
-function switchQuad(qid){ STATE.activeQuad=qid; renderBoard(); }
+function switchQuad(qid){ if(qid!==STATE.activeQuad){ STATE.navStack=STATE.navStack||[]; STATE.navStack.push(STATE.activeQuad); if(STATE.navStack.length>20) STATE.navStack.shift(); } STATE.activeQuad=qid; renderBoard(); }   // 象限切換入導航棧(返回鍵=恢復上一動)
 
 /* ===================================================================
    左滑快捷（淘寶式）：左滑露出 接單/提交；點卡片進詳情
@@ -3527,7 +3527,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.20';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.21';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3558,6 +3558,7 @@ if(/Android/i.test(navigator.userAgent) || location.search.indexOf('bkdbg')>=0){
     const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
     const top=masks[masks.length-1];
     if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
+    else if(STATE.navStack && STATE.navStack.length){ STATE.activeQuad=STATE.navStack.pop(); renderBoard(); }   // 無彈窗→退回上一個象限分頁(恢復上一動)
     _bkUpd();
     // 不在此補推(會被防護標記跳過而失效);下一次觸碰畫面時自動補建 → 「操作→返回」永遠被攔;連按兩下返回=退出(安卓慣例)
   });
