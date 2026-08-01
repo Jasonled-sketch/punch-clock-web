@@ -717,7 +717,7 @@ async function ragicSaveTask(t){
   fd.append(F.creator, (userById(t.createdById)||{}).email || '');
   if(t.dueAt) fd.append(F.due, isoToRagic(t.dueAt));
   fd.append(F.points, String(t.points||0));
-  if(t.earnedPoints!=null) fd.append(F.earnedPoints, String(t.earnedPoints));
+  fd.append(F.earnedPoints, t.earnedPoints!=null?String(t.earnedPoints):'');   // 一律寫入,null 送空字串清欄位(撤回完成時點數才不會殘留復活)
   fd.append(F.contribution, String(t.contribution||0));
   fd.append(F.favor, String(t.favor||0));
   if(t.glow) fd.append(F.glow, t.glow);   // 城市光彩類型：小屏/大屏
@@ -949,6 +949,7 @@ function renderBoard(){
           <span style="color:var(--ok,#15803d);font-weight:900">✓</span>
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:line-through;color:var(--muted);font-size:14px">${esc(t.title)}</span>
           ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
+          ${sup?`<button style="flex:0 0 auto;background:none;border:1px solid var(--line,#c2d8ea);border-radius:8px;padding:3px 8px;font-size:12px;color:var(--muted);cursor:pointer" onclick="event.stopPropagation();reopenTask('${t.id}')">↩️ 撤回</button>`:''}
           <span style="font-size:12px;color:var(--accent);flex:0 0 auto">詳情 ▾</span>
         </div>`; }).join('');
       if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#ffffff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
@@ -1257,6 +1258,20 @@ async function saveTask(){
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+/* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
+async function reopenTask(id){
+  if(!isSupervisor(STATE.user)){ toast('只有主管能撤回已完成的任務'); return; }
+  const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='done'){ toast('這張單狀態已變更'); return; }
+  if(!await vConfirm({icon:'↩️',title:'撤回完成',msg:'把「'+t.title+'」撤回為進行中？\n已發的點數/鑽石會自動收回。',okText:'撤回',danger:true})) return;
+  try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft||ft.status!=='done'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
+  const t2=STATE.tasks.find(x=>x.id===id)||t;
+  t2.status='open'; t2.earnedPoints=null; t2.approvedAt=null; t2.approvedById=null; t2.completedById=null; t2.submittedAt=null;
+  if(t2.dueAt && new Date(t2.dueAt).getTime() < Date.now()+24*3600000) t2.dueAt=new Date(Date.now()+24*3600000).toISOString();   // 至少24hr寬限,不被舊逾期打折
+  renderBoard();
+  try{ await dbUpsert(t2); }catch(e){ toast('雲端寫入失敗：'+e.message); return; }
+  toast('已撤回為進行中 ↩️'); if(typeof refreshGameUI==='function') refreshGameUI();
+  { const au=userById(t2.assigneeId); if(au&&au.email) pushNotify([au.email],'↩️ 任務被重新開啟', t2.title); }
+}
 /* 撤回提交(誤按「我完成了」的後悔藥):待審核期間本人可撤回→回到進行中;已核准(done)只能請主管退回 */
 async function unsubmitTask(id){
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='submitted'){ toast('這張單狀態已變更'); return; }
@@ -1314,6 +1329,7 @@ function showTaskDetail(id){
   if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
   if(t.status==='submitted'&&mine) actions+=`<button class="btn-soft" onclick="unsubmitTask('${t.id}');closeDetail()">↩️ 撤回重做</button>`;
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
+  if(t.status==='done'&&sup) actions+=`<button class="btn-soft" onclick="reopenTask('${t.id}');closeDetail()">↩️ 撤回完成（重啟）</button>`;
   if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
   const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='detailModal';
@@ -3442,7 +3458,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.16';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.17';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3455,9 +3471,10 @@ document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機
   }
 }
 renderLogin();
-/* 安卓返回鍵(只在主畫面 APP 模式)：返回=關最上層彈窗,關到底停在首頁、永不跳出(Jason 定案);要離開用 Home 鍵
-   ⚠️ Chrome「歷史操縱防護」會跳過無手勢的 pushState → 攔截層必須在使用者第一次觸碰後才建立(三星實測跳出的根因) */
-if(window.matchMedia && matchMedia('(display-mode: standalone)').matches){
+/* 安卓返回鍵：返回=關最上層彈窗,關到底停在首頁、永不跳出(Jason 定案);要離開用 Home 鍵
+   ⚠️ 三星「加到主畫面」不一定回報 standalone(Samsung Internet/捷徑模式)→改成安卓一律啟用,不看 display-mode
+   ⚠️ Chrome 歷史操縱防護會跳過無手勢的 pushState → 攔截層在使用者第一次觸碰後建立 */
+if(/Android/i.test(navigator.userAgent)){
   let _bkArmed=false;
   document.addEventListener('pointerdown', ()=>{ if(!_bkArmed){ _bkArmed=true; try{ history.pushState({tw:1},''); }catch(e){} } }, {passive:true});
   window.addEventListener('popstate',()=>{
