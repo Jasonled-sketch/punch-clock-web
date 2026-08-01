@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#11151c">
+<meta name="theme-color" content="#dcecf9">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -23,12 +23,34 @@
    切換：把 CONFIG.MODE 改成 'CLOUD' 即可（需先填好 Ragic 欄位 ID）
    =================================================================== */
 :root{
-  --bg:#0a0c12; --surface:#151823; --surface2:#1e2230; --border:#2a2f3f;
-  --text:#e8eaf0; --muted:#8b90a3; --accent:#f0a500;
-  --q1:#ef4444; --q2:#f59e0b; --q3:#22c55e; --q4:#3b82f6;
+  /* ── 基底:天空藍 ── */
+  --bg:#dcecf9;            /* 頁面底:天空藍(非純白,才有「天空」感) */
+  --surface:#ffffff;        /* 卡片/面板:純白,浮在天空上 */
+  --surface2:#eef6fd;       /* 卡片內層/輸入框:淡藍白 */
+  --border:#c2d8ea;         /* 邊線:藍灰 */
+  --text:#16324a;           /* 主文字:深海軍藍(對白 12.5:1) */
+  --muted:#4e6a82;          /* 次文字:藍灰(對白 5.6:1) */
+  /* ── 品牌琥珀(拆兩用途) ── */
+  --accent:#a86e00;         /* 琥珀「當文字用」深色版(對白 4.5:1) */
+  --accent-bg:#f0a500;      /* 原品牌亮琥珀:只當按鈕底/漸層/圖形 */
+  --accent-ink:#241603;     /* 琥珀底上的字 */
+  /* ── 四象限(亮底對比版,text/bg 兩用皆 ≥4.5:1) ── */
+  --q1:#d12f2f; --q2:#b45309; --q3:#15803d; --q4:#2563eb;
+  /* ── 狀態/遊戲 ── */
+  --ok:#15803d; --ok-soft:rgba(21,128,61,.12);
+  --danger:#c62828;
+  --gold-text:#a16207;      /* 鑽石金/點數「文字」 */
+  --gold-bg:#fbbf24;        /* 金色「圖形/光暈」保留亮版 */
+  --sky:#0b72c4;            /* 科技藍:連結/資訊強調 */
+  /* ── 補定義(JS 用 var(--card,#151823) fallback,root 沒定義會落回深色!) ── */
+  --card:#ffffff; --card2:#eef6fd; --line:#c2d8ea;
+  /* ── 陰影(藍調) ── */
+  --sh1:0 1px 3px rgba(22,68,110,.10),0 1px 2px rgba(22,68,110,.06);
+  --sh2:0 8px 24px rgba(22,68,110,.14);
+  --sh3:0 16px 48px rgba(22,68,110,.22);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
+html,body{background:linear-gradient(180deg,#cfe6f9 0%,#e2f0fb 45%,#eef6fd 100%) fixed;color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
 body{min-height:100vh}
 html,body{overflow-x:hidden;max-width:100vw}   /* 鎖橫向捲動:防 standalone 版面左右移 */
 button{font-family:inherit;cursor:pointer;border:none;font-size:15px}
@@ -53,10 +75,14 @@ img{display:block}
 .role-tag.boss{background:rgba(240,165,0,.18);color:var(--accent)}
 
 /* ---------- 頂部 bar ---------- */
-#topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:nowrap;gap:6px}
+#topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);box-shadow:var(--sh1);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:nowrap;gap:6px}
 #topbar .brand{font-weight:900;color:var(--accent);font-size:17px;white-space:nowrap;flex:0 0 auto}
 #topbar .right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-@media(max-width:520px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{display:none} .growth-btn{padding:6px 9px} }   /* 手機窄幅:按鈕縮icon、名字收起、標題不換行→🔔一定看得到 */
+@media(max-width:430px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{display:none} #topbar .growth-btn{width:36px;height:36px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px} #topbar .me-chip{padding:3px;gap:0} #topbar .me-chip .avatar{width:32px;height:32px;font-size:14px} }   /* 手機窄幅(≤430):三鈕縮 36px 圓 icon、名字收起、只留 32px 頭像、標題不換行→🔔一定看得到 */
+/* 🔔 通知鈴:36px 圓鈕顯眼化;未開通知=右上紅點提示可開啟,已開=全彩無紅點(setBellState 切 .bell-off) */
+#pushBell{position:relative;width:36px;height:36px;border-radius:50%;background:#e3f1fc;border:1px solid var(--border);padding:0;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+#pushBell.bell-off{background:var(--surface2)}
+#pushBell.bell-off::after{content:'';position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--danger)}
 .me-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border-radius:20px;padding:5px 10px 5px 5px}
 .me-chip .avatar{width:28px;height:28px;font-size:13px}
 .me-chip .nm{font-size:13px}
@@ -88,15 +114,15 @@ img{display:block}
 .rd-sub{font-size:11px;color:var(--muted);margin-top:2px}
 .rd-st{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
 .mr-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
-.mr-cell{background:rgba(255,255,255,.08);border-radius:10px;padding:10px 4px;text-align:center}
-.mr-cell b{font-size:20px;display:block;color:#fff}
-.mr-cell span{font-size:11px;color:#cbd5e1}
+.mr-cell{background:var(--surface2);border-radius:10px;padding:10px 4px;text-align:center}
+.mr-cell b{font-size:20px;display:block;color:var(--text)}
+.mr-cell span{font-size:11px;color:var(--muted)}
 .mreview-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px 18px;width:min(92vw,370px)}
 /* v1.0 KPI/團隊池/團隊頁/道具/賣裝/快閃 */
 .kpi-box{background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
 .kpi-row{display:flex;justify-content:space-between;font-size:12px;color:var(--text);margin-bottom:5px}
 .kpi-bar{height:12px;border-radius:8px;background:var(--surface);overflow:visible;position:relative}
-.kpi-bar>i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,var(--accent),#fbbf24);transition:width .5s}
+.kpi-bar>i{display:block;height:100%;border-radius:8px;background:linear-gradient(90deg,var(--accent-bg),#fbbf24);transition:width .5s}
 .kpi-bar.team>i{background:linear-gradient(90deg,#64748b,#94a3b8)}
 .kpi-bar.team.lit>i{background:linear-gradient(90deg,#f97316,#fbbf24);box-shadow:0 0 10px rgba(251,191,36,.6)}
 .kpi-bar.team em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--border);transform:translateX(-1px)}
@@ -114,17 +140,17 @@ img{display:block}
 .rw-card.out{opacity:.5;filter:grayscale(.6)}
 .rw-out{font-size:11px;color:var(--muted);font-weight:700;flex-shrink:0}
 .rw-card.hidden-rw{border:2px solid var(--accent);background:rgba(240,165,0,.12);animation:flashHidden 1.6s ease-in-out infinite;margin-bottom:9px}
-@keyframes flashHidden{0%,100%{box-shadow:0 0 4px rgba(240,165,0,.3)}50%{box-shadow:0 0 16px rgba(240,165,0,.8)}}
+@keyframes flashHidden{0%,100%{box-shadow:0 0 2px rgba(240,165,0,.3)}50%{box-shadow:0 0 8px rgba(240,165,0,.35)}}
 
 /* ---------- 看板 ---------- */
 #board{padding:12px;max-width:760px;margin:0 auto}
-.quadrant{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px;border-top-width:4px}
+.quadrant{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;border-top-width:4px;box-shadow:var(--sh1)}
 .q-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .q-title{font-weight:800;font-size:15px}
 .q-title .sub{font-weight:400;font-size:11px;color:var(--muted);margin-left:6px}
 .q-count{font-size:12px;color:var(--muted)}
 .q-add{background:var(--surface2);color:var(--accent);width:30px;height:30px;border-radius:8px;font-size:20px;font-weight:700;display:flex;align-items:center;justify-content:center}
-.q-add:active{background:var(--accent);color:#000}
+.q-add:active{background:var(--accent-bg);color:var(--accent-ink)}
 .task-list{display:flex;flex-direction:column;gap:8px}
 .empty{text-align:center;color:var(--muted);font-size:13px;padding:18px 0}
 
@@ -145,15 +171,15 @@ img{display:block}
 .t-thumb img{width:54px;height:54px;border-radius:8px;object-fit:cover;border:1px solid var(--border)}
 .t-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 .t-actions button{font-size:13px;padding:7px 12px;border-radius:8px;font-weight:600;flex:1;min-width:72px}
-.btn-primary{background:var(--accent);color:#000}
+.btn-primary{background:var(--accent-bg);color:var(--accent-ink)}
 .btn-soft{background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .btn-good{background:rgba(34,197,94,.2);color:var(--q3);border:1px solid rgba(34,197,94,.4)}
 .btn-warn{background:rgba(239,68,68,.15);color:var(--q1);border:1px solid rgba(239,68,68,.4)}
 
 /* ---------- Modal ---------- */
-.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0}
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:flex-end;justify-content:center;padding:0}
 @media(min-width:560px){.modal-mask{align-items:center;padding:20px}}
-.modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;overflow-y:auto;padding:18px}
+.modal{background:var(--surface);width:100%;max-width:480px;border-radius:18px 18px 0 0;max-height:92vh;overflow-y:auto;padding:18px;box-shadow:var(--sh2)}
 @media(min-width:560px){.modal{border-radius:18px}}
 .modal h3{font-size:18px;margin-bottom:14px}
 .field{margin-bottom:13px}
@@ -176,7 +202,7 @@ img{display:block}
 #imageView img{max-width:100%;max-height:100%;border-radius:10px}
 
 /* Toast */
-#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--accent);color:var(--accent);padding:11px 20px;border-radius:30px;z-index:300;font-size:14px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.4)}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#16324a;border:1px solid var(--gold-bg);color:#fff;padding:11px 20px;border-radius:30px;z-index:300;font-size:14px;font-weight:600;box-shadow:var(--sh2)}   /* 反白:深藍底+白字+金邊,亮頁最醒目 */
 
 /* 模式標示 */
 .mode-flag{position:fixed;bottom:8px;left:8px;font-size:10px;color:var(--muted);z-index:40;background:var(--surface);padding:3px 7px;border-radius:6px;opacity:.6}
@@ -204,7 +230,7 @@ img{display:block}
 .quad-tab .qt-title{font-size:11px;font-weight:700;line-height:1.2}
 .quad-tab .qt-sub{font-size:16px;font-weight:800;margin-top:1px}
 .quad-tab.active{color:#fff!important}
-.quad-panel{background:var(--surface);border:2px solid var(--border);border-radius:14px;padding:12px}
+.quad-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:var(--sh1)}
 .qp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .qp-title{font-weight:800;font-size:16px}
 .qp-sub{font-weight:400;font-size:12px;color:var(--muted);margin-left:8px}
@@ -224,7 +250,7 @@ img{display:block}
 .t-title-row{display:flex;align-items:flex-start;gap:6px}
 .t-title-row .t-title{flex:1}
 .t-expand{background:var(--surface);border:1px solid var(--border);color:var(--accent);min-width:30px;height:26px;border-radius:6px;font-size:14px;flex-shrink:0;line-height:1;font-weight:700}
-.t-expand:active{background:var(--accent);color:#000}
+.t-expand:active{background:var(--accent-bg);color:var(--accent-ink)}
 /* 詳情視窗 */
 .detail-section{margin-bottom:14px}
 .detail-label{font-size:13px;color:var(--muted);margin-bottom:6px;font-weight:600}
@@ -288,7 +314,7 @@ img{display:block}
 .lvup-mask{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.72);animation:lvfade .3s ease;cursor:pointer}
 .lvup-flash{position:absolute;inset:0;animation:lvflash .7s ease-out;pointer-events:none}
 .lvup-card{position:relative;text-align:center;animation:lvpop .55s cubic-bezier(.2,1.5,.4,1)}
-.lvup-ava{width:112px;height:112px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;margin:0 auto;background:var(--surface)}
+.lvup-ava{width:112px;height:112px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;margin:0 auto;background:#151823}   /* 升級儀式=全螢幕黑遮罩保留原深色,不吃亮色 --surface */
 .lvup-title{font-size:26px;font-weight:900;color:#fff;margin-top:14px;letter-spacing:2px;text-shadow:0 2px 12px rgba(0,0,0,.5)}
 .lvup-lv{font-size:20px;font-weight:800;margin-top:4px}
 .lvup-hint{font-size:12px;color:#cbd5e1;margin-top:12px;opacity:.85}
@@ -302,7 +328,7 @@ img{display:block}
 .coin-pill{background:rgba(240,165,0,.15);color:var(--accent);border:1px solid var(--accent);border-radius:20px;padding:3px 11px;font-size:13px;font-weight:700;white-space:nowrap}
 .coin-pill.big{font-size:14px;padding:6px 14px}
 .gc-actionrow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 4px}
-.shop-open-btn{flex:1;background:linear-gradient(90deg,var(--accent),#f5b301);color:#1a1205;font-weight:800;border-radius:10px;padding:10px;font-size:14px}
+.shop-open-btn{flex:1;background:linear-gradient(135deg,#f7b733,#f0a500);color:var(--accent-ink);font-weight:800;border-radius:10px;padding:10px;font-size:14px}
 .shop-open-btn:active{opacity:.85}
 .gc-title-tag{font-size:12px;font-weight:600;color:var(--accent);margin-left:8px}
 .pet-card{display:flex;align-items:center;gap:12px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:12px}
@@ -325,7 +351,7 @@ img{display:block}
 .shop-tab.active{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
 .slot-chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
 .slot-chip{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:16px;padding:5px 12px;font-size:12px;font-weight:700}
-.slot-chip.on{background:var(--accent);color:#1a1205;border-color:var(--accent)}
+.slot-chip.on{background:var(--accent-bg);color:var(--accent-ink);border-color:var(--accent-bg)}
 .shop-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
 .shop-item{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:6px}
 .shop-item.eq{border-color:#22c55e!important;background:rgba(34,197,94,.14);box-shadow:0 0 0 1px #22c55e inset}
@@ -337,9 +363,9 @@ img{display:block}
 .shop-item.soldout{opacity:.62;filter:grayscale(.55)}
 .shop-item.soldout .si-img{filter:grayscale(1) brightness(.7)}
 .soldout-tag{position:absolute;top:6px;left:6px;font-size:9px;font-weight:800;color:#fff;background:#ef4444;border-radius:6px;padding:1px 6px}
-.glow-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;font-weight:700;text-align:center;background:linear-gradient(120deg,rgba(56,189,248,.2),rgba(168,85,247,.18),rgba(240,165,0,.18));border:1px solid #38bdf8;box-shadow:0 0 18px rgba(56,189,248,.25)}
-.glow-banner b{font-size:20px;color:#38bdf8}
-.tb-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;background:linear-gradient(120deg,rgba(239,68,68,.18),rgba(168,85,247,.16));border:1px solid #ef4444;box-shadow:0 0 16px rgba(239,68,68,.22)}
+.glow-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:13px;font-weight:700;text-align:center;background:linear-gradient(120deg,rgba(56,189,248,.2),rgba(168,85,247,.18),rgba(240,165,0,.18));border:1px solid #38bdf8;box-shadow:0 0 9px rgba(56,189,248,.25)}
+.glow-banner b{font-size:20px;color:var(--sky)}
+.tb-banner{border-radius:12px;padding:12px 14px;margin-bottom:12px;background:linear-gradient(120deg,rgba(239,68,68,.18),rgba(168,85,247,.16));border:1px solid #ef4444;box-shadow:0 0 8px rgba(239,68,68,.22)}
 .tb-banner.won{background:linear-gradient(120deg,rgba(240,165,0,.2),rgba(34,197,94,.16));border-color:#f0a500;text-align:center;font-weight:700}
 .mm-banner{border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;background:var(--surface2);border:1px solid var(--border)}
 .mm-banner b{color:var(--accent)}
@@ -348,15 +374,15 @@ img{display:block}
 .ob-step.ok{color:var(--text)}
 .mch-banner{border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:12px}
 .mch-banner.off{background:var(--surface2);border:1px dashed var(--border);color:var(--muted);text-align:center}
-.mch-banner.on{background:linear-gradient(110deg,rgba(168,85,247,.22),rgba(240,165,0,.18));border:1px solid #a855f7;box-shadow:0 0 16px rgba(168,85,247,.3);animation:mchGlow 1.8s ease-in-out infinite}
-@keyframes mchGlow{0%,100%{box-shadow:0 0 12px rgba(168,85,247,.25)}50%{box-shadow:0 0 22px rgba(168,85,247,.5)}}
+.mch-banner.on{background:linear-gradient(110deg,rgba(168,85,247,.22),rgba(240,165,0,.18));border:1px solid #a855f7;box-shadow:0 0 8px rgba(168,85,247,.3);animation:mchGlow 1.8s ease-in-out infinite}
+@keyframes mchGlow{0%,100%{box-shadow:0 0 6px rgba(168,85,247,.25)}50%{box-shadow:0 0 11px rgba(168,85,247,.35)}}
 .mch-h{font-weight:700;margin-bottom:8px;color:var(--text)}
 .mch-rates{display:flex;gap:6px;flex-wrap:wrap}
-.mch-btn{flex:1;min-width:96px;background:#a855f7;color:#fff;border:none;border-radius:9px;padding:8px 6px;font-size:12px;font-weight:700}
+.mch-btn{flex:1;min-width:96px;background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:8px 6px;font-size:12px;font-weight:700}
 .mch-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
 /* 人情系統 */
 .fv-bal{background:linear-gradient(120deg,rgba(251,191,36,.16),rgba(244,114,182,.12));border:1px solid #fbbf24;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:700;margin-bottom:6px}
-.fv-bal b{font-size:24px;color:#fbbf24;margin-left:4px}
+.fv-bal b{font-size:24px;color:var(--gold-text);margin-left:4px}
 .fv-bal .fv-sub{font-size:11px;color:var(--muted);font-weight:400;margin-top:2px}
 .fv-row{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-top:7px;font-size:13px}
 .fv-row.pend{border-color:var(--accent)}
@@ -364,7 +390,7 @@ img{display:block}
 .fv-form{display:flex;flex-direction:column;gap:8px;margin-top:8px}
 .fv-in{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px;font-size:13px;color:var(--text)}
 .fv-hint{font-size:11px;color:var(--muted)}
-.favor-card{border:2px solid #fbbf24!important;box-shadow:0 0 44px #fbbf24,0 0 14px #fde68a inset!important}
+.favor-card{border:2px solid #fbbf24!important;box-shadow:0 0 22px rgba(251,191,36,.35),0 0 7px rgba(253,230,138,.35) inset!important}   /* 亮底收斂:blur減半、透明度≤.35 */
 .equip-panel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .equip-slot{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;position:relative}
 .equip-slot img{width:42px;height:42px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}
@@ -377,7 +403,7 @@ img{display:block}
 .char-pick.on{border-color:var(--accent);background:rgba(240,165,0,.1)}
 .char-pick.lk{opacity:.5;filter:grayscale(1);cursor:not-allowed}
 .char-lk{position:absolute;bottom:5px;left:0;right:0;text-align:center;font-size:10px;color:#fff;font-weight:700}
-.char-cur{position:absolute;top:5px;right:5px;font-size:9px;background:var(--accent);color:#000;border-radius:6px;padding:1px 5px;font-weight:800}
+.char-cur{position:absolute;top:5px;right:5px;font-size:9px;background:var(--accent-bg);color:var(--accent-ink);border-radius:6px;padding:1px 5px;font-weight:800}
 .gc-char{position:relative;width:132px;height:150px;margin:0 auto 4px;cursor:pointer;display:flex;align-items:flex-end;justify-content:center}
 .gc-char-img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));position:relative;z-index:1}
 .gc-char-aura{position:absolute;inset:-6% -6% 6%;z-index:0;animation:auraPulse 2.6s ease-in-out infinite}
@@ -396,7 +422,7 @@ img{display:block}
 .bopt{display:block;width:100%;text-align:center;background:var(--surface);border:1.5px solid var(--border);color:var(--text);border-radius:10px;padding:13px 12px;font-size:14px;line-height:1.4}
 .bopt:active{transform:scale(.99)}
 .bopt.mid{padding:8px;font-size:12px;color:var(--muted);border-style:dashed}
-.bopt.sel{background:var(--accent);color:#1a1205;border-color:var(--accent);border-style:solid;font-weight:700}
+.bopt.sel{background:var(--accent-bg);color:var(--accent-ink);border-color:var(--accent-bg);border-style:solid;font-weight:700}
 /* 角色結果 */
 .rr-hero{border-radius:14px;padding:14px 10px 12px;margin-bottom:6px}
 .rr-badge{font-size:11px;font-weight:800;color:#fff;border-radius:8px;padding:2px 9px}
@@ -424,7 +450,7 @@ img{display:block}
 .tmap-fam span{font-size:10px;color:var(--muted)}
 .tmap-axes{display:flex;flex-direction:column;gap:7px}
 .tmap-axhead{display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px}
-.tmap-split{height:8px;background:#3b82f633;border-radius:4px;overflow:hidden}
+.tmap-split{height:8px;background:rgba(37,99,235,.2);border-radius:4px;overflow:hidden}
 .tmap-split i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .tmap-side{margin-top:10px;font-size:12px;color:var(--text);line-height:1.7;background:var(--surface);border-radius:9px;padding:9px 11px}
 /* 副本 / 戰鬥 / 答題 */
@@ -444,11 +470,11 @@ img{display:block}
 .quiz-q{font-size:16px;font-weight:700;line-height:1.5;margin-bottom:14px}
 .quiz-opts{display:grid;gap:9px}
 .quiz-opt{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:13px;font-size:15px;text-align:left}
-.quiz-opt:active{background:var(--accent);color:#1a1205}
+.quiz-opt:active{background:var(--accent-bg);color:var(--accent-ink)}
 .drop-box{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface2);border:1px solid var(--accent);border-radius:10px;padding:10px;margin-top:10px}
 .drop-box img{width:44px;height:44px;object-fit:contain}
 .si-skill{font-size:10px;color:var(--accent);line-height:1.3;min-height:13px}
-.confucius-btn{width:100%;margin-top:10px;background:rgba(168,85,247,.18);border:1px solid #a855f7;color:#c4b5fd;border-radius:10px;padding:10px;font-weight:700;font-size:13px}
+.confucius-btn{width:100%;margin-top:10px;background:rgba(168,85,247,.18);border:1px solid #a855f7;color:#c4b5fd;border-radius:10px;padding:10px;font-weight:700;font-size:13px}   /* 仲裁:只出現在戰鬥深色區,維持亮紫 */
 .boss-wrap{position:relative;display:inline-block}
 .battle-boss.hit{animation:bossHit .4s ease}
 @keyframes bossHit{0%{transform:translateX(0)}20%{transform:translateX(-10px) rotate(-4deg)}40%{transform:translateX(8px) rotate(3deg)}60%{transform:translateX(-5px)}100%{transform:translateX(0)}}
@@ -485,8 +511,8 @@ img{display:block}
 .pet-rbadge{font-size:9px;font-weight:800;color:#fff;border-radius:6px;padding:1px 7px;line-height:1.5;white-space:nowrap}
 .feed-btn.inv{background:rgba(240,165,0,.16);border-color:var(--accent);color:var(--accent)}
 /* 質感提示詢問框 vConfirm */
-.vc-mask{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
-.vc-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px 20px 18px;width:100%;max-width:340px;text-align:center;box-shadow:0 22px 64px rgba(0,0,0,.55);animation:vcPop .24s cubic-bezier(.2,1.3,.5,1)}
+.vc-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+.vc-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:24px 20px 18px;width:100%;max-width:340px;text-align:center;box-shadow:var(--sh3);animation:vcPop .24s cubic-bezier(.2,1.3,.5,1)}
 .vc-ic{font-size:40px;line-height:1;margin-bottom:10px}
 .vc-title{font-weight:800;font-size:18px;margin-bottom:7px}
 .vc-msg{font-size:13px;color:var(--muted);line-height:1.65;margin-bottom:20px;white-space:pre-line}
@@ -495,10 +521,10 @@ img{display:block}
 .vc-actions button{flex:1;padding:12px;border-radius:12px;font-weight:700;font-size:15px;border:1px solid transparent}
 .vc-cancel{background:var(--surface2);border-color:var(--border)!important;color:var(--text)}
 .vc-cancel:active{background:var(--bg)}
-.vc-ok{background:var(--accent);color:#1a1205}
+.vc-ok{background:var(--accent-bg);color:var(--accent-ink)}
 .vc-ok.danger{background:#ef4444;color:#fff}
 @keyframes vcPop{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
-.buy-btn{background:var(--accent);color:#1a1205;font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
+.buy-btn{background:var(--accent-bg);color:var(--accent-ink);font-weight:800;border-radius:8px;padding:5px 0;font-size:12px;width:100%}
 .buy-btn.dis{background:var(--surface);color:var(--muted);border:1px solid var(--border)}
 .equip-btn{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:5px 0;font-size:12px;width:100%;font-weight:600}
 .equip-btn.on{background:#22c55e;color:#06210f;border-color:#22c55e;font-weight:800}
@@ -508,6 +534,11 @@ img{display:block}
 .cat-toggle.on{border-color:var(--accent);background:rgba(240,165,0,.16);color:var(--accent)}
 .cat-toggle .hint{font-size:11px;font-weight:400;opacity:.75}
 .img-preview-list video{width:62px;height:62px;border-radius:8px;object-fit:cover;border:1px solid var(--border);background:#000}
+/* ---------- v1.10.15 天空藍主題:遊戲化深色沉浸區(戰鬥/寶箱) ---------- */
+.dark-zone{--bg:#0a0c12;--surface:#151823;--surface2:#1e2230;--border:#2a2f3f;--text:#e8eaf0;--muted:#8b90a3;--accent:#f0a500;--accent-ink:#000;--ok:#22c55e;--gold-text:#fbbf24;--sky:#38bdf8;--card:#151823;--card2:#1e2230;--line:#2a2f3f;background:var(--surface);color:var(--text)}
+/* 月回顧卡改白底後,沿用的 lvup 白字/淺灰字改回主題色(A清單 mr-cell 同組) */
+.mreview-card .lvup-title{color:var(--text);text-shadow:none}
+.mreview-card .lvup-hint{color:var(--muted)}
 </style>
 </head>
 <body>
@@ -530,17 +561,16 @@ img{display:block}
   <div id="topbar">
     <div style="display:flex;align-items:center;gap:10px">
       <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
-      <button class="growth-btn" onclick="showGrowth()">📈<span class="bt-txt"> 成長</span></button>
-      <button class="growth-btn" onclick="showTeam()">👥<span class="bt-txt"> 團隊</span></button>
-      <button class="growth-btn" onclick="showFavor()">🤝<span class="bt-txt"> 人情</span></button>
+      <button class="growth-btn" onclick="showGrowth()" title="成長">📈<span class="bt-txt"> 成長</span></button>
+      <button class="growth-btn" onclick="showTeam()" title="團隊">👥<span class="bt-txt"> 團隊</span></button>
+      <button class="growth-btn" onclick="showFavor()" title="人情">🤝<span class="bt-txt"> 人情</span></button>
     </div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
         <span class="nm" id="meName"></span>
       </div>
-      <button class="btn-logout" id="pushBell" onclick="togglePush()" title="任務提醒" style="filter:grayscale(1);opacity:.45">🔔</button>
-      <button class="btn-logout" onclick="logout()">登出</button>
+      <button id="pushBell" class="bell-off" onclick="togglePush()" title="開啟任務提醒">🔔</button>
     </div>
   </div>
   <div id="board"></div>
@@ -571,10 +601,10 @@ const CONFIG = {
 
   // 四象限（艾森豪矩陣）
   QUADRANTS: [
-    { id:'q1', title:'重要又緊急',   sub:'需要立刻處理', color:'#ef4444' },
-    { id:'q2', title:'重要不緊急',   sub:'要有進度執行', color:'#f59e0b' },
-    { id:'q3', title:'不重要但緊急', sub:'瑣事盡快處理', color:'#22c55e' },
-    { id:'q4', title:'不重要不緊急', sub:'利用空閒執行', color:'#3b82f6' },
+    { id:'q1', title:'重要又緊急',   sub:'需要立刻處理', color:'#d12f2f' },
+    { id:'q2', title:'重要不緊急',   sub:'要有進度執行', color:'#b45309' },
+    { id:'q3', title:'不重要但緊急', sub:'瑣事盡快處理', color:'#15803d' },
+    { id:'q4', title:'不重要不緊急', sub:'利用空閒執行', color:'#2563eb' },
   ],
 
   // ===== Ragic 雲端設定（CLOUD 模式用）=====
@@ -595,7 +625,7 @@ const CONFIG = {
 
   // ===== Web Push 系統提醒（工單 B4：專用 taskwall-push Worker）=====
   PUSH: {
-    WORKER: 'https://taskwall-push.usled.workers.dev',
+    WORKER: 'https://taskwall-push.yspe-led.workers.dev',   // covernself 帳戶(與打卡 proxy 同帳戶,2026-08 搬家定案)
     VAPID_PUB: 'BGdMkSz8g5h1Mb7yLDYgtOGwc4V24_7dnBiAV_QdMljYUCmd_0cLAALaTiefQxng56wSE3YFJ6MvG-9raBSM3PQ',
   },
 };
@@ -842,7 +872,7 @@ function logout(){
    =================================================================== */
 function pushSupported(){ return typeof Notification!=='undefined' && 'serviceWorker' in navigator && 'PushManager' in window; }
 function urlB64ToUint8Array(s){ const p='='.repeat((4-s.length%4)%4); const b=atob((s+p).replace(/-/g,'+').replace(/_/g,'/')); const out=new Uint8Array(b.length); for(let i=0;i<b.length;i++) out[i]=b.charCodeAt(i); return out; }
-function setBellState(on){ const b=document.getElementById('pushBell'); if(!b) return; b.style.filter=on?'none':'grayscale(1)'; b.style.opacity=on?'1':'.45'; b.title=on?'任務提醒已開啟（點擊關閉）':'開啟任務提醒'; }
+function setBellState(on){ const b=document.getElementById('pushBell'); if(!b) return; b.classList.toggle('bell-off',!on); b.title=on?'任務提醒已開啟（點擊關閉）':'開啟任務提醒'; }   /* v1.10.15 紅點+底色模式:未開=紅點,已開=全彩無紅點 */
 async function refreshBellState(){
   try{
     if(!pushSupported()){ setBellState(false); return; }
@@ -911,10 +941,10 @@ function renderBoard(){
   const glowN = done.filter(t=>t.glow).length;
   let doneHtml='';
   if(done.length){
-    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#1e2230);border-left:4px solid #22c55e;border-radius:12px;min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:#22c55e;font-size:15px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:17px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
+    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:15px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:17px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
     if(dOpen){
       doneHtml += done.slice(0,5).map(renderTaskCard).join('');
-      if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#151823);border:1px solid var(--line,#2a2f3f);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
+      if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#ffffff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
     }
   }
   board.innerHTML = `
@@ -937,11 +967,11 @@ function showDoneHistory(qid){
   const pts=t=>t.earnedPoints!=null?t.earnedPoints:(t.points||0);
   const rows=Object.keys(byM).map(m=>{
     const list=byM[m], sum=list.reduce((s,t)=>s+pts(t),0);
-    return `<div style="font-size:13px;color:var(--muted);margin-top:18px;padding-bottom:4px;border-bottom:1px solid var(--line,#2a2f3f)">${m} ── ${list.length} 件 ・ ＋${sum} 點</div>`+
+    return `<div style="font-size:13px;color:var(--muted);margin-top:18px;padding-bottom:4px;border-bottom:1px solid var(--line,#c2d8ea)">${m} ── ${list.length} 件 ・ ＋${sum} 點</div>`+
       list.map(t=>{ const d=new Date(t.submittedAt||t.approvedAt||t.createdAt||0);
-        return `<div style="min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px dashed var(--line,#2a2f3f)33" onclick="showTaskDetail('${t.id}')">
+        return `<div style="min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;border-bottom:1px dashed var(--line,#c2d8ea)33" onclick="showTaskDetail('${t.id}')">
           <span>✅</span>${t.glow?'<span>🌃</span>':''}<span style="flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</span>
-          <span style="font-size:12px;color:var(--muted)">${(d.getMonth()+1)}/${d.getDate()}</span><span style="font-size:13px;color:#fbbf24;font-weight:700">＋${pts(t)}</span></div>`;
+          <span style="font-size:12px;color:var(--muted)">${(d.getMonth()+1)}/${d.getDate()}</span><span style="font-size:13px;color:var(--gold-text);font-weight:700">＋${pts(t)}</span></div>`;
       }).join('');
   }).join('');
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='doneHistModal';
@@ -1038,7 +1068,7 @@ function renderTaskCard(t){
   }
   return `<div class="swipe-row">
     ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
-    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'#22c55e':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
       <div class="task-body">
         <div class="task-main">
           <div class="t-title">${esc(t.title)}</div>
@@ -1092,8 +1122,8 @@ function openTaskModal(taskId, presetQuad){
     </div>
     <div class="field"><label>獎勵點數（依任務性質給）<a onclick="showPricing()" style="float:right;color:var(--accent);font-size:12px;cursor:pointer;text-decoration:underline">📋 定價表</a></label>
       <div class="reward-row">
-        <div class="reward-item"><span class="reward-lbl" style="color:#fbbf24">T 點</span><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
-        <div class="reward-item"><span class="reward-lbl" style="color:#22c55e">貢獻值</span><input type="number" id="f_contribution" value="${t&&t.contribution?t.contribution:0}" min="0"></div>
+        <div class="reward-item"><span class="reward-lbl" style="color:var(--gold-text)">T 點</span><input type="number" id="f_points" value="${t?t.points:10}" min="0"></div>
+        <div class="reward-item"><span class="reward-lbl" style="color:var(--ok)">貢獻值</span><input type="number" id="f_contribution" value="${t&&t.contribution?t.contribution:0}" min="0"></div>
         <div class="reward-item"><span class="reward-lbl" style="color:#f472b6">人情點</span><input type="number" id="f_favor" value="${t&&t.favor?t.favor:0}" min="0"></div>
       </div>
     </div>
@@ -1318,8 +1348,8 @@ function showMyTasks(){
       <button class="t-expand" onclick="closeMyTasks()" style="font-size:18px">✕</button>
     </div>
     <div class="pts-cards">
-      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:#fbbf24">${sumPts}</div><div class="pl">T 點</div></div>
-      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:#22c55e">${sumCon}</div><div class="pl">貢獻值</div></div>
+      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:var(--gold-text)">${sumPts}</div><div class="pl">T 點</div></div>
+      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:var(--ok)">${sumCon}</div><div class="pl">貢獻值</div></div>
       <div class="pts-card" style="border-color:#f472b6;background:rgba(244,114,182,.1)"><div class="pv" style="color:#f472b6">${sumFav}</div><div class="pl">人情點</div></div>
     </div>
     <div class="detail-label">📋 我的任務（待辦 ${open.length}）</div>
@@ -1346,8 +1376,8 @@ function closeMyTasks(){ const m=document.getElementById('myTasksModal'); if(m)m
    經驗值 = T點 + 貢獻值；戰力 = T點 + 貢獻值×2 + 人情點
    =================================================================== */
 const RANKS = [
-  { min:1,  name:'見習生',   icon:'🐣', color:'#9ca3af' },
-  { min:5,  name:'正式員工', icon:'🧑‍💼', color:'#60a5fa' },
+  { min:1,  name:'見習生',   icon:'🐣', color:'#556575' },
+  { min:5,  name:'正式員工', icon:'🧑‍💼', color:'#2563eb' },
   { min:10, name:'資深老手', icon:'💪', color:'#22c55e' },
   { min:20, name:'任務達人', icon:'🔥', color:'#f59e0b' },
   { min:35, name:'部門菁英', icon:'🌟', color:'#a855f7' },
@@ -1467,9 +1497,9 @@ function showGameCenter(){
       <div class="gc-sub">${STATE.user.name} · Lv.${g.level} · ⚔️ 戰力 ${g.power+gearPower()}</div>
       ${onboardCardHtml()}
       <div class="gc-statrow">
-        <div class="gc-stat"><b style="color:#f0a500">${coinBalance()}</b><span>💎 鑽石</span></div>
-        <div class="gc-stat"><b style="color:#22c55e">${contribSpendable(STATE.user.id)}</b><span>貢獻值</span></div>
-        <div class="gc-stat"><b style="color:#38bdf8">${(GS&&GS.clears)||0}</b><span>⚔️ 闖關</span></div>
+        <div class="gc-stat"><b style="color:var(--gold-text)">${coinBalance()}</b><span>💎 鑽石</span></div>
+        <div class="gc-stat"><b style="color:var(--ok)">${contribSpendable(STATE.user.id)}</b><span>貢獻值</span></div>
+        <div class="gc-stat"><b style="color:var(--sky)">${(GS&&GS.clears)||0}</b><span>⚔️ 闖關</span></div>
       </div>
       <div class="gc-bar"><i style="width:${pct}%;background:linear-gradient(90deg,${c},${c}aa)"></i></div>
       <div class="gp-xptxt" style="padding:0 2px"><span>經驗值 ${g.total}</span><span>${next?`距「${next.name}」還需 Lv.${next.min}`:'已達最高階 👑'}</span></div>
@@ -1503,8 +1533,8 @@ function showGrowth(){
       <button class="t-expand" onclick="closeGrowth()" style="font-size:18px">✕</button>
     </div>
     <div class="pts-cards">
-      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:#fbbf24">${sumPts}</div><div class="pl">T 點</div></div>
-      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:#22c55e">${sumCon}</div><div class="pl">貢獻值</div></div>
+      <div class="pts-card" style="border-color:#fbbf24;background:rgba(251,191,36,.1)"><div class="pv" style="color:var(--gold-text)">${sumPts}</div><div class="pl">T 點</div></div>
+      <div class="pts-card" style="border-color:#22c55e;background:rgba(34,197,94,.1)"><div class="pv" style="color:var(--ok)">${sumCon}</div><div class="pl">貢獻值</div></div>
       <div class="pts-card" style="border-color:#f472b6;background:rgba(244,114,182,.1)"><div class="pv" style="color:#f472b6">${sumFav}</div><div class="pl">人情點</div></div>
     </div>
     ${kpiPoolHtml()}
@@ -1519,6 +1549,7 @@ function showGrowth(){
       <button class="equip-btn" onclick="showPricing()">📋 點數定價表</button>
     </div>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">這是你真實付出的紀錄 ✨ 想玩角色/裝備/寵物請點頭像進「角色養成中心」</div>
+    <button class="btn-logout" style="display:block;width:100%;margin-top:12px;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px" onclick="closeGrowth();logout()">🚪 登出帳號</button>
   </div>`;
   mask.onclick=closeGrowth; document.body.appendChild(mask);
 }
@@ -1611,7 +1642,7 @@ function showTeam(){
       <div class="team-top">
         ${roleFaceHtml(role,54)}
         <div style="flex:1;min-width:0">
-          <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:#22c55e;margin-left:4px">🌱新人</span>':''}</div>
+          <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:var(--ok);margin-left:4px">🌱新人</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${role?`${role.emoji}${role.animalName} ${codeFmt(role.code)} · ${role.title}`:'<span style="color:var(--q1)">尚未做角色測驗</span>'}</div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
           <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
@@ -1907,7 +1938,7 @@ function showFavor(){
       <button class="buy-btn${kdLeft<=0?' dis':''}" style="width:100%;padding:11px" ${kdLeft<=0?'disabled':''} onclick="sendKudos()">送出感謝卡</button>
     </div>
     ${kdGot.length?`<div class="detail-label" style="margin-top:12px">💌 我收到的感謝（本月 ${kudosMonthCount(me.id)} 張）</div>${kdGot.map(k=>`<div class="fv-row"><div style="flex:1;min-width:0"><b style="color:#f472b6">${esc(k.fromName)}</b><div class="fv-desc">「${esc(k.msg)}」</div></div></div>`).join('')}`:''}
-    ${pend.length?`<div class="detail-label" style="color:var(--accent)">📨 待你回覆（${pend.length}）</div>${pend.map(x=>{const r=x.r,isA=r.kind==='assign';return `<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(r.fromName)}</b> ${isA?'想請你幫忙、給你':'想向你借用，願付'} <b style="color:#fbbf24">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',true)">${isA?'接受':'同意'}</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',false)">拒絕</button></div>`;}).join('')}`:''}
+    ${pend.length?`<div class="detail-label" style="color:var(--accent)">📨 待你回覆（${pend.length}）</div>${pend.map(x=>{const r=x.r,isA=r.kind==='assign';return `<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(r.fromName)}</b> ${isA?'想請你幫忙、給你':'想向你借用，願付'} <b style="color:var(--gold-text)">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',true)">${isA?'接受':'同意'}</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${r.id}',false)">拒絕</button></div>`;}).join('')}`:''}
     <div class="detail-label" style="margin-top:14px">✍️ 提出請求</div>
     <div class="fv-form">
       <select id="fvTo" class="fv-in">${ppl.map(u=>`<option value="${u.id}">${u.name}（${u.title}）</option>`).join('')}</select>
@@ -1916,7 +1947,7 @@ function showFavor(){
       <input id="fvAmt" class="fv-in" type="number" min="1" value="1" placeholder="人情點">
       <button class="buy-btn" style="width:100%;padding:11px" onclick="sendFavorReq()">送出請求</button>
     </div>
-    ${mine.length?`<div class="detail-label" style="margin-top:14px">📜 我發出的</div>${mine.slice(0,10).map(r=>`<div class="fv-row"><div style="flex:1;min-width:0">${r.kind==='assign'?'指派 ':'求助 '}${esc(r.toName)} · <b style="color:#fbbf24">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><span class="rd-st">${FV_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelFavorReq('${r.id}')">收回</button>`:''}</div>`).join('')}`:''}
+    ${mine.length?`<div class="detail-label" style="margin-top:14px">📜 我發出的</div>${mine.slice(0,10).map(r=>`<div class="fv-row"><div style="flex:1;min-width:0">${r.kind==='assign'?'指派 ':'求助 '}${esc(r.toName)} · <b style="color:var(--gold-text)">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><span class="rd-st">${FV_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelFavorReq('${r.id}')">收回</button>`:''}</div>`).join('')}`:''}
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px">人情點＝主管派的個人任務完成後給的心意；可用來向同事／主管提出請求。完全獨立，不影響遊戲與戰力 🤝</div>
   </div>`;
   mask.onclick=closeFavor; document.body.appendChild(mask);
@@ -2013,7 +2044,7 @@ function onboardCardHtml(){
   if(!isNewbie() || (GS&&GS.newbieGradClaimed)) return '';
   const steps=onboardSteps(), n=steps.filter(s=>s.ok).length;
   return `<div class="onboard-card">
-    <div style="font-weight:800;color:#22c55e;margin-bottom:6px">🌱 新星之路　<span style="font-size:11px;color:var(--muted);font-weight:400">${n}/${steps.length} · 全部完成得「譽昇新星 🌱」+200鑽</span></div>
+    <div style="font-weight:800;color:var(--ok);margin-bottom:6px">🌱 新星之路　<span style="font-size:11px;color:var(--muted);font-weight:400">${n}/${steps.length} · 全部完成得「譽昇新星 🌱」+200鑽</span></div>
     ${steps.map(s=>`<div class="ob-step${s.ok?' ok':''}">${s.ok?'✅':'⬜'} ${s.label}</div>`).join('')}
   </div>`;
 }
@@ -2042,12 +2073,12 @@ function showMonthlyReview(manual){
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='mreviewMask';
   o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
     <div class="lvup-card mreview-card" onclick="event.stopPropagation()">
-      <div style="font-size:13px;color:#cbd5e1">${y} 年 ${m+1} 月 · ${STATE.user.name}</div>
+      <div style="font-size:13px;color:var(--muted)">${y} 年 ${m+1} 月 · ${STATE.user.name}</div>
       <div class="lvup-title" style="font-size:22px">🌟 本月成長回顧</div>
       <div class="mr-grid">
         <div class="mr-cell"><b>${st.count}</b><span>完成任務</span></div>
-        <div class="mr-cell"><b style="color:#fbbf24">${st.pts}</b><span>T 點</span></div>
-        <div class="mr-cell"><b style="color:#22c55e">${st.con}</b><span>貢獻值</span></div>
+        <div class="mr-cell"><b style="color:var(--gold-text)">${st.pts}</b><span>T 點</span></div>
+        <div class="mr-cell"><b style="color:var(--ok)">${st.con}</b><span>貢獻值</span></div>
         <div class="mr-cell"><b style="color:#f472b6">${st.fav}</b><span>人情點</span></div>
         <div class="mr-cell"><b style="color:${c}">${up>0?('+'+up):'—'}</b><span>升級</span></div>
         <div class="mr-cell"><b>${st.newBadges>0?('+'+st.newBadges):'—'}</b><span>新徽章</span></div>
@@ -2665,7 +2696,7 @@ function showCharPick(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='charPickModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">🦸 選擇角色</h3><button class="t-expand" onclick="closeCharPick()" style="font-size:18px">✕</button></div>
-    <div style="font-size:12px;margin-bottom:10px;padding:8px 11px;border-radius:9px;background:${canC?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${canC?'#22c55e':'var(--q1)'};font-weight:600">🗓️ 角色只在<b>月度更新日（每月 5 號）</b>才能更換${canC?'　·　今天可以換！':'　·　今天 '+new Date().getDate()+' 號，僅供預覽'}</div>
+    <div style="font-size:12px;margin-bottom:10px;padding:8px 11px;border-radius:9px;background:${canC?'rgba(34,197,94,.12)':'rgba(239,68,68,.1)'};color:${canC?'var(--ok)':'var(--q1)'};font-weight:600">🗓️ 角色只在<b>月度更新日（每月 5 號）</b>才能更換${canC?'　·　今天可以換！':'　·　今天 '+new Date().getDate()+' 號，僅供預覽'}</div>
     <div class="char-grid">${CHARS.map(c=>{ const lk=!lvOK(c.minLevel); return `<div class="char-pick${c.id===cur?' on':''}${lk?' lk':''}" onclick="${lk?'':`selectChar('${c.id}')`}"><img src="${charFile(c.id)}" loading="lazy">${lk?`<span class="char-lk">🔒Lv.${c.minLevel}</span>`:''}${c.id===cur?'<span class="char-cur">使用中</span>':''}</div>`; }).join('')}</div>
   </div>`;
   mask.onclick=closeCharPick; document.body.appendChild(mask);
@@ -2756,7 +2787,7 @@ function charHeroHtml(){
   }
   return `<div class="gc-char empty" onclick="showAnimalTest()">
     <div class="gc-role-empty">＋</div>
-    <span class="gc-char-edit" style="background:var(--accent);color:#1a1205;border:none">🐾 新增頭像 · 做測驗</span>
+    <span class="gc-char-edit" style="background:var(--accent-bg);color:var(--accent-ink);border:none">🐾 新增頭像 · 做測驗</span>
   </div>`;
 }
 function equipPanelHtml(){
@@ -3107,7 +3138,7 @@ function showDungeon(){
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">⚔️ 副本闖關</h3><button class="t-expand" onclick="closeDungeon()" style="font-size:18px">✕</button></div>
     ${teamBossBannerHtml()}
-    <div class="mm-banner">📅 本月詞綴 · <b>${mm.name}</b>　<span style="color:var(--muted)">${mm.desc}</span>${isUpdateDay()?'　<span style="color:#22c55e">· 今天是月度更新日！</span>':''}</div>
+    <div class="mm-banner">📅 本月詞綴 · <b>${mm.name}</b>　<span style="color:var(--muted)">${mm.desc}</span>${isUpdateDay()?'　<span style="color:var(--ok)">· 今天是月度更新日！</span>':''}</div>
     ${qsPend.length?`<div class="detail-label" style="color:var(--accent)">✍️ 待採納的員工出題（${qsPend.length}）</div>${qsPend.map(x=>`<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name)}</b> 出題<div class="fv-desc" style="color:var(--text)">${esc(x.s.q)}<br><span style="color:var(--muted)">正解：${esc((x.s.a||[])[x.s.c]||'')}</span></div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideQuiz(${x.pi},'${x.s.id}',true)">採納</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideQuiz(${x.pi},'${x.s.id}',false)">婉拒</button></div>`).join('')}`:''}
     <div style="font-size:12px;color:var(--muted);margin:10px 0 12px">答對攻擊（武器/項鍊/戒指加攻）；答錯或超時被怪打（頭盔/護甲/鞋減傷）。❤️ ${Math.round(GS.hp)}%（每小時回4%）｜今日剩 <b style="color:var(--accent)">${left}</b>/${DUNGEON_DAILY} 次　<a onclick="showQuizSubmit()" style="color:var(--accent);cursor:pointer;text-decoration:underline">✍️ 我來出題</a></div>
     ${BOSSES.map(b=>{ const lk=!lvOK(b.minLevel); return `<div class="boss-row${lk?' lk':''}">
@@ -3147,7 +3178,7 @@ function showChest(coins, drop, left, bonus){
   const col = drop?PET_RARITY[drop.r].color:'#f0a500';
   STATE.chest={coins,drop,col,opened:false,left,bonus};
   const o=document.createElement('div'); o.className='modal-mask'; o.id='battleModal';
-  o.innerHTML=`<div class="modal" style="text-align:center" onclick="event.stopPropagation()">
+  o.innerHTML=`<div class="modal dark-zone" style="text-align:center" onclick="event.stopPropagation()">
     <div style="font-size:22px;font-weight:800">🏆 闖關成功！</div>
     <div style="font-size:13px;color:var(--muted);margin-top:4px">獲得寶箱 — 點擊開啟 ✨</div>
     <div id="chestBox" class="chest-box" onclick="openChest()">🎁</div>
@@ -3196,7 +3227,7 @@ function renderBattle(){
   const hpPct=Math.max(0,Math.round(bt.hp/b.hp*100));
   const old=document.getElementById('battleModal'); if(old) old.remove();
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
-  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+  mask.innerHTML=`<div class="modal dark-zone" onclick="event.stopPropagation()">
     <div style="text-align:center">
       <div class="boss-wrap">
         <img src="assets/game/mob/${b.file}" class="battle-boss${bt.hit?' hit':''}">
@@ -3281,7 +3312,7 @@ async function endBattle(win){
   } else {
     saveGameState();
     const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='battleModal';
-    mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="text-align:center">
+    mask.innerHTML=`<div class="modal dark-zone" onclick="event.stopPropagation()" style="text-align:center">
       <div style="font-size:46px">💀</div>
       <h3 style="margin:6px 0">戰敗了…</h3>
       <div style="font-size:13px;color:var(--muted)">❤️ 血量耗盡（剩 5%）。穿防具減傷、用補劑回血、答題更穩就能贏 💪<br><span style="font-size:11px">血量每小時自然回復 4%</span></div>
@@ -3392,7 +3423,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.14';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.15';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3446,7 +3477,7 @@ function dragActivate(){
   if(navigator.vibrate) navigator.vibrate(30);
   const el = dragCtx.taskEl;
   const g = el.cloneNode(true);
-  g.style.cssText = 'position:fixed;z-index:500;width:'+el.offsetWidth+'px;opacity:.92;pointer-events:none;transform:scale(1.04);box-shadow:0 10px 32px rgba(0,0,0,.7);border:2px solid var(--accent)';
+  g.style.cssText = 'position:fixed;z-index:500;width:'+el.offsetWidth+'px;opacity:.92;pointer-events:none;transform:scale(1.04);box-shadow:0 10px 32px rgba(22,68,110,.35);border:2px solid var(--accent)';
   document.body.appendChild(g); dragCtx.ghost = g;
   el.style.opacity = '.3';
   toast('拖到其他象限改分類');
