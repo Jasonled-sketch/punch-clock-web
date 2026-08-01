@@ -260,7 +260,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -722,12 +722,15 @@ async function salaryParityCheck() {
   } catch (e) { box.innerHTML = `<p style="color:#d33;padding:8px">對照失敗：${e.message}</p>`; }
 }
 
-function getWorkDays(year, month) {
+function getWorkDays(year, month, specialDays) {   // specialDays(可選):含類型「補班」的週六日照算應出勤(勞基法)
   const days = new Date(year, month, 0).getDate();
+  const makeup = new Set((specialDays || []).filter(s => /補班/.test(s.type || '')).map(s => s.date));
   let count = 0;
   for (let d = 1; d <= days; d++) {
     const dow = new Date(year, month - 1, d).getDay();
+    const ds = `${year}/${pad(month)}/${pad(d)}`;
     if (dow !== 0 && dow !== 6) count++;
+    else if (makeup.has(ds)) count++;
   }
   return count;
 }
@@ -1106,7 +1109,7 @@ async function loadMyKPI() {
       getMyRecs(year, month), getIncompleteRecs(year, month), getMyLeaves(), getSpecialDays(), getAllLeaves()
     ]);
     const teamUrgent = allLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
-    const specialSet = new Set(specialDays.map(s => s.date));
+    const specialSet = new Set(specialDays.filter(s => !/補班/.test(s.type || '')).map(s => s.date));  // 排除補班(補班六=應出勤)
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
     let lateCnt = 0, lateMin = 0, earlyCnt = 0;
@@ -2060,7 +2063,7 @@ async function delSpecialDay(id) {
 }
 
 // 曠職分析：逐日掃應出勤工作日，缺席(無打卡無請假無特殊日)且過 30hr 沒補單 → 曠職；未過 → 待補單
-function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
+function analyzeAbsence(worker, recs, leaves, year, month, specialSet, spByDateM) {
   const now = new Date();
   const dim = new Date(year, month, 0).getDate();
   const ym = `${year}/${pad(month)}`;
@@ -2073,15 +2076,16 @@ function analyzeAbsence(worker, recs, leaves, year, month, specialSet) {
   const [inH, inM] = (sh ? sh.am[0] : '09:00').split(':').map(Number);
   let confirmed = 0;
   const pending = [];
+  const isMakeup = ds => { const sp = spByDateM && spByDateM[ds]; return !!(sp && /補班/.test(sp.type || '')); };  // spByDateM(可選第7參數):補班六照算應出勤
   for (let d = 1; d <= dim; d++) {
     const dow = new Date(year, month - 1, d).getDay();
-    if (dow === 0 || dow === 6) continue;                              // 週末非應出勤
+    const ds = `${ym}/${pad(d)}`;
+    if ((dow === 0 || dow === 6) && !isMakeup(ds)) continue;           // 週末非應出勤(補班日除外,勞基法)
     const dt = new Date(year, month - 1, d, inH, inM);                 // 該日上班時間起算
     if (dt > now) continue;                                            // 未來
     if (new Date(year, month - 1, d).toDateString() === now.toDateString()) continue;  // 今天不標「缺席待補單」(可能還在上班中/當天還會打卡)，隔天起才算(Jason 要求；不影響曠職計時，那個吃 elapsed>30hr)
     if (startDate && new Date(year, month - 1, d) < startDate) continue; // 到職前
-    const ds = `${ym}/${pad(d)}`;
-    if (specialSet && specialSet.has(ds)) continue;                    // 特殊日(國定假/颱風/全特休)不計缺席
+    if (specialSet && specialSet.has(ds) && !isMakeup(ds)) continue;   // 特殊日(國定假/颱風/全特休)不計缺席;補班日不在此列
     if (attendSet.has(ds) || leaveSet.has(ds)) continue;               // 有打卡或有請假
     const elapsed = (now - dt) / 3600000;
     if (elapsed > 30) confirmed++;                                     // 過 30hr 未補單 → 曠職
@@ -2230,11 +2234,11 @@ async function viewReport() {
     WORKERS = workers;
     const recs = recBundle.recs;
     const incomplete = recBundle.incomplete;
-    const specialSet = new Set(specialDays.map(s => s.date));
+    const specialSet = new Set(specialDays.filter(s => !/補班/.test(s.type || '')).map(s => s.date));  // 放假類特殊日(排除補班,否則補班日被當放假)
     const holidaySet = new Set(specialDays.filter(s => s.type === '國定假日').map(s => s.date));  // 國定假日(出勤加倍)
-    const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);  // 全部特殊日(含颱風/全特休)供明細顯示
+    const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);  // 全部特殊日(含颱風/全特休/補班)供明細顯示
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
-    const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1);
+    const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1, specialDays);   // 補班六照算應出勤(勞基法)
     const payrollLocks = await getPayrollLocks(ym);
     const isLocked = payrollLocks.length > 0;
     const payrollRows = [];
@@ -2284,7 +2288,7 @@ async function viewReport() {
       const pendingCnt = leaves.filter(l => l.email === w.email && l.status === 'pending' && (l.start_date || '').startsWith(ym)).length;
 
       // 曠職（正職）：逐日分析，過 72hr 未補單才算；緩衝期內列待補單
-      const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialSet) : { confirmed: 0, pending: [] };
+      const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialSet, specialByDate) : { confirmed: 0, pending: [] };
       const absent = ab.confirmed;
       const pendingAbsent = ab.pending.length;
       // ── 勞基法薪資計算：改吃 bot 單一 API（_apiS 有值就用，載入失敗才用本地算；數字已對照驗證一致）──
@@ -2481,8 +2485,8 @@ function showReportDetail(email) {
       if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
     });
   }
-  const latePen = lateMin > 15 ? lateMin : 0, earlyPen = earlyMin > 15 ? earlyMin : 0;
-  const lateDeduct = _apiS ? _apiS.lateDeduct : Math.round((latePen + earlyPen) / 60 * hourly);
+  const teTotP = lateMin + earlyMin;   // 遲到+早退「合計」月累計>15分→全額扣(Jason 2026/08/01 拍板,與全勤同門檻;與 bot 一致)
+  const lateDeduct = _apiS ? _apiS.lateDeduct : Math.round((teTotP > 15 ? teTotP : 0) / 60 * hourly);
 
   // 加班費明細
   const od = overtimeDetail(email, otAll, ym, hourly);
@@ -2516,7 +2520,7 @@ function showReportDetail(email) {
   // 薪資彙整
   const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
   const attendDays = new Set(wr.map(r => r.date)).size;
-  const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month, specialSet) : { confirmed: 0, pending: [] };
+  const ab = isFull ? analyzeAbsence(w, recs, leaves, year, month, specialSet, specialByDate) : { confirmed: 0, pending: [] };
   const absent = ab.confirmed;
   const absentDeduct = _apiS ? _apiS.absentDeduct : (isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0);
   const disasterDeduct = _apiS ? _apiS.disasterDeduct : (isFull ? Math.round(disasterUnpaidDays(w, recs, leaves, year, month, specialByDate) * (w.monthly_salary / 30)) : 0);  // 天災假不支薪
@@ -2553,7 +2557,7 @@ function showReportDetail(email) {
     const dow = new Date(year, month - 1, d).getDay();
     const dMs = Date.UTC(year, month - 1, d);
     const rec = recByDate[ds], lvs = lvByDate[ds] || [];
-    const isHol = (holidaySet && holidaySet.has(ds)) || dow === 0 || dow === 6;
+    const isHol = ((holidaySet && holidaySet.has(ds)) || dow === 0 || dow === 6) && !(specialByDate && specialByDate[ds] && /補班/.test(specialByDate[ds].type || ''));  // 補班六非假日,照列
     const dayOff = [];
     lvs.forEach(l => { if (l.start_time && l.end_time && (parseFloat(l.hours) || 0) < (sh ? sh.hours : 8)) dayOff.push({ s: l.start_time, e: l.end_time, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); else dayOff.push({ full: true, type: l.leave_type, h: parseFloat(l.hours) || 0, urg: isUrgentLeave(l) }); });
     (compByDate[ds] || []).forEach(c => dayOff.push({ s: c.s, e: c.e, type: '補休', h: c.h }));
