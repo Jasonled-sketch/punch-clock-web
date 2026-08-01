@@ -5,8 +5,16 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>工讀生打卡系統</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>譽昇打卡系統</title>
+  <!-- PWA：加到主畫面變 App + 推播通知（iPhone 需 iOS16.4+ 且必須先加到主畫面才收得到推播）-->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a73e8">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="譽昇打卡">
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#222;min-height:100vh}
@@ -260,7 +268,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -948,6 +956,7 @@ let _MD = {}; // modal data store
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 async function initApp() {
+  initSW();                                          // PWA：註冊 Service Worker（推播用；失敗不影響其他功能）
   loadRemoteCfg();                                   // 背景載入公司設定（假別清單等），失敗用預設
   if (ME.isAdmin) {
     renderAdminTabs();
@@ -1803,6 +1812,53 @@ function chgAMonth(d) {
 //  即時現況戰情牆（管理者：一眼看全公司此刻狀態）
 //  資料來自 bot 集中計算 /calc/roster-now（判定與群組提醒同源，attendance-sync）；統計由 people[] 自算（deptmgr 過濾後也正確）
 // ═══════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
+//  PWA：Service Worker + 手機推播（只有管理者需要；iPhone 須先「加入主畫面」）
+// ═══════════════════════════════════════════════════════════════════════
+let _SWREG = null;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+async function initSW() {
+  if (!('serviceWorker' in navigator)) return null;
+  try { _SWREG = await navigator.serviceWorker.register('sw.js'); return _SWREG; } catch (e) { return null; }
+}
+function b64ToU8(base64) {
+  const pad = '='.repeat((4 - base64.length % 4) % 4);
+  const raw = atob((base64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+async function pushStatus() {   // 'unsupported' | 'need-standalone' | 'denied' | 'on' | 'off'
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return isIOS() && !isStandalone() ? 'need-standalone' : 'unsupported';
+  if (isIOS() && !isStandalone()) return 'need-standalone';       // iOS 未加主畫面 → 無法推播
+  if (Notification.permission === 'denied') return 'denied';
+  const reg = _SWREG || await initSW();
+  if (!reg) return 'unsupported';
+  const sub = await reg.pushManager.getSubscription();
+  return sub ? 'on' : 'off';
+}
+async function enablePush(btn) {
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = '設定中…'; }
+    const st = await pushStatus();
+    if (st === 'need-standalone') { alert('iPhone 需要先把本系統「加入主畫面」才能開啟通知：\n\n1. 點畫面下方「分享」按鈕（方框↑）\n2. 選「加入主畫面」\n3. 從主畫面的 App 圖示開啟\n4. 再回來點一次「開啟通知」'); return; }
+    if (st === 'unsupported') { alert('這個瀏覽器不支援手機通知，請改用 Chrome（Android）或加入主畫面後用 Safari（iPhone，需 iOS 16.4 以上）'); return; }
+    if (st === 'denied') { alert('通知權限先前被拒絕了。\n請到手機「設定 → 通知」或瀏覽器網站設定，把本站的通知打開後再試。'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { alert('未取得通知權限，無法開啟提醒'); return; }
+    const vres = await authedFetch(`${CONFIG.WORKER_URL}/calc/push/vapid`);
+    const vj = await vres.json().catch(() => ({}));
+    if (!vj.ok || !vj.enabled || !vj.key) { alert('伺服器尚未設定推播金鑰（VAPID），請稍後再試'); return; }
+    const reg = _SWREG || await initSW();
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(vj.key) });
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sub: sub.toJSON ? sub.toJSON() : sub }) });
+    const j = await res.json().catch(() => ({}));
+    if (!j.ok) { alert('訂閱失敗：' + (j.reason || '未知錯誤')); return; }
+    toast('通知已開啟 ✓ 待會會收到一則測試通知', 'green');
+    if (CUR_TAB === 'live') renderLive();
+  } catch (e) { alert('開啟通知失敗：' + e.message); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = '🔔 開啟通知'; } }
+}
+
 const LIVE_META = {
   missing:    { label: '未打卡',      emoji: '🟡', color: '#F59E0B' },
   ot:         { label: '加班中',      emoji: '🔵', color: '#2563EB' },
@@ -1832,8 +1888,13 @@ async function renderLive() {
     people.forEach(p => { cnt[p.status] = (cnt[p.status] || 0) + 1; });
     const onDuty = cnt.working + cnt.ot;
     let h = '<div class="view">';
+    const pst = await pushStatus();
+    const bell = pst === 'on' ? '<span class="live-refresh" style="background:#e6f4ea;color:#137333">🔔 通知已開</span>'
+      : pst === 'need-standalone' ? '<button class="live-refresh" style="background:#f59e0b" onclick="enablePush(this)">📲 裝成 App</button>'
+      : pst === 'unsupported' ? ''
+      : '<button class="live-refresh" style="background:#7c3aed" onclick="enablePush(this)">🔔 開啟通知</button>';
     h += `<div class="live-top"><div><span class="live-title">即時現況</span><span class="live-sub">${d.today} · 全公司 ${people.length} 人</span></div>`;
-    h += '<button class="live-refresh" onclick="renderLive()">🔄 重新整理</button></div>';
+    h += `<div style="display:flex;gap:8px">${bell}<button class="live-refresh" onclick="renderLive()">🔄 重新整理</button></div></div>`;
     if (d.holiday) h += `<div class="live-hol">💤 今日${d.holidayName || '放假'}　全公司休假</div>`;
     const chip = (n, l, c) => `<div class="live-chip" style="border-top-color:${c}"><div class="n" style="color:${c}">${n}</div><div class="l">${l}</div></div>`;
     h += '<div class="live-chips">' +
