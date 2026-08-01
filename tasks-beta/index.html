@@ -75,7 +75,9 @@ img{display:block}
 .role-tag.boss{background:rgba(240,165,0,.18);color:var(--accent)}
 
 /* ---------- 頂部 bar ---------- */
-#topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);box-shadow:var(--sh1);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:nowrap;gap:6px}
+#topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);box-shadow:var(--sh1);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:wrap;gap:6px}   /* wrap:搜尋列(order:99)換行滿寬 */
+#schBtn.active{background:var(--sky,#0b72c4);border-color:var(--sky,#0b72c4);color:#fff}
+mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
 #topbar .brand{font-weight:900;color:var(--accent);font-size:17px;white-space:nowrap;flex:0 0 auto}
 #topbar .right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
 @media(max-width:430px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{font-size:9px} #topbar .growth-btn{width:36px;height:36px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px} #topbar .me-chip{padding:3px;gap:0} #topbar .me-chip .avatar{width:32px;height:32px;font-size:14px} }   /* 手機窄幅(≤430):三鈕縮 36px 圓 icon、名字收起、只留 32px 頭像;版本號縮字保留(Jason 要看得到) */
@@ -227,7 +229,7 @@ img{display:block}
 /* 象限分頁 */
 .quad-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px}
 .quad-tab{padding:8px 3px;border-radius:10px;border:2px solid var(--border);background:var(--surface);text-align:center;color:var(--text);transition:all .12s}
-.quad-tab .qt-title{font-size:11px;font-weight:700;line-height:1.2}
+.quad-tab .qt-title{font-size:13px;font-weight:700;line-height:1.2}   /* 11→13:50-60歲可讀(設計經理自查) */
 .quad-tab .qt-sub{font-size:16px;font-weight:800;margin-top:1px}
 .quad-tab.active{color:#fff!important}
 .quad-panel{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;box-shadow:var(--sh1)}
@@ -564,7 +566,7 @@ img{display:block}
       <button class="growth-btn" onclick="showGrowth()" title="成長">📈<span class="bt-txt"> 成長</span></button>
       <button class="growth-btn" onclick="showTeam()" title="團隊">👥<span class="bt-txt"> 團隊</span></button>
       <button class="growth-btn" onclick="showFavor()" title="人情">🤝<span class="bt-txt"> 人情</span></button>
-      <button class="growth-btn" onclick="showSearch()" title="搜尋任務">🔍<span class="bt-txt"> 搜尋</span></button>
+      <button class="growth-btn" id="schBtn" onclick="toggleSearch()" title="搜尋任務">🔍<span class="bt-txt"> 搜尋</span></button>
     </div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
@@ -572,6 +574,18 @@ img{display:block}
         <span class="nm" id="meName"></span>
       </div>
       <button id="pushBell" class="bell-off" onclick="togglePush()" title="開啟任務提醒">🔔</button>
+    </div>
+    <!-- 搜尋列(設計經理規格 v2):就地滑出,結果直接在看板即時過濾 -->
+    <div id="searchBar" style="width:100%;order:99;max-height:0;overflow:hidden;transition:max-height .18s ease;display:flex;align-items:center;gap:8px">
+      <div style="flex:1;position:relative">
+        <input type="search" id="schInput" enterkeyhint="search" autocomplete="off" autocapitalize="off" placeholder="打 1-2 個字就能找（標題、備註、負責人）"
+          style="width:100%;height:44px;font-size:17px;border-radius:12px;background:var(--surface2);border:1.5px solid var(--border);padding:0 44px 0 12px;box-sizing:border-box"
+          oninput="STATE.searchQ=this.value;renderBoard();const x=document.getElementById('schClear');if(x)x.style.display=this.value?'flex':'none'"
+          onkeydown="if(event.key==='Enter')this.blur()">
+        <button id="schClear" onclick="const i=document.getElementById('schInput');i.value='';STATE.searchQ='';this.style.display='none';renderBoard();i.focus()"
+          style="display:none;position:absolute;right:4px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:none;background:none;cursor:pointer;align-items:center;justify-content:center"><span style="width:22px;height:22px;border-radius:50%;background:var(--border);color:var(--text);display:flex;align-items:center;justify-content:center;font-size:13px">✕</span></button>
+      </div>
+      <button onclick="closeSearch()" style="border:none;background:none;color:var(--sky,#0b72c4);font-size:15px;font-weight:700;height:44px;cursor:pointer;flex:0 0 auto">取消</button>
     </div>
   </div>
   <div id="board"></div>
@@ -950,6 +964,8 @@ function renderBoard(){
       <div class="qt-sub">${cnt}</div>
     </button>`;
   }).join('');
+  const sq=(STATE.searchQ||'').trim().toLowerCase();
+  if(sq){ board.innerHTML=`<div style="padding:4px 2px">${renderSearchResults(sq)}</div>`; return; }   // 搜尋模式:結果直接取代看板,清除即還原
   const q = CONFIG.QUADRANTS.find(x=>x.id===STATE.activeQuad) || CONFIG.QUADRANTS[0];
   const tasks = STATE.tasks.filter(t=>t.quadrant===STATE.activeQuad);
   const open = tasks.filter(t=>t.status!=='done');
@@ -968,9 +984,7 @@ function renderBoard(){
           <span style="color:var(--ok,#15803d);font-weight:900">✓</span>
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:13px">${esc(t.title)}</span>
           ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
-          <span style="font-size:12px;color:var(--accent);flex:0 0 auto">詳情 ▾</span>
         </div>`; }).join('');
-      if(isAdmin()) doneHtml += `<div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:center">經理：長按任一件可撤回重啟</div>`;
       if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#ffffff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
     }
   }
@@ -1017,6 +1031,7 @@ let swipeCtx=null, lastSwipeEnd=0;
 function initSwipe(){
   const board=document.getElementById('board');
   if(!board || board.__swipeInit) return; board.__swipeInit=true;
+  board.addEventListener('touchstart', ()=>{ const i=document.getElementById('schInput'); if(i&&document.activeElement===i) i.blur(); }, {passive:true});   // 捲結果就收鍵盤(設計經理規格)
   board.addEventListener('touchstart', swipeStart, {passive:true});
   board.addEventListener('touchmove', swipeMove, {passive:false});
   board.addEventListener('touchend', swipeEnd);
@@ -1074,7 +1089,8 @@ async function acceptTask(id){
   t2.assigneeId=STATE.user.id; renderBoard(); await dbUpsert(t2); toast('已接單，開始處理！');
 }
 
-function renderTaskCard(t){
+function renderTaskCard(t, hl){
+  hl = (typeof hl==='string' && hl) ? hl : '';   // map(renderTaskCard) 會把 index 傳進來,擋掉
   const a = userById(t.assigneeId);
   const sup = isSupervisor(STATE.user);
   const mine = STATE.user.id === t.assigneeId;
@@ -1102,42 +1118,51 @@ function renderTaskCard(t){
     <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" data-swd="${swN*56}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
       <div style="display:flex;align-items:center;gap:8px;min-height:34px">
         ${t.status==='done'?`<span style="color:var(--ok);font-weight:900;flex:0 0 auto">✓</span>`:dueDot(t)}
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'color:var(--muted);font-weight:400':''}">${esc(t.title)}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'color:var(--muted);font-weight:400':''}">${hl?hlMark(t.title,hl):esc(t.title)}</span>
         ${t.rejectNote&&t.status==='open'?`<span title="退回：${esc(t.rejectNote)}" style="flex:0 0 auto">↩️</span>`:''}
-        ${t.status==='submitted'?'<span style="font-size:11px;color:var(--sky);flex:0 0 auto">📮審核中</span>':''}
+        ${t.status==='submitted'?'<span title="審核中" style="flex:0 0 auto">📮</span>':''}
         ${!a&&t.status==='open'?`<button style="flex:0 0 auto;background:var(--accent-bg,#f0a500);color:var(--accent-ink,#241603);border:none;border-radius:14px;padding:4px 12px;font-size:13px;font-weight:700;cursor:pointer" onclick="event.stopPropagation();acceptTask('${t.id}')">🙋 接單</button>`:''}
         ${a?`<span class="mini-avatar" style="background:${a.color};flex:0 0 auto" title="${a.name}">${a.name.slice(-1)}</span>`:''}
       </div>
     </div>
   </div>`;
 }
-/* 🔍 任務搜尋(Jason:打1-2字就跳出執行中跟已完成在哪) */
-function showSearch(){
-  const old=document.getElementById('searchModal'); if(old) old.remove();
-  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='searchModal';
-  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="max-height:84vh;overflow:auto">
-    <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">🔍 搜尋任務</h3><button class="t-expand" onclick="document.getElementById('searchModal').remove()" style="font-size:18px">✕</button></div>
-    <input type="text" id="schInput" placeholder="輸入 1-2 個關鍵字…" oninput="renderSearch()" style="width:100%;margin-top:10px;font-size:16px" autocomplete="off">
-    <div id="schResults" style="margin-top:10px"></div>
-  </div>`;
-  mask.onclick=()=>mask.remove(); document.body.appendChild(mask);
-  setTimeout(()=>{const i=document.getElementById('schInput'); if(i)i.focus();},60);
+/* 🔍 搜尋 v2(設計經理規格):就地搜尋列+看板即時過濾,結果沿用單行卡(左滑/詳情全通用) */
+function toggleSearch(){
+  if(STATE.searchOpen){ closeSearch(); return; }
+  STATE.searchOpen=true;
+  const sb=document.getElementById('searchBar'); if(sb){ sb.style.maxHeight='56px'; sb.style.paddingTop='4px'; }
+  const b=document.getElementById('schBtn'); if(b)b.classList.add('active');
+  window.scrollTo(0,0);
+  setTimeout(()=>{const i=document.getElementById('schInput'); if(i)i.focus();},80);
 }
-function renderSearch(){
-  const q=(document.getElementById('schInput')||{value:''}).value.trim().toLowerCase();
-  const box=document.getElementById('schResults'); if(!box) return;
-  if(!q){ box.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">輸入關鍵字（標題或備註都會找）</div>'; return; }
-  const hits=STATE.tasks.filter(t=>(t.title||'').toLowerCase().includes(q)||(t.note||'').toLowerCase().includes(q));
-  if(!hits.length){ box.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">找不到相關任務</div>'; return; }
+function closeSearch(){
+  STATE.searchOpen=false; STATE.searchQ='';
+  const sb=document.getElementById('searchBar'); if(sb){ sb.style.maxHeight='0'; sb.style.paddingTop='0'; }
+  const i=document.getElementById('schInput'); if(i)i.value='';
+  const x=document.getElementById('schClear'); if(x)x.style.display='none';
+  const b=document.getElementById('schBtn'); if(b)b.classList.remove('active');
+  renderBoard();
+}
+function hlMark(txt,q){ const e=esc(txt); if(!q) return e; try{ const re=new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi'); return e.replace(re,'<mark>$1</mark>'); }catch(err){ return e; } }
+function renderSearchResults(q){
+  const hit=t=>{ const a=userById(t.assigneeId); return (t.title||'').toLowerCase().includes(q)||(t.note||'').toLowerCase().includes(q)||(a&&(((a.name||'').toLowerCase().includes(q))||((a.nick||'').toLowerCase().includes(q)))); };
+  const hits=STATE.tasks.filter(hit);
+  if(!hits.length) return `<div style="text-align:center;padding:30px 16px">
+    <div style="font-size:15px">😅 找不到「${esc(q)}」相關任務</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:6px">試試少打一個字，或換個關鍵字</div>
+    <button style="margin-top:14px;width:60%;height:44px;background:var(--card,#fff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer" onclick="const i=document.getElementById('schInput');i.value='';STATE.searchQ='';renderBoard();i.focus()">清除重找</button></div>`;
   const grp={open:[],submitted:[],done:[]}; hits.forEach(t=>grp[t.status]&&grp[t.status].push(t));
-  const row=t=>{ const qd=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant);
-    return `<div style="min-height:42px;display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--line,#c2d8ea);cursor:pointer;padding:2px 0" onclick="document.getElementById('searchModal').remove();showTaskDetail('${t.id}')">
-      ${t.status==='done'?'<span style="color:var(--ok);font-weight:900">✓</span>':dueDot(t)}
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;${t.status==='done'?'color:var(--muted)':''}">${esc(t.title)}</span>
-      <span style="font-size:11px;color:${qd.color};flex:0 0 auto">${qd.title}</span></div>`; };
-  box.innerHTML=[['open','⏳ 進行中'],['submitted','📮 待審核'],['done','🏆 已完成']]
-    .filter(([k])=>grp[k].length)
-    .map(([k,label])=>`<div style="font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:700">${label}（${grp[k].length}）</div>`+grp[k].map(row).join('')).join('');
+  grp.open.sort((a,b)=>(a.dueAt?new Date(a.dueAt).getTime():9e15)-(b.dueAt?new Date(b.dueAt).getTime():9e15));
+  grp.done.sort((a,b)=>new Date(b.approvedAt||b.submittedAt||0)-new Date(a.approvedAt||a.submittedAt||0));
+  const doneAll=grp.done.length; grp.done=grp.done.slice(0,20);
+  let html=`<div style="font-size:13px;color:var(--muted);margin:2px 0 8px">找到 ${hits.length} 件</div>`;
+  [['open','⏳ 進行中'],['submitted','📮 待審核'],['done','🏆 已完成']].forEach(([k,label])=>{
+    if(!grp[k].length) return;
+    html+=`<div style="font-size:13px;font-weight:700;color:var(--muted);margin:12px 0 6px">${label}（${k==='done'?doneAll:grp[k].length}）</div>`+grp[k].map(t=>renderTaskCard(t,q)).join('');
+  });
+  if(doneAll>20) html+=`<div style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">還有 ${doneAll-20} 件更早的…</div>`;
+  return html;
 }
 /* 時間狀態圓點(Jason 規格):剩<2hr或已逾期=紅底黃❗/剩<4hr=黃底紅▲/剩<8hr=綠底/更久或不限時=藍底 */
 function dueDot(t){
@@ -3587,7 +3612,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.26';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.27';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3619,6 +3644,7 @@ if(/Android/i.test(navigator.userAgent) || location.search.indexOf('bkdbg')>=0){
     const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
     const top=masks[masks.length-1];
     if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
+    else if(STATE.searchOpen){ closeSearch(); }   // 搜尋列開著→返回=關搜尋(上一動)
     else if(STATE.navStack && STATE.navStack.length){ STATE.activeQuad=STATE.navStack.pop(); renderBoard(); }   // 無彈窗→退回上一個象限分頁(恢復上一動)
     _bkUpd();
     // 不在此補推(會被防護標記跳過而失效);下一次觸碰畫面時自動補建 → 「操作→返回」永遠被攔;連按兩下返回=退出(安卓慣例)
