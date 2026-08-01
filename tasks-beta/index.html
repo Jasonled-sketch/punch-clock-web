@@ -53,9 +53,10 @@ img{display:block}
 .role-tag.boss{background:rgba(240,165,0,.18);color:var(--accent)}
 
 /* ---------- 頂部 bar ---------- */
-#topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 14px}
-#topbar .brand{font-weight:900;color:var(--accent);font-size:17px}
-#topbar .right{display:flex;align-items:center;gap:8px}
+#topbar{position:sticky;top:0;z-index:50;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:nowrap;gap:6px}
+#topbar .brand{font-weight:900;color:var(--accent);font-size:17px;white-space:nowrap;flex:0 0 auto}
+#topbar .right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+@media(max-width:520px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{display:none} .growth-btn{padding:6px 9px} }   /* 手機窄幅:按鈕縮icon、名字收起、標題不換行→🔔一定看得到 */
 .me-chip{display:flex;align-items:center;gap:7px;background:var(--surface2);border-radius:20px;padding:5px 10px 5px 5px}
 .me-chip .avatar{width:28px;height:28px;font-size:13px}
 .me-chip .nm{font-size:13px}
@@ -529,9 +530,9 @@ img{display:block}
   <div id="topbar">
     <div style="display:flex;align-items:center;gap:10px">
       <div class="brand">⬡ 任務牆 <span id="verTag" style="font-size:10px;color:var(--muted);font-weight:400"></span></div>
-      <button class="growth-btn" onclick="showGrowth()">📈 成長</button>
-      <button class="growth-btn" onclick="showTeam()">👥 團隊</button>
-      <button class="growth-btn" onclick="showFavor()">🤝 人情</button>
+      <button class="growth-btn" onclick="showGrowth()">📈<span class="bt-txt"> 成長</span></button>
+      <button class="growth-btn" onclick="showTeam()">👥<span class="bt-txt"> 團隊</span></button>
+      <button class="growth-btn" onclick="showFavor()">🤝<span class="bt-txt"> 人情</span></button>
     </div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
@@ -1212,7 +1213,7 @@ async function saveTask(){
   closeModal(); renderBoard();
   try{
     await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務');
-    if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],'📌 新任務指派給你', title); }   // 🔔 B4-1 新增且指派他人
+    if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],(quad==='q1'?'🔴 緊急任務指派給你':'📌 新任務指派給你'), title); }   // 🔔 B4-1 新增且指派他人;重要又緊急標紅
   }
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
@@ -3391,7 +3392,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.13';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.14';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3404,14 +3405,17 @@ document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機
   }
 }
 renderLogin();
-/* 安卓返回鍵(只在主畫面 APP 模式)：先關最上層彈窗,不直接退出 APP;要離開用 Home/多工鍵 */
+/* 安卓返回鍵(只在主畫面 APP 模式)：返回=關最上層彈窗(上一個動作);沒東西可關→再按就正常退出 APP */
 if(window.matchMedia && matchMedia('(display-mode: standalone)').matches){
   history.pushState({tw:1},'');
   window.addEventListener('popstate',()=>{
     const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
     const top=masks[masks.length-1];
-    if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
-    history.pushState({tw:1},'');   // 推回,維持攔截
+    if(top){
+      if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); }
+      history.pushState({tw:1},'');   // 有關掉東西→推回,下一次返回繼續往上關
+    }
+    // 沒彈窗→不推回:此時已在歷史底層,使用者再按一次返回=正常退出 APP
   });
 }
 /* ===================================================================
