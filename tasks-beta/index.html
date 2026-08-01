@@ -683,9 +683,9 @@ function emailToUserId(email){ const u=CONFIG.USERS.find(x=>x.email===email); re
 function parseImages(s){ if(!s) return []; return String(s).split('\n').filter(x=>x.trim()).map(u=>({type:/\.(mp4|mov|webm)/i.test(u)?'video':'image', src:u.trim()})); }
 
 async function ragicFetch(suffix, opts){
-  const s=wsess();   // 有 7 天通行證→走 taskwall-push 代理(免 Google token);401(過期/被撤)清掉 fallback 舊路
+  const s=wsess();   // 有 7 天通行證→走 taskwall-push 代理;任何非 2xx(401/5xx)都 fallback 舊路(可靠優先)
   if(s){ try{ const r=await fetch(CONFIG.PUSH.WORKER+'/ragic'+CONFIG.RAGIC.PATH+suffix, Object.assign({}, opts, { headers: Object.assign({'X-Session-Token':s.token},(opts&&opts.headers)||{}) }));
-    if(r.status!==401) return r; localStorage.removeItem('usled_wsess'); }catch(e){} }
+    if(r.ok) return r; if(r.status===401) localStorage.removeItem('usled_wsess'); }catch(e){} }
   const url = CONFIG.RAGIC.WORKER + CONFIG.RAGIC.PATH + suffix;
   const headers = Object.assign({ 'X-Google-Token': STATE.googleToken||'' }, (opts&&opts.headers)||{});
   return await fetch(url, Object.assign({}, opts, { headers }));
@@ -693,7 +693,9 @@ async function ragicFetch(suffix, opts){
 
 async function ragicLoadTasks(){
   const r = await ragicFetch('?api', { method:'GET' });
+  if(!r.ok) throw new Error('HTTP '+r.status);   // 非 2xx 一律當錯誤,不再靜默變空清單(2026-08 事故:401 JSON 被當 0 筆資料)
   const json = await r.json();
+  if(json && json.status && typeof json.status==='string' && !json['1'] && Object.keys(json).length<=3) throw new Error('AUTH:'+json.status);   // {status:'UNAUTHORIZED'...} 這類錯誤物件不是資料
   const tasks = [];
   Object.keys(json).forEach(k=>{
     const rec = json[k]; if(!rec || typeof rec!=='object' || rec._ragicId==null) return;
@@ -827,7 +829,10 @@ async function login(uid){
   document.getElementById('meName').textContent = STATE.user.name;
   ensureSession();   // 背景換/續 7 天通行證(有 Google token 時);不阻塞,本次讀寫雙軌自動選路
   try{ STATE.tasks = await dbLoadTasks(); }
-  catch(e){ STATE.tasks = []; toast('雲端讀取失敗：'+e.message); }
+  catch(e){ STATE.tasks = [];
+    if(CONFIG.MODE==='CLOUD' && !STATE.googleToken){ toast('連線憑證過期，2 秒後帶你重新登入'); setTimeout(forceRelogin, 2000); return; }   // 憑證鏈全斷→自動重登(不再讓人看空畫面)
+    toast('雲端讀取失敗：'+e.message);
+  }
   renderBoard();
   initSwipe();
   checkOverdue();
@@ -2671,9 +2676,9 @@ async function resetGame(){
 }
 function lvOK(min){ return isBeta() || userGameLevel(STATE.user.id) >= (min||0); }   // beta 全解鎖
 async function ragicFetchGS(suffix, opts){
-  const s=wsess();   // 同 ragicFetch:通行證優先,401 fallback
+  const s=wsess();   // 同 ragicFetch:通行證優先,任何非 2xx 都 fallback 舊路
   if(s){ try{ const r=await fetch(CONFIG.PUSH.WORKER+'/ragic'+GAME_STORE.PATH+suffix, Object.assign({},opts,{headers:Object.assign({'X-Session-Token':s.token},(opts&&opts.headers)||{})}));
-    if(r.status!==401) return r; localStorage.removeItem('usled_wsess'); }catch(e){} }
+    if(r.ok) return r; if(r.status===401) localStorage.removeItem('usled_wsess'); }catch(e){} }
   const url=CONFIG.RAGIC.WORKER + GAME_STORE.PATH + suffix;
   const headers=Object.assign({'X-Google-Token':STATE.googleToken||''},(opts&&opts.headers)||{});
   return await fetch(url, Object.assign({},opts,{headers}));
@@ -3545,7 +3550,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.23';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.24';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
