@@ -78,7 +78,7 @@ img{display:block}
 #topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);box-shadow:var(--sh1);display:flex;align-items:center;justify-content:space-between;padding:10px 10px;flex-wrap:nowrap;gap:6px}
 #topbar .brand{font-weight:900;color:var(--accent);font-size:17px;white-space:nowrap;flex:0 0 auto}
 #topbar .right{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-@media(max-width:430px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{display:none} #topbar .growth-btn{width:36px;height:36px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px} #topbar .me-chip{padding:3px;gap:0} #topbar .me-chip .avatar{width:32px;height:32px;font-size:14px} }   /* 手機窄幅(≤430):三鈕縮 36px 圓 icon、名字收起、只留 32px 頭像、標題不換行→🔔一定看得到 */
+@media(max-width:430px){ .bt-txt{display:none} #topbar .me-chip .nm{display:none} #topbar .brand{font-size:15px} #topbar #verTag{font-size:9px} #topbar .growth-btn{width:36px;height:36px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px} #topbar .me-chip{padding:3px;gap:0} #topbar .me-chip .avatar{width:32px;height:32px;font-size:14px} }   /* 手機窄幅(≤430):三鈕縮 36px 圓 icon、名字收起、只留 32px 頭像;版本號縮字保留(Jason 要看得到) */
 /* 🔔 通知鈴:36px 圓鈕顯眼化;未開通知=右上紅點提示可開啟,已開=全彩無紅點(setBellState 切 .bell-off) */
 #pushBell{position:relative;width:36px;height:36px;border-radius:50%;background:#e3f1fc;border:1px solid var(--border);padding:0;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 #pushBell.bell-off{background:var(--surface2)}
@@ -943,7 +943,14 @@ function renderBoard(){
   if(done.length){
     doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:15px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:17px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
     if(dOpen){
-      doneHtml += done.slice(0,5).map(renderTaskCard).join('');
+      /* 單行精簡列(Jason 要求不佔空間):✓ 標題(刪除線) … 完成者頭像＋詳情 */
+      doneHtml += done.slice(0,5).map(t=>{ const a=userById(t.assigneeId);
+        return `<div style="min-height:44px;display:flex;align-items:center;gap:8px;background:var(--card2,#eef6fd);border:1px solid var(--line,#c2d8ea);border-radius:10px;padding:0 10px;margin-top:6px;cursor:pointer" onclick="showTaskDetail('${t.id}')">
+          <span style="color:var(--ok,#15803d);font-weight:900">✓</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:line-through;color:var(--muted);font-size:14px">${esc(t.title)}</span>
+          ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
+          <span style="font-size:12px;color:var(--accent);flex:0 0 auto">詳情 ▾</span>
+        </div>`; }).join('');
       if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#ffffff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
     }
   }
@@ -1064,6 +1071,7 @@ function renderTaskCard(t){
     } else {
       if(!mine && t.status==='open') swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
       if(mine && t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
+      if(mine && t.status==='submitted') swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();unsubmitTask('${t.id}')">撤回</button>`;
     }
   }
   return `<div class="swipe-row">
@@ -1249,6 +1257,16 @@ async function saveTask(){
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+/* 撤回提交(誤按「我完成了」的後悔藥):待審核期間本人可撤回→回到進行中;已核准(done)只能請主管退回 */
+async function unsubmitTask(id){
+  const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='submitted'){ toast('這張單狀態已變更'); return; }
+  if(t.assigneeId!==STATE.user.id && !isSupervisor(STATE.user)){ toast('只能撤回自己提交的任務'); return; }
+  if(!await vConfirm({icon:'↩️',title:'撤回重做',msg:'把「'+t.title+'」撤回為進行中？\n（主管將看不到這筆待審核）',okText:'撤回'})) return;
+  const t2=STATE.tasks.find(x=>x.id===id); if(!t2||t2.status!=='submitted') { toast('這張單狀態已變更'); return; }
+  t2.status='open'; t2.submittedAt=null; renderBoard();
+  try{ await dbUpsert(t2); }catch(e){ toast('雲端寫入失敗：'+e.message); return; }
+  toast('已撤回，繼續加油 💪');
+}
 async function approveTask(id){ let t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; }
   // 重讀確認還在待審核(競態防護,比照 acceptTask)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
@@ -1294,6 +1312,7 @@ function showTaskDetail(id){
   const stMap={open:'待處理',submitted:'待主管審核',done:'已完成'};
   let actions='';
   if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
+  if(t.status==='submitted'&&mine) actions+=`<button class="btn-soft" onclick="unsubmitTask('${t.id}');closeDetail()">↩️ 撤回重做</button>`;
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
   if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
   const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
@@ -3423,7 +3442,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.15';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.16';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3436,17 +3455,16 @@ document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機
   }
 }
 renderLogin();
-/* 安卓返回鍵(只在主畫面 APP 模式)：返回=關最上層彈窗(上一個動作);沒東西可關→再按就正常退出 APP */
+/* 安卓返回鍵(只在主畫面 APP 模式)：返回=關最上層彈窗,關到底停在首頁、永不跳出(Jason 定案);要離開用 Home 鍵
+   ⚠️ Chrome「歷史操縱防護」會跳過無手勢的 pushState → 攔截層必須在使用者第一次觸碰後才建立(三星實測跳出的根因) */
 if(window.matchMedia && matchMedia('(display-mode: standalone)').matches){
-  history.pushState({tw:1},'');
+  let _bkArmed=false;
+  document.addEventListener('pointerdown', ()=>{ if(!_bkArmed){ _bkArmed=true; try{ history.pushState({tw:1},''); }catch(e){} } }, {passive:true});
   window.addEventListener('popstate',()=>{
     const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
     const top=masks[masks.length-1];
-    if(top){
-      if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); }
-      history.pushState({tw:1},'');   // 有關掉東西→推回,下一次返回繼續往上關
-    }
-    // 沒彈窗→不推回:此時已在歷史底層,使用者再按一次返回=正常退出 APP
+    if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
+    try{ history.pushState({tw:1},''); }catch(e){}   // 永遠推回:關到最後停在首頁,不跳出
   });
 }
 /* ===================================================================
