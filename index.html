@@ -231,7 +231,10 @@
     .sp-list{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
     .sp-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f8f9fa;border-radius:8px;padding:8px 12px;font-size:13px}
     .sp-del{background:#fce8e6;color:#ea4335;border:none;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0}
-    .lock-bar{margin-bottom:12px;text-align:right}
+    .lock-bar{margin-bottom:12px}
+    .lock-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}          /* 三顆等寬一排(手機不換行) */
+    .lock-acts .btn{width:100%;padding:10px 4px;font-size:13px;line-height:1.25;color:#fff;border:none;border-radius:10px;white-space:nowrap}
+    .lock-note{margin-bottom:8px}
     .lock-on{font-size:13px;color:#137333;font-weight:600;background:#e6f4ea;border-radius:8px;padding:6px 12px;display:inline-block}
     .leave-note{font-size:12px;color:#ea4335;margin-top:4px}
     .btn-quick{flex:1;background:#e8f0fe;border:none;color:#1a73e8;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
@@ -268,7 +271,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v8.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -507,6 +510,18 @@ async function authedFetch(url, opts = {}) {
   return res;
 }
 
+// ── 前端讀取快取（切分頁來回不重抓；任何寫入後自動清空，見 ragicPost/ragicUpdate）──
+const _CACHE = new Map();
+function cached(key, ttlMs, fn) {
+  const c = _CACHE.get(key);
+  if (c && Date.now() - c.t < ttlMs) return c.p;
+  const p = fn();
+  _CACHE.set(key, { t: Date.now(), p });
+  p.catch(() => _CACHE.delete(key));            // 失敗不留快取，下次重抓
+  return p;
+}
+function bustCache() { _CACHE.clear(); }        // 寫入後全清（保守作法：寧可重抓也不給舊資料）
+
 async function ragicGet(sheet, extra = {}) {
   const u = new URL(ragicUrl(sheet));
   u.searchParams.set('api', '');
@@ -529,6 +544,7 @@ async function ragicPost(sheet, fields) {
   if (!res.ok) throw new Error(`Ragic POST 失敗 ${res.status}`);
   const data = await res.json();
   if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
+  bustCache();                                   // 寫入後清讀取快取，下次查詢拿最新
   return data.ragicId;
 }
 
@@ -542,6 +558,7 @@ async function ragicUpdate(sheet, id, fields) {
   if (!res.ok) throw new Error(`Ragic UPDATE 失敗 ${res.status}`);
   const data = await res.json();
   if (data.status !== 'SUCCESS') throw new Error(data.errMsg || JSON.stringify(data));
+  bustCache();                                   // 寫入後清讀取快取，下次查詢拿最新
 }
 
 function stripSec(t) { return t ? String(t).slice(0, 5) : ''; }
@@ -957,6 +974,7 @@ let _MD = {}; // modal data store
 
 async function initApp() {
   initSW();                                          // PWA：註冊 Service Worker（推播用；失敗不影響其他功能）
+  initBackGuard();                                   // 返回鍵不直接跳出 App（關彈窗 → 回首頁 → 再按一次才離開）
   loadRemoteCfg();                                   // 背景載入公司設定（假別清單等），失敗用預設
   if (ME.isAdmin) {
     renderAdminTabs();
@@ -1715,7 +1733,8 @@ function showMyReqDetail(req) {
 //  ADMIN VIEWS
 // ═══════════════════════════════════════════════════════════════════════
 
-async function getAllWorkers() {
+async function getAllWorkers() { return cached('workers', 300000, _getAllWorkers); }   // 員工表變動少 → 5 分鐘
+async function _getAllWorkers() {
   const F = CONFIG.FID.W;
   const all = await ragicGet(CONFIG.SHEETS.WORKERS);
   return all.map(r => ({
@@ -1740,7 +1759,8 @@ async function getAllWorkers() {
 }
 
 // 一次抓打卡記錄，同時回傳「完成(recs)」與「未完成(incomplete)」，避免抓兩次全表
-async function getMonthRecsBundle(year, month) {
+async function getMonthRecsBundle(year, month) { return cached(`recs|${year}|${month}`, 45000, () => _getMonthRecsBundle(year, month)); }  // 打卡表最大 → 快取避免切分頁重抓
+async function _getMonthRecsBundle(year, month) {
   const F = CONFIG.FID.R;
   const all = await ragicGet(CONFIG.SHEETS.RECORDS);
   const ok = r => r[F.rec_status] !== 'cancelled' && r[F.rec_status] !== 'deleted';
@@ -2069,7 +2089,8 @@ let _RPT = null;  // 月報資料快取，供明細彈窗使用
 const LIGHT_EMOJI = { green: '🟢', yellow: '🟡', red: '🔴' };
 
 // 特殊日（國定假/颱風/全特休）：該日不計缺席
-async function getSpecialDays() {
+async function getSpecialDays() { return cached('special', 300000, _getSpecialDays); }  // 特殊日極少改 → 5 分鐘
+async function _getSpecialDays() {
   const F = CONFIG.FID.S;
   const all = await ragicGet(CONFIG.SHEETS.SPECIAL);
   return all.map(r => ({
@@ -2313,13 +2334,20 @@ async function viewReport() {
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
     if (showPay) {   // deptmgr 隱藏:鎖薪/匯出/工資清冊/兩顆對照 按鈕
     h += `<div class="lock-bar">${isLocked
-      ? `<span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#b45309;margin-top:4px">⚠️ 以下為即時重算數字；若鎖薪後有補核准的單據，實發以「鎖定當時」快照為準，勿以此畫面重發薪。</div>`
-      : `<button class="btn btn-sm" style="background:#1a73e8;color:#fff;padding:6px 14px" onclick="lockPayroll()">🔒 鎖定本月薪資</button>`}<button class="btn btn-sm" style="background:#0f9d58;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportMonthDetail()">📥 匯出本月明細</button><button class="btn btn-sm" style="background:#6b21a8;color:#fff;padding:6px 14px;margin-left:8px" onclick="exportPayrollRegister()">📑 工資清冊</button></div>`;
+      ? `<div class="lock-note"><span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#b45309;margin-top:4px">⚠️ 以下為即時重算數字；若鎖薪後有補核准的單據，實發以「鎖定當時」快照為準，勿以此畫面重發薪。</div></div>` : ''}
+      <div class="lock-acts">
+        <button class="btn" style="background:${isLocked ? '#9ca3af' : '#1a73e8'}" ${isLocked ? 'disabled' : ''} onclick="lockPayroll()">🔒 ${isLocked ? '已鎖薪' : '鎖定薪資'}</button>
+        <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
+        <button class="btn" style="background:#6b21a8" onclick="exportPayrollRegister()">📑 工資清冊</button>
+      </div></div>`;
     // 對照鈕已下架(2026/07/19 Jason:正式啟用,階段性任務完成)——annualParityCheck/salaryParityCheck 函式保留,需要診斷時 console 手動呼叫
     }
 
-    _API_ANNUAL = await loadApiAnnual();  // 特休改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
-    _API_SALARY = await loadApiSalary(CUR_YEAR, CUR_MONTH + 1);  // 月報薪資改吃 bot 單一 API（載入失敗則各員工自動回退本地算）
+    // 兩支 bot API 並行（原本串著等＝時間相加；改並行後月報載入約快一半）；失敗各自回退本地算
+    [_API_ANNUAL, _API_SALARY] = await Promise.all([
+      cached('api-annual', 45000, loadApiAnnual),
+      cached(`api-salary|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadApiSalary(CUR_YEAR, CUR_MONTH + 1))
+    ]);
     if (!_API_SALARY && showPay) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪（deptmgr 不顯示薪資,免驚擾）
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
@@ -3281,7 +3309,8 @@ async function getMyLeaves() {
   return all.map(parseLeaveRec).filter(l => l.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
 }
 
-async function getAllLeaves() {
+async function getAllLeaves() { return cached('leaves', 45000, _getAllLeaves); }        // 申請類 → 45 秒（送出/核准會即時清快取）
+async function _getAllLeaves() {
   const all = await ragicGet(CONFIG.SHEETS.LEAVES);
   return all.map(parseLeaveRec).filter(l => l.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
 }
@@ -3656,7 +3685,8 @@ async function getMyOt() {
   const all = await ragicGet(CONFIG.SHEETS.OVERTIME, { where:`${F.email},eq,${ME.email}` });
   return all.map(parseOtRec).filter(o => o.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
 }
-async function getAllOt() {
+async function getAllOt() { return cached('ot', 45000, _getAllOt); }
+async function _getAllOt() {
   const all = await ragicGet(CONFIG.SHEETS.OVERTIME);
   return all.map(parseOtRec).filter(o => o.status !== 'cancelled').sort((a,b) => b.apply_time.localeCompare(a.apply_time));
 }
@@ -4127,6 +4157,25 @@ function escAttr(s) { return escHtml(s); }
 
 function setView(html) { document.getElementById('view').innerHTML = html; }
 
+// ── 返回鍵/返回手勢：不直接跳出 App（人性化：關視窗 → 回首頁 → 再按一次才離開）──
+let _backArmed = false, _backReady = false;
+function homeTab() { return (ROLE !== 'employee' || (ME && ME.isAdmin)) ? 'live' : 'punch'; }
+function modalOpen() { const bg = document.getElementById('modal-bg'); return !!(bg && bg.classList.contains('open')); }
+function pushGuard() { try { history.pushState({ g: 1 }, ''); } catch (e) {} }
+function initBackGuard() {
+  if (_backReady) return; _backReady = true;
+  pushGuard();
+  window.addEventListener('popstate', () => {
+    if (modalOpen()) { closeModal(); pushGuard(); return; }                       // ① 有彈窗 → 先關彈窗
+    if (CUR_TAB && CUR_TAB !== homeTab()) { switchTab(homeTab()); pushGuard(); return; }  // ② 不在首頁 → 回首頁
+    if (!_backArmed) {                                                            // ③ 已在首頁 → 再按一次才離開
+      _backArmed = true; toast('再按一次返回鍵可離開', 'green');
+      setTimeout(() => { _backArmed = false; }, 2000);
+      pushGuard(); return;
+    }
+    // 第三次(2秒內)：不再攔截，讓系統真的返回/關閉
+  });
+}
 function openModal(html, center) {
   document.getElementById('modal-box').innerHTML = html;
   const bg = document.getElementById('modal-bg');
