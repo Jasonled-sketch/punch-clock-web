@@ -564,6 +564,7 @@ img{display:block}
       <button class="growth-btn" onclick="showGrowth()" title="成長">📈<span class="bt-txt"> 成長</span></button>
       <button class="growth-btn" onclick="showTeam()" title="團隊">👥<span class="bt-txt"> 團隊</span></button>
       <button class="growth-btn" onclick="showFavor()" title="人情">🤝<span class="bt-txt"> 人情</span></button>
+      <button class="growth-btn" onclick="showSearch()" title="搜尋任務">🔍<span class="bt-txt"> 搜尋</span></button>
     </div>
     <div class="right">
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
@@ -941,7 +942,7 @@ function renderBoard(){
   const glowN = done.filter(t=>t.glow).length;
   let doneHtml='';
   if(done.length){
-    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:48px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:15px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:17px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
+    doneHtml = `<div class="done-drawer" style="margin-top:14px;background:var(--card2,#eef6fd);border-left:4px solid var(--ok);border-radius:12px;min-height:44px;display:flex;align-items:center;padding:0 12px;cursor:pointer;font-weight:700;color:var(--ok);font-size:13px" onclick="toggleDoneDrawer('${STATE.activeQuad}')">🏆 戰績庫 ｜ 已完成 <b style="font-size:15px;margin:0 3px">${done.length}</b> 件${glowN?`（含 🌃 點亮 ${glowN} 面屏）`:''}<span style="margin-left:auto">${dOpen?'▾':'▸'}</span></div>`;
     if(dOpen){
       /* 單行精簡列:✓ 標題(刪除線) … 頭像＋詳情;主管「長按」整行=撤回(Jason 指定,不佔版面標題不截斷) */
       doneHtml += done.slice(0,5).map(t=>{ const a=userById(t.assigneeId);
@@ -951,7 +952,7 @@ function renderBoard(){
           ${a?`<span style="width:22px;height:22px;border-radius:50%;background:${a.color};color:#000;font-size:11px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${esc(a.name.slice(-1))}</span>`:''}
           <span style="font-size:12px;color:var(--accent);flex:0 0 auto">詳情 ▾</span>
         </div>`; }).join('');
-      if(sup) doneHtml += `<div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:center">主管：長按任一件可撤回重啟</div>`;
+      if(isAdmin()) doneHtml += `<div style="font-size:11px;color:var(--muted);margin-top:4px;text-align:center">經理：長按任一件可撤回重啟</div>`;
       if(done.length>5) doneHtml += `<button style="width:100%;height:44px;background:var(--card,#ffffff);border:1px solid var(--line,#c2d8ea);border-radius:12px;color:var(--muted);font-size:14px;cursor:pointer;margin-top:6px" onclick="showDoneHistory('${STATE.activeQuad}')">查看全部 ${done.length} 件戰績 →</button>`;
     }
   }
@@ -1075,24 +1076,57 @@ function renderTaskCard(t){
       if(mine && t.status==='submitted') swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();unsubmitTask('${t.id}')">撤回</button>`;
     }
   }
+  /* 單行卡(Jason 人性化定案):時間圓點+標題+審核icon+頭像;不放狀態徽章/倒數字/滑動提示(熟了就會長按滑動);細節進詳情 */
   return `<div class="swipe-row">
     ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
     <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
-      <div class="task-body">
-        <div class="task-main">
-          <div class="t-title">${esc(t.title)}</div>
-          ${t.rejectNote&&t.status==='open'?`<div style="font-size:11px;color:var(--q1);margin:2px 0 1px">↩️ 退回：${esc(t.rejectNote)}</div>`:''}
-          <div class="t-meta">
-            <span class="status-badge ${st[1]}">${st[0]}</span>
-            ${a?`<span class="mini-avatar" style="background:${a.color}" title="${a.name}">${a.name.slice(-1)}</span>`:''}
-            ${tl?`<span class="${tl.urgent?'t-countdown':''}">⏰ ${tl.text}</span>`:''}
-            ${swipe?'<span class="t-expand-hint">◀ 滑動</span>':'<span class="t-expand-hint">詳情 ▾</span>'}
-          </div>
-        </div>
-        ${thumbs}
+      <div style="display:flex;align-items:center;gap:8px;min-height:40px">
+        ${t.status==='done'?`<span style="color:var(--ok);font-weight:900;flex:0 0 auto">✓</span>`:dueDot(t)}
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'text-decoration:line-through;color:var(--muted);font-weight:400':''}">${esc(t.title)}</span>
+        ${t.rejectNote&&t.status==='open'?`<span title="退回：${esc(t.rejectNote)}" style="flex:0 0 auto">↩️</span>`:''}
+        ${t.status==='submitted'?'<span style="font-size:11px;color:var(--sky);flex:0 0 auto">📮審核中</span>':''}
+        ${a?`<span class="mini-avatar" style="background:${a.color};flex:0 0 auto" title="${a.name}">${a.name.slice(-1)}</span>`:''}
       </div>
     </div>
   </div>`;
+}
+/* 🔍 任務搜尋(Jason:打1-2字就跳出執行中跟已完成在哪) */
+function showSearch(){
+  const old=document.getElementById('searchModal'); if(old) old.remove();
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='searchModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="max-height:84vh;overflow:auto">
+    <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;flex:1">🔍 搜尋任務</h3><button class="t-expand" onclick="document.getElementById('searchModal').remove()" style="font-size:18px">✕</button></div>
+    <input type="text" id="schInput" placeholder="輸入 1-2 個關鍵字…" oninput="renderSearch()" style="width:100%;margin-top:10px;font-size:16px" autocomplete="off">
+    <div id="schResults" style="margin-top:10px"></div>
+  </div>`;
+  mask.onclick=()=>mask.remove(); document.body.appendChild(mask);
+  setTimeout(()=>{const i=document.getElementById('schInput'); if(i)i.focus();},60);
+}
+function renderSearch(){
+  const q=(document.getElementById('schInput')||{value:''}).value.trim().toLowerCase();
+  const box=document.getElementById('schResults'); if(!box) return;
+  if(!q){ box.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">輸入關鍵字（標題或備註都會找）</div>'; return; }
+  const hits=STATE.tasks.filter(t=>(t.title||'').toLowerCase().includes(q)||(t.note||'').toLowerCase().includes(q));
+  if(!hits.length){ box.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:14px">找不到相關任務</div>'; return; }
+  const grp={open:[],submitted:[],done:[]}; hits.forEach(t=>grp[t.status]&&grp[t.status].push(t));
+  const row=t=>{ const qd=CONFIG.QUADRANTS.find(x=>x.id===t.quadrant);
+    return `<div style="min-height:42px;display:flex;align-items:center;gap:8px;border-bottom:1px dashed var(--line,#c2d8ea);cursor:pointer;padding:2px 0" onclick="document.getElementById('searchModal').remove();showTaskDetail('${t.id}')">
+      ${t.status==='done'?'<span style="color:var(--ok);font-weight:900">✓</span>':dueDot(t)}
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;${t.status==='done'?'text-decoration:line-through;color:var(--muted)':''}">${esc(t.title)}</span>
+      <span style="font-size:11px;color:${qd.color};flex:0 0 auto">${qd.title}</span></div>`; };
+  box.innerHTML=[['open','⏳ 進行中'],['submitted','📮 待審核'],['done','🏆 已完成']]
+    .filter(([k])=>grp[k].length)
+    .map(([k,label])=>`<div style="font-size:12px;color:var(--muted);margin:10px 0 4px;font-weight:700">${label}（${grp[k].length}）</div>`+grp[k].map(row).join('')).join('');
+}
+/* 時間狀態圓點(Jason 規格):剩<2hr或已逾期=紅底黃❗/剩<4hr=黃底紅▲/剩<8hr=綠底/更久或不限時=藍底 */
+function dueDot(t){
+  const base='display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;flex:0 0 auto;font-weight:900;line-height:1';
+  if(!t.dueAt) return `<span style="${base};background:#2563eb" title="不限時間"></span>`;
+  const h=(new Date(t.dueAt).getTime()-Date.now())/3600000;
+  if(h<=2)  return `<span style="${base};background:#d12f2f;color:#ffd400;font-size:12px" title="${h<=0?'已逾期':'剩不到 2 小時'}">!</span>`;
+  if(h<=4)  return `<span style="${base};background:#f5c400;color:#d12f2f;font-size:9px" title="剩不到 4 小時">▲</span>`;
+  if(h<=8)  return `<span style="${base};background:#15803d" title="剩不到 8 小時"></span>`;
+  return `<span style="${base};background:#2563eb" title="時間充裕"></span>`;
 }
 
 /* ===================================================================
@@ -1123,7 +1157,7 @@ function openTaskModal(taskId, presetQuad){
         <div class="cat-toggle ${modalUrgent?'on':''}" id="catUrg" onclick="toggleCat('urgent')">緊急<span class="hint">優先完成</span></div>
       </div>
     </div>
-    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
+    <div class="field"><label>備註 / 步驟（一行一項，告知順序或注意事項）</label><textarea id="f_note" oninput="autoGrow(this)" style="overflow:hidden;resize:none" placeholder="1. 先確認料號&#10;2. 拍照回報&#10;3. 完成通知主管">${t&&t.note?esc(t.note):''}</textarea></div>
     <div class="field"><label>指派給</label><select id="f_assignee">${empOpts}</select></div>
     <div class="field"><label>截止時間</label>
       <div class="due-quick" id="dueQuick"></div>
@@ -1157,15 +1191,49 @@ function openTaskModal(taskId, presetQuad){
   document.body.appendChild(mask);
   renderModalImages();
   renderDueQuick();
+  applyCatColors();
+  autoGrow(document.getElementById('f_note'));   // 既有備註直接展開(手機打字人性化)
   if(!editingId && modalUrgent) setDueQuick('1h');
 }
+/* 備註框自動延展(人性化鐵則:手機打字不捲小框) */
+function autoGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=Math.min(el.scrollHeight+2,420)+'px'; }
 function toggleCat(which){
   if(which==='important') modalImportant=!modalImportant; else modalUrgent=!modalUrgent;
   const ci=document.getElementById('catImp'), cu=document.getElementById('catUrg');
   if(ci) ci.classList.toggle('on', modalImportant);
   if(cu) cu.classList.toggle('on', modalUrgent);
+  applyCatColors();
   renderDueQuick();
   if(which==='urgent' && modalUrgent) setDueQuick('1h');
+}
+/* 分類勾選變色(Jason 規格,與象限同色):都勾=兩框紅粗(q1)/只重要=橘(q2)/只緊急=綠(q3)/都不勾=灰(存為q4藍) */
+function applyCatColors(){
+  const ci=document.getElementById('catImp'), cu=document.getElementById('catUrg');
+  if(!ci||!cu) return;
+  const both=modalImportant&&modalUrgent;
+  ci.style.borderColor = modalImportant ? (both?'var(--q1)':'var(--q2)') : '';
+  ci.style.borderWidth = both&&modalImportant ? '3px' : '';
+  ci.style.color       = modalImportant ? (both?'var(--q1)':'var(--q2)') : '';
+  cu.style.borderColor = modalUrgent ? (both?'var(--q1)':'var(--q3)') : '';
+  cu.style.borderWidth = both&&modalUrgent ? '3px' : '';
+  cu.style.color       = modalUrgent ? (both?'var(--q1)':'var(--q3)') : '';
+}
+/* 複製為新任務(主管;月度重複任務用):帶入標題/備註/點數/分類/指派,重設日期與狀態 */
+function duplicateTask(id){
+  if(!isSupervisor(STATE.user)) return;
+  const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  closeDetail();
+  openTaskModal(null, t.quadrant);
+  setTimeout(()=>{ const g=i=>document.getElementById(i);
+    if(g('f_title')) g('f_title').value=t.title;
+    if(g('f_note')){ g('f_note').value=t.note||''; autoGrow(g('f_note')); }
+    if(g('f_points')) g('f_points').value=t.points||0;
+    if(g('f_contribution')) g('f_contribution').value=t.contribution||0;
+    if(g('f_favor')) g('f_favor').value=t.favor||0;
+    if(g('f_glow')) g('f_glow').value=t.glow||'';
+    if(g('f_assignee')) g('f_assignee').value=t.assigneeId;
+    toast('已帶入內容，設定截止時間後按「新增」📋');
+  },60);
 }
 function computeQuad(){ return modalImportant ? (modalUrgent?'q1':'q2') : (modalUrgent?'q3':'q4'); }
 function renderDueQuick(){
@@ -1260,7 +1328,7 @@ async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除�
 async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; } t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
 /* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
 async function reopenTask(id){
-  if(!isSupervisor(STATE.user)){ toast('只有主管能撤回已完成的任務'); return; }
+  if(!isAdmin()){ toast('只有經理能撤回已完成的任務'); return; }
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='done'){ toast('這張單狀態已變更'); return; }
   if(!await vConfirm({icon:'↩️',title:'撤回完成',msg:'把「'+t.title+'」撤回為進行中？\n已發的點數/鑽石會自動收回。',okText:'撤回',danger:true})) return;
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft||ft.status!=='done'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
@@ -1329,7 +1397,8 @@ function showTaskDetail(id){
   if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
   if(t.status==='submitted'&&mine) actions+=`<button class="btn-soft" onclick="unsubmitTask('${t.id}');closeDetail()">↩️ 撤回重做</button>`;
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
-  if(t.status==='done'&&sup) actions+=`<button class="btn-soft" onclick="reopenTask('${t.id}');closeDetail()">↩️ 撤回完成（重啟）</button>`;
+  if(t.status==='done'&&sup) actions+=`<button class="btn-soft" onclick="duplicateTask('${t.id}')">📋 複製為新任務</button>`;
+  if(t.status==='done'&&isAdmin()) actions+=`<button class="btn-soft" onclick="reopenTask('${t.id}');closeDetail()">↩️ 撤回完成（重啟）</button>`;
   if(sup) actions+=`<button class="btn-soft" onclick="closeDetail();openTaskModal('${t.id}')">編輯</button>`;
   const ptsTxt = t.status==='done' ? (t.earnedPoints!=null?t.earnedPoints:t.points) : ep;
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='detailModal';
@@ -3458,7 +3527,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.18';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.19';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3475,13 +3544,20 @@ renderLogin();
    ⚠️ 深修根因:Chrome「歷史操縱防護」會把 popstate 裡程式補推的攔截層標記為「可跳過」→之前攔一次後就失效跳出
    正規繞法:改在「每次使用者觸碰畫面」時補建攔截層(有真手勢的 entry 不會被跳過);三星不回報 standalone→安卓一律啟用 */
 if(/Android/i.test(navigator.userAgent) || location.search.indexOf('bkdbg')>=0){   // bkdbg=桌面測試開關
+  window._bkStat={pd:0,push:0,pop:0};
+  const _bkUpd=()=>{ const d=document.getElementById('bkDbg'); if(d) d.textContent='BK 觸'+_bkStat.pd+' 推'+_bkStat.push+' 攔'+_bkStat.pop+(history.state&&history.state.tw===1?' ●':' ○'); };
+  if(isBeta()){ const d=document.createElement('div'); d.id='bkDbg'; d.style.cssText='position:fixed;bottom:4px;right:6px;z-index:99998;font-size:10px;background:rgba(0,0,0,.45);color:#fff;padding:2px 7px;border-radius:8px;pointer-events:none;font-family:monospace'; document.body.appendChild(d); _bkUpd(); }
   document.addEventListener('pointerdown', ()=>{
-    try{ if(!history.state || history.state.tw!==1) history.pushState({tw:1},''); }catch(e){}   // 棧頂沒哨兵就補(手勢內推,不會被防護跳過)
+    _bkStat.pd++;
+    try{ if(!history.state || history.state.tw!==1){ history.pushState({tw:1},''); _bkStat.push++; } }catch(e){}   // 棧頂沒哨兵就補(手勢內推,不會被防護跳過)
+    _bkUpd();
   }, {passive:true, capture:true});
   window.addEventListener('popstate',()=>{
+    _bkStat.pop++;
     const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
     const top=masks[masks.length-1];
     if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
+    _bkUpd();
     // 不在此補推(會被防護標記跳過而失效);下一次觸碰畫面時自動補建 → 「操作→返回」永遠被攔;連按兩下返回=退出(安卓慣例)
   });
 }
@@ -3494,7 +3570,7 @@ document.addEventListener('pointerdown',e=>{
   _lpTimer=setTimeout(()=>{ window._lpFired=true; _lpTimer=null;
     if(navigator.vibrate) try{ navigator.vibrate(30); }catch(err){}
     const id=row.dataset.doneid;
-    if(isSupervisor(STATE.user)) reopenTask(id); else showTaskDetail(id);
+    if(isAdmin()) reopenTask(id); else showTaskDetail(id);
     setTimeout(()=>{ window._lpFired=false; },400);   // 長按後抑制緊接的 click(不然會再開詳情)
   },550);
 },{passive:true});
