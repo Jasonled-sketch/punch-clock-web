@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#11151c">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
@@ -30,6 +30,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI","Microsoft JhengHei",sans-serif;font-size:15px;line-height:1.5}
 body{min-height:100vh}
+html,body{overflow-x:hidden;max-width:100vw}   /* 鎖橫向捲動:防 standalone 版面左右移 */
 button{font-family:inherit;cursor:pointer;border:none;font-size:15px}
 img{display:block}
 .hidden{display:none!important}
@@ -762,7 +763,9 @@ function renderGoogleButton(){
 function handleGoogleSignIn(resp){
   try{
     STATE.googleToken = resp.credential;
+    if(STATE._reloginTimer){ clearTimeout(STATE._reloginTimer); STATE._reloginTimer=null; }
     const payload = JSON.parse(atob(resp.credential.split('.')[1]));
+    try{ localStorage.setItem('usled_gtoken', JSON.stringify({cred:resp.credential, exp:(payload.exp||0)*1000})); }catch(e){}   // token 快取:50分內重開秒進不等GIS(解 standalone 卡「重新連線中」)
     const email = (payload.email||'').toLowerCase();
     const user = CONFIG.USERS.find(u=>(u.email||'').toLowerCase()===email);
     if(!user){ alert('你的 Google 帳號（'+email+'）尚未開通，請聯絡管理員開通'); return; }
@@ -825,6 +828,7 @@ function checkApprovals(){
 }
 function logout(){
   STATE.user = null; STATE.googleToken=null;
+  try{ localStorage.removeItem('usled_gtoken'); }catch(e){}   // 清 token 快取
   clearSession();                                        // 清掉記住的登入
   try{ google.accounts.id.disableAutoSelect(); }catch(e){}   // 下次需重新選帳號
   document.getElementById('appView').classList.add('hidden');
@@ -871,6 +875,7 @@ async function enablePush(){
     const r=await fetch(CONFIG.PUSH.WORKER+'/subscribe',{method:'POST',headers:{'X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON()})});
     if(!r.ok){ try{ await sub.unsubscribe(); }catch(e2){} setBellState(false); throw new Error('HTTP '+r.status); }   // 後端沒存到→清掉本機孤兒訂閱,鈴鐺不誤亮
     setBellState(true); toast('🔔 提醒已開啟');
+    pushNotify('self','🔔 提醒測試','通知功能正常！之後任務指派/審核會像這樣通知你');   // 端到端自我測試:幾秒內手機應跳這則
   }catch(e){ toast('開啟提醒失敗：'+e.message); }
 }
 /* 通知 helper：fire-and-forget（絕不 await、絕不影響任務主流程；sandbox 測試模式不發） */
@@ -3386,13 +3391,29 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.12';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.13';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
-{ const _s=cachedSession(); if(_s) enterAppShell(userById(_s.id)); }
+{ const _s=cachedSession();
+  if(_s){
+    let gt=null; try{ gt=JSON.parse(localStorage.getItem('usled_gtoken')||'null'); }catch(e){}
+    if(gt && gt.cred && (gt.exp-Date.now())>5*60000){ STATE.googleToken=gt.cred; login(_s.id); }   // token 還有效(>5分)→秒進,完全不等 Google
+    else { enterAppShell(userById(_s.id)); STATE._reloginTimer=setTimeout(()=>{ if(!STATE.googleToken) forceRelogin(); },8000); }   // 等 GIS 靜默;8秒沒完成自動回登入頁(解卡死)
+  }
+}
 renderLogin();
+/* 安卓返回鍵(只在主畫面 APP 模式)：先關最上層彈窗,不直接退出 APP;要離開用 Home/多工鍵 */
+if(window.matchMedia && matchMedia('(display-mode: standalone)').matches){
+  history.pushState({tw:1},'');
+  window.addEventListener('popstate',()=>{
+    const masks=[...document.querySelectorAll('.modal-mask,.lvup-mask'),document.getElementById('imageView')].filter(Boolean);
+    const top=masks[masks.length-1];
+    if(top){ if(top.id==='battleModal'){ toast('戰鬥中：要離開請按「放棄離開」'); } else { top.remove(); } }
+    history.pushState({tw:1},'');   // 推回,維持攔截
+  });
+}
 /* ===================================================================
    長按拖曳：把任務拖到其他象限改分類（主管限定）
    =================================================================== */
