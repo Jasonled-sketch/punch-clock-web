@@ -1715,7 +1715,7 @@ function showGameCenter(){
     </div>
     <div class="gc-actionrow">
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
-      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button><button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button>`:''}
+      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button><button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button><button class="shop-open-btn" style="flex:0 0 auto;background:#7c3aed;color:#fff" onclick="seasonReset()">🏁賽季歸零</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -2749,6 +2749,22 @@ function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && 
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
 function isBeta(){ return location.href.indexOf('beta')>=0 || CONFIG.MODE!=='CLOUD'; }
 async function grantTestCoins(){ if(!isAdmin()||!GS) return; GS.bonus=(GS.bonus||0)+9999; await saveGameState(); toast('🧪 測試 +9999 鑽石'); refreshGameUI(); }   // 守衛：只有管理員(covernself)叫得動，防其他人/console 自肥
+/* 🏁 賽季歸零(管理員限定)：全員遊戲存檔清空(鑽石/裝備/寵物/道具/兌換紀錄),保留動物角色;任務資料完全不動,等級因純衍生自動重算 */
+async function seasonReset(){
+  if(!isAdmin()) return;
+  if(!await vConfirm({icon:'🏁',title:'賽季歸零',msg:'把「全公司」的遊戲存檔歸零到同起跑線？\n\n會清空：鑽石／裝備／寵物／道具／副本紀錄／兌換紀錄\n會保留：動物角色測驗結果、所有任務資料\n\n此動作無法復原。',okText:'我確定要歸零',danger:true})) return;
+  const t=await vPrompt({icon:'⚠️',title:'最後確認',msg:'請輸入「歸零」兩個字以確認執行：',placeholder:'歸零',okText:'執行'});
+  if(t===null) return;
+  if(String(t).trim()!=='歸零'){ toast('輸入不符，已取消'); return; }
+  toast('執行中…請稍候');
+  try{
+    const r=await fetch(CONFIG.PUSH.WORKER+'/season-reset',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:'{}'});
+    const j=await r.json();
+    if(!r.ok||!j.ok){ toast('歸零失敗：'+(j.reason||('HTTP '+r.status))); return; }
+    await loadGameState(); refreshGameUI(); renderBoard();
+    toast('🏁 賽季歸零完成：'+j.reset+'/'+j.total+' 筆存檔已重置');
+  }catch(e){ toast('歸零失敗：'+e.message); }
+}
 /* 測試模式(沙盒,管理員限定)：開啟後所有雲端/本機寫入全部跳過,隨便玩;關閉或關視窗即還原雲端原狀 */
 async function toggleSandbox(){
   if(!isAdmin()) return;
@@ -3650,7 +3666,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.11.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.11.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
