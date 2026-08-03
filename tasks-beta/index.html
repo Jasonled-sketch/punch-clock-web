@@ -609,11 +609,11 @@ const CONFIG = {
   USERS: [
     // joinedAt=到職日(團隊池名冊計算用,新人加入不會回溯炸掉舊池金)；kpi=個人月產值目標(內勤設低,只算達成%不顯示)
     { id:'u-chen',   name:'陳俊男', nick:'男', title:'經理', role:'supervisor', color:'#4fc3f7', email:'covernself@gmail.com', joinedAt:'2021/01/01' },   // 老闆,到職日待確認(設早即可)
-    { id:'u-chuang', name:'莊鈺萱', nick:'萱', title:'主管', role:'supervisor', color:'#ce93d8', email:'t8562ne@gmail.com', joinedAt:'2021/11/15' },
+    { id:'u-chuang', name:'莊鈺萱', nick:'萱', title:'行政', role:'supervisor', color:'#ce93d8', email:'t8562ne@gmail.com', joinedAt:'2021/11/15' },   // 職稱改行政(仍是 supervisor 有核准權)
     { id:'u-yu',     name:'陳譽昇', nick:'昇', title:'助理', role:'employee',   color:'#f48fb1', email:'us104931@gmail.com', kpi:3000, joinedAt:'2021/01/01' },   // 助理文書,KPI 設低;到職日待確認
     // 2026-06 啟用(Jason 提供 email)；職稱暫填「員工」可再改
-    { id:'u-huang', name:'黃偉智', nick:'智', title:'員工', role:'employee', color:'#80cbc4', email:'qaz0989514613@gmail.com', kpi:6500, joinedAt:'2021/08/01' },
-    { id:'u-li',    name:'李尹蘋', nick:'蘋', title:'員工', role:'employee', color:'#ffab91', email:'apple839600@gmail.com', kpi:3000, joinedAt:'2025/11/10' },
+    { id:'u-huang', name:'黃偉智', nick:'智', title:'工程', role:'employee', color:'#80cbc4', email:'qaz0989514613@gmail.com', kpi:6500, joinedAt:'2021/08/01' },
+    { id:'u-li',    name:'李尹蘋', nick:'蘋', title:'組裝', role:'employee', color:'#ffab91', email:'apple839600@gmail.com', kpi:3000, joinedAt:'2025/11/10' },
     { id:'u-ru',    name:'陳婉如', nick:'如', title:'會計', role:'employee', color:'#b39ddb', email:'s0936931932@gmail.com', kpi:3000, joinedAt:'2026/08/01' },   // 2026-08 新增;內勤 kpi 低;到職日暫填當月(Jason 可改)
   ],
 
@@ -3650,7 +3650,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.10.32';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.10.33';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
