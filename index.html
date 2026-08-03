@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -504,15 +504,35 @@ function normalizeRec(sheet, r) {
   return out;
 }
 
-const TOKEN_HDR = () => ({ 'X-Google-Token': ID_TOKEN });
+// ── 7 天通行證（同任務牆做法）：Google 登入一次 → 換自家 token 存本機，7 天內開 App 完全不用再碰 Google ──
+const SESS_KEY = 'pc_wsess';
+function sessGet() { try { const s = JSON.parse(localStorage.getItem(SESS_KEY) || 'null'); return (s && s.token && s.exp > Date.now()) ? s : null; } catch (e) { return null; } }
+function sessSet(s) { try { localStorage.setItem(SESS_KEY, JSON.stringify(s)); } catch (e) {} }
+function sessClear() { try { localStorage.removeItem(SESS_KEY); } catch (e) {} }
+async function ensureSession() {                    // 沒通行證或剩不到 1 天 → 用 Google token 換新的（換證只能用 Google token）
+  const s = sessGet();
+  if (s && s.exp - Date.now() > 86400000) return s;
+  if (!ID_TOKEN) return s;
+  try {
+    const r = await fetch(`${CONFIG.WORKER_URL}/session`, { method: 'POST', headers: { 'X-Google-Token': ID_TOKEN } });
+    const j = await r.json().catch(() => ({}));
+    if (j && j.token) { const n = { token: j.token, exp: j.exp, email: j.email }; sessSet(n); return n; }
+  } catch (e) {}
+  return s;
+}
+const TOKEN_HDR = () => { const s = sessGet(); return s ? { 'X-Session-Token': s.token } : { 'X-Google-Token': ID_TOKEN }; };  // 通行證優先
 
-// Worker 請求統一入口：自動帶 Google token；遇 401(token 過期)靜默續期後重試一次，仍失敗才登出
+// Worker 請求統一入口：優先帶 7 天通行證；401 時清掉通行證→改用 Google token→仍失敗才靜默續期重試
 async function authedFetch(url, opts = {}) {
   const build = () => ({ ...opts, headers: { ...(opts.headers || {}), ...TOKEN_HDR() } });
   let res = await fetch(url, build());
   if (res.status === 401) {
-    try { await refreshToken(); } catch (e) { throw new Error('登入階段已過期，請點右上角 Google 一鍵續期（帳號仍記住、不需重填）'); }  // ⚠️不再 logout 清掉記住的帳號（避免一次續期失敗就整個要重登，刷新一直跳登入）
-    res = await fetch(url, build());
+    if (sessGet()) { sessClear(); res = await fetch(url, build()); }           // 通行證失效 → 退回 Google token 再試
+    if (res.status === 401) {
+      try { await refreshToken(); } catch (e) { throw new Error('登入階段已過期，請點右上角 Google 一鍵續期（帳號仍記住、不需重填）'); }  // ⚠️不 logout 清掉記住的帳號
+      res = await fetch(url, build());
+      ensureSession();                                                          // 拿到新 Google token 順便換一張新通行證
+    }
   }
   return res;
 }
@@ -916,6 +936,7 @@ function showApp() {
 function handleGoogleSignIn(resp) {
   applyIdentity(resp.credential);
   saveAuth();                                       // 記住帳號（含最新 token）
+  ensureSession();                                  // 換 7 天通行證：之後 7 天開 App 不用再碰 Google
   _tokenWaiters.splice(0).forEach(f => f(resp.credential));  // 喚醒等待續期的請求
   showApp();
 }
@@ -931,6 +952,7 @@ function refreshToken(timeoutMs = 8000) {
 
 function logout() {
   ME = null; ID_TOKEN = ''; APP_INITED = false;
+  sessClear();                                      // 登出要一併清掉 7 天通行證
   try { localStorage.removeItem(AUTH_KEY); } catch (e) {}
   try { google.accounts.id.disableAutoSelect(); } catch (e) {}   // 停用自動登入，下次需手動選帳號
   document.getElementById('login-screen').classList.remove('hidden');
@@ -948,20 +970,23 @@ function gsiReady() {
     theme:'outline', size:'large', width:280
   });
 
-  // ① 有存檔就先進 App（免登入畫面、免點）；token 過期則背景靜默續期，API 會自動用新 token（不清帳號）
+  // ① 有存檔就先進 App（免登入畫面、免點）；有 7 天通行證時連 Google 都不用碰
   const saved = loadAuth();
+  const sess = sessGet();
   if (saved && saved.token) {
     applyIdentity(saved.token);
     showApp();
-    if (!tokenAlive(saved.token)) refreshToken().catch(() => {});   // 過期→背景續期（One Tap；多帳號時 auto_select 可能仍需點一下，但畫面已在 App 不卡登入）
+    if (!sess && !tokenAlive(saved.token)) refreshToken().catch(() => {});   // 沒通行證且 token 過期才背景續期
   }
 
-  // ② 一律靜默續期（更新 token；若還沒進 App，這步成功就會自動登入）
-  google.accounts.id.prompt();
+  // ② 沒有有效通行證時才叫 Google（有通行證＝7 天內完全不彈 Google，Jason 要的「長期不用再按登入」）
+  if (!sess) google.accounts.id.prompt();
+  else if (sess.exp - Date.now() < 86400000) ensureSession();                 // 剩不到 1 天 → 背景續期（需 Google token，失敗就下次再說）
 
   // ③ 長時間開著 → 每 5 分鐘檢查，token 剩不到 15 分鐘才靜默續期（避免 1 小時過期被擋，也不無謂跳 One-Tap）
   setInterval(() => {
     if (!ME) return;
+    if (sessGet()) return;                                    // 有 7 天通行證 → 不需要 Google token，不打擾
     const p = parseJwt(ID_TOKEN), msLeft = p && p.exp ? p.exp * 1000 - Date.now() : 0;
     if (msLeft < 15 * 60 * 1000) { try { google.accounts.id.prompt(); } catch (e) {} }
   }, 5 * 60 * 1000);
