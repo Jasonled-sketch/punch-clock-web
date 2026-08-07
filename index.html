@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -634,10 +634,12 @@ function hourlyOf(w) {
   const sh = CONFIG.SHIFTS[w.shift];
   return (Number(w.monthly_salary) || 0) / (30 * (sh ? sh.hours : 8));
 }
-function calcAnnualLeave(startDateStr) {
+// refDate＝基準日（月報封存用「查詢月末」，省略＝今天）。⚠️ 沒有它的話，查歷史月會隨「今天」漂移
+// ——員工跨到職週年後回看上月，應有天數會突然變多（2026/08/01 抓到的大 bug，bot 已用 refTw 封存）
+function calcAnnualLeave(startDateStr, refDate) {
   if (!startDateStr) return 0;
   const start = new Date(startDateStr.replace(/\//g, '-'));
-  const years = (new Date() - start) / (365.25 * 24 * 3600 * 1000);
+  const years = ((refDate || new Date()) - start) / (365.25 * 24 * 3600 * 1000);
   if (years < 0.5) return 0;
   if (years < 1)  return 3;
   if (years < 2)  return 7;
@@ -657,9 +659,9 @@ function annYearWindow(startStr, refDate) {   // refDate:窗口基準日(月報�
   return { startY, jy, startN: startY * 10000 + jm * 100 + jd, endN: (startY + 1) * 10000 + jm * 100 + jd };
 }
 // 特休已用(天) = 到職週年區間內已核准特休時數 + 期初已用特休(時) ÷ 每日工時（與 LINE bot 一致；期初最常被忘）
-function annualUsedDays(w, leaves, shHours) {
+function annualUsedDays(w, leaves, shHours, refDate) {   // refDate：同 calcAnnualLeave，月報要傳「查詢月末」才不漂移
   if (!w || !w.start_date) return 0;
-  const win = annYearWindow(w.start_date);
+  const win = annYearWindow(w.start_date, refDate);
   const inWin = ds => { const n = ymdInt(ds); return n >= win.startN && n < win.endN; };
   const initH = (w.init_reg_date && inWin(w.init_reg_date)) ? (Number(w.init_annual_used) || 0) : 0;
   const sysH = (leaves || []).filter(l => l.email === w.email && l.leave_type === '特休' && l.status === 'approved' && inWin(l.start_date)).reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
@@ -692,14 +694,23 @@ async function loadApiSalary(year, month) {
   } catch (e) { return null; }
 }
 // 取某員工特休 {total,used,remain}：優先用 API（與員工 LINE 同一份計算），API 沒有才回退本地算
-function annualNums(w, leaves, shHours, isFull, apiS) {
+// 期末封存基準日：查歷史月→該月最後一天；查本月/未來→今天（對齊 bot lib/attCalc.js 的 refTw = min(now, 月末)）
+function refDateOf(ym) {
+  const [y, m] = String(ym || '').split('/').map(Number);
+  if (!y || !m) return new Date();
+  const eom = new Date(y, m, 0, 23, 59, 59);
+  const now = new Date();
+  return eom < now ? eom : now;
+}
+function annualNums(w, leaves, shHours, isFull, apiS, ymForRef) {
   if (!isFull) return { total: 0, used: 0, remain: 0, remainH: 0 };
   // ①優先:薪資 API(帶查詢年月→期末封存,月報數字固定不隨今天漂移;2026/08/01 跨週年大bug 修正) ②次:leave-balance(今天基準,僅當月等值) ③fallback 本地
   if (apiS && apiS.annualTotal != null) return { total: apiS.annualTotal, used: apiS.usedAnnual, remain: apiS.annualRemain, remainH: (apiS.annualRemainYrH != null ? Math.round(apiS.annualRemainYrH * 10) / 10 : Math.round(apiS.annualRemain * shHours * 10) / 10) };
   const a = _API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()];
   if (a) return { total: a.total, used: a.used, remain: a.remain, remainH: (a.remainH != null ? Math.round(a.remainH * 10) / 10 : Math.round(a.remain * shHours * 10) / 10) };
-  const total = calcAnnualLeave(w.start_date);
-  const used = annualUsedDays(w, leaves, shHours);
+  const _ref = ymForRef ? refDateOf(ymForRef) : undefined;   // 有帶查詢年月→期末封存（歷史月數字固定）
+  const total = calcAnnualLeave(w.start_date, _ref);
+  const used = annualUsedDays(w, leaves, shHours, _ref);
   const remain = Math.round((total - used) * 100) / 100;
   return { total, used, remain, remainH: Math.round(remain * shHours * 10) / 10 };
 }
@@ -793,6 +804,33 @@ function getWorkDays(year, month, specialDays) {   // specialDays(可選):含類
     else if (makeup.has(ds)) count++;
   }
   return count;
+}
+
+// 全勤獎金（fallback 用；正常吃 _apiS.attendBonus）——對齊 bot lib/attCalc.js:243-253
+// 規則：正職且 ym>=生效月；事假一件即不成立、曠職>0 不成立、遲到早退「合計」>15 分不成立；
+//       成立則按病假天數比例扣：基數×(整月應出勤天−病假天)÷整月應出勤天
+// ⚠️ 限制：員工表「全勤獎金」欄的數字 ID 未知（讀不到），fallback 一律用制度基數 ATTEND_BONUS_BASE；
+//    若某員工設了自訂金額，離線估算會與 API 值不同——鎖薪已擋離線（_API_SALARY null 不得鎖薪）故不影響發薪。
+const ATTEND_BONUS_BASE = 1000, ATTEND_BONUS_FROM = '2026/08';
+function calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotM, shHours, specialSet, makeupSet) {
+  if (!isFull || ym < ATTEND_BONUS_FROM) return 0;
+  if (appr.some(l => l.leave_type === '事假')) return 0;
+  if (absent > 0 || teTotM > 15) return 0;
+  const [yy, mm] = ym.split('/').map(Number);
+  const dim = new Date(yy, mm, 0).getDate();
+  const startMs = w.start_date ? new Date(w.start_date.replace(/\//g, '-') + 'T00:00:00').getTime() : null;
+  let wdMonth = 0;
+  for (let d = 1; d <= dim; d++) {
+    const ds = `${yy}/${pad(mm)}/${pad(d)}`;
+    const dow = new Date(yy, mm - 1, d).getDay();
+    const isRest = (dow === 0 || dow === 6) && !(makeupSet && makeupSet.has(ds));   // 補班六照算應出勤
+    if (isRest) continue;
+    if (startMs !== null && new Date(yy, mm - 1, d).getTime() < startMs) continue;  // 到職前不計
+    if (specialSet && specialSet.has(ds)) continue;                                 // 國定假日等放假類
+    wdMonth++;
+  }
+  const sickD = appr.filter(l => l.leave_type === '病假').reduce((s, l) => s + (parseFloat(l.hours) || 0), 0) / (shHours || 8);
+  return wdMonth > 0 ? Math.round(ATTEND_BONUS_BASE * Math.max(0, wdMonth - sickD) / wdMonth) : ATTEND_BONUS_BASE;
 }
 
 async function uploadWorkerPhoto(ragicId, file) {
@@ -1179,13 +1217,16 @@ async function loadMyKPI() {
     const specialSet = new Set(specialDays.filter(s => !/補班/.test(s.type || '')).map(s => s.date));  // 排除補班(補班六=應出勤)
     const myInc = allInc.filter(r => r.email === ME.email).length;
     const sh = CONFIG.SHIFTS[MY_WORKER?.shift];
-    let lateCnt = 0, lateMin = 0, earlyCnt = 0;
-    if (sh && MY_WORKER?.emp_type === '正式員工') myRecs.forEach(r => {   // 工讀生時薪制不計遲到/早退
-      if (r.start_time) { const d = toMin(r.start_time) - toMin(sh.am[0]); if (d > 0) { lateCnt++; lateMin += d; } }
-      if (r.end_time && toMin(sh.pm[1]) - toMin(r.end_time) > 0) earlyCnt++;
-    });
     const isFull = MY_WORKER?.emp_type === '正式員工';
     const appr = myLeaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym));
+    let lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0;
+    if (sh && isFull) myRecs.forEach(r => {   // 工讀生時薪制不計遲到/早退
+      // ⚠️ 與管理者月報同一算法：effShiftBounds 扣掉當日已核准請假時段，並累計早退分鐘
+      // （舊版直接比班別上下班 → 上午請假下午上班會在自己首頁被判大遲到，管理端卻正常＝同一人兩畫面不一致）
+      const eff = effShiftBounds(sh, appr.filter(l => l.start_date === r.date));
+      if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateCnt++; lateMin += d; } }
+      if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
+    });
     const urgentCnt = appr.filter(isUrgentLeave).length;
     const personalCnt = appr.filter(l => l.leave_type === '事假').length;
     const sickCnt = appr.filter(l => l.leave_type === '病假').length;
@@ -1193,7 +1234,7 @@ async function loadMyKPI() {
     const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
     const ab = isFull ? analyzeAbsence(MY_WORKER, myRecs, myLeaves, year, month, specialSet) : { confirmed: 0, pending: [] };
     const absent = ab.confirmed;
-    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, lateMin, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
+    const kpi = calcAttendanceKPI({ absent, noClockOut: myInc, lateCnt, lateMin, earlyCnt, earlyMin, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
     box.innerHTML = `
       <div class="rpt-kpi" style="margin-bottom:10px">
         <span class="kpi-light ${kpi.light}">${LIGHT_EMOJI[kpi.light]} 本月${kpi.lightLabel}</span>
@@ -2084,15 +2125,37 @@ function calcMonthOvertimePay(email, otAll, ym, hourly) {
 
 // 請假扣薪：特休不扣、病假半薪、事假/其他全扣（臨時與否不影響扣薪，僅 isUrgentLeave 標記供考核）
 const FULLPAY_LEAVES = ['婚假','喪假','產假','產檢假','陪產假','公傷病假','公假'];  // 全薪假不扣（與 bot ATT_LEAVE_CATALOG 同步；此為 fallback，正式數字吃薪資 API）
-function calcLeaveDeduct(apprLeaves, hourly) {
+// 請假扣薪（fallback 用；正常吃 _apiS.leaveDeduct）——對齊 bot lib/attCalc.js:130-141
+// 病假：同一曆年前 30 天（×每日工時）半薪、第 31 天起「全扣」。需帶入 sickRunH＝本月之前同曆年已用病假時數
+// （含期初病假），沒帶則退化為舊行為（一律半薪）——舊版就是漏了這段，年度病假逾 30 天時少扣一半。
+function calcLeaveDeduct(apprLeaves, hourly, shHours, sickRunH) {
   let d = 0;
-  apprLeaves.forEach(l => {
+  const capH = 30 * (shHours || 8);
+  let run = Number(sickRunH) || 0;
+  const hasCap = sickRunH !== undefined && sickRunH !== null;
+  // 病假先依日期排序逐筆吃額度，其餘假別照舊
+  const sorted = apprLeaves.slice().sort((a, b) => String(a.start_date || '').localeCompare(String(b.start_date || '')));
+  sorted.forEach(l => {
     const h = parseFloat(l.hours) || 0;
     if (l.leave_type === '特休' || FULLPAY_LEAVES.includes(l.leave_type)) return;
-    if (l.leave_type === '病假' || l.leave_type === '生理假') d += h * hourly * 0.5;
+    if (l.leave_type === '病假') {
+      if (!hasCap) { d += h * hourly * 0.5; return; }                  // 無年度累計資料→維持舊行為
+      const halfH = Math.max(0, Math.min(h, capH - run));              // 落在 30 天額度內→半薪
+      d += halfH * hourly * 0.5 + (h - halfH) * hourly;                // 超過額度→全扣
+      run += h;
+    }
+    else if (l.leave_type === '生理假') d += h * hourly * 0.5;
     else d += h * hourly;
   });
   return Math.round(d);
+}
+// 本月之前、同一曆年已用的病假時數（含期初病假）——給 calcLeaveDeduct 判 30 天額度用
+function sickUsedBeforeMonth(w, leaves, ym) {
+  const year = String(ym).slice(0, 4);
+  const init = (w.init_reg_date && String(w.init_reg_date).startsWith(year)) ? (Number(w.init_sick) || 0) : 0;
+  return init + leaves.filter(l => l.email === w.email && l.leave_type === '病假' && l.status === 'approved'
+    && String(l.start_date || '').startsWith(year) && String(l.start_date || '').slice(0, 7) < ym)
+    .reduce((s, l) => s + (parseFloat(l.hours) || 0), 0);
 }
 
 // 單筆請假扣薪（給明細用）
@@ -2242,13 +2305,16 @@ function disasterUnpaidDays(worker, recs, leaves, year, month, specialByDate) {
 
 // 個人全勤燈號 + 出勤健康度（加分制：基礎 75，疏失才扣、沒請假給獎勵，避免勞資爭議）
 function calcAttendanceKPI(p) {
-  const { absent = 0, noClockOut = 0, lateCnt = 0, lateMin = 0, earlyCnt = 0,
+  const { absent = 0, noClockOut = 0, lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0,
           sickCnt = 0, personalCnt = 0, urgentCnt = 0, otherCnt = 0, overduePenalty = 0 } = p;
-  // 全勤資格（公司結合勞基法）：曠職、漏打卡≥3、遲到累積≥15分、有事假 → 失格；病假10天內不影響
+  // 全勤資格（公司結合勞基法）：曠職、漏打卡≥3、**遲到＋早退合計>15分**、有事假 → 失格；病假10天內不影響
+  // ⚠️ 門檻與「扣薪」「bot 全勤獎金」同一條（合計 >15）：舊版寫 `lateMin >= 15` 漏算早退、且 =15 就失格
+  //    → 會出現「畫面顯示非全勤、實際仍領到全勤獎金」或反之的矛盾
+  const teTot = lateMin + earlyMin;
   let light, lightLabel;
-  if (absent >= 1 || noClockOut >= 3 || lateMin >= 15 || personalCnt >= 1) {
+  if (absent >= 1 || noClockOut >= 3 || teTot > 15 || personalCnt >= 1) {
     light = 'red'; lightLabel = '非全勤';
-  } else if (noClockOut >= 1 || lateMin > 0) {
+  } else if (noClockOut >= 1 || teTot > 0) {
     light = 'yellow'; lightLabel = '留意';
   } else {
     light = 'green'; lightLabel = '全勤';
@@ -2359,12 +2425,13 @@ async function viewReport() {
     const specialSet = new Set(specialDays.filter(s => !/補班/.test(s.type || '')).map(s => s.date));  // 放假類特殊日(排除補班,否則補班日被當放假)
     const holidaySet = new Set(specialDays.filter(s => s.type === '國定假日').map(s => s.date));  // 國定假日(出勤加倍)
     const specialByDate = {}; specialDays.forEach(s => specialByDate[s.date] = s);  // 全部特殊日(含颱風/全特休/補班)供明細顯示
+    const makeupSet = new Set(specialDays.filter(s => /補班/.test(s.type || '')).map(s => s.date));  // 補班日(週末照算應出勤)——全勤獎金 fallback 用
     const ym = `${CUR_YEAR}/${pad(CUR_MONTH + 1)}`;
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1, specialDays);   // 補班六照算應出勤(勞基法)
     const payrollLocks = await getPayrollLocks(ym);
     const isLocked = payrollLocks.length > 0;
     const payrollRows = [];
-    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
+    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, makeupSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
 
     const showPay = ROLE !== 'deptmgr';   // 部門主管:月報可看出勤,但隱藏一切薪資元素與薪資操作
     let h = `<div class="view">${monthNav(true)}`;
@@ -2423,13 +2490,14 @@ async function viewReport() {
       // ── 勞基法薪資計算：改吃 bot 單一 API（_apiS 有值就用，載入失敗才用本地算；數字已對照驗證一致）──
       const _apiS = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
       const hourly = hourlyOf(w);
+      const shHours = sh ? sh.hours : 8;   // ⚠️ 必須早於 leaveDeduct/attendBonus（兩者都用到，晚宣告會 TDZ 讓整頁月報崩潰）
       const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);  // ot.hours 顯示用；金額改吃 API
-      // 遲到/早退：月累計 ≤15 分免責，>15 分扣全部
-      const latePen  = lateMin  > 15 ? lateMin  : 0;
-      const earlyPen = earlyMin > 15 ? earlyMin : 0;
+      // 遲到/早退：**遲到＋早退「合計」**月累計 ≤15 分免責，>15 分扣全部（bot lib/attCalc.js:126-127 同一門檻）
+      // ⚠️ 舊版寫成「各自 >15」→ 遲到10+早退10（合計20應扣20分）會扣 0，且與下方明細彈窗的合計制分岔
+      const teTotM = lateMin + earlyMin;
       const otPay        = _apiS ? _apiS.otPay        : ot.pay;
-      const lateDeduct   = _apiS ? _apiS.lateDeduct   : Math.round((latePen + earlyPen) / 60 * hourly);
-      const leaveDeduct  = _apiS ? _apiS.leaveDeduct  : calcLeaveDeduct(appr, hourly);
+      const lateDeduct   = _apiS ? _apiS.lateDeduct   : Math.round((teTotM > 15 ? teTotM : 0) / 60 * hourly);
+      const leaveDeduct  = _apiS ? _apiS.leaveDeduct  : calcLeaveDeduct(appr, hourly, shHours, sickUsedBeforeMonth(w, leaves, ym));
       const absentDeduct = _apiS ? _apiS.absentDeduct : (isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0);
       const disasterDeduct = _apiS ? _apiS.disasterDeduct : (isFull ? Math.round(disasterUnpaidDays(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialByDate) * (w.monthly_salary / 30)) : 0);  // 天災假不支薪
       const base      = _apiS ? _apiS.base      : (isFull ? w.monthly_salary : totP);
@@ -2441,10 +2509,12 @@ async function viewReport() {
       const holidayBonus = _apiS ? _apiS.holidayBonus : (isFull
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
         : 0);
-      const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+      // 全勤獎金：2026/08 起計入 net（工資性質）。API 優先，離線用本地估算（bot lib/attCalc.js:243-255 同規則）
+      const attendBonus = _apiS ? (_apiS.attendBonus || 0)
+        : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotM, shHours, specialSet, makeupSet);
+      const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
       // 特休：優先吃薪資 API（帶查詢年月→期末封存,月報數字固定不隨今天漂移）,fallback leave-balance/本地
-      const shHours = sh ? sh.hours : 8;
-      const _an = annualNums(w, leaves, shHours, isFull, _apiS);
+      const _an = annualNums(w, leaves, shHours, isFull, _apiS, ym);
       const annualTotal = _an.total, usedAnnual = _an.used, annualRemain = _an.remain;
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const compRemain = _apiS ? _apiS.compBal : calcOtBalance(otAll.filter(o => o.email === w.email), ym);  // 月結補休：吃 API（查詢當月），fallback 本地同月
@@ -2454,7 +2524,7 @@ async function viewReport() {
       const sickCnt = appr.filter(l => l.leave_type === '病假').length;
       const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
       const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
-      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, lateMin, earlyCnt, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
+      const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, lateMin, earlyCnt, earlyMin, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
@@ -2484,8 +2554,8 @@ async function viewReport() {
           ${cell('實出勤', `${attendDays} 天`)}
           ${isFull ? cell('曠職', `${absent} 天`, absent>0) : ''}
           ${cell('漏打卡', `${noClockOut} 次`, noClockOut>0)}
-          ${cell('遲到', `${lateCnt} 次 / ${lateMin} 分`, latePen>0)}
-          ${cell('早退', `${earlyCnt} 次 / ${earlyMin} 分`, earlyPen>0)}
+          ${cell('遲到', `${lateCnt} 次 / ${lateMin} 分`, teTotM>15)}
+          ${cell('早退', `${earlyCnt} 次 / ${earlyMin} 分`, teTotM>15)}
           ${cell('請假', `${leaveHours} 小時`)}
           ${cell('臨時假', `${urgentCnt} 次`, urgentCnt>0)}
           ${isFull ? cell('本月補休餘額', `${compRemain} 小時`) : ''}
@@ -2593,7 +2663,7 @@ function showReportDetail(email) {
   if (!w) return;
   if (!deptAllowed(email)) return;              // deptmgr 只能看轄下成員+自己
   const showPay = ROLE !== 'deptmgr';           // deptmgr:明細隱藏所有薪資元素(金額/時薪/勞健保/離職結算/pay-box)
-  const { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, ym, year, month, workDays } = _RPT;
+  const { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, makeupSet, ym, year, month, workDays } = _RPT;
   const isFull = w.emp_type === '正式員工';
   const isCheng = w.emp_type === '承攬';   // 承攬:時薪·內勤/外勤逐段自選費率
   const canEditPunch = (ROLE === 'owner' || ROLE === 'hr');   // 管理者可直接修正打卡時段（拆段/改時間/改內外勤）
@@ -2644,7 +2714,7 @@ function showReportDetail(email) {
   });
 
   // 特休：優先薪資 API（帶查詢年月→期末封存,歷史月報不隨今天漂移;2026/08/01 跨週年大bug 修正）
-  const _an = annualNums(w, leaves, shHours, isFull, _apiS);
+  const _an = annualNums(w, leaves, shHours, isFull, _apiS, ym);
   const annualTotal = _an.total, usedAnnual = _an.used;
 
   // 薪資彙整
@@ -2654,7 +2724,7 @@ function showReportDetail(email) {
   const absent = ab.confirmed;
   const absentDeduct = _apiS ? _apiS.absentDeduct : (isFull ? Math.round(absent * (w.monthly_salary / 30)) : 0);
   const disasterDeduct = _apiS ? _apiS.disasterDeduct : (isFull ? Math.round(disasterUnpaidDays(w, recs, leaves, year, month, specialByDate) * (w.monthly_salary / 30)) : 0);  // 天災假不支薪
-  const leaveDeduct = _apiS ? _apiS.leaveDeduct : calcLeaveDeduct(appr, hourly);
+  const leaveDeduct = _apiS ? _apiS.leaveDeduct : calcLeaveDeduct(appr, hourly, shHours, sickUsedBeforeMonth(w, leaves, ym));
   const base = _apiS ? _apiS.base : (isFull ? w.monthly_salary : totP);
   const laborIns  = _apiS ? _apiS.laborIns : (isFull ? laborInsuranceEE(w.monthly_salary) : 0);
   const healthIns = _apiS ? _apiS.healthIns : (isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0);
@@ -2663,7 +2733,10 @@ function showReportDetail(email) {
   const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = _apiS ? _apiS.holidayBonus : holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
   const otPay = _apiS ? _apiS.otPay : od.totalPay;
-  const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
+  // 全勤獎金：2026/08 起計入 net（與月報卡片同一規則，離線估算見 calcAttendBonusLocal）
+  const attendBonus = _apiS ? (_apiS.attendBonus || 0)
+    : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotP, shHours, specialSet, makeupSet);
+  const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
 
   const section = (title, rows, empty) =>
     `<div class="rd-sec"><div class="rd-title">${title}</div>` +
@@ -2806,7 +2879,7 @@ function showReportDetail(email) {
     ${empCostHtml}
     ${showPay ? `<div class="pay-box" style="margin-top:14px">
       <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${(_apiS && _apiS.attendBonus) ? `　＋全勤獎金 $${_apiS.attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
     </div>` : ''}
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
