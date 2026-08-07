@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -919,6 +919,36 @@ function splitSegs(inM, outM, dayOff) {  // 打卡時段扣掉休假/補休時�
   (dayOff || []).filter(o => o.s && o.e).forEach(o => { const os = toMin(o.s), oe = toMin(o.e); segs = segs.flatMap(([a, b]) => { if (oe <= a || os >= b) return [[a, b]]; const r = []; if (a < os) r.push([a, Math.min(os, b)]); if (oe < b) r.push([Math.max(oe, a), b]); return r; }); });
   return segs.filter(([a, b]) => b > a);
 }
+// ⏱ 打卡與計薪工時落差（勞動事件法 §38：出勤紀錄的時間「推定」為工作時間，舉證責任在雇主）
+// 逐日：實際在場（已扣午休/請假/補休）− 當日應工作時數（已扣請假）− 已核准加班 = 落差
+// 落差 > 0 ＝ 人在公司但這段沒算薪也沒加班單 → 日後爭議時會被推定為應付薪工時，管理者要在月結時處理掉。
+// 僅正職（工讀/承攬按實際時數計薪，無此落差）。每日 ≥ GAP_MIN_H 才列入，避免打卡誤差雜訊。
+const GAP_MIN_H = 0.25, GAP_WARN_H = 2, GAP_ALERT_H = 8;   // 每日最小列入 / 月累計橘 / 月累計紅
+function calcWorkGap(w, recs, leaves, otAll, sh, ym) {
+  const out = { totalH: 0, days: [] };
+  if (!w || w.emp_type !== '正式員工' || !sh) return out;
+  const mine = (recs || []).filter(r => r.email === w.email && (r.date || '').startsWith(ym) && r.start_time && r.end_time
+    && r.rec_status !== 'cancelled' && r.rec_status !== 'deleted');
+  const byDate = {};
+  mine.forEach(r => { (byDate[r.date] = byDate[r.date] || []).push(r); });
+  const lunchS = toMin(sh.am[1]), lunchE = toMin(sh.pm[0]);
+  Object.keys(byDate).sort().forEach(ds => {
+    const dayOff = dayOffOf(w.email, ds, leaves, otAll);
+    if (dayOff.some(o => o.full)) return;                                   // 整天請假 → 不列
+    const actual = byDate[ds].reduce((s, r) => s + realWorkHours(r, sh, true, dayOff), 0);   // 實際在場（已扣午休/請假/補休）
+    const eff = effShiftBounds(sh, dayOff);                                 // 當日應出勤界線（請假已扣）
+    if (eff.fullDay) return;
+    const lunchOverlap = Math.max(0, Math.min(eff.pmEnd, lunchE) - Math.max(eff.amStart, lunchS));
+    const should = Math.max(0, (eff.pmEnd - eff.amStart - lunchOverlap)) / 60;                // 當日應工作時數
+    const otH = (otAll || []).filter(o => o.email === w.email && o.ot_type === '加班'
+      && o.status === 'approved' && o.date === ds).reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);
+    const gap = Math.round((actual - should - otH) * 100) / 100;
+    if (gap >= GAP_MIN_H) { out.days.push({ date: ds, actual: Math.round(actual * 100) / 100, should: Math.round(should * 100) / 100, ot: otH, gap }); out.totalH += gap; }
+  });
+  out.totalH = Math.round(out.totalH * 100) / 100;
+  return out;
+}
+
 // 某員工某日的休假時段（已核准請假＋補休），供工時扣除
 function dayOffOf(email, date, leaves, otAll) {
   const off = [];
@@ -2525,6 +2555,7 @@ async function viewReport() {
       const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
       const overduePenalty = appr.reduce((s, l) => s + leaveOverduePenalty(l), 0);
       const kpi = calcAttendanceKPI({ absent: isFull ? absent : 0, noClockOut, lateCnt, lateMin, earlyCnt, earlyMin, sickCnt, personalCnt, urgentCnt, otherCnt, overduePenalty });
+      const gapInfo = calcWorkGap(w, recs, leaves, otAll, sh, ym);   // ⏱ 打卡在場 vs 計薪工時 落差（勞動事件法舉證風險）
 
       const cell = (lbl, val, warn) => `<div class="rpt-cell"><div class="rpt-lbl">${lbl}</div><div class="rpt-val${warn?' warn':''}">${val}</div></div>`;
       const shiftTag = w.shift ? `<span class="rpt-shift">${w.shift} 班</span>` : `<span class="rpt-shift none">未設班別</span>`;
@@ -2548,6 +2579,11 @@ async function viewReport() {
         </div>
         ${pendingAbsent ? `<div class="rpt-warn">${ab.pending.map(p => `${addDay(p.ds).slice(5)} 缺席待補單（剩 ${String(p.hoursLeft).padStart(2,'0')}hr），超過 30hr 未補計曠職`).join('<br>')}</div>` : ''}
         ${(() => { if (!isFull || !_apiS) return ''; const w1 = _apiS.otMonthH > 46 ? `🔴 本月加班 ${_apiS.otMonthH}h，超過勞基法 46h 上限` : _apiS.otMonthH >= 36 ? `🟠 本月加班 ${_apiS.otMonthH}h，接近 46h 上限` : ''; const w2 = _apiS.consecMax >= 7 ? `🔴 連續出勤 ${_apiS.consecMax} 天，違反七休一` : _apiS.consecMax === 6 ? `🟠 已連續出勤 6 天（七休一預警）` : ''; return (w1 || w2) ? `<div class="rpt-warn">${[w1, w2].filter(Boolean).join('<br>')}</div>` : ''; })()}
+        ${(() => {   // ⏱ 打卡與計薪落差（勞動事件法 §38 舉證風險）：只在超過門檻時出現，點頭像看明細有逐日清單
+          if (!gapInfo || gapInfo.totalH < GAP_WARN_H) return '';
+          const lv = gapInfo.totalH >= GAP_ALERT_H ? '🔴' : '🟠';
+          return `<div class="rpt-warn">${lv} 打卡在場比計薪工時多 ${gapInfo.totalH}h（${gapInfo.days.length} 天），未登記加班；點頭像看逐日明細</div>`;
+        })()}
         <div class="rpt-grid">
           ${showPay ? cell(isFull ? '月薪' : '本薪', `$${base.toLocaleString()}`) : ''}
           ${cell('實際工時', `${totH.toFixed(1)} h`)}
@@ -2870,6 +2906,17 @@ function showReportDetail(email) {
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
+    ${(() => {   // ⏱ 打卡在場 > 計薪工時：勞動事件法 §38 下這些時間會被推定為工作時間，月結時要逐日處理掉
+      const g = calcWorkGap(w, recs, leaves, otAll, sh, ym);
+      if (!g.days.length) return '';
+      const rows = g.days.map(d => `${addDay(d.date)}　在場 <b>${d.actual}h</b>　應工時 ${d.should}h${d.ot ? `　已登記加班 ${d.ot}h` : ''}　<b style="color:${d.gap >= 1 ? '#c62828' : '#e07c00'}">未登記 ${d.gap}h</b>`);
+      rows.push(`<span style="color:#666">合計 <b>${g.totalH}h</b>　處理方式：確為加班→補加班單；提早到/延後走非工作→免處理，本表僅供核對</span>`);
+      return `<div class="rd-sec" style="background:#fffbeb;border:1px dashed #f0c36d;border-radius:8px;padding:8px 10px">
+        <div class="rd-title">⏱ 打卡在場多於計薪工時（${g.days.length} 天）</div>
+        ${rows.map(r => `<div class="rd-row">${r}</div>`).join('')}
+        <div class="rd-row" style="font-size:11px;color:#999">※ 依勞動事件法，出勤紀錄的時間會被推定為工作時間、由雇主負舉證責任。建議每月結算前逐日確認。</div>
+      </div>`;
+    })()}
     ${isFull ? `<div class="rd-sec"><div class="rd-title">📅 特休</div><div class="rd-row">應有 <b>${annualTotal}</b> 天　已用 <b>${usedAnnual}</b> 天　剩餘 <b>${_an.remain}</b> 天（≈ ${_an.remainH} 小時）</div></div>` : ''}
     ${isFull && ((_apiS && _apiS.sickUsedDisp != null) || (_API_ANNUAL && _API_ANNUAL[String(w.email || '').toLowerCase()])) ? (() => { const s2 = (_apiS && _apiS.sickUsedDisp != null) ? { sickUsedDisp: _apiS.sickUsedDisp, persUsedDisp: _apiS.persUsedDisp } : _API_ANNUAL[String(w.email || '').toLowerCase()]; return `<div class="rd-sec"><div class="rd-title">🤒 病假/事假（查詢月所屬年累積）</div><div class="rd-row">病假已用 <b>${s2.sickUsedDisp || '0天'}</b>　事假已用 <b>${s2.persUsedDisp || '0天'}</b></div></div>`; })() : ''}
     ${leaveDetailHtml}
