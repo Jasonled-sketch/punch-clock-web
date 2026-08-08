@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1410,11 +1410,24 @@ function selLoc(i) {
   document.getElementById('btn-in').disabled = false;
 }
 
-async function doPunchIn() {
+// 承攬打上班卡前先選內勤/外勤（與 LINE 一致：費率依此段決定，內勤=平日時薪欄、外勤=假日時薪欄）
+function doPunchInCheng() {
+  if (!SEL_LOC) { toast('請先選擇打卡地點', 'red'); return; }
+  openModal(`
+    <div class="modal-title">這一段是內勤還是外勤？</div>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">兩者費率不同，選錯會影響計薪。若中途轉換，請先打下班卡再開新的一段。</div>
+    <div class="modal-actions" style="flex-direction:column;gap:8px">
+      <button class="btn" style="background:#2563eb" onclick="closeModal();doPunchIn('內勤')">🏢 內勤（公司）</button>
+      <button class="btn" style="background:#16a34a" onclick="closeModal();doPunchIn('外勤')">🚚 外勤（客戶端／工地）</button>
+      <button class="btn btn-gray" onclick="closeModal()">取消</button>
+    </div>`, true);
+}
+async function doPunchIn(workType) {
   if (!SEL_LOC) return;
+  if (MY_WORKER?.emp_type === '承攬' && !workType && !OPEN_REC) { doPunchInCheng(); return; }  // 承攬未選內外勤 → 先問
   const btn = document.getElementById('btn-in');
-  const origLabel = btn.textContent;
-  btn.disabled = true; btn.textContent = '取得位置中…';
+  const origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '取得位置中…'; }
   try {
     const F = CONFIG.FID.R;
     const now = new Date();
@@ -1424,12 +1437,14 @@ async function doPunchIn() {
       // 補打上班（今天已有記錄，如先打了下班）
       await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, { [F.start_time]: fmtHHMM(now), [F.location]: locStr });
     } else {
-      await ragicPost(CONFIG.SHEETS.RECORDS, {
+      const fields = {
         [F.email]: ME.email, [F.name]: MY_WORKER?.name || ME.name,
         [F.date]: fmtDate(now), [F.start_time]: fmtHHMM(now),
         [F.end_time]: '', [F.location]: locStr,
         [F.breaks_minutes]: '0', [F.paused_at]: '', [F.rec_status]: ''
-      });
+      };
+      if (MY_WORKER?.emp_type === '承攬' && workType) fields[F.work_content] = workType;  // 承攬:上班卡先記內/外勤,下班依此算費率
+      await ragicPost(CONFIG.SHEETS.RECORDS, fields);
     }
     toast('上班打卡成功！' + fmtHHMM(now) + (gps ? '　GPS ✓' : '　GPS 未取得'), 'green');
     await viewPunch();
@@ -1463,9 +1478,9 @@ async function doMakeupIn() {
       const startDt = parseDatetime(`${OPEN_REC.date} ${t}`);
       const endDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.end_time}`);
       const workMin = (endDt - startDt) / 60000 - OPEN_REC.breaks_minutes;
-      const hours = Math.max(0, Math.round(workMin / 60 * 100) / 100);
+      const hours = calcPayHours(workMin / 60, MY_WORKER);   // 承攬 0.25h 單位；其餘 0.01h
       upd[F.hours] = String(hours);
-      upd[F.subtotal] = String(Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER)));
+      upd[F.subtotal] = String(Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER, await getMakeupSet(), OPEN_REC.work_content)));
     }
     await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, upd);
     closeModal();
@@ -1564,11 +1579,16 @@ async function doPunchOut() {
       if (OPEN_REC.start_time) {
         const startDt = parseDatetime(`${OPEN_REC.date} ${OPEN_REC.start_time}`);
         const workMin = (now - startDt) / 60000 - OPEN_REC.breaks_minutes;
-        hours = Math.round(workMin / 60 * 100) / 100;
-        subtotal = Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER));
+        // 承攬：0.25h 為一單位不足歸零、費率依上班卡記的內勤/外勤；工讀：補班日算平日時薪（勞基法）
+        hours = calcPayHours(workMin / 60, MY_WORKER);
+        subtotal = Math.round(hours * calcRate(OPEN_REC.date, MY_WORKER, await getMakeupSet(), OPEN_REC.work_content));
       }
+      // 承攬的工作內容存「類型｜描述」（與 bot 一致，保留內/外勤供算費率與明細顯示）
+      const wcFinal = (MY_WORKER?.emp_type === '承攬')
+        ? (String(OPEN_REC.work_content || '').indexOf('外') >= 0 ? '外勤' : '內勤') + '｜' + wc.replace(/^•\s*/gm, '').replace(/\n/g, '、')
+        : wc;
       await ragicUpdate(CONFIG.SHEETS.RECORDS, OPEN_REC.ragicId, {
-        [F.end_time]: fmtHHMM(now), [F.hours]: String(hours), [F.subtotal]: String(subtotal), [F.work_content]: wc
+        [F.end_time]: fmtHHMM(now), [F.hours]: String(hours), [F.subtotal]: String(subtotal), [F.work_content]: wcFinal
       });
       closeModal();
       toast(OPEN_REC.start_time ? `下班打卡成功！${hours}h　$${subtotal}` : '已記錄下班，請記得補打上班卡', 'green');
@@ -1588,11 +1608,30 @@ async function doPunchOut() {
   } catch (e) { toast('下班失敗：' + e.message, 'red'); }
 }
 
-function calcRate(dateStr, worker) {
+// 時薪費率（對齊 bot index.js:3574-3576）——⚠️「兩個時薪欄」對不同員工類型語意不同：
+//   工讀生 → 平日時薪 / 假日時薪（**補班日算平日**，勞基法；漏判會多付錢）
+//   承攬   → 平日時薪欄＝內勤費率、假日時薪欄＝外勤費率（與星期幾無關）
+// makeupSet：補班日集合（特殊日表類型含「補班」）；workType：承攬該段的內勤/外勤
+function calcRate(dateStr, worker, makeupSet, workType) {
   if (!worker) return 0;
+  if (worker.emp_type === '承攬') {
+    return String(workType || '').indexOf('外') >= 0 ? (Number(worker.weekend_rate) || 0) : (Number(worker.weekday_rate) || 0);
+  }
   const d = parseDatetime(dateStr + ' 12:00');
   const dow = d.getDay();
-  return (dow === 0 || dow === 6) ? worker.weekend_rate : worker.weekday_rate;
+  const isMakeup = makeupSet && makeupSet.has(dateStr);          // 補班六/日 → 視為平日
+  return ((dow === 0 || dow === 6) && !isMakeup) ? worker.weekend_rate : worker.weekday_rate;
+}
+// 計薪時數（對齊 bot）：承攬以 0.25h 為一單位、不足歸零；其餘精確到 0.01h
+function calcPayHours(rawHours, worker) {
+  const h = Math.max(0, Number(rawHours) || 0);
+  if (worker && worker.emp_type === '承攬') return Math.floor(h * 4) / 4;
+  return Math.round(h * 100) / 100;
+}
+// 補班日集合（給 calcRate 用）；讀特殊日表，5 分鐘快取
+async function getMakeupSet() {
+  try { return new Set((await getSpecialDays()).filter(s => /補班/.test(s.type || '')).map(s => s.date)); }
+  catch (e) { return new Set(); }
 }
 
 // ─── Timer ───────────────────────────────────────────────────────────────────
@@ -3112,8 +3151,9 @@ async function doApprove() {
       const start = parseDatetime(`${req.date} ${req.start_time}`);
       const end = parseDatetime(`${req.date} ${req.end_time}`);
       const grossMin = (end - start) / 60000;
-      hours = Math.round(grossMin / 60 * 100) / 100;
-      subtotal = Math.round(hours * calcRate(req.date, worker));
+      // 承攬 0.25h 單位＋費率依內外勤（補登單的工作內容含「外」＝外勤）；工讀補班日算平日時薪
+      hours = calcPayHours(grossMin / 60, worker);
+      subtotal = Math.round(hours * calcRate(req.date, worker, await getMakeupSet(), req.work_content));
     }
     const F = CONFIG.FID.R;
     await ragicPost(CONFIG.SHEETS.RECORDS, {
