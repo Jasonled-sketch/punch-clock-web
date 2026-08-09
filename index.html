@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2449,10 +2449,23 @@ function showKpiInfo() {
 }
 
 // ─── 月結鎖定 ─────────────────────────────────────────────────────────────────
+// 讀該月薪資快照（鎖薪當時的定版值）。⚠️ 已鎖薪的月份，月報一律顯示這裡的數字＝與實發一致，
+// 不再即時重算（鎖薪後才補核准的重報單/補登會改動歷史打卡，即時算會與實發不符，每月對帳都要多解釋一次）
 async function getPayrollLocks(ym) {
   const F = CONFIG.FID.P;
   const all = await ragicGet(CONFIG.SHEETS.PAYROLL, { where:`${F.ym},eq,${ym}` });
-  return all.map(r => ({ email: r[F.email], net: r[F.net], locked_at: r[F.locked_at], locked_by: r[F.locked_by] }));
+  const N = v => Number(v) || 0;
+  return all.map(r => ({
+    email: String(r[F.email] || '').toLowerCase(), name: r[F.name],
+    base: N(r[F.base]), ot: N(r[F.ot]), absentd: N(r[F.absentd]), lated: N(r[F.lated]),
+    leaved: N(r[F.leaved]), labor: N(r[F.labor]), health: N(r[F.health]), net: N(r[F.net]),
+    annualRemain: N(r[F.annual_remain]), compRemain: N(r[F.comp_remain]),
+    locked_at: r[F.locked_at], locked_by: r[F.locked_by]
+  }));
+}
+// 快照沒有「假日加給/全勤獎金」獨立欄（當初併入 net）→ 由 net 反推合計，確保分解式加總 = 應發
+function snapExtra(s) {
+  return Math.round(s.net - s.base - s.ot + s.absentd + s.lated + s.leaved + s.labor + s.health);
 }
 
 async function lockPayroll() {
@@ -2499,8 +2512,9 @@ async function viewReport() {
     const workDays = getWorkDays(CUR_YEAR, CUR_MONTH + 1, specialDays);   // 補班六照算應出勤(勞基法)
     const payrollLocks = await getPayrollLocks(ym);
     const isLocked = payrollLocks.length > 0;
+    const lockMap = {}; payrollLocks.forEach(s => { lockMap[s.email] = s; });   // 已鎖薪 → 卡片/明細顯示這份定版值
     const payrollRows = [];
-    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, makeupSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows };
+    _RPT = { recs, leaves, otAll, incomplete, specialSet, holidaySet, specialByDate, makeupSet, ym, year: CUR_YEAR, month: CUR_MONTH + 1, workDays, payrollRows, lockMap, isLocked };
 
     const showPay = ROLE !== 'deptmgr';   // 部門主管:月報可看出勤,但隱藏一切薪資元素與薪資操作
     let h = `<div class="view">${monthNav(true)}`;
@@ -2510,7 +2524,7 @@ async function viewReport() {
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
     if (showPay) {   // deptmgr 隱藏:鎖薪/匯出/工資清冊/兩顆對照 按鈕
     h += `<div class="lock-bar">${isLocked
-      ? `<div class="lock-note"><span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#b45309;margin-top:4px">⚠️ 以下為即時重算數字；若鎖薪後有補核准的單據，實發以「鎖定當時」快照為準，勿以此畫面重發薪。</div></div>` : ''}
+      ? `<div class="lock-note"><span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#0a6b0a;margin-top:4px">✅ 以下薪資數字＝鎖定當時的定版值（與實發一致）。若鎖定後有補核准的單據，會在該員工卡片標示重算差額。</div></div>` : ''}
       <div class="lock-acts">
         <button class="btn" style="background:${isLocked ? '#9ca3af' : '#1a73e8'}" ${isLocked ? 'disabled' : ''} onclick="lockPayroll()">🔒 ${isLocked ? '已鎖薪' : '鎖定薪資'}</button>
         <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
@@ -2589,6 +2603,16 @@ async function viewReport() {
       const compRemain = _apiS ? _apiS.compBal : calcOtBalance(otAll.filter(o => o.email === w.email), ym);  // 月結補休：吃 API（查詢當月），fallback 本地同月
       payrollRows.push({ email: w.email, name: w.name, base, ot: otPay, absentd: absentDeduct + disasterDeduct,  // 天災假不支薪併入缺勤扣(快照無獨立欄)
         lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain });
+      // ── 已鎖薪 → 顯示改用「鎖定當時的快照」＝與實發一致；即時值仍保留在 payrollRows（鎖薪寫入用）──
+      // 鎖薪後才補核准的重報單/補登會改動歷史打卡，即時重算會與實發不符 → 會計每月對帳都要多解釋一次
+      const snap = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
+      const dBase = snap ? snap.base : base, dOtPay = snap ? snap.ot : otPay;
+      const dAbsent = snap ? snap.absentd : (absentDeduct + disasterDeduct);
+      const dLate = snap ? snap.lated : lateDeduct, dLeave = snap ? snap.leaved : leaveDeduct;
+      const dLabor = snap ? snap.labor : laborIns, dHealth = snap ? snap.health : healthIns;
+      const dExtra = snap ? snapExtra(snap) : (holidayBonus + attendBonus);   // 假日加給＋全勤獎金（快照由 net 反推）
+      const dNet = snap ? snap.net : net;
+      const netDrift = snap ? Math.round(net - snap.net) : 0;                 // 鎖定後資料異動造成的差額（不改顯示，只提示）
       const personalCnt = appr.filter(l => l.leave_type === '事假').length;
       const sickCnt = appr.filter(l => l.leave_type === '病假').length;
       const otherCnt = appr.filter(l => l.leave_type === '特休' || l.leave_type === '其他').length;
@@ -2639,9 +2663,12 @@ async function viewReport() {
         </div>
         <div style="text-align:center;font-size:11px;color:#1a73e8;margin-top:8px">👆 點頭像看完整明細</div>
         ${showPay ? `<div class="pay-box">
-          <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
+          <div class="pay-net">應發薪資　$${dNet.toLocaleString()}${snap ? '　<span style="font-size:11px;color:#6b7280;font-weight:500">🔒 鎖定值</span>' : ''}</div>
+          ${netDrift ? `<div style="font-size:11px;color:#b45309;margin-bottom:4px">⚠️ 鎖定後資料有異動，現在重算為 $${net.toLocaleString()}（差 ${netDrift > 0 ? '+' : ''}${netDrift.toLocaleString()}）——實發仍以鎖定值為準，如需更正請補發或調整次月</div>` : ''}
           <div class="pay-detail">
-            ${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}
+            ${snap
+              ? `${isFull?'月薪':'本薪'} $${dBase.toLocaleString()}${dOtPay?`　＋加班 $${dOtPay.toLocaleString()}`:''}${dExtra?`　＋假日加給/全勤 $${dExtra.toLocaleString()}`:''}${dAbsent?`　－曠職/天災 $${dAbsent.toLocaleString()}`:''}${dLate?`　－遲退 $${dLate.toLocaleString()}`:''}${dLeave?`　－請假 $${dLeave.toLocaleString()}`:''}${dLabor?`　－勞保 $${dLabor.toLocaleString()}`:''}${dHealth?`　－健保 $${dHealth.toLocaleString()}`:''}`
+              : `${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${attendBonus?`　＋全勤獎金 $${attendBonus.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}`}
           </div>
         </div>` : ''}
       </div>`;
@@ -2717,10 +2744,22 @@ function exportPayrollRegister() {
   if (!_RPT) { alert('請先載入薪資月報'); return; }
   if (!_API_SALARY) { toast('薪資 API 未連線（離線估算中），為避免匯出備用數字，請稍後重新整理再匯出', 'red'); return; }
   const ym = _RPT.ym;
-  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)']];
+  // ⚠️ 已鎖薪的月份：「實發金額」一律用鎖定當時的快照（＝真正發出去的錢），
+  //    即時重算值另列「重算實發(對照)」，避免拿重算數字去發薪或報稅
+  const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
+  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
     const a2 = _API_SALARY[String(w.email || '').toLowerCase()]; if (!a2) return;
-    rows.push([ym, w.name, w.email, a2.attendDays, a2.totH, a2.base, a2.otMonthH, a2.otPay, a2.holidayBonus, a2.absentDeduct, a2.disasterDeduct, a2.lateDeduct, a2.leaveDeduct, a2.laborIns, a2.healthIns, a2.net, a2.annualRemainYr, a2.compBal]);
+    const sp = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
+    const paid = sp ? sp.net : a2.net;                                   // 實發＝已鎖用快照
+    const status = sp ? (Math.round(a2.net - sp.net) ? `已鎖定(鎖後有異動,差${Math.round(a2.net - sp.net)})` : '已鎖定') : '未鎖定';
+    rows.push([ym, w.name, w.email, a2.attendDays, a2.totH,
+      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, a2.holidayBonus,
+      sp ? sp.absentd : a2.absentDeduct, sp ? '' : a2.disasterDeduct,   // 快照的曠職扣已含天災假(無獨立欄)
+      sp ? sp.lated : a2.lateDeduct, sp ? sp.leaved : a2.leaveDeduct,
+      sp ? sp.labor : a2.laborIns, sp ? sp.health : a2.healthIns,
+      paid, sp ? sp.annualRemain : a2.annualRemainYr, sp ? sp.compRemain : a2.compBal,
+      status, sp ? a2.net : '']);
   });
   if (rows.length <= 1) { alert('本月無薪資資料可匯出'); return; }
   const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
@@ -2963,10 +3002,19 @@ function showReportDetail(email) {
     ${holidayRows.length ? section('🎌 國定假日/例假出勤加倍', holidayRows.map(r => { const tag = holidaySet.has(r.date) ? '國定假日' : '週日例假'; return `${addDay(r.date)} ${tag}　${r.start_time}–${r.end_time}${showPay ? `　加給 $${Math.round((parseFloat(r.hours)||0)*hrly)}` : ''}`; }), '') : ''}
     ${isFull && _apiS && showPay ? `<div class="rd-sec" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 10px"><div class="rd-title">🧾 離職結算試算（以今日離職計）</div><div class="rd-row">本月應發 <b>$${net.toLocaleString()}</b>　＋　未休特休折發 <b>$${(_apiS.annualCashout || 0).toLocaleString()}</b>（剩 ${_apiS.annualRemainYr || 0} 天）</div><div class="rd-row" style="font-weight:700">合計應付 $${(net + (_apiS.annualCashout || 0)).toLocaleString()}</div><div class="rd-row" style="font-size:11px;color:#999">※ 補休依月結制已併入當月薪資折發；離職結算請於最後工作日當天試算最準。</div></div>` : ''}
     ${empCostHtml}
-    ${showPay ? `<div class="pay-box" style="margin-top:14px">
-      <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-      <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
-    </div>` : ''}
+    ${showPay ? (() => {   // 已鎖薪 → 與卡片一致顯示鎖定當時的定版值（不可與卡片打架）
+      const sp = (_RPT && _RPT.isLocked) ? (_RPT.lockMap || {})[String(email || '').toLowerCase()] : null;
+      if (!sp) return `<div class="pay-box" style="margin-top:14px">
+        <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
+        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+      </div>`;
+      const ex = snapExtra(sp), drift = Math.round(net - sp.net);
+      return `<div class="pay-box" style="margin-top:14px">
+        <div class="pay-net">應發薪資　$${sp.net.toLocaleString()}　<span style="font-size:11px;color:#6b7280;font-weight:500">🔒 鎖定值（${(sp.locked_at||'').slice(0,16)}）</span></div>
+        ${drift ? `<div style="font-size:11px;color:#b45309;margin-bottom:4px">⚠️ 鎖定後資料有異動，現在重算為 $${net.toLocaleString()}（差 ${drift > 0 ? '+' : ''}${drift.toLocaleString()}）——實發以鎖定值為準</div>` : ''}
+        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${sp.base.toLocaleString()}${sp.ot ? `　＋加班 $${sp.ot.toLocaleString()}` : ''}${ex ? `　＋假日加給/全勤 $${ex.toLocaleString()}` : ''}${sp.absentd ? `　－曠職/天災 $${sp.absentd.toLocaleString()}` : ''}${sp.lated ? `　－遲退 $${sp.lated.toLocaleString()}` : ''}${sp.leaved ? `　－請假 $${sp.leaved.toLocaleString()}` : ''}${sp.labor ? `　－勞保 $${sp.labor.toLocaleString()}` : ''}${sp.health ? `　－健保 $${sp.health.toLocaleString()}` : ''}</div>
+      </div>`;
+    })() : ''}
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
 }
