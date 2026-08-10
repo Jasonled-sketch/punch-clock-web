@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2456,6 +2456,7 @@ async function getPayrollLocks(ym) {
   const all = await ragicGet(CONFIG.SHEETS.PAYROLL, { where:`${F.ym},eq,${ym}` });
   const N = v => Number(v) || 0;
   return all.map(r => ({
+    ragicId: r._ragicId,                                        // 重新鎖定時覆蓋既有列用
     email: String(r[F.email] || '').toLowerCase(), name: r[F.name],
     base: N(r[F.base]), ot: N(r[F.ot]), absentd: N(r[F.absentd]), lated: N(r[F.lated]),
     leaved: N(r[F.leaved]), labor: N(r[F.labor]), health: N(r[F.health]), net: N(r[F.net]),
@@ -2468,25 +2469,34 @@ function snapExtra(s) {
   return Math.round(s.net - s.base - s.ot + s.absentd + s.lated + s.leaved + s.labor + s.health);
 }
 
-async function lockPayroll() {
+async function lockPayroll(relock) {
   if (!_RPT || !_RPT.payrollRows.length) { toast('無資料可鎖定', 'red'); return; }
   if (!_API_SALARY) { toast('⚠️ 薪資 API 未連線，目前顯示為離線估算值，禁止鎖薪。請稍後重新整理、確認月報無「離線估算」警示後再鎖定。', 'red'); return; }  // 防鎖到 fallback 數字
-  if (!confirm(`確定鎖定 ${_RPT.ym} 薪資？\n鎖定後該月以此快照為準，事後改打卡不影響已發薪資。`)) return;
+  const msg = relock
+    ? `⚠️ 重新鎖定 ${_RPT.ym} 薪資？\n\n將「覆蓋」既有快照，新定版＝目前重算值（含事後補正，如全勤獎金）。\n覆蓋後舊快照不保留，發薪與清冊一律以新定版為準。`
+    : `確定鎖定 ${_RPT.ym} 薪資？\n鎖定後該月以此快照為準，事後改打卡不影響已發薪資。`;
+  if (!confirm(msg)) return;
   const F = CONFIG.FID.P;
   const ym = _RPT.ym;
   const now = fmtDateTime(new Date());
-  toast('鎖定中…', 'green');
+  toast(relock ? '重新鎖定中…' : '鎖定中…', 'green');
   try {
+    let okN = 0, skipN = 0;
     for (const r of _RPT.payrollRows) {
-      await ragicPost(CONFIG.SHEETS.PAYROLL, {
+      if (!r.hasApi) { skipN++; continue; }                       // 個別員工缺 API 值＝離線估算 → 不寫進定版（防污染快照）
+      const fields = {
         [F.email]: r.email, [F.name]: r.name, [F.ym]: ym,
         [F.base]: r.base, [F.ot]: r.ot, [F.absentd]: r.absentd, [F.lated]: r.lated,
         [F.leaved]: r.leaved, [F.labor]: r.labor, [F.health]: r.health, [F.net]: r.net,
         [F.annual_remain]: r.annualRemain, [F.comp_remain]: r.compRemain,
         [F.locked_at]: now, [F.locked_by]: ME.email
-      });
+      };
+      const ex = (_RPT.lockMap || {})[String(r.email || '').toLowerCase()];
+      if (ex && ex.ragicId) await ragicUpdate(CONFIG.SHEETS.PAYROLL, ex.ragicId, fields);   // 重鎖＝覆蓋既有列（不產生重複快照）
+      else await ragicPost(CONFIG.SHEETS.PAYROLL, fields);
+      okN++;
     }
-    toast(`已鎖定 ${ym} 薪資 ✓（${_RPT.payrollRows.length} 人）`, 'green');
+    toast(`已${relock ? '重新' : ''}鎖定 ${ym} 薪資 ✓（${okN} 人${skipN ? `，略過 ${skipN} 位無 API 值` : ''}）`, 'green');
     viewReport();
   } catch (e) { toast('鎖定失敗：' + e.message, 'red'); }
 }
@@ -2526,7 +2536,7 @@ async function viewReport() {
     h += `<div class="lock-bar">${isLocked
       ? `<div class="lock-note"><span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#0a6b0a;margin-top:4px">✅ 以下薪資數字＝鎖定當時的定版值（與實發一致）。若鎖定後有補核准的單據，會在該員工卡片標示重算差額。</div></div>` : ''}
       <div class="lock-acts">
-        <button class="btn" style="background:${isLocked ? '#9ca3af' : '#1a73e8'}" ${isLocked ? 'disabled' : ''} onclick="lockPayroll()">🔒 ${isLocked ? '已鎖薪' : '鎖定薪資'}</button>
+        <button class="btn" style="background:${isLocked ? '#b45309' : '#1a73e8'}" onclick="lockPayroll(${isLocked ? 'true' : ''})">${isLocked ? '🔄 重新鎖定' : '🔒 鎖定薪資'}</button>
         <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
         <button class="btn" style="background:#6b21a8" onclick="exportPayrollRegister()">📑 工資清冊</button>
       </div></div>`;
@@ -2602,7 +2612,7 @@ async function viewReport() {
       const noClockOut = incomplete.filter(r => r.email === w.email).length;  // 漏打下班次數
       const compRemain = _apiS ? _apiS.compBal : calcOtBalance(otAll.filter(o => o.email === w.email), ym);  // 月結補休：吃 API（查詢當月），fallback 本地同月
       payrollRows.push({ email: w.email, name: w.name, base, ot: otPay, absentd: absentDeduct + disasterDeduct,  // 天災假不支薪併入缺勤扣(快照無獨立欄)
-        lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain });
+        lated: lateDeduct, leaved: leaveDeduct, labor: laborIns, health: healthIns, net, annualRemain, compRemain, hasApi: !!_apiS });
       // ── 已鎖薪 → 顯示改用「鎖定當時的快照」＝與實發一致；即時值仍保留在 payrollRows（鎖薪寫入用）──
       // 鎖薪後才補核准的重報單/補登會改動歷史打卡，即時重算會與實發不符 → 會計每月對帳都要多解釋一次
       const snap = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
