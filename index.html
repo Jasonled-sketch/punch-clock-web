@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2592,7 +2592,7 @@ async function viewReport() {
       const holidayBonus = _apiS ? _apiS.holidayBonus : (isFull
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
         : 0);
-      // 全勤獎金：2026/08 起計入 net（工資性質）。API 優先，離線用本地估算（bot lib/attCalc.js:243-255 同規則）
+      // 全勤獎金：2026/07 起計入 net（2026/08/10 拍板提前）（工資性質）。API 優先，離線用本地估算（bot lib/attCalc.js:243-255 同規則）
       const attendBonus = _apiS ? (_apiS.attendBonus || 0)
         : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotM, shHours, specialSet, makeupSet);
       const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
@@ -2747,14 +2747,14 @@ function exportPayrollRegister() {
   // ⚠️ 已鎖薪的月份：「實發金額」一律用鎖定當時的快照（＝真正發出去的錢），
   //    即時重算值另列「重算實發(對照)」，避免拿重算數字去發薪或報稅
   const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
-  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
+  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
     const a2 = _API_SALARY[String(w.email || '').toLowerCase()]; if (!a2) return;
     const sp = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
     const paid = sp ? sp.net : a2.net;                                   // 實發＝已鎖用快照
     const status = sp ? (Math.round(a2.net - sp.net) ? `已鎖定(鎖後有異動,差${Math.round(a2.net - sp.net)})` : '已鎖定') : '未鎖定';
     rows.push([ym, w.name, w.email, a2.attendDays, a2.totH,
-      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, a2.holidayBonus,
+      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, (sp ? snapExtra(sp) - a2.holidayBonus : a2.attendBonus), a2.holidayBonus,
       sp ? sp.absentd : a2.absentDeduct, sp ? '' : a2.disasterDeduct,   // 快照的曠職扣已含天災假(無獨立欄)
       sp ? sp.lated : a2.lateDeduct, sp ? sp.leaved : a2.leaveDeduct,
       sp ? sp.labor : a2.laborIns, sp ? sp.health : a2.healthIns,
@@ -2847,7 +2847,7 @@ function showReportDetail(email) {
   const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = _apiS ? _apiS.holidayBonus : holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
   const otPay = _apiS ? _apiS.otPay : od.totalPay;
-  // 全勤獎金：2026/08 起計入 net（與月報卡片同一規則，離線估算見 calcAttendBonusLocal）
+  // 全勤獎金：2026/07 起計入 net（2026/08/10 拍板提前）（與月報卡片同一規則，離線估算見 calcAttendBonusLocal）
   const attendBonus = _apiS ? (_apiS.attendBonus || 0)
     : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotP, shHours, specialSet, makeupSet);
   const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
