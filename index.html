@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1184,7 +1184,7 @@ function renderAdminTabs() {
     tab('live','即時現況') + tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
     `<button class="tab-btn" id="tab-areq" onclick="switchTab('areq')">補登審核<span class="tab-badge hidden" id="req-badge">0</span></button>` +
     tab('report','月報') + (ROLE === 'deptmgr' ? '' : tab('wrkrs','工讀生')) + tab('aleave','請假審核') +   // 工讀生分頁=薪資設定管理,deptmgr 不顯示
-    tab('aot','加班審核') + tab('aannounce','公告管理');
+    tab('aot','加班審核') + tab('aannounce','公告管理') + (ROLE === 'deptmgr' ? '' : tab('audit','行為紀錄'));
   updateBadge();
 }
 
@@ -1214,7 +1214,8 @@ function switchTab(t) {
     report: viewReport,
     aleave: viewAdminLeave,
     aot: viewAdminOt,
-    aannounce: viewAdminAnnounce
+    aannounce: viewAdminAnnounce,
+    audit: viewAudit
   })[t]?.();
 }
 
@@ -4288,6 +4289,88 @@ async function viewAnnounce() {
     }
     setView(`<div class="view"><div class="ann-list">${anns.map(a => buildAnnCard(a, false)).join('')}</div></div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// ═══ 行為紀錄（管理者）：誰、何時、做了什麼 ═══════════════════════════════
+// 資料來自 bot att_audit（只增不改）。重點看得到「超時詢問 → 員工當場的選擇」，
+// 這是勞動事件法下「該時段非工作」的關鍵佐證；也用來核對有沒有人天天拖著不回應。
+const AUDIT_LABEL = {
+  stay_ask:        { icon: '🕐', name: '系統詢問超時', color: '#b45309' },
+  stay_reply_off:  { icon: '🏠', name: '員工選「不加班」', color: '#0a6b0a' },
+  stay_reply_ot:   { icon: '💪', name: '員工選「我在加班」', color: '#1a73e8' },
+  ot_extend_apply: { icon: '⏳', name: '加班延長申請', color: '#b45309' },
+  ot_auto_approve: { icon: '💪', name: '下班加班登記', color: '#1a73e8' },
+  ot_cancel:       { icon: '🗑', name: '撤銷加班', color: '#c62828' },
+  ot_expire:       { icon: '⌛', name: '加班逾期關閉', color: '#9aa0a6' },
+  approve:         { icon: '✅', name: '核准', color: '#0a6b0a' },
+  reject:          { icon: '❌', name: '駁回', color: '#c62828' },
+  punch_edit:      { icon: '🔧', name: '修正打卡', color: '#6b21a8' },
+  punch_redo_request:{ icon: '🔄', name: '請員工重報', color: '#6b21a8' },
+  payslip_sent:    { icon: '💰', name: '發薪資單', color: '#0a6b0a' },
+  self_cancel:     { icon: '↩️', name: '員工自取消', color: '#9aa0a6' },
+  fixseg:          { icon: '🔧', name: '異常修復', color: '#6b21a8' },
+  cmd:             { icon: '💬', name: 'LINE 操作', color: '#9aa0a6' }
+};
+let _AUD_TARGET = '', _AUD_DAYS = 7;
+async function viewAudit() {
+  if (!WORKERS.length) WORKERS = await getAllWorkers();
+  const to = new Date(), from = new Date(Date.now() - (_AUD_DAYS - 1) * 86400000);
+  const ds = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  setView(`<div class="view"><p style="text-align:center;color:#999;padding:20px">載入中…</p></div>`);
+  let list = [];
+  try {
+    const q = new URLSearchParams({ from: ds(from), to: ds(to), limit: '300' });
+    if (_AUD_TARGET) q.set('target', _AUD_TARGET);
+    const r = await authedFetch(`${CONFIG.WORKER_URL}/calc/audit?${q}`);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.reason || `HTTP ${r.status}`);
+    list = j.list || [];
+  } catch (e) {
+    setView(`<div class="view"><div class="rpt-warn">讀取失敗：${e.message}</div></div>`); return;
+  }
+  const opts = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '測試號')
+    .map(w => `<option value="${w.email}" ${_AUD_TARGET === w.email ? 'selected' : ''}>${w.name}</option>`).join('');
+  // 依台灣日期分組
+  const days = {};
+  list.forEach(x => {
+    const d = new Date(x.ts), k = `${d.getMonth() + 1}/${pad(d.getDate())}`;
+    (days[k] = days[k] || []).push(x);
+  });
+  let h = `<div class="view">
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <select onchange="_AUD_TARGET=this.value;viewAudit()" style="flex:1;min-width:120px;padding:8px;border:1px solid #dadce0;border-radius:8px">
+        <option value="">全部員工</option>${opts}</select>
+      <select onchange="_AUD_DAYS=Number(this.value);viewAudit()" style="padding:8px;border:1px solid #dadce0;border-radius:8px">
+        ${[[1,'今天'],[7,'近7天'],[30,'近30天']].map(([v,t])=>`<option value="${v}" ${_AUD_DAYS===v?'selected':''}>${t}</option>`).join('')}</select>
+    </div>`;
+  if (!list.length) h += `<p style="text-align:center;color:#999;padding:26px">這段期間沒有紀錄</p>`;
+  Object.keys(days).forEach(k => {
+    h += `<div style="font-size:13px;font-weight:700;color:#5f6368;margin:12px 0 6px 2px">${k}</div>`;
+    days[k].forEach(x => {
+      const L = AUDIT_LABEL[x.action] || { icon: '•', name: x.action, color: '#5f6368' };
+      const d = new Date(x.ts);
+      const who = x.targetName && x.targetName !== x.actorName ? `${x.actorName} → <b>${x.targetName}</b>` : `<b>${x.actorName || x.actor || '系統'}</b>`;
+      const dt = x.detail || {};
+      const extra = [
+        dt.text ? `「${dt.text}」` : '',
+        dt.seg || '', dt.date && !dt.seg ? dt.date : '',
+        dt.overMin != null ? `超時 ${dt.overMin} 分` : '',
+        dt.hours != null ? `${dt.hours}h` : '',
+        dt.note || ''
+      ].filter(Boolean).join('　');
+      h += `<div style="background:#fff;border-radius:10px;padding:9px 12px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.06);display:flex;gap:9px;align-items:flex-start">
+        <span style="flex:0 0 auto">${L.icon}</span>
+        <span style="flex:1;min-width:0">
+          <div style="font-size:14px"><span style="color:${L.color};font-weight:600">${L.name}</span>　${who}</div>
+          ${extra ? `<div style="font-size:12px;color:#5f6368;margin-top:2px;word-break:break-all">${extra}</div>` : ''}
+        </span>
+        <span style="flex:0 0 auto;font-size:12px;color:#9aa0a6">${pad(d.getHours())}:${pad(d.getMinutes())}</span>
+      </div>`;
+    });
+  });
+  h += `<div style="font-size:11px;color:#9aa0a6;margin-top:14px;line-height:1.6">
+    ※ 紀錄只增不改，供勞資爭議時佐證。<b>員工選「不加班」</b>代表他當下確認該時段非工作時間。</div></div>`;
+  setView(h);
 }
 
 async function viewAdminAnnounce() {
