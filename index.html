@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2097,7 +2097,7 @@ async function viewOverview() {
     WORKERS = await getAllWorkers();
     const recs = await getAllRecs(CUR_YEAR, CUR_MONTH + 1);
     let h = `<div class="view">${monthNav(true)}<div class="wk-cards">`;
-    WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
+    WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
       const wr = recs.filter(r => r.email === w.email);
       const totH = wr.reduce((s, r) => s + (Number(r.hours) || 0), 0);
       const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
@@ -2528,7 +2528,7 @@ async function viewReport() {
 
     const showPay = ROLE !== 'deptmgr';   // 部門主管:月報可看出勤,但隱藏一切薪資元素與薪資操作
     let h = `<div class="view">${monthNav(true)}`;
-    const actives = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者' && deptAllowed(w.email));  // deptmgr 只列轄下成員+自己
+    const actives = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號' && deptAllowed(w.email));  // deptmgr 只列轄下成員+自己
     if (!actives.length) { setView(h + '<p style="color:#999;text-align:center">無在職員工</p></div>'); return; }
     const teamUrgent = leaves.filter(l => l.status === 'approved' && (l.start_date || '').startsWith(ym) && isUrgentLeave(l)).length;  // 全隊本月臨時請假數
     h += teamLifeHtml(teamUrgent);  // 團隊生命值（全員臨時請假總數，3 次歸零）
@@ -2694,7 +2694,7 @@ function exportMonthDetail() {
   const wkd = ['日','一','二','三','四','五','六'];
   const headers = ['姓名','Email','日期','星期','預定上班','預定下班','預定休息','實際上班','實際下班','請假開始','請假結束','假別','加班開始','加班結束','實際工時','遲到分','早退分','應加發','應扣除'];
   const rows = [headers];
-  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
+  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
     const sh = CONFIG.SHIFTS[w.shift];
     const isFull = w.emp_type === '正式員工';
     const hourly = hourlyOf(w);
@@ -2758,7 +2758,7 @@ function exportPayrollRegister() {
   //    即時重算值另列「重算實發(對照)」，避免拿重算數字去發薪或報稅
   const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
   const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
-  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者').forEach(w => {
+  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
     const a2 = _API_SALARY[String(w.email || '').toLowerCase()]; if (!a2) return;
     const sp = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
     const paid = sp ? sp.net : a2.net;                                   // 實發＝已鎖用快照
@@ -3310,6 +3310,7 @@ function showWrkrForm(w) {
         <option value="正式員工" ${isFullTime?'selected':''}>正式員工（月薪制）</option>
         <option value="承攬" ${isCheng?'selected':''}>承攬（時薪·打卡自選內勤/外勤費率）</option>
         <option value="管理者" ${isMgr?'selected':''}>管理者（不打卡 / 不計薪 / 免提醒）</option>
+        <option value="測試號" ${w?.emp_type==='測試號'?'selected':''}>測試號（可打卡·不計薪 / 不列月報戰情牆 / 免提醒）</option>
       </select>
     </div>
     <div class="ff"><label>Email</label><input id="wf-email" type="email" value="${w?.email||''}" ${w?'readonly':''}></div>
