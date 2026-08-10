@@ -112,9 +112,18 @@ label.lb{display:block;font-size:12px;color:var(--tx2);margin:10px 0 5px}
   background:rgba(52,211,153,.16);color:var(--ok);font-weight:800}
 .okbox .txt{font-size:12.5px;line-height:1.6}
 .okbox a{color:var(--brand)}
-select.cat{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);
+select.cat,input.cat{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);
   font-family:inherit;font-size:13px;padding:9px 10px;margin-top:6px}
-select.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
+select.cat:focus,input.cat:focus{outline:none;border-color:rgba(45,212,191,.5)}
+input.cat{text-transform:uppercase;letter-spacing:.04em}
+/* 案號：顏色即資訊——補運費類必填時整塊轉琥珀色 */
+#projBlock.need input.cat{border-color:rgba(245,158,11,.65);background:rgba(245,158,11,.07)}
+#projBlock.need #projHint{color:#f59e0b}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.chips button{background:var(--bg2);border:1px solid var(--line);border-radius:999px;color:var(--tx2);
+  font-family:inherit;font-size:11.5px;padding:5px 11px;cursor:pointer}
+.chips button:active{transform:scale(.96)}
+.chips button.on{border-color:rgba(45,212,191,.6);color:var(--brand)}
 .kpis{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .kpi{background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:13px 14px;text-align:left}
 .kpi .lb{font-size:11.5px;color:var(--tx2)}
@@ -287,6 +296,7 @@ const F = {
   vendor: '1003143',  // 廠商/客戶名
   serial: '1003129',  // 流水號（唯讀）
   photo: '1003138',   // 憑證照片（檔案欄位）
+  proj: '1003242',    // 案號（2026-08-10 新增；工程案成本歸戶＋包裝提成品質判定用，選填）
 };
 
 // ── 歸類科目三層體系（同支出紀錄表：截圖選項＋971筆歷史記錄合併，2026-07-20）──
@@ -469,7 +479,7 @@ function parseEInvoiceQR(leftRaw, rightRaw){
 function dedupeKey(p){ return `${p.invoiceNumber}_${p.sellerId}`; }
 
 /* ═══════════════ QR 槽位（左/右）與狀態 ═══════════════ */
-const state = { left: null, right: null, io: 'out', photoBlob: null, photoName: '' };
+const state = { left: null, right: null, io: 'out', photoBlob: null, photoName: '', projNo: '' };
 
 function classifyQR(latin1){
   if (latin1.startsWith('**')) return 'right';
@@ -490,7 +500,7 @@ function acceptQR(latin1){
 
 function resetScan(){
   state.left = null; state.right = null;
-  state.photoBlob = null; state.photoName = '';
+  state.photoBlob = null; state.photoName = ''; state.projNo = '';
   updateSlots();
   document.getElementById('result').innerHTML = '';
 }
@@ -953,6 +963,12 @@ function renderResult(p){
         <select class="cat" id="catL2"></select>
         <select class="cat" id="catL3"></select>
       </div>
+      <div class="kv" style="display:block" id="projBlock">
+        <span class="k">案號<span id="projHint" class="src">選填 · 工程案成本歸戶</span></span>
+        <input class="cat" id="projNo" type="text" inputmode="latin" autocomplete="off"
+               placeholder="Q26xxxx" value="${esc(state.projNo || '')}">
+        <div id="projRecent" class="chips"></div>
+      </div>
       <div class="kv"><span class="k">憑證照片</span>
         <span class="v">${state.photoBlob ? '📎 已附' + (state.photoName === 'live.jpg' ? '掃描畫面' : '原圖') : '<span style="color:var(--tx3)">無（貼碼模式）</span>'}</span></div>
       <div class="alert"><div class="ai">AI</div>
@@ -965,6 +981,7 @@ function renderResult(p){
     </div>`;
 
   initCatSelectors(suggestCategory(p));
+  initProjInput();
   document.getElementById('ioIn').addEventListener('click', () => setIO('in'));
   document.getElementById('ioOut').addEventListener('click', () => setIO('out'));
   document.getElementById('btnAgain').addEventListener('click', resetScan);
@@ -979,6 +996,43 @@ function setIO(io){
   document.getElementById('ioOut').className = io === 'out' ? 'on-out' : '';
   const cb = document.getElementById('catBlock');
   if (cb) cb.style.display = io === 'in' ? 'none' : 'block';   // 進項＝營業收入，不用選科目
+}
+
+/* ── 案號（2026-08-10）：工程案成本歸戶＋包裝提成品質判定的資料地基 ──
+   設計重點（人性化 UI 鐵則）：不用連結欄改用純文字，摩擦低才有人填；
+   最近用過的案號做成一鍵晶片；選到「補運費-出貨失誤」自動轉琥珀色提示必填。 */
+const PROJ_LS = 'usled_acct_recent_proj';
+const projRecent = () => { try { return JSON.parse(localStorage.getItem(PROJ_LS) || '[]'); } catch (e) { return []; } };
+function projRemember(no){
+  if (!no) return;
+  const list = [no, ...projRecent().filter(x => x !== no)].slice(0, 6);
+  try { localStorage.setItem(PROJ_LS, JSON.stringify(list)); } catch (e) {}
+}
+const projVal = () => ((document.getElementById('projNo') || {}).value || '').trim().toUpperCase();
+/** 補運費類必填 → 整塊轉琥珀色（顏色即資訊，不跳警告視窗） */
+function projSyncNeed(){
+  const blk = document.getElementById('projBlock'), hint = document.getElementById('projHint');
+  if (!blk) return;
+  const cat = ((document.getElementById('catL3') || {}).value || '');
+  const need = /補運費/.test(cat);
+  blk.classList.toggle('need', need);
+  if (hint) hint.textContent = need ? '必填 · 包裝品質判定要對到訂單' : '選填 · 工程案成本歸戶';
+}
+function initProjInput(){
+  const inp = document.getElementById('projNo'), box = document.getElementById('projRecent');
+  if (!inp) return;
+  inp.addEventListener('input', () => { state.projNo = projVal(); syncChips(); });
+  function syncChips(){
+    const cur = projVal();
+    box.innerHTML = projRecent().map(no =>
+      `<button type="button" data-no="${esc(no)}" class="${no === cur ? 'on' : ''}">${esc(no)}</button>`).join('');
+    box.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+      const no = b.dataset.no;
+      inp.value = (projVal() === no) ? '' : no;      // 再按一次＝取消，不用手動清空
+      state.projNo = projVal(); syncChips();
+    }));
+  }
+  syncChips(); projSyncNeed();
 }
 
 /* ── 歸類科目三層連動選單 ── */
@@ -1002,8 +1056,9 @@ function initCatSelectors(sugg){
     fillSelect(L3, subs, chosen3 || '', '— 次類別（可不選）—');
   };
   syncL2(sugg ? sugg[1] : ''); syncL3(sugg ? sugg[2] : '');
-  L1.addEventListener('change', () => { syncL2(); syncL3(); });
-  L2.addEventListener('change', () => syncL3());
+  L1.addEventListener('change', () => { syncL2(); syncL3(); projSyncNeed(); });
+  L2.addEventListener('change', () => { syncL3(); projSyncNeed(); });
+  L3.addEventListener('change', projSyncNeed);   // 選到補運費 → 案號欄轉琥珀色
   setIO(state.io);   // 進項時隱藏
 }
 
@@ -1169,6 +1224,8 @@ async function approveEntry(p, btn){
     fd.append(F.status, '已入帳');
     fd.append(F.source, p.source === 'ai' ? 'AI' : 'QR');
     if (p.buyerName) fd.append(F.vendor, p.buyerName);
+    const projNo = projVal();
+    if (projNo) fd.append(F.proj, projNo);          // 案號（選填；空值不送，不覆蓋既有資料）
     // 歸類科目：進項＝營業收入；出項＝三層選單組合（同支出紀錄表體系）
     if (state.io === 'in') fd.append(F.category, '營業收入');
     else {
@@ -1181,6 +1238,7 @@ async function approveEntry(p, btn){
     const r = await fetch(WORKER_URL + '/?sheet=acct', { method: 'POST', headers: route.headers, body: fd });
     const j = await r.json().catch(() => null);
     if (r.ok && j && j.status === 'SUCCESS') {
+      projRemember(projNo);                         // 記住這次的案號 → 下次一鍵可選
       renderApproved(p, (j.data && j.data[F.serial]) || '', false);
     } else {
       throw new Error('HTTP ' + r.status + '／' + ((j && (j.reason || j.status)) || '未知回應'));
