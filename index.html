@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v9.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -811,7 +811,7 @@ function getWorkDays(year, month, specialDays) {   // specialDays(可選):含類
 //       成立則按病假天數比例扣：基數×(整月應出勤天−病假天)÷整月應出勤天
 // ⚠️ 限制：員工表「全勤獎金」欄的數字 ID 未知（讀不到），fallback 一律用制度基數 ATTEND_BONUS_BASE；
 //    若某員工設了自訂金額，離線估算會與 API 值不同——鎖薪已擋離線（_API_SALARY null 不得鎖薪）故不影響發薪。
-const ATTEND_BONUS_BASE = 1000, ATTEND_BONUS_FROM = '2026/08';
+const ATTEND_BONUS_BASE = 1000, ATTEND_BONUS_FROM = '2026/07';   // Jason 2026/08/10 拍板 7 月起適用（與 bot ATT_ATTEND_FROM 同步）
 function calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotM, shHours, specialSet, makeupSet) {
   if (!isFull || ym < ATTEND_BONUS_FROM) return 0;
   if (appr.some(l => l.leave_type === '事假')) return 0;
@@ -2976,7 +2976,7 @@ function showReportDetail(email) {
 
   openModal(`
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
-    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : (w.emp_type==='承攬'?'承攬':'工讀')}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${hourly}` : ''}</div>
+    <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : (w.emp_type==='承攬'?'承攬':'工讀')}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${Math.round(hourly*10)/10}` : ''}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
