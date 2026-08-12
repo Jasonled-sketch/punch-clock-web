@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -356,6 +356,7 @@ const CONFIG = {
       work_content:   1002880,
       breaks_minutes: 1002881,
       paused_at:      1002882,
+      cash_settle:    1003245,
       rec_status:     1002883
     },
     Q: {
@@ -462,7 +463,7 @@ const FNAME_MAP = {
     'Email':1002871,'姓名':1002872,'日期':1002873,
     '上班時間':1002874,'下班時間':1002875,'時數':1002876,
     '薪資':1002877,'地點':1002879,'工作內容':1002880,
-    '休息分鐘':1002881,'休息開始時間':1002882,'狀態':1002883
+    '休息分鐘':1002881,'休息開始時間':1002882,'狀態':1002883,'現金結清':1003245
   },
   'check-in-system/4': {
     'Email':1002884,'姓名':1002885,'日期':1002886,
@@ -1699,7 +1700,7 @@ async function getMyRecs(year, month) {
     ragicId: r._ragicId, email: r[F.email], name: r[F.name],
     date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
     hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
-    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
+    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes], cash_settle: r[F.cash_settle]
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -1920,7 +1921,7 @@ async function _getMonthRecsBundle(year, month) {
     ragicId: r._ragicId, email: r[F.email], name: r[F.name],
     date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
     hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
-    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
+    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes], cash_settle: r[F.cash_settle]
   })).sort((a, b) => a.date.localeCompare(b.date));
   // 漏打卡：缺一段打卡（有上班無下班=漏下班；無上班有下班=漏上班）。今天上班中(有上班無下班且=今天)不算
   const today = fmtDate(new Date());
@@ -1948,7 +1949,7 @@ async function getAllRecs(year, month) {
     ragicId: r._ragicId, email: r[F.email], name: r[F.name],
     date: r[F.date], start_time: stripSec(r[F.start_time]), end_time: stripSec(r[F.end_time]),
     hours: r[F.hours], subtotal: r[F.subtotal], location: r[F.location],
-    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes]
+    work_content: r[F.work_content], breaks_minutes: r[F.breaks_minutes], cash_settle: r[F.cash_settle]
   })).sort((a, b) => a.date.localeCompare(b.date));
 }
 
@@ -2992,6 +2993,27 @@ function showReportDetail(email) {
     <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
     ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段・含工作內容）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${String(r.work_content||'').indexOf('外')>=0?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
+    ${(() => {   // 💵 現金結清（時薪制專用，管理者操作）：逐筆標記「這筆已用現金付了」，欄位記日期+操作者
+      if (isFull || !showPay) return '';
+      const rows = wr.filter(r => (Number(r.subtotal) || 0) > 0).sort((a, b) => String(a.date + a.start_time).localeCompare(String(b.date + b.start_time)));
+      if (!rows.length) return '';
+      const paid = rows.filter(r => (r.cash_settle || '').trim());
+      const paidSum = paid.reduce((s2, r) => s2 + (Number(r.subtotal) || 0), 0);
+      const unpaid = rows.filter(r => !(r.cash_settle || '').trim());
+      const unpaidSum = unpaid.reduce((s2, r) => s2 + (Number(r.subtotal) || 0), 0);
+      const line = r => {
+        const done = (r.cash_settle || '').trim();
+        return `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　$${Number(r.subtotal)||0}　` + (done
+          ? `<span style="color:#0a6b0a;font-weight:600" title="${String(done).replace(/"/g,'')}">💵 已結清 ${String(done).split(' ')[0].slice(5).replace(/[<>&"]/g,'')}</span>`
+          : `<button class="btn" style="padding:3px 10px;font-size:12px;background:#0a6b0a" onclick="markCashSettle(${r.ragicId},'${w.email}')">💵 結清</button>`);
+      };
+      return `<div class="rd-sec" style="background:#f0fdf4;border:1px dashed #86efac;border-radius:8px;padding:8px 10px">
+        <div class="rd-title">💵 現金結清${unpaid.length ? `<button class="btn" style="float:right;padding:3px 10px;font-size:12px;background:#0a6b0a" onclick="settleAllCash('${w.email}')">整月全部結清（$${unpaidSum.toLocaleString()}）</button>` : ''}</div>
+        ${rows.map(r => `<div class="rd-row">${line(r)}</div>`).join('')}
+        <div class="rd-row" style="font-weight:700;margin-top:4px">${unpaid.length ? `已結清 $${paidSum.toLocaleString()}　<span style="color:#c62828">未結清 $${unpaidSum.toLocaleString()}</span>` : `✅ 本月已全額現金結清 $${paidSum.toLocaleString()}`}</div>
+        <div class="rd-row" style="font-size:11px;color:#999">※ 標記僅代表付款狀態，不影響工時與薪資計算；點「已結清」可長按無效——如需取消請洽系統管理。</div>
+      </div>`;
+    })()}
     ${section('💪 加班/補休申請', otcpRows, '無加班/補休')}
     ${section('🌴 請假', leaveRows, '無請假')}
     ${isFull && ab.pending.length ? section('🟠 缺席待補單（30hr 內補請假否則計曠職）', ab.pending.map(p => `${addDay(p.ds)}　剩 ${p.hoursLeft} 小時`), '') : ''}
@@ -4394,6 +4416,42 @@ async function viewAdminAnnounce() {
       <div class="ann-list">${list || '<p style="color:#999;text-align:center">尚無公告</p>'}</div>
     </div>`);
   } catch (e) { setView(`<div class="view"><div class="err-box">${e.message}</div></div>`); }
+}
+
+// ═══ 💵 現金結清（時薪制）：標記某筆打卡「已用現金付訖」，欄位 1003245 記「日期 時間 操作者」═══
+// 只是付款狀態標記，不動工時/薪資數字；重開明細即可看到最新狀態
+async function markCashSettle(ragicId, email) {
+  if (!confirm('標記這筆為「已現金結清」？\n（會記錄今天日期與你的帳號，之後看得到是誰、何時結的）')) return;
+  try {
+    const F = CONFIG.FID.R;
+    const now = new Date();
+    const who = (MY_WORKER && MY_WORKER.name) || (ME && ME.name) || (ME && ME.email) || '';
+    await ragicUpdate(CONFIG.SHEETS.RECORDS, ragicId, { [F.cash_settle]: `${fmtDate(now)} ${fmtHHMM(now)} ${who}` });
+    toast('已標記結清 💵', 'green');
+    const hit = _RPT && _RPT.recs.find(r => r.ragicId === ragicId);
+    if (hit) hit.cash_settle = `${fmtDate(new Date())} ${fmtHHMM(new Date())}`;   // _RPT 同步，畫面立即更新
+    bustCache();
+    showReportDetail(email);                          // 重開明細刷新狀態
+  } catch (e) { toast('標記失敗：' + e.message, 'red'); }
+}
+async function settleAllCash(email) {
+  if (!_RPT) return;
+  const rows = _RPT.recs.filter(r => r.email === email && (r.date || '').startsWith(_RPT.ym)
+    && (Number(r.subtotal) || 0) > 0 && !(r.cash_settle || '').trim());
+  if (!rows.length) { toast('沒有未結清的紀錄', 'red'); return; }
+  const sum = rows.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
+  if (!confirm(`把本月 ${rows.length} 筆、共 $${sum.toLocaleString()} 全部標記為「已現金結清」？`)) return;
+  try {
+    const F = CONFIG.FID.R;
+    const now = new Date();
+    const who = (MY_WORKER && MY_WORKER.name) || (ME && ME.name) || (ME && ME.email) || '';
+    const stamp = `${fmtDate(now)} ${fmtHHMM(now)} ${who}`;
+    for (const r of rows) await ragicUpdate(CONFIG.SHEETS.RECORDS, r.ragicId, { [F.cash_settle]: stamp });
+    toast(`已整月結清 ${rows.length} 筆 💵`, 'green');
+    rows.forEach(r => { r.cash_settle = stamp; });     // _RPT 同步，畫面立即更新
+    bustCache();
+    showReportDetail(email);
+  } catch (e) { toast('結清失敗：' + e.message, 'red'); }
 }
 
 async function markAnnouncementRead(ragicId, btn) {
