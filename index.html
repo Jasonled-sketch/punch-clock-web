@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -1174,10 +1174,12 @@ function pushLocalNotify(title, body) {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function renderWorkerTabs() {
+  // 請假/加班補休/公告＝正式員工限定（Jason 2026/08/12：其他類型都不給，Worker 後端同步擋）；測試號模擬正職
+  const formal = ['正式員工', '測試號'].includes(MY_WORKER?.emp_type || '');
   document.getElementById('tab-bar').innerHTML =
     tab('punch','打卡') + tab('calendar','月曆') + tab('records','明細') +
-    tab('requests','補登申請') + tab('leave','請假') +
-    (MY_WORKER?.emp_type === '正式員工' ? tab('ot','加班補休') : '') + tab('announce','公告');
+    tab('requests','補登申請') +
+    (formal ? tab('leave','請假') + tab('ot','加班補休') + tab('announce','公告') : '');
 }
 
 function renderAdminTabs() {
