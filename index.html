@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2562,9 +2562,15 @@ async function viewReport() {
       // 遲到 / 早退（依班別時段）；工讀生時薪制不計
       let lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0;
       if (sh && isFull) {
-        const apprL = leaves.filter(l => l.email === w.email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
+        // ⚠️ 請假「與補休」都要扣（Jason 2026/08/12 抓到）：補休和請假一樣「那段不用在公司」，
+        //    漏扣會把「16:00 開始補休、16:01 打卡下班」誤判成早退 59 分 → 扣薪＋全勤失格。
+        //    補休存在加班表(otAll 類型=補休)不在請假表，需另外併入。bot lib/attCalc.js 已同步修正。
+        const apprL = leaves.filter(l => l.email === w.email && l.status === 'approved' && (l.start_date || '').startsWith(ym))
+          .map(l => ({ date: l.start_date, s: l.start_time, e: l.end_time, full: !l.start_time || !l.end_time }))
+          .concat((otAll || []).filter(o => o.email === w.email && o.ot_type === '補休' && o.status === 'approved' && (o.date || '').startsWith(ym))
+            .map(o => ({ date: o.date, s: o.start_time, e: o.end_time, full: false })));
         wr.forEach(r => {
-          const eff = effShiftBounds(sh, apprL.filter(l => l.start_date === r.date));  // 扣除當日請假時段
+          const eff = effShiftBounds(sh, apprL.filter(l => l.date === r.date));  // 扣除當日請假＋補休時段
           if (eff.fullDay) return;
           if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateCnt++; lateMin += d; } }
           if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
