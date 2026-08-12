@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3005,10 +3005,10 @@ function showReportDetail(email) {
         const done = (r.cash_settle || '').trim();
         return `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　$${Number(r.subtotal)||0}　` + (done
           ? `<span style="color:#0a6b0a;font-weight:600" title="${String(done).replace(/"/g,'')}">💵 已結清 ${String(done).split(' ')[0].slice(5).replace(/[<>&"]/g,'')}</span>`
-          : `<button class="btn" style="padding:3px 10px;font-size:12px;background:#0a6b0a" onclick="markCashSettle(${r.ragicId},'${w.email}')">💵 結清</button>`);
+          : `<button class="btn" style="padding:3px 12px;font-size:12px;background:#0a6b0a;color:#fff" onclick="markCashSettle(${r.ragicId},'${w.email}')">未結清</button>`);
       };
       return `<div class="rd-sec" style="background:#f0fdf4;border:1px dashed #86efac;border-radius:8px;padding:8px 10px">
-        <div class="rd-title">💵 現金結清${unpaid.length ? `<button class="btn" style="float:right;padding:3px 10px;font-size:12px;background:#0a6b0a" onclick="settleAllCash('${w.email}')">整月全部結清（$${unpaidSum.toLocaleString()}）</button>` : ''}</div>
+        <div class="rd-title">💵 現金結清${unpaid.length ? `<button class="btn" style="float:right;padding:3px 12px;font-size:12px;background:#0a6b0a;color:#fff" onclick="settleAllCash('${w.email}')">整月全部結清（${unpaidSum.toLocaleString()}）</button>` : ''}</div>
         ${rows.map(r => `<div class="rd-row">${line(r)}</div>`).join('')}
         <div class="rd-row" style="font-weight:700;margin-top:4px">${unpaid.length ? `已結清 $${paidSum.toLocaleString()}　<span style="color:#c62828">未結清 $${unpaidSum.toLocaleString()}</span>` : `✅ 本月已全額現金結清 $${paidSum.toLocaleString()}`}</div>
         <div class="rd-row" style="font-size:11px;color:#999">※ 標記僅代表付款狀態，不影響工時與薪資計算；點「已結清」可長按無效——如需取消請洽系統管理。</div>
