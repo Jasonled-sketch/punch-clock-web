@@ -121,9 +121,10 @@
   #caseList{display:flex;flex-direction:column;gap:7px;margin-top:9px;max-height:300px;overflow-y:auto}
   #caseList button{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;
     color:#334155;border-radius:11px;padding:10px 12px;font-family:inherit;line-height:1.35}
-  #caseList button b{display:block;font-size:13px;color:var(--sky-d);font-weight:800;letter-spacing:.3px}
-  #caseList button span{display:block;font-size:14px;font-weight:700;color:#1e293b;margin-top:2px}
-  #caseList button small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  #caseList button b{display:block;font-size:11px;color:var(--sky-d);font-weight:700;letter-spacing:.2px}
+  #caseList button span{display:block;font-size:13px;font-weight:600;color:#1e293b;margin-top:1px;line-height:1.3}
+  #caseList button.warn{border-color:#f59e0b;background:#fffbeb}
+  #caseList button.warn b{color:#b45309}
   #caseList button.on{background:var(--sky);border-color:var(--sky)}
   #caseList button.on b,#caseList button.on span,#caseList button.on small{color:#fff}
   #caseList .none{color:#94a3b8;font-size:13px;padding:6px 2px}
@@ -438,8 +439,13 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.16';
+const APP_VERSION='1.17';
 const CHANGELOG=[
+  'v1.17　2026/07/18',
+  '· 任務清單精簡：只顯示案件敘述、字體縮小、預設前 10 筆',
+  '· 只有交貨方式「到府安裝／到府維修」的案件會出現（自取／宅配不列）',
+  '· 建立日誌加二次確認：點一下→再點一下確認，防誤觸',
+  '',
   'v1.16　2026/07/18',
   '· 修正：免登入開啟時任務清單一直空白（憑證補上後自動重新載入）',
   '',
@@ -754,9 +760,13 @@ async function loadCases(all){
 function findCase(no){ return (S.cases||[]).find(c=>c.no===no)||null; }
 async function pickCase(v){
   if(S.ensuring) return;                       // 建立日誌中,避免連點
-  if(S.caseNo===v){ S.caseNo=''; S.logNo=''; renderCaseSel(); renderCaseList(); return; }   // 再點=取消
+  if(S.caseNo===v){ S.caseNo=''; S.logNo=''; S.confirmNo=''; renderCaseSel(); renderCaseList(); return; }   // 再點=取消
   const c=findCase(v); if(!c) return;
-  if(!c.log){                                  // 還沒有工作日誌 → 當場自動產生(方案B,行政不用等)
+  if(!c.log && S.confirmNo!==v){               // 🆕第一下=進入確認狀態,防誤觸直接建日誌
+    S.confirmNo=v; renderCaseList(); return;
+  }
+  S.confirmNo='';
+  if(!c.log){                                  // 第二下確認 → 當場自動產生工作日誌(方案B,行政不用等)
     S.ensuring=v; renderCaseList();
     try{
       const r=await fetch(CFG.WORKER+'/worklog-ensure-log',{method:'POST',
@@ -784,28 +794,31 @@ function renderCaseList(){
   const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
   const all=S.cases||[];
   if(!all.length){ box.innerHTML='<div class="none">'+(S.loadingCases?'任務清單載入中…':(S.waitToken?'登入憑證更新中，幾秒後自動載入…':'目前沒有任務可選'))+'</div>'; return; }
+  const moreBtn=S.allLoaded?'':'<button type="button" onclick="loadCases(1)" style="border:1.5px dashed var(--sky);background:#f8fafc;color:var(--sky-d);border-radius:11px;padding:10px;font-weight:700;font-size:13px;font-family:inherit;width:100%">'+(S.loadingCases?'搜尋中…':'🔍 搜尋更早的任務（較慢）')+'</button>';
   let show;
   if(q){
     show=all.filter(c=>((c.no||'')+' '+(c.log||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.addr||'')).toUpperCase().includes(q)).slice(0,40);
   } else {
     const rec=recentCases().map(n=>findCase(n)).filter(Boolean);
     const seen={}; show=[];
-    [...rec, ...all.slice(0,12)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
-    show=show.slice(0,15);
+    [...rec, ...all.slice(0,10)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
+    show=show.slice(0,10);                                  // 預設只列前10筆,搜尋為輔
   }
   if(!show.length){
-    box.innerHTML='<div class="none">近兩個月任務查無「'+esc(q)+'」</div>'+
-      (S.allLoaded?'':'<button type="button" onclick="loadCases(1)" style="border:1.5px dashed var(--sky);background:#f8fafc;color:var(--sky-d);border-radius:11px;padding:11px;font-weight:700;font-family:inherit;width:100%">'+(S.loadingCases?'搜尋中…':'🔍 搜尋更早的任務（較慢）')+'</button>');
+    box.innerHTML='<div class="none">近兩個月任務查無「'+esc(q)+'」</div>'+moreBtn;
     return;
   }
   box.innerHTML=show.map(c=>{
-    const sub=[c.cust,c.addr].filter(Boolean).join('｜');
-    const tag=S.ensuring===c.no?'⏳ 建立日誌中…':(c.log?esc(c.log):'🆕 新任務·點選自動建日誌');
-    return '<button type="button" class="'+(S.caseNo===c.no?'on':'')+'" onclick="pickCase(\''+esc(c.no)+'\')">'+
-      '<b>'+tag+'　'+esc(c.no)+'</b>'+
-      '<span>'+esc(c.desc||c.cust||'(無敘述)')+'</span>'+
-      (sub?'<small>'+esc(sub)+'</small>':'')+'</button>';
-  }).join('');
+    let tag, cls='';
+    if(S.ensuring===c.no){ tag='⏳ 建立日誌中…'; }
+    else if(S.confirmNo===c.no){ tag='❗再點一次確認建立日誌'; cls='warn'; }
+    else if(c.log){ tag=esc(c.log); }
+    else { tag='🆕 '+esc(c.no); }
+    if(S.caseNo===c.no) cls='on';
+    return '<button type="button" class="'+cls+'" onclick="pickCase(\''+esc(c.no)+'\')">'+
+      '<b>'+tag+'</b>'+
+      '<span>'+esc(c.desc||c.cust||'(無敘述)')+'</span></button>';
+  }).join('')+(q?moreBtn:'');
 }
 
 /* ---------- 工務分類三層連動 + 智能顯示／預設 ---------- */
@@ -894,7 +907,7 @@ function calcGrade(){
 function buildForm(){
   $('f_date').value = todayStr();
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
-  S.caseNo=''; S.logNo=''; S.ensuring=''; if($('caseSearch')) $('caseSearch').value=''; renderCaseSel(); renderCaseList();
+  S.caseNo=''; S.logNo=''; S.ensuring=''; S.confirmNo=''; if($('caseSearch')) $('caseSearch').value=''; renderCaseSel(); renderCaseList();
   buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
   if(S.pick.lead && S.coworkers.indexOf(S.pick.lead)<0) S.coworkers.push(S.pick.lead);   // 預設主任自動帶入協作員
   S.autoLead = S.pick.lead || '';
