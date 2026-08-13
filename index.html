@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.0</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2571,11 +2571,15 @@ async function viewReport() {
           .map(l => ({ date: l.start_date, s: l.start_time, e: l.end_time, full: !l.start_time || !l.end_time }))
           .concat((otAll || []).filter(o => o.email === w.email && o.ot_type === '補休' && o.status === 'approved' && (o.date || '').startsWith(ym))
             .map(o => ({ date: o.date, s: o.start_time, e: o.end_time, full: false })));
+        // ⏳ 補時券（sheet8 類型='補時券'且時數>0=已使用）：生效日班表順延、須當日補足——與 bot attCalc 同邏輯
+        const tsMapW = {};
+        (otAll || []).filter(o => o.email === w.email && o.ot_type === '補時券' && o.status === 'approved' && (parseFloat(o.hours) || 0) > 0 && (o.date || '').startsWith(ym)).forEach(o => { tsMapW[o.date] = Math.min(10, parseFloat(o.hours) || 0); });
         wr.forEach(r => {
           const eff = effShiftBounds(sh, apprL.filter(l => l.date === r.date));  // 扣除當日請假＋補休時段
           if (eff.fullDay) return;
-          if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateCnt++; lateMin += d; } }
-          if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
+          let tsN = tsMapW[r.date] || 0; if (tsN && !(r.end_time && toMin(r.end_time) >= eff.pmEnd + tsN)) tsN = 0;   // 未補足=券無效
+          if (r.start_time) { const d = toMin(r.start_time) - (eff.amStart + tsN); if (d > 0) { lateCnt++; lateMin += d; } }
+          if (r.end_time)   { const d = (eff.pmEnd + tsN) - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
         });
       }
 
@@ -2597,10 +2601,7 @@ async function viewReport() {
       const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);  // ot.hours 顯示用；金額改吃 API
       // 遲到/早退：**遲到＋早退「合計」**月累計 ≤15 分免責，>15 分扣全部（bot lib/attCalc.js:126-127 同一門檻）
       // ⚠️ 舊版寫成「各自 >15」→ 遲到10+早退10（合計20應扣20分）會扣 0，且與下方明細彈窗的合計制分岔
-      // 🎟️ 遲到抵免券（任務牆獎勵）：otAll 類型='遲到抵免'、時數欄=分鐘、approved 生效——先抵再比門檻（與 attCalc 同步）
-      const couponMin = (otAll || []).filter(o => o.email === w.email && o.ot_type === '遲到抵免' && o.status === 'approved' && (o.date || '').startsWith(ym)).reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);
-      const teRawM = lateMin + earlyMin;                      // ⚖️ 全勤判定用「原始」分鐘：減免券只抵扣薪，不得影響全勤（勞資法遵，與 attCalc 同步）
-      const teTotM = Math.max(0, teRawM - couponMin);         // 扣薪 fallback 用（抵扣券後）
+      const teTotM = lateMin + earlyMin;                      // 補時券生效日已於上方逐日順延（與 attCalc 同步）
       const otPay        = _apiS ? _apiS.otPay        : ot.pay;
       const lateDeduct   = _apiS ? _apiS.lateDeduct   : Math.round((teTotM > 15 ? teTotM : 0) / 60 * hourly);
       const leaveDeduct  = _apiS ? _apiS.leaveDeduct  : calcLeaveDeduct(appr, hourly, shHours, sickUsedBeforeMonth(w, leaves, ym));
@@ -2617,7 +2618,7 @@ async function viewReport() {
         : 0);
       // 全勤獎金：2026/07 起計入 net（2026/08/10 拍板提前）（工資性質）。API 優先，離線用本地估算（bot lib/attCalc.js:243-255 同規則）
       const attendBonus = _apiS ? (_apiS.attendBonus || 0)
-        : calcAttendBonusLocal(w, isFull, ym, appr, absent, teRawM, shHours, specialSet, makeupSet);
+        : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotM, shHours, specialSet, makeupSet);
       const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
       // 特休：優先吃薪資 API（帶查詢年月→期末封存,月報數字固定不隨今天漂移）,fallback leave-balance/本地
       const _an = annualNums(w, leaves, shHours, isFull, _apiS, ym);
@@ -2812,20 +2813,21 @@ function showReportDetail(email) {
 
   // 遲到 / 早退逐筆
   const apprForCalc = leaves.filter(l => l.email === email && l.status === 'approved' && (l.start_date || '').startsWith(ym));
+  // ⏳ 補時券（sheet8 類型='補時券'且時數>0=已使用）：生效日班表順延、須當日補足——與 bot attCalc 同邏輯（本 modal 兩個迴圈共用）
+  const tsMapD = {};
+  (otAll || []).filter(o => o.email === email && o.ot_type === '補時券' && o.status === 'approved' && (parseFloat(o.hours) || 0) > 0 && (o.date || '').startsWith(ym)).forEach(o => { tsMapD[o.date] = Math.min(10, parseFloat(o.hours) || 0); });
   const lateRows = [], earlyRows = [];
   let lateMin = 0, earlyMin = 0;
   if (sh && isFull) {                                          // 工讀生時薪制不計遲到/早退
     wr.forEach(r => {
       const eff = effShiftBounds(sh, apprForCalc.filter(l => l.start_date === r.date));  // 扣除當日請假時段
       if (eff.fullDay) return;
-      if (r.start_time) { const d = toMin(r.start_time) - eff.amStart; if (d > 0) { lateMin += d; lateRows.push(`${addDayShort(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
-      if (r.end_time)   { const d = eff.pmEnd - toMin(r.end_time);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
+      let tsN = tsMapD[r.date] || 0; if (tsN && !(r.end_time && toMin(r.end_time) >= eff.pmEnd + tsN)) tsN = 0;   // ⏳ 補時券:未補足=無效
+      if (r.start_time) { const d = toMin(r.start_time) - (eff.amStart + tsN); if (d > 0) { lateMin += d; lateRows.push(`${addDayShort(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
+      if (r.end_time)   { const d = (eff.pmEnd + tsN) - toMin(r.end_time);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
     });
   }
-  // 🎟️ 遲到抵免券（任務牆獎勵）：otAll 類型='遲到抵免'、時數欄=分鐘、approved 生效——先抵再比門檻（與 attCalc 同步）
-  const couponMinD = (otAll || []).filter(o => o.email === email && o.ot_type === '遲到抵免' && o.status === 'approved' && (o.date || '').startsWith(ym)).reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);
-  const teRawP = lateMin + earlyMin;                             // ⚖️ 全勤判定用原始分鐘（減免券只抵扣薪，與 attCalc 同步）
-  const teTotP = Math.max(0, teRawP - couponMinD);               // 扣薪 fallback（抵扣券後）月累計>15分→全額扣(與全勤同門檻;與 bot 一致)
+  const teTotP = lateMin + earlyMin;                             // 補時券生效日已於上方逐日順延（與 attCalc 同步）；月累計>15分→全額扣(與全勤同門檻)
   const lateDeduct = _apiS ? _apiS.lateDeduct : Math.round((teTotP > 15 ? teTotP : 0) / 60 * hourly);
 
   // 加班費明細
@@ -2875,7 +2877,7 @@ function showReportDetail(email) {
   const otPay = _apiS ? _apiS.otPay : od.totalPay;
   // 全勤獎金：2026/07 起計入 net（2026/08/10 拍板提前）（與月報卡片同一規則，離線估算見 calcAttendBonusLocal）
   const attendBonus = _apiS ? (_apiS.attendBonus || 0)
-    : calcAttendBonusLocal(w, isFull, ym, appr, absent, teRawP, shHours, specialSet, makeupSet);
+    : calcAttendBonusLocal(w, isFull, ym, appr, absent, teTotP, shHours, specialSet, makeupSet);
   const net = _apiS ? _apiS.net : Math.round(base + otPay + holidayBonus + attendBonus - absentDeduct - disasterDeduct - lateDeduct - leaveDeduct - laborIns - healthIns);
 
   const section = (title, rows, empty) =>
@@ -2923,8 +2925,9 @@ function showReportDetail(email) {
           const firstIn = recsT[0].start_time ? toMin(recsT[0].start_time) : null;
           const lastOut = cl.length ? toMin(cl[cl.length - 1].end_time) : null;
           let lateM = 0, earlyM = 0;
-          if (firstIn != null && firstIn - eff.amStart > 0) lateM = firstIn - eff.amStart;
-          if (lastOut != null && eff.pmEnd - lastOut > 0) earlyM = eff.pmEnd - lastOut;
+          let tsN1 = tsMapD[ds] || 0; if (tsN1 && !(lastOut != null && lastOut >= eff.pmEnd + tsN1)) tsN1 = 0;   // ⏳ 補時券:未補足=無效
+          if (firstIn != null && firstIn - (eff.amStart + tsN1) > 0) lateM = firstIn - (eff.amStart + tsN1);
+          if (lastOut != null && (eff.pmEnd + tsN1) - lastOut > 0) earlyM = (eff.pmEnd + tsN1) - lastOut;
           totLate += lateM; totEarly += earlyM;
           const lt = []; if (lateM) lt.push(`遲到${lateM}分鐘`); if (earlyM) lt.push(`早退${earlyM}分鐘`);
           if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
@@ -2936,7 +2939,8 @@ function showReportDetail(email) {
     if (rec && rec.start_time && rec.end_time) {
       const eff = effShiftBounds(sh, dayOff);
       let lateM = 0, earlyM = 0;
-      if (sh && !eff.fullDay && isFull) { const a = toMin(rec.start_time) - eff.amStart; if (a > 0) lateM = a; const b = eff.pmEnd - toMin(rec.end_time); if (b > 0) earlyM = b; }
+      let tsN2 = tsMapD[ds] || 0; if (tsN2 && toMin(rec.end_time) < eff.pmEnd + tsN2) tsN2 = 0;   // ⏳ 補時券:未補足=無效
+      if (sh && !eff.fullDay && isFull) { const a = toMin(rec.start_time) - (eff.amStart + tsN2); if (a > 0) lateM = a; const b = (eff.pmEnd + tsN2) - toMin(rec.end_time); if (b > 0) earlyM = b; }
       totLate += lateM; totEarly += earlyM;
       const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
       const wh = realWorkHours(rec, sh, isFull, dayOff);
@@ -2965,10 +2969,8 @@ function showReportDetail(email) {
   const urgentTotal = appr.filter(isUrgentLeave).length;
   const uTier = urgentTierCounts(appr);  // 三級：緊急<24 / 急件<72 / 一般<120
   const uSum = uTier.緊急 + uTier.急件 + uTier.一般;
-  const couponMin2 = otAll.filter(o => o.email === email && o.ot_type === '遲到抵免' && o.status === 'approved' && (o.date || '').startsWith(ym)).reduce((s, o) => s + (parseFloat(o.hours) || 0), 0);  // 🎟️ 遲到分鐘減免券(分)
-  const lateEarlyTot = totLate + totEarly;                                          // ⚖️ 顯示與全勤判定用原始分鐘（券只抵扣薪）
-  const lateEarlyEff = Math.max(0, lateEarlyTot - couponMin2);
-  const lateEarlyDeduct = Math.round((lateEarlyEff > 15 ? lateEarlyEff : 0) / 60 * hourly);
+  const lateEarlyTot = totLate + totEarly;                                          // 補時券生效日已於上方逐日順延（與 attCalc 同步）
+  const lateEarlyDeduct = Math.round((lateEarlyTot > 15 ? lateEarlyTot : 0) / 60 * hourly);
   const todayStr2 = `${nowTw.getUTCFullYear()}/${pad2(nowTw.getUTCMonth() + 1)}/${pad2(nowTw.getUTCDate())}`;
   const otcpRows = otAll.filter(o => o.email === email && (o.ot_type === '加班' || o.ot_type === '補休') && o.status === 'approved' && (o.date || '').startsWith(ym))  // 同 LINE：已核准加班(綠)/補休(藍)，已/預
     .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
@@ -3012,7 +3014,7 @@ function showReportDetail(email) {
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : (w.emp_type==='承攬'?'承攬':'工讀')}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${Math.round(hourly*10)/10}` : ''}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
-    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${couponMin2 ? `（🎟️減免券抵扣薪 ${couponMin2} 分，不影響全勤）` : ''}${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : (lateEarlyEff > 15 ? '' : '（未達 15 分不扣）')) : ''}` : '遲到早退：時薪制不計'}</div>
+    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
     ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段・含工作內容）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${String(r.work_content||'').indexOf('外')>=0?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
     ${(() => {   // 💵 現金結清（時薪制專用，管理者操作）：逐筆標記「這筆已用現金付了」，欄位記日期+操作者
