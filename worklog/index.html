@@ -134,8 +134,13 @@
   #caseSearchRow input{font-size:15px;padding:11px 12px}
   #caseList{flex:1;overflow-y:auto;padding:2px 14px 14px;display:flex;flex-direction:column;gap:7px}
   #caseList button{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;
-    color:#334155;border-radius:10px;padding:8px 11px;font-family:inherit;line-height:1.3;overflow:hidden}
+    color:#334155;border-radius:10px;padding:8px 42px 8px 11px;font-family:inherit;line-height:1.3;overflow:hidden;position:relative}
   #caseList button b{display:block;font-size:10.5px;color:var(--sky-d);font-weight:700;letter-spacing:.2px}
+  #caseList button .uc{position:absolute;top:7px;right:8px;min-width:26px;height:20px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-style:normal;padding:0 6px}
+  #caseList button .uc.u0{background:#f1f5f9;color:#94a3b8}
+  #caseList button .uc.u1{background:#e0f2fe;color:var(--sky-d)}
+  #caseList button .uc.u2{background:#fef3c7;color:#b45309}
   #caseList button span{display:block;font-size:12.5px;font-weight:600;color:#1e293b;margin-top:1px;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #caseList button.warn{border-color:#f59e0b;background:#fffbeb}
@@ -265,7 +270,7 @@
       <div class="field">
         <label class="lb">今日任務（工作日誌）<span class="opt">選填</span></label>
         <div id="caseSelWrap"></div>
-        <button type="button" class="case-pick" onclick="openCaseModal()">🗂 選擇任務</button>
+        <button type="button" class="case-pick" id="casePickBtn" onclick="openCaseModal()">🗂 選擇任務</button>
       </div>
       <div class="field">
         <label class="lb">施工主題（客戶／案場）<span class="req">*</span></label>
@@ -469,8 +474,12 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.18';
+const APP_VERSION='1.19';
 const CHANGELOG=[
+  'v1.19　2026/07/18',
+  '· 每個任務右上角顯示「被日誌登打次數」：0 灰／1 藍／2+ 橘，二次工三次工一眼看出',
+  '· 清單放寬到 20 筆；已選任務時隱藏「選擇任務」按鈕',
+  '',
   'v1.18　2026/07/18',
   '· 任務改「彈出視窗」選擇：表單上只留一顆「選擇任務」按鈕，不再攤開清單',
   '· 搜尋藏進放大鏡🔍，點了才展開；敘述縮成一行、字體再縮小',
@@ -837,6 +846,7 @@ async function pickCase(v){
 }
 function renderCaseSel(){
   const w=$('caseSelWrap'); if(!w) return;
+  const pb=$('casePickBtn'); if(pb) pb.style.display = S.caseNo? 'none':'';   // 已選任務→藏「選擇任務」鈕(一個入口即可)
   if(!S.caseNo){ w.innerHTML=''; return; }
   const c=findCase(S.caseNo);
   w.innerHTML='<div class="case-sel"><div style="display:flex;width:100%;align-items:center">已選 '+esc(S.logNo||S.caseNo)+'（'+esc(S.caseNo)+'）'+
@@ -855,8 +865,8 @@ function renderCaseList(){
   } else {
     const rec=recentCases().map(n=>findCase(n)).filter(Boolean);
     const seen={}; show=[];
-    [...rec, ...all.slice(0,10)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
-    show=show.slice(0,10);                                  // 預設只列前10筆,搜尋為輔
+    [...rec, ...all.slice(0,20)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
+    show=show.slice(0,20);                                  // 預設列前20筆,搜尋為輔
   }
   if(!show.length){
     box.innerHTML='<div class="none">近兩個月任務查無「'+esc(q)+'」</div>'+moreBtn;
@@ -869,7 +879,9 @@ function renderCaseList(){
     else if(c.log){ tag=esc(c.log); }
     else { tag='🆕 '+esc(c.no); }
     if(S.caseNo===c.no) cls='on';
-    return '<button type="button" class="'+cls+'" onclick="pickCase(\''+esc(c.no)+'\')">'+
+    const n=c.used||0;                                       // 被工務日誌登打過的次數(0=首次,1=二次工,2=三次工…)
+    const uc='<i class="uc '+(n===0?'u0':(n===1?'u1':'u2'))+'">'+n+'</i>';
+    return '<button type="button" class="'+cls+'" onclick="pickCase(\''+esc(c.no)+'\')">'+uc+
       '<b>'+tag+'</b>'+
       '<span>'+esc(c.desc||c.cust||'(無敘述)')+'</span></button>';
   }).join('')+(q?moreBtn:'');
