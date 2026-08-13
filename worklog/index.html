@@ -231,7 +231,7 @@
       <div class="sec-t"><span class="n">1</span>基本資訊</div>
       <div class="field">
         <label class="lb">執行日期<span class="req">*</span><span id="dateWeek" style="margin-left:auto;color:var(--sky-d);font-weight:700;font-size:13px"></span></label>
-        <input type="date" id="f_date" onchange="updateWeekday()">
+        <input type="date" id="f_date" onchange="updateWeekday();loadCases()">
       </div>
       <div class="field">
         <label class="lb">負責主任<span class="req">*</span></label>
@@ -438,8 +438,12 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.13';
+const APP_VERSION='1.14';
 const CHANGELOG=[
+  'v1.14　2026/07/17',
+  '· 案件清單大幅加速：只載入「執行日期前後 2 個月」的案件（原本全部載入很慢）',
+  '· 找不到時可按「搜尋更早的案件」再撈全部',
+  '',
   'v1.13　2026/07/17',
   '· 案件改成看得懂的清單：直接顯示客戶／案場／產品，不必記流水號',
   '· 可用客戶名、地點、產品搜尋；記住最近用過的案件',
@@ -725,14 +729,19 @@ function recentCases(){ try{ return JSON.parse(localStorage.getItem('wl_case_rec
 function pushRecentCase(v){
   try{ const a=recentCases().filter(x=>x!==v); a.unshift(v); localStorage.setItem('wl_case_recent', JSON.stringify(a.slice(0,8))); }catch(e){}
 }
-async function loadCases(){
-  const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); }
+async function loadCases(all){
+  if(!all){ const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); } }
+  const day=(($('f_date')||{}).value)||'';
+  const q = all? '?all=1' : ('?d='+encodeURIComponent(day));   // 預設只取執行日期前後2個月(快)
+  S.loadingCases=true; if(all) renderCaseList();
   try{
-    const r=await fetch(CFG.WORKER+'/worklog-cases',{headers:{'X-Google-Token':S.token||''}});
+    const r=await fetch(CFG.WORKER+'/worklog-cases'+q,{headers:{'X-Google-Token':S.token||''}});
     const d=await r.json();
     const list=(d&&d.cases)||[];   // [{no,desc,cust,prod,addr}] 已在伺服器端剝除金額
-    if(list.length){ S.cases=list; try{ localStorage.setItem('wl_cases_v1', JSON.stringify(list)); }catch(e){} renderCaseList(); }
+    S.allLoaded=!!all;
+    if(list.length){ S.cases=list; if(!all){ try{ localStorage.setItem('wl_cases_v1', JSON.stringify(list)); }catch(e){} } }
   }catch(e){}
+  S.loadingCases=false; renderCaseList();
 }
 function findCase(no){ return (S.cases||[]).find(c=>c.no===no)||null; }
 function pickCase(v){ S.caseNo=(S.caseNo===v?'':v); if(S.caseNo) pushRecentCase(S.caseNo); renderCaseSel(); renderCaseList(); }
@@ -748,7 +757,7 @@ function renderCaseList(){
   const box=$('caseList'); if(!box) return;
   const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
   const all=S.cases||[];
-  if(!all.length){ box.innerHTML='<div class="none">案件清單載入中…（第一次較久，之後秒開）</div>'; return; }
+  if(!all.length){ box.innerHTML='<div class="none">'+(S.loadingCases?'案件清單載入中…':'目前沒有案件可選')+'</div>'; return; }
   let show;
   if(q){
     show=all.filter(c=>((c.no||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.prod||'')+' '+(c.addr||'')).toUpperCase().includes(q)).slice(0,40);
@@ -758,7 +767,11 @@ function renderCaseList(){
     [...rec, ...all.slice(0,12)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
     show=show.slice(0,15);
   }
-  if(!show.length){ box.innerHTML='<div class="none">查無「'+esc(q)+'」，可換關鍵字（客戶／地點／產品）或留空不填</div>'; return; }
+  if(!show.length){
+    box.innerHTML='<div class="none">目前清單（執行日期前後 2 個月）查無「'+esc(q)+'」</div>'+
+      (S.allLoaded?'':'<button type="button" onclick="loadCases(1)" style="border:1.5px dashed var(--sky);background:#f8fafc;color:var(--sky-d);border-radius:11px;padding:11px;font-weight:700;font-family:inherit;width:100%">'+(S.loadingCases?'搜尋中…':'🔍 搜尋更早的案件（較慢）')+'</button>');
+    return;
+  }
   box.innerHTML=show.map(c=>{
     const sub=[c.prod,c.addr].filter(Boolean).join('｜');
     return '<button type="button" class="'+(S.caseNo===c.no?'on':'')+'" onclick="pickCase(\''+esc(c.no)+'\')">'+
