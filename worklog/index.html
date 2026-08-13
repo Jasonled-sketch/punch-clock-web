@@ -118,11 +118,17 @@
     border-radius:11px;padding:11px 13px;margin-bottom:9px;font-weight:800;color:var(--sky-d);font-size:15px}
   .case-sel .x{margin-left:auto;border:none;background:rgba(2,132,199,.15);color:var(--sky-d);
     width:28px;height:28px;border-radius:50%;font-size:17px;line-height:1;font-family:inherit}
-  #caseList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:9px;max-height:238px;overflow-y:auto}
-  #caseList button{border:1.5px solid var(--line);background:#fff;color:#334155;border-radius:10px;
-    padding:11px 6px;font-size:14px;font-weight:700;font-family:inherit;min-height:46px}
-  #caseList button.on{background:var(--sky);border-color:var(--sky);color:#fff}
-  #caseList .none{grid-column:1/-1;color:#94a3b8;font-size:13px;padding:6px 2px}
+  #caseList{display:flex;flex-direction:column;gap:7px;margin-top:9px;max-height:300px;overflow-y:auto}
+  #caseList button{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;
+    color:#334155;border-radius:11px;padding:10px 12px;font-family:inherit;line-height:1.35}
+  #caseList button b{display:block;font-size:13px;color:var(--sky-d);font-weight:800;letter-spacing:.3px}
+  #caseList button span{display:block;font-size:14px;font-weight:700;color:#1e293b;margin-top:2px}
+  #caseList button small{display:block;font-size:11.5px;color:var(--muted);font-weight:500;margin-top:2px}
+  #caseList button.on{background:var(--sky);border-color:var(--sky)}
+  #caseList button.on b,#caseList button.on span,#caseList button.on small{color:#fff}
+  #caseList .none{color:#94a3b8;font-size:13px;padding:6px 2px}
+  .case-sel{align-items:flex-start;flex-direction:column;gap:3px}
+  .case-sel .cs-desc{font-size:13.5px;font-weight:600;color:#0c4a6e}
 
   /* Yes/No 開關列 */
   .chk{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f1f5f9}
@@ -243,7 +249,7 @@
       <div class="field">
         <label class="lb">案件編號<span class="opt">選填·可搜尋</span></label>
         <div id="caseSelWrap"></div>
-        <input type="search" id="caseSearch" placeholder="輸入案號搜尋，例 Q2603、CO2405" autocomplete="off" oninput="renderCaseList()">
+        <input type="search" id="caseSearch" placeholder="搜尋客戶／地點／產品，例 陳曉霓、桃園、字幕機" autocomplete="off" oninput="renderCaseList()">
         <div id="caseList"></div>
       </div>
       <div class="field">
@@ -432,10 +438,14 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.12';
+const APP_VERSION='1.13';
 const CHANGELOG=[
+  'v1.13　2026/07/17',
+  '· 案件改成看得懂的清單：直接顯示客戶／案場／產品，不必記流水號',
+  '· 可用客戶名、地點、產品搜尋；記住最近用過的案件',
+  '',
   'v1.12　2026/07/17',
-  '· 新增「案件編號」：工程師可自己搜尋選case（會記住最近用過的，免每次找）',
+  '· 新增「案件編號」欄位',
   '',
   'v1.11　2026/07/17',
   '· 【修正登入失敗】中文姓名帳號會出現「invalid characters」無法登入的問題（JWT 改 base64url＋UTF-8 解碼）',
@@ -718,31 +728,44 @@ function pushRecentCase(v){
 async function loadCases(){
   const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); }
   try{
-    const r=await callRagic('?api&v=3&def=1',{method:'GET'});
+    const r=await fetch(CFG.WORKER+'/worklog-cases',{headers:{'X-Google-Token':S.token||''}});
     const d=await r.json();
-    const f=(d.fields||d)['fid'+CFG.F.caseNo];
-    const opts=(f&&f.options)||[];
-    const list=opts.map(o=>o.v).filter(Boolean).reverse();   // 新的排前面
+    const list=(d&&d.cases)||[];   // [{no,desc,cust,prod,addr}] 已在伺服器端剝除金額
     if(list.length){ S.cases=list; try{ localStorage.setItem('wl_cases_v1', JSON.stringify(list)); }catch(e){} renderCaseList(); }
   }catch(e){}
 }
+function findCase(no){ return (S.cases||[]).find(c=>c.no===no)||null; }
 function pickCase(v){ S.caseNo=(S.caseNo===v?'':v); if(S.caseNo) pushRecentCase(S.caseNo); renderCaseSel(); renderCaseList(); }
 function renderCaseSel(){
   const w=$('caseSelWrap'); if(!w) return;
-  w.innerHTML = S.caseNo
-    ? '<div class="case-sel">已選 '+esc(S.caseNo)+'<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'
-    : '';
+  if(!S.caseNo){ w.innerHTML=''; return; }
+  const c=findCase(S.caseNo);
+  w.innerHTML='<div class="case-sel"><div style="display:flex;width:100%;align-items:center">已選 '+esc(S.caseNo)+
+    '<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'+
+    (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+'</div>';
 }
 function renderCaseList(){
   const box=$('caseList'); if(!box) return;
   const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
   const all=S.cases||[];
+  if(!all.length){ box.innerHTML='<div class="none">案件清單載入中…（第一次較久，之後秒開）</div>'; return; }
   let show;
-  if(q){ show=all.filter(v=>String(v).toUpperCase().includes(q)).slice(0,40); }
-  else { const rec=recentCases().filter(v=>all.indexOf(v)>=0); show=[...new Set([...rec, ...all.slice(0,12)])].slice(0,14); }
-  if(!all.length){ box.innerHTML='<div class="none">案號載入中…</div>'; return; }
-  if(!show.length){ box.innerHTML='<div class="none">查無「'+esc(q)+'」，可換關鍵字或留空不填</div>'; return; }
-  box.innerHTML=show.map(v=>'<button type="button" class="'+(S.caseNo===v?'on':'')+'" onclick="pickCase(\''+esc(v)+'\')">'+esc(v)+'</button>').join('');
+  if(q){
+    show=all.filter(c=>((c.no||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.prod||'')+' '+(c.addr||'')).toUpperCase().includes(q)).slice(0,40);
+  } else {
+    const rec=recentCases().map(n=>findCase(n)).filter(Boolean);
+    const seen={}; show=[];
+    [...rec, ...all.slice(0,12)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
+    show=show.slice(0,15);
+  }
+  if(!show.length){ box.innerHTML='<div class="none">查無「'+esc(q)+'」，可換關鍵字（客戶／地點／產品）或留空不填</div>'; return; }
+  box.innerHTML=show.map(c=>{
+    const sub=[c.prod,c.addr].filter(Boolean).join('｜');
+    return '<button type="button" class="'+(S.caseNo===c.no?'on':'')+'" onclick="pickCase(\''+esc(c.no)+'\')">'+
+      '<b>'+esc(c.no)+'</b>'+
+      '<span>'+esc(c.desc||c.cust||'(無敘述)')+'</span>'+
+      (sub?'<small>'+esc(sub)+'</small>':'')+'</button>';
+  }).join('');
 }
 
 /* ---------- 工務分類三層連動 + 智能顯示／預設 ---------- */
