@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v10.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3062,6 +3062,7 @@ function showReportDetail(email) {
         <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${sp.base.toLocaleString()}${sp.ot ? `　＋加班 $${sp.ot.toLocaleString()}` : ''}${ex ? `　＋假日加給/全勤 $${ex.toLocaleString()}` : ''}${sp.absentd ? `　－曠職/天災 $${sp.absentd.toLocaleString()}` : ''}${sp.lated ? `　－遲退 $${sp.lated.toLocaleString()}` : ''}${sp.leaved ? `　－請假 $${sp.leaved.toLocaleString()}` : ''}${sp.labor ? `　－勞保 $${sp.labor.toLocaleString()}` : ''}${sp.health ? `　－健保 $${sp.health.toLocaleString()}` : ''}</div>
       </div>`;
     })() : ''}
+    ${ROLE !== 'employee' && _apiS && _apiS.mgrNotes && _apiS.mgrNotes.length ? `<div class="rd-sec" style="background:#fefce8;border:1px dashed #ca8a04;border-radius:8px;padding:10px;margin-top:10px"><div class="rd-title">🔒 管理者備註（員工端不顯示）</div>${_apiS.mgrNotes.map(t => `<div class="rd-row" style="font-size:12px;color:#854d0e;line-height:1.7">${escHtml(t)}</div>`).join('')}<div class="rd-row" style="font-size:11px;color:#a16207">※ 法定紅線假別不對外公告，但系統依法自動豁免全勤、薪資已照規則計算——此區僅供管理者對帳與備查。</div></div>` : ''}
     ${isFull && showPay && _apiS && _apiS.explain && _apiS.explain.length ? `<div class="rd-sec" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-top:10px"><div class="rd-title">📖 這些錢怎麼算</div>${_apiS.explain.map(t => `<div class="rd-row" style="font-size:12px;color:#475569;line-height:1.7">・${escHtml(t)}</div>`).join('')}<div class="rd-row" style="font-size:11px;color:#999">※ 計算說明由計算核心產生，與員工 LINE 薪資單顯示的文字相同（Jason 2026/08/13：扣薪透明化）。</div></div>` : ''}
     <div class="modal-actions"><button class="btn" onclick="closeModal()">關閉</button></div>
   `, true);
