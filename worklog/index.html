@@ -113,6 +113,17 @@
   #gradeExtra{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   #gradeExtra .chip{border-radius:12px;padding:9px 4px;font-size:12px;min-height:46px;text-align:center;line-height:1.25}
 
+  /* 案件編號選擇器 */
+  .case-sel{display:flex;align-items:center;gap:9px;background:#e0f2fe;border:1.5px solid var(--sky);
+    border-radius:11px;padding:11px 13px;margin-bottom:9px;font-weight:800;color:var(--sky-d);font-size:15px}
+  .case-sel .x{margin-left:auto;border:none;background:rgba(2,132,199,.15);color:var(--sky-d);
+    width:28px;height:28px;border-radius:50%;font-size:17px;line-height:1;font-family:inherit}
+  #caseList{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:9px;max-height:238px;overflow-y:auto}
+  #caseList button{border:1.5px solid var(--line);background:#fff;color:#334155;border-radius:10px;
+    padding:11px 6px;font-size:14px;font-weight:700;font-family:inherit;min-height:46px}
+  #caseList button.on{background:var(--sky);border-color:var(--sky);color:#fff}
+  #caseList .none{grid-column:1/-1;color:#94a3b8;font-size:13px;padding:6px 2px}
+
   /* Yes/No 開關列 */
   .chk{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f1f5f9}
   .chk:last-child{border-bottom:none}
@@ -229,6 +240,12 @@
     <!-- 2 案場 / 時間 -->
     <div class="card">
       <div class="sec-t"><span class="n">2</span>案場與時間</div>
+      <div class="field">
+        <label class="lb">案件編號<span class="opt">選填·可搜尋</span></label>
+        <div id="caseSelWrap"></div>
+        <input type="search" id="caseSearch" placeholder="輸入案號搜尋，例 Q2603、CO2405" autocomplete="off" oninput="renderCaseList()">
+        <div id="caseList"></div>
+      </div>
       <div class="field">
         <label class="lb">施工主題（客戶／案場）<span class="req">*</span></label>
         <input type="text" id="f_subject" placeholder="例：岡山壽天宮 電視牆維修" autocomplete="off">
@@ -415,8 +432,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.11';
+const APP_VERSION='1.12';
 const CHANGELOG=[
+  'v1.12　2026/07/17',
+  '· 新增「案件編號」：工程師可自己搜尋選case（會記住最近用過的，免每次找）',
+  '',
   'v1.11　2026/07/17',
   '· 【修正登入失敗】中文姓名帳號會出現「invalid characters」無法登入的問題（JWT 改 base64url＋UTF-8 解碼）',
   '· 加大「App 內建瀏覽器」偵測，提醒改用 Safari',
@@ -467,7 +487,7 @@ const CFG = {
     volt:1002790, height:1002791, ladder:1002789, pay:1002785,
     siteNote:1002590, process:1002788, aar:1002778, photo:1002622,
     toolMiss:1002623, delay:1002641, dispute:1002642, suggest:1002643,
-    workLevel:1003079, payAmount:1003085
+    workLevel:1003079, payAmount:1003085, caseNo:1002613
   },
   STAFF: ['偉智','俊男','阿維'],       // 協做參與員池（會自動長）
   LEADS: ['偉智','俊男'],             // 負責主任固定只有這兩位（不自動長）
@@ -526,7 +546,7 @@ const CFG = {
   }
 };
 
-const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{}, grade:{fix:0,extra:{},score:0,lv:0,quick:''} };
+const S = { token:null, tokenAt:0, user:null, myName:'', mode:'🌄外務', coworkers:[], photos:[], seg:{}, pick:{}, checks:{}, grade:{fix:0,extra:{},score:0,lv:0,quick:''}, cases:[], caseNo:'' };
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -608,6 +628,7 @@ function enterApp(){
   S.myName = localStorage.getItem('wl_myname') || CFG.EMAIL2NAME[S.user.email] || '';
   buildForm();
   loadRecent();
+  loadCases();
   resendPending();
 }
 
@@ -686,6 +707,42 @@ function buildChecks(){
     tog.onclick=()=>{ const nv=tog.getAttribute('data-v')==='No'?'Yes':'No'; tog.setAttribute('data-v',nv); S.checks[c.k]=nv; };
     w.appendChild(row);
   });
+}
+
+/* ---------- 案件編號（1292 筆，搜尋 + 最近常用）---------- */
+function readCaseCache(){ try{ return JSON.parse(localStorage.getItem('wl_cases_v1')||'null'); }catch(e){ return null; } }
+function recentCases(){ try{ return JSON.parse(localStorage.getItem('wl_case_recent')||'[]'); }catch(e){ return []; } }
+function pushRecentCase(v){
+  try{ const a=recentCases().filter(x=>x!==v); a.unshift(v); localStorage.setItem('wl_case_recent', JSON.stringify(a.slice(0,8))); }catch(e){}
+}
+async function loadCases(){
+  const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); }
+  try{
+    const r=await callRagic('?api&v=3&def=1',{method:'GET'});
+    const d=await r.json();
+    const f=(d.fields||d)['fid'+CFG.F.caseNo];
+    const opts=(f&&f.options)||[];
+    const list=opts.map(o=>o.v).filter(Boolean).reverse();   // 新的排前面
+    if(list.length){ S.cases=list; try{ localStorage.setItem('wl_cases_v1', JSON.stringify(list)); }catch(e){} renderCaseList(); }
+  }catch(e){}
+}
+function pickCase(v){ S.caseNo=(S.caseNo===v?'':v); if(S.caseNo) pushRecentCase(S.caseNo); renderCaseSel(); renderCaseList(); }
+function renderCaseSel(){
+  const w=$('caseSelWrap'); if(!w) return;
+  w.innerHTML = S.caseNo
+    ? '<div class="case-sel">已選 '+esc(S.caseNo)+'<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'
+    : '';
+}
+function renderCaseList(){
+  const box=$('caseList'); if(!box) return;
+  const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
+  const all=S.cases||[];
+  let show;
+  if(q){ show=all.filter(v=>String(v).toUpperCase().includes(q)).slice(0,40); }
+  else { const rec=recentCases().filter(v=>all.indexOf(v)>=0); show=[...new Set([...rec, ...all.slice(0,12)])].slice(0,14); }
+  if(!all.length){ box.innerHTML='<div class="none">案號載入中…</div>'; return; }
+  if(!show.length){ box.innerHTML='<div class="none">查無「'+esc(q)+'」，可換關鍵字或留空不填</div>'; return; }
+  box.innerHTML=show.map(v=>'<button type="button" class="'+(S.caseNo===v?'on':'')+'" onclick="pickCase(\''+esc(v)+'\')">'+esc(v)+'</button>').join('');
 }
 
 /* ---------- 工務分類三層連動 + 智能顯示／預設 ---------- */
@@ -774,6 +831,7 @@ function calcGrade(){
 function buildForm(){
   $('f_date').value = todayStr();
   S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
+  S.caseNo=''; if($('caseSearch')) $('caseSearch').value=''; renderCaseSel(); renderCaseList();
   buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
   if(S.pick.lead && S.coworkers.indexOf(S.pick.lead)<0) S.coworkers.push(S.pick.lead);   // 預設主任自動帶入協作員
   S.autoLead = S.pick.lead || '';
@@ -835,6 +893,7 @@ function buildPayload(){
   f.push([F.execDate,dateToRagic($('f_date').value)],[F.execDate2,dateToRagic($('f_date').value)],[F.logTime,nowRagic()],[F.lead,(S.pick.lead||'').trim()]);
   S.coworkers.forEach(n=>f.push([F.coworkers,n]));
   f.push([F.io,S.seg.io],[F.subject,$('f_subject').value.trim()]);
+  if(S.caseNo) f.push([F.caseNo, S.caseNo]);   // 案件編號（L型連結欄,實測可寫）
   if($('f_arrive').value) f.push([F.arrive,timeToRagic(normTime($('f_arrive').value))]);
   if($('f_leave').value)  f.push([F.leave,timeToRagic(normTime($('f_leave').value))]);
   if(S.pick.main) f.push([F.main,S.pick.main]);
