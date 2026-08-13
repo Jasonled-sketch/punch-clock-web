@@ -133,7 +133,7 @@
   #caseSearchRow{padding:0 14px 10px}
   #caseSearchRow input{font-size:15px;padding:11px 12px}
   #caseList{flex:1;overflow-y:auto;padding:2px 14px 14px;display:flex;flex-direction:column;gap:7px}
-  #caseList button{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:#fff;
+  #caseList button{display:block;width:100%;flex:none;text-align:left;border:1.5px solid var(--line);background:#fff;
     color:#334155;border-radius:10px;padding:8px 42px 8px 11px;font-family:inherit;line-height:1.3;overflow:hidden;position:relative}
   #caseList button b{display:block;font-size:10.5px;color:var(--sky-d);font-weight:700;letter-spacing:.2px}
   #caseList button .uc{position:absolute;top:7px;right:8px;min-width:26px;height:20px;border-radius:10px;
@@ -152,12 +152,12 @@
   .case-sel .cs-desc{font-size:13.5px;font-weight:600;color:#0c4a6e}
 
   /* Yes/No 開關列 */
-  .chk{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #f1f5f9}
+  .chk{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9}
   .chk:last-child{border-bottom:none}
-  .chk .lbl{font-size:15.5px;font-weight:600;color:#334155}
-  .tog{position:relative;width:112px;height:42px;border-radius:22px;background:#f1f5f9;border:1.5px solid var(--line);
+  .chk .lbl{font-size:13.5px;font-weight:600;color:#334155}
+  .tog{position:relative;width:92px;height:34px;border-radius:18px;background:#f1f5f9;border:1.5px solid var(--line);
     display:flex;cursor:pointer;flex:none}
-  .tog span{flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--muted);z-index:2}
+  .tog span{flex:1;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:700;color:var(--muted);z-index:2}
   .tog .knob{position:absolute;top:2px;left:2px;width:calc(50% - 2px);height:calc(100% - 6px);border-radius:20px;
     background:#fff;box-shadow:var(--shadow);transition:transform .2s}
   .tog[data-v="Yes"]{background:#fef2f2;border-color:#fecaca}
@@ -474,8 +474,13 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.20';
+const APP_VERSION='1.21';
 const CHANGELOG=[
+  'v1.21　2026/07/19',
+  '· 修正任務清單跑版（卡片被壓扁看不見）；恢復列 12 筆',
+  '· 移除涼水費提醒（涼水費依工程等級另計，等級定義確定後再上）',
+  '· 自我檢核縮小字體與間距',
+  '',
   'v1.20　2026/07/19',
   '· 工務分數改「外務一律寫入」不再漏記（提成依據）',
   '· 選任務後顯示「本次第 N 次工・團隊涼水費 $N×50」，並一併記錄',
@@ -853,11 +858,9 @@ function renderCaseSel(){
   const pb=$('casePickBtn'); if(pb) pb.style.display = S.caseNo? 'none':'';   // 已選任務→藏「選擇任務」鈕(一個入口即可)
   if(!S.caseNo){ w.innerHTML=''; return; }
   const c=findCase(S.caseNo);
-  const nth=((c&&c.used)||0)+1;   // 本次=第N次工,涼水費N×50(供團隊)
   w.innerHTML='<div class="case-sel"><div style="display:flex;width:100%;align-items:center">已選 '+esc(S.logNo||S.caseNo)+'（'+esc(S.caseNo)+'）'+
     '<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'+
-    (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+
-    '<div class="cs-desc" style="color:#b45309">☕ 本次為第 '+nth+' 次工 · 團隊涼水費 $'+(nth*50)+'</div></div>';
+    (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+'</div>';
 }
 function renderCaseList(){
   const box=$('caseList'); if(!box) return;
@@ -871,8 +874,8 @@ function renderCaseList(){
   } else {
     const rec=recentCases().map(n=>findCase(n)).filter(Boolean);
     const seen={}; show=[];
-    [...rec, ...all.slice(0,20)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
-    show=show.slice(0,20);                                  // 預設列前20筆,搜尋為輔
+    [...rec, ...all.slice(0,12)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
+    show=show.slice(0,12);                                  // 預設列前12筆(10~15清楚為主),搜尋為輔
   }
   if(!show.length){
     box.innerHTML='<div class="none">近兩個月任務查無「'+esc(q)+'」</div>'+moreBtn;
@@ -1055,11 +1058,9 @@ function buildPayload(){
     if($('f_height').value) f.push([F.height,$('f_height').value]);
     if($('f_ladder').value) f.push([F.ladder,$('f_ladder').value]);
     if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
-    if(F.workLevel){   // 外務一律寫入分數(提成依據,不可漏);任務有選時附「工N｜涼水$」(第N次工×50=團隊涼水費)
+    if(F.workLevel){   // 外務一律寫入分數(提成依據,不可漏)。涼水費=依工程等級(Lv)另給,等級定義未定案前不顯示不寫入
       const q=S.grade.quick?(S.grade.quick+'｜'):'';
-      const nth=S.caseNo? (((findCase(S.caseNo)||{}).used||0)+1) : 0;
-      const cool=nth? ('｜工'+nth+'｜涼水$'+(nth*50)) : '';
-      f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）'+cool]);
+      f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）']);
     }
   }
   if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
