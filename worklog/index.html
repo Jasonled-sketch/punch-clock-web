@@ -438,8 +438,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.15';
+const APP_VERSION='1.16';
 const CHANGELOG=[
+  'v1.16　2026/07/18',
+  '· 修正：免登入開啟時任務清單一直空白（憑證補上後自動重新載入）',
+  '',
   'v1.15　2026/07/17',
   '· 任務改選「工作日誌（日誌流水號）」，正確串回施工紀錄',
   '· 進行中案件還沒被轉成日誌？點下去系統自動產生，不用等行政',
@@ -619,7 +622,7 @@ function onSignIn(resp){
     const inApp = S.user && S.user.email===email && !$('appView').classList.contains('hidden');
     S.user = { email, name:p.name||'', picture:p.picture||'' };
     saveSession(S.user);
-    if(inApp){ loadRecent(); resendPending(); return; }
+    if(inApp){ loadRecent(); loadCases(); resendPending(); return; }   // ★背景補到 token 後,任務清單也要重抓(否則記住登入開啟永遠 401 空清單)
     enterApp();
   }catch(e){ toast('登入失敗：'+e.message,'bad'); }
 }
@@ -735,9 +738,12 @@ function pushRecentCase(v){
 }
 async function loadCases(all){
   if(!all){ const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); } }
+  if(!S.token){ S.waitToken=true; renderCaseList(); return; }   // 記住登入剛開啟:token 還在背景補,先顯示快取,onSignIn 會再呼叫
+  S.waitToken=false;
   S.loadingCases=true; if(all) renderCaseList();
   try{
     const r=await fetch(CFG.WORKER+'/worklog-cases'+(all?'?all=1':''),{headers:{'X-Google-Token':S.token||''}});
+    if(r.status===401){ S.waitToken=true; S.loadingCases=false; renderCaseList(); return; }   // 憑證過期:等 GSI 靜默補新的再來
     const d=await r.json();
     const list=(d&&d.cases)||[];   // [{log,no,desc,cust,addr,date}] 金額已在伺服器端剝除;log=null 代表點選時自動建日誌
     S.allLoaded=!!all;
@@ -777,7 +783,7 @@ function renderCaseList(){
   const box=$('caseList'); if(!box) return;
   const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
   const all=S.cases||[];
-  if(!all.length){ box.innerHTML='<div class="none">'+(S.loadingCases?'任務清單載入中…':'目前沒有任務可選')+'</div>'; return; }
+  if(!all.length){ box.innerHTML='<div class="none">'+(S.loadingCases?'任務清單載入中…':(S.waitToken?'登入憑證更新中，幾秒後自動載入…':'目前沒有任務可選'))+'</div>'; return; }
   let show;
   if(q){
     show=all.filter(c=>((c.no||'')+' '+(c.log||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.addr||'')).toUpperCase().includes(q)).slice(0,40);
