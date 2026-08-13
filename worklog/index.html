@@ -474,8 +474,12 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.19';
+const APP_VERSION='1.20';
 const CHANGELOG=[
+  'v1.20　2026/07/19',
+  '· 工務分數改「外務一律寫入」不再漏記（提成依據）',
+  '· 選任務後顯示「本次第 N 次工・團隊涼水費 $N×50」，並一併記錄',
+  '',
   'v1.19　2026/07/18',
   '· 每個任務右上角顯示「被日誌登打次數」：0 灰／1 藍／2+ 橘，二次工三次工一眼看出',
   '· 清單放寬到 20 筆；已選任務時隱藏「選擇任務」按鈕',
@@ -849,9 +853,11 @@ function renderCaseSel(){
   const pb=$('casePickBtn'); if(pb) pb.style.display = S.caseNo? 'none':'';   // 已選任務→藏「選擇任務」鈕(一個入口即可)
   if(!S.caseNo){ w.innerHTML=''; return; }
   const c=findCase(S.caseNo);
+  const nth=((c&&c.used)||0)+1;   // 本次=第N次工,涼水費N×50(供團隊)
   w.innerHTML='<div class="case-sel"><div style="display:flex;width:100%;align-items:center">已選 '+esc(S.logNo||S.caseNo)+'（'+esc(S.caseNo)+'）'+
     '<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'+
-    (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+'</div>';
+    (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+
+    '<div class="cs-desc" style="color:#b45309">☕ 本次為第 '+nth+' 次工 · 團隊涼水費 $'+(nth*50)+'</div></div>';
 }
 function renderCaseList(){
   const box=$('caseList'); if(!box) return;
@@ -1049,7 +1055,12 @@ function buildPayload(){
     if($('f_height').value) f.push([F.height,$('f_height').value]);
     if($('f_ladder').value) f.push([F.ladder,$('f_ladder').value]);
     if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
-    if(F.workLevel && S.grade.score>0){ const q=S.grade.quick?(S.grade.quick+'｜'):''; f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）']); }   // 背景持續記錄,畫面不顯示;測試準度用,不含金額
+    if(F.workLevel){   // 外務一律寫入分數(提成依據,不可漏);任務有選時附「工N｜涼水$」(第N次工×50=團隊涼水費)
+      const q=S.grade.quick?(S.grade.quick+'｜'):'';
+      const nth=S.caseNo? (((findCase(S.caseNo)||{}).used||0)+1) : 0;
+      const cool=nth? ('｜工'+nth+'｜涼水$'+(nth*50)) : '';
+      f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）'+cool]);
+    }
   }
   if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
   if($('f_aar').value.trim())     f.push([F.aar,$('f_aar').value.trim()]);
