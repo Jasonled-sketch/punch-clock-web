@@ -568,8 +568,10 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
       <button class="growth-btn" onclick="showTeam()" title="團隊">👥<span class="bt-txt"> 團隊</span></button>
       <button class="growth-btn" onclick="showFavor()" title="人情">🤝<span class="bt-txt"> 人情</span></button>
       <button class="growth-btn" id="schBtn" onclick="toggleSearch()" title="搜尋任務">🔍<span class="bt-txt"> 搜尋</span></button>
+      <button class="growth-btn" id="inboxBtn" onclick="showInbox()" title="待辦收件匣" style="display:none;position:relative">📥<span class="bt-txt"> 待辦</span><span id="inboxCount" style="position:absolute;top:-5px;right:-5px;background:var(--q1);color:#fff;font-size:10px;font-weight:800;min-width:17px;height:17px;border-radius:9px;display:none;align-items:center;justify-content:center;padding:0 4px"></span></button>
     </div>
     <div class="right">
+      <span id="pendBadge" onclick="flushPendQ(true)" title="有離線變更待送出，點一下重試" style="display:none;align-items:center;background:var(--q2,#f59e0b);color:#fff;font-size:11px;font-weight:800;border-radius:12px;padding:3px 8px;cursor:pointer"></span>
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
         <span class="nm" id="meName"></span>
@@ -662,10 +664,69 @@ function isAdmin(){ return STATE.user && (STATE.user.email||'').toLowerCase()===
    資料層（db）—— LOCAL 用 localStorage；CLOUD 預留 Ragic
    =================================================================== */
 async function dbLoadTasks(){
-  if(CONFIG.MODE==='CLOUD'){ return await ragicLoadTasks(); }
+  if(CONFIG.MODE==='CLOUD'){ const t=await ragicLoadTasks(); taskCacheSave(t); return t; }
   const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
   if(!raw){ const seed = seedTasks(); localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(seed)); return seed; }
   try{ return JSON.parse(raw); }catch(e){ return []; }
+}
+/* ===================================================================
+   外勤可靠性（Jason 指定①）：任務離線快取 ＋ 待送出佇列
+   工地/機房/電梯井沒訊號時：讀→吃快取看得到任務；寫→進佇列，有訊號自動補送。
+   「提交」這種動作永遠不會靜默消失——這是外勤對系統信任的底線。
+   =================================================================== */
+const TC_KEY='usled_taskcache', TQ_KEY='usled_taskq';
+function taskCacheSave(tasks){ try{ localStorage.setItem(TC_KEY, JSON.stringify({at:Date.now(), tasks})); }catch(e){} }
+function taskCacheLoad(){ try{ const c=JSON.parse(localStorage.getItem(TC_KEY)||'null'); return (c && Array.isArray(c.tasks) && c.tasks.length)?c:null; }catch(e){ return null; } }
+function pendQ(){ try{ const q=JSON.parse(localStorage.getItem(TQ_KEY)||'[]'); return Array.isArray(q)?q:[]; }catch(e){ return []; } }
+function pendQSave(q){ try{ localStorage.setItem(TQ_KEY, JSON.stringify(q.slice(-40))); }catch(e){} updatePendBadge(); }
+function pendQAdd(task, label){
+  const q=pendQ().filter(x=>x.tid!==task.id);   // 同一張單只留最新一筆（後蓋前）
+  q.push({tid:task.id, label:label||'變更', at:Date.now(), task:JSON.parse(JSON.stringify(task))});
+  pendQSave(q);
+}
+/* 補送佇列：逐筆重寫 Ragic，成功移除；仍失敗保留（>7 天的丟棄，避免無限累積） */
+let _flushing=false;
+async function flushPendQ(manual){
+  if(_flushing || CONFIG.MODE!=='CLOUD' || STATE.sandbox) return;
+  let q=pendQ(); if(!q.length){ if(manual) toast('沒有待送出的變更 ✓'); return; }
+  if(!navigator.onLine){ if(manual) toast('目前沒有網路，恢復連線會自動送出'); return; }
+  _flushing=true;
+  const keep=[]; let okN=0;
+  for(const it of q){
+    if(Date.now()-(it.at||0) > 7*86400000) continue;   // 太舊丟棄
+    try{ const res=await ragicSaveTask(it.task);
+      if(res && res.ragicId!=null && it.task.ragicId==null){ const lt=STATE.tasks.find(x=>x.id===it.tid); if(lt){ lt.ragicId=res.ragicId; lt.id='r'+res.ragicId; } }
+      okN++;
+    }catch(e){ keep.push(it); }
+  }
+  pendQSave(keep); _flushing=false;
+  if(okN){ toast('📤 已補送 '+okN+' 筆離線變更'+(keep.length?('，'+keep.length+' 筆仍失敗'):' ✓'));
+    try{ STATE.tasks=await dbLoadTasks(); renderBoard(); }catch(e){} }
+  else if(manual) toast(keep.length?('仍送不出去（'+keep.length+' 筆），稍後再試'):'已清空 ✓');
+}
+/* 寫入包裝：成功回 true；失敗不再靜默——進佇列＋明確告知（呼叫端據此決定是否保留本地狀態） */
+async function dbUpsertQ(task, label){
+  try{ await dbUpsert(task); return true; }
+  catch(e){
+    pendQAdd(task, label);
+    toast('📶 目前送不出去，已存進「待送出」，有訊號會自動補送');
+    return false;
+  }
+}
+/* 寫前重讀（Jason 指定②）：拿雲端最新狀態比對，防「開著舊畫面的操作把已核准的單打回原形」。
+   ⚠️ 離線時放行（走佇列）——外勤沒訊號不能被鎖死，可靠性優先於嚴格性 */
+async function freshCheck(id, expectStatus){
+  let fresh=null;
+  try{ fresh=await dbLoadTasks(); }catch(e){ return {ok:true, t:STATE.tasks.find(x=>x.id===id), offline:true}; }
+  STATE.tasks=fresh;
+  const ft=fresh.find(x=>x.id===id);
+  if(!ft){ renderBoard(); return {ok:false, msg:'這張單已被刪除'}; }
+  if(expectStatus && ft.status!==expectStatus){ renderBoard(); return {ok:false, msg:'這張單狀態已變更（目前：'+({open:'待處理',submitted:'待審核',done:'已完成'}[ft.status]||ft.status)+'）'}; }
+  return {ok:true, t:ft};
+}
+function updatePendBadge(){
+  const n=pendQ().length, el=document.getElementById('pendBadge'); if(!el) return;
+  el.style.display=n?'inline-flex':'none'; el.textContent='⏳'+n;
 }
 function dbSaveTasks(tasks){
   if(CONFIG.MODE==='CLOUD') return;
@@ -847,12 +908,19 @@ async function login(uid){
   document.getElementById('meName').textContent = STATE.user.name;
   ensureSession();   // 背景換/續 7 天通行證(有 Google token 時);不阻塞,本次讀寫雙軌自動選路
   try{ STATE.tasks = await dbLoadTasks(); }
-  catch(e){ STATE.tasks = [];
-    if(CONFIG.MODE==='CLOUD' && !STATE.googleToken){ toast('連線憑證過期，2 秒後帶你重新登入'); setTimeout(forceRelogin, 2000); return; }   // 憑證鏈全斷→自動重登(不再讓人看空畫面)
-    toast('雲端讀取失敗：'+e.message);
+  catch(e){
+    const c=taskCacheLoad();   // ①外勤離線：讀不到雲端就用上次成功載入的快取,至少看得到任務內容/備註步驟(不再整片空白)
+    if(c){ STATE.tasks=c.tasks; STATE.offlineMode=true;
+      const mins=Math.round((Date.now()-c.at)/60000);
+      toast('📶 目前沒有連線，顯示 '+(mins<60?(mins+' 分鐘'):(Math.round(mins/60)+' 小時'))+'前的離線資料');
+    } else { STATE.tasks = [];
+      if(CONFIG.MODE==='CLOUD' && !STATE.googleToken){ toast('連線憑證過期，2 秒後帶你重新登入'); setTimeout(forceRelogin, 2000); return; }   // 憑證鏈全斷→自動重登(不再讓人看空畫面)
+      toast('雲端讀取失敗：'+e.message);
+    }
   }
   renderBoard();
   initSwipe();
+  updatePendBadge(); flushPendQ();   // ①有待送出的離線變更→登入時自動補送
   STATE.bootQ=[];             // ⬇ P0#3 開工卡收集模式:以下所有儀式/提醒進佇列,最後 bootFlush 合成一張卡(解連環彈窗+toast互蓋)
   checkOverdue();
   refreshBellState();   // 🔔 非同步刷新訂閱鈴狀態（不 await，不擋登入流程）
@@ -866,9 +934,9 @@ async function login(uid){
   checkNewbieGrad();          // 新星之路全達標 → 頒新星稱號
   if(!hasRole()) bootCollect({pri:1, icon:'🐾', title:'還沒有 RPG 角色 — 做一次動物測驗解鎖', action:'showGameCenter()'});
   else if(roleDaysSince()>=180) bootCollect({pri:1, icon:'🐾', title:'動物角色滿 180 天，可重測更新', action:'showGameCenter()'});
-  if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) bootCollect({pri:6, icon:'🎁', title:n+' 筆實體獎兌換待你核准', action:'showGameCenter()'}); }
-  { const fp=favorPendingFor(STATE.user.id).length; if(fp) bootCollect({pri:6, icon:'🤝', title:fp+' 筆人情請求待你回覆', action:'showFavor()'}); }
-  if(isSupervisor(STATE.user)){ const pr=STATE.tasks.filter(t=>t.status==='submitted').length; if(pr) bootCollect({pri:6, icon:'📮', title:pr+' 件任務待你審核'}); }
+  refreshInboxBtn();
+  if(isSupervisor(STATE.user)){ const it=inboxItems(); if(it.total) bootCollect({pri:6, icon:'📥', color:'#0b72c4', title:'你有 '+it.total+' 件待辦', sub:[it.tasks.length?it.tasks.length+' 件待審任務':'', it.redeems.length?it.redeems.length+' 筆兌換':'', it.quizzes.length?it.quizzes.length+' 題待採納':'', it.favors.length?it.favors.length+' 筆人情':''].filter(Boolean).join('　'), action:'showInbox()'}); }
+  else { const fp=favorPendingFor(STATE.user.id).length; if(fp) bootCollect({pri:6, icon:'🤝', title:fp+' 筆人情請求待你回覆', action:'showFavor()'}); }
   if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) bootCollect({pri:0, icon:'📱', title:'建議用手機操作（電腦＋手機同開可能互蓋存檔）'});
   bootFlush();                // ⬆ 收集結束:合成單一開工卡(最高優先完整儀式+其餘一行清單)
   // Google 日曆已停用（Jason 2026-06：避免第二次登入太麻煩）
@@ -1148,7 +1216,9 @@ async function acceptTask(id){
     STATE.tasks=fresh;
   }catch(e){}
   const t2=STATE.tasks.find(x=>x.id===id)||t;
-  t2.assigneeId=STATE.user.id; renderBoard(); await dbUpsert(t2); toast('已接單，開始處理！');
+  t2.assigneeId=STATE.user.id; renderBoard();
+  if(!await dbUpsertQ(t2,'接單')) return;   // ①失敗進佇列並告知(原本靜默,接了等於沒接)
+  toast('已接單，開始處理！');
 }
 
 function renderTaskCard(t, hl){
@@ -1431,7 +1501,14 @@ async function saveTask(){
   const quad = computeQuad();
   let task;
   if(editingId){
-    task = STATE.tasks.find(x=>x.id===editingId);
+    // ②寫前重讀：編輯視窗開著的期間員工可能已提交/被核准,直接整筆覆蓋會把提交紀錄與實得點數清掉
+    const fc=await freshCheck(editingId);
+    if(!fc.ok){ toast(fc.msg); closeModal(); return; }
+    task = fc.t;
+    if(!fc.offline && task.status!=='open'){
+      const stTxt={submitted:'已提交待審核',done:'已完成'}[task.status]||task.status;
+      if(!await vConfirm({icon:'⚠️',title:'這張單狀態變了',msg:'你開著編輯視窗的期間，這張單變成「'+stTxt+'」了。\n\n繼續儲存會保留該狀態，只更新你改的欄位。',okText:'仍要儲存'})){ closeModal(); renderBoard(); return; }
+    }
     Object.assign(task,{ title, quadrant:quad, assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, glow, images:[...modalImages] });
   }else{
     task = { id:'t'+Date.now(), title, quadrant:quad, status:'open', assigneeId:assignee, dueAt:due?new Date(due).toISOString():null, points, contribution, favor, note, glow, images:[...modalImages], createdById:STATE.user.id, createdAt:new Date().toISOString() };
@@ -1448,9 +1525,17 @@ async function saveTask(){
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
 async function deleteTask(id){ if(!await vConfirm({icon:'🗑️',title:'刪除任務',msg:'確定要刪除這個任務嗎？\n此動作無法復原。',okText:'刪除',danger:true}))return; const t=STATE.tasks.find(x=>x.id===id); STATE.tasks=STATE.tasks.filter(x=>x.id!==id); closeModal(); closeDetail(); renderBoard(); if(t) await dbDelete(t); toast('已刪除'); }   // 連底下的詳情一起關(任務已不存在)
-async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'){ toast('這張單狀態已變更'); return; } if(t.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; }
-  { const st=noteSteps(t); if(st.total && st.done<st.total){ toast('還有 '+(st.total-st.done)+' 個步驟未勾選，全部完成才能提交 ✅'); showTaskDetail(id); return; } }   // 步驟全勾才能送(Jason 規則)
-  t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard(); await dbUpsert(t); toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+async function submitTask(id){
+  const t0=STATE.tasks.find(x=>x.id===id); if(!t0||t0.status!=='open'){ toast('這張單狀態已變更'); return; }
+  if(t0.assigneeId!==STATE.user.id){ toast('只能提交自己被指派的任務'); return; }
+  { const st=noteSteps(t0); if(st.total && st.done<st.total){ toast('還有 '+(st.total-st.done)+' 個步驟未勾選，全部完成才能提交 ✅'); showTaskDetail(id); return; } }   // 步驟全勾才能送(Jason 規則)
+  const fc=await freshCheck(id,'open'); if(!fc.ok){ toast(fc.msg); return; }   // ②寫前重讀:防舊畫面把已核准的單打回待處理
+  const t=fc.t||t0; if(fc.offline) Object.assign(t, {note:t0.note});           // 離線時保留本地剛勾的步驟
+  if(t.assigneeId!==STATE.user.id){ toast('這張單已改派給別人了'); renderBoard(); return; }
+  t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard();
+  const ok=await dbUpsertQ(t,'提交任務');   // ①失敗不再靜默:進待送出佇列
+  if(ok){ toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+}
 /* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
 async function reopenTask(id){
   if(!isAdmin()){ toast('只有經理能撤回已完成的任務'); return; }
@@ -1470,9 +1555,9 @@ async function unsubmitTask(id){
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='submitted'){ toast('這張單狀態已變更'); return; }
   if(t.assigneeId!==STATE.user.id && !isSupervisor(STATE.user)){ toast('只能撤回自己提交的任務'); return; }
   if(!await vConfirm({icon:'↩️',title:'撤回重做',msg:'把「'+esc(t.title)+'」撤回為進行中？\n（主管將看不到這筆待審核）',okText:'撤回'})) return;
-  const t2=STATE.tasks.find(x=>x.id===id); if(!t2||t2.status!=='submitted') { toast('這張單狀態已變更'); return; }
-  t2.status='open'; t2.submittedAt=null; renderBoard();
-  try{ await dbUpsert(t2); }catch(e){ toast('雲端寫入失敗：'+e.message); return; }
+  const fc=await freshCheck(id,'submitted'); if(!fc.ok){ toast(fc.msg); return; }   // ②寫前重讀:主管可能剛核准了
+  const t2=fc.t; t2.status='open'; t2.submittedAt=null; renderBoard();
+  if(!await dbUpsertQ(t2,'撤回提交')) return;
   toast('已撤回，繼續加油 💪');
 }
 async function approveTask(id){ if(!isSupervisor(STATE.user)){ toast('只有主管能核准'); return; }   // 前端守衛(防 console 呼叫;Worker 端驗權為後續 P0)
@@ -1480,7 +1565,9 @@ async function approveTask(id){ if(!isSupervisor(STATE.user)){ toast('只有主�
   // 重讀確認還在待審核(競態防護,比照 acceptTask)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
   t=STATE.tasks.find(x=>x.id===id)||t;
-  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); { const au=userById(t.assigneeId); if(au&&au.email) pushNotify([au.email],'✅ 任務核准 +'+t.earnedPoints+'點', t.title); }   // 🔔 B4-3
+  t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard();
+  if(!await dbUpsertQ(t,'核准任務')) return;   // ①核准=發錢,寫入失敗必須明講(原本靜默,員工以為沒核)
+  toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); { const au=userById(t.assigneeId); if(au&&au.email) pushNotify([au.email],'✅ 任務核准 +'+t.earnedPoints+'點', t.title); }   // 🔔 B4-3
   checkLevelUp(); }
 async function rejectTask(id){
   if(!isSupervisor(STATE.user)){ toast('只有主管能退回'); return; }
@@ -1547,7 +1634,7 @@ function showTaskDetail(id){
         ${t.points?` ｜ <b style="color:${ep<t.points&&t.status!=='done'?'var(--q1)':'var(--accent)'}">＋${ptsTxt} 點</b>${ep<t.points&&t.status!=='done'?`<span style="text-decoration:line-through;opacity:.5;margin-left:4px">${t.points}</span>`:''}`:''}
       </div>
     </div>
-    ${t.note?(()=>{const st=noteSteps(t);return `<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項${st.total?`　<b style="color:${st.done>=st.total?'var(--ok)':'var(--accent)'}">${st.done}/${st.total}</b>`:''}${t.status==='open'&&t.assigneeId===STATE.user.id?'<span style="font-size:11px;color:var(--muted)">（點一項勾一項，全勾才能提交）</span>':''}</div><div>${noteChecklistHtml(t)}</div></div>`;})():''}
+    ${t.note?(()=>{const st=noteSteps(t);return `<div class="detail-section"><div class="detail-label">📋 步驟 / 注意事項${st.total?`　<b style="color:${st.done>=st.total?'var(--ok)':'var(--accent)'}">${st.done}/${st.total}</b>`:''}${t.status==='open'&&t.assigneeId===STATE.user.id?'<span style="font-size:11px;color:var(--muted)">（點一項勾一項，全勾才能提交）</span>':''}</div><div id="stepBox">${noteChecklistHtml(t)}</div></div>`;})():''}
     ${media.length?`<div class="detail-section"><div class="detail-label">🖼 附件（點可放大）</div><div style="display:flex;gap:8px;flex-wrap:wrap">${media.map((m,i)=>{const src=typeof m==='string'?m:m.src;const isVid=typeof m==='object'&&m.type==='video';return isVid?`<video src="${src}" muted onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;background:#000"></video>`:`<img src="${src}" onclick="showMedia('${t.id}',${i})" style="width:84px;height:84px;border-radius:8px;object-fit:cover;cursor:pointer">`;}).join('')}</div></div>`:''}
     ${actions?`<div class="modal-actions">${actions}</div>`:''}
   </div>`;
@@ -1565,20 +1652,43 @@ function noteChecklistHtml(t){
       <span style="width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;${d?'background:var(--ok);color:#fff;border:2px solid var(--ok)':'border:2px solid var(--border);color:transparent'}">✓</span>
       <span style="flex:1;font-size:14px;line-height:1.5;${d?'color:var(--muted)':''}">${esc(txt)}</span></div>`; }).join('');
 }
-async function toggleStep(id,idx){
+/* 勾步驟：①只換 checklist 的 DOM（不再整個視窗關掉重開，訊號差時不再閃五次）
+   ②連勾用 1 秒 debounce 合併成一次寫入（原本每勾一項寫一次雲端）
+   ③寫前重讀比對（防舊畫面把已核准的單打回原形）；離線則進待送出佇列 */
+let _stepTimer=null, _stepDirty=null;
+function toggleStep(id,idx){
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'||t.assigneeId!==STATE.user.id) return;
   const lines=(t.note||'').split('\n'); let k=-1;
   for(let i=0;i<lines.length;i++){ if(lines[i].trim()){ k++; if(k===idx){ lines[i]=/^\s*✓/.test(lines[i])? lines[i].replace(/^(\s*)✓\s*/,'$1') : '✓ '+lines[i]; break; } } }
   t.note=lines.join('\n');
-  closeDetail(); showTaskDetail(id);
-  try{ await dbUpsert(t); }catch(e){ toast('雲端寫入失敗：'+e.message); }
+  const box=document.getElementById('stepBox'); if(box) box.innerHTML=noteChecklistHtml(t);   // 只換這塊，視窗不動
+  const st=noteSteps(t), lbl=document.querySelector('#detailModal .detail-label b');
+  if(lbl){ lbl.textContent=st.done+'/'+st.total; lbl.style.color=(st.done>=st.total)?'var(--ok)':'var(--accent)'; }
+  _stepDirty=id;
+  if(_stepTimer) clearTimeout(_stepTimer);
+  _stepTimer=setTimeout(()=>flushStep(id), 1000);   // 連續勾選只寫一次
+}
+async function flushStep(id){
+  _stepTimer=null; if(_stepDirty!==id) return; _stepDirty=null;
+  const local=STATE.tasks.find(x=>x.id===id); if(!local) return;
+  const note=local.note;
+  const fc=await freshCheck(id,'open');
+  if(!fc.ok){ toast(fc.msg+'，步驟未儲存'); closeDetail(); return; }
+  const t=fc.t; t.note=note;   // 以雲端最新那筆為底，只帶回我剛勾的 note
+  await dbUpsertQ(t,'勾選步驟');
+  renderBoard();
 }
 async function moveTaskQuad(id, qid){
   if(!isSupervisor(STATE.user)){ toast('只有主管能移動分類'); return; }
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   closeDetail();
   STATE.activeQuad=qid;
-  if(t.quadrant!==qid){ t.quadrant=qid; renderBoard(); try{ await dbUpsert(t); }catch(e){ toast('雲端寫入失敗：'+e.message); return; } toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」'); }
+  if(t.quadrant!==qid){
+    const fc=await freshCheck(id); if(!fc.ok){ toast(fc.msg); return; }   // ②寫前重讀
+    const t2=fc.t; t2.quadrant=qid; renderBoard();
+    if(!await dbUpsertQ(t2,'移動分類')) return;
+    toast('已移到「'+CONFIG.QUADRANTS.find(x=>x.id===qid).title+'」');
+  }
   else { renderBoard(); }
 }
 
@@ -1805,6 +1915,75 @@ function showGrowth(){
   mask.onclick=closeGrowth; document.body.appendChild(mask);
 }
 function closeGrowth(){ const m=document.getElementById('growthModal'); if(m)m.remove(); }
+/* ===================================================================
+   📥 待辦收件匣（Jason 指定③，主管限定）
+   把散在四個入口的待辦收攏成一頁：待審任務(四象限裡找📮)＋待核兌換(要穿過鑽石商店)
+   ＋待採納出題(藏在副本彈窗)＋待回人情。打開→清完→關掉，不用再繞。
+   =================================================================== */
+function inboxItems(){
+  if(!isSupervisor(STATE.user)) return {tasks:[], redeems:[], quizzes:[], favors:[], total:0};
+  const tasks=STATE.tasks.filter(t=>t.status==='submitted');
+  const redeems=pendingRedeems();
+  const quizzes=quizSubPending();
+  const favors=favorPendingFor(STATE.user.id);
+  return {tasks, redeems, quizzes, favors, total:tasks.length+redeems.length+quizzes.length+favors.length};
+}
+function refreshInboxBtn(){
+  const b=document.getElementById('inboxBtn'); if(!b) return;
+  if(!isSupervisor(STATE.user)){ b.style.display='none'; return; }
+  b.style.display='';
+  const n=inboxItems().total, c=document.getElementById('inboxCount');
+  if(c){ c.style.display=n?'flex':'none'; c.textContent=n>99?'99+':n; }
+}
+function showInbox(){
+  if(!isSupervisor(STATE.user)) return;
+  const it=inboxItems();
+  const sec=(title,rows)=>rows.length?`<div class="detail-label" style="margin-top:14px">${title}</div>${rows.join('')}`:'';
+  const taskRows=it.tasks.map(t=>{ const a=userById(t.assigneeId), ep=effectivePoints(t);
+    return `<div class="fv-row"><div style="flex:1;min-width:0;cursor:pointer" onclick="closeInbox();showTaskDetail('${t.id}')">
+        <b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title)}</b>
+        <div class="fv-desc">${esc((a||{}).name||'—')} 提交 · ＋${ep} 點${t.submittedAt?' · '+doneDate(t):''}</div></div>
+      <button class="buy-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('approve','${t.id}')">核准</button>
+      <button class="equip-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('reject','${t.id}')">退回</button></div>`; });
+  const redeemRows=it.redeems.map(x=>{ const rw=rewardDef(x.r.rid);
+    return `<div class="fv-row"><div style="flex:1;min-width:0"><b>${esc(rw?rw.name:x.r.rid)}</b><div class="fv-desc">${esc(x.p.name||x.p.email)} · ${x.r.price} 鑽</div></div>
+      <button class="buy-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('redeemOk',${x.pi},'${x.r.id}')">核准</button>
+      <button class="equip-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('redeemNo',${x.pi},'${x.r.id}')">婉拒</button></div>`; });
+  const quizRows=it.quizzes.map(x=>`<div class="fv-row"><div style="flex:1;min-width:0"><b>${esc(x.s.q)}</b><div class="fv-desc">${esc(x.p.name||x.p.email)} 出題 · 正解：${esc((x.s.a||[])[x.s.c]||'')}</div></div>
+      <button class="buy-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('quizOk',${x.pi},'${x.s.id}')">採納</button>
+      <button class="equip-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('quizNo',${x.pi},'${x.s.id}')">婉拒</button></div>`);
+  const favorRows=it.favors.map(x=>{ const isA=x.r.kind==='assign';
+    return `<div class="fv-row"><div style="flex:1;min-width:0"><b>${esc(x.r.fromName)}</b> ${isA?'想請你幫忙':'想向你借用'} · ${x.r.favor} 人情<div class="fv-desc">「${esc(x.r.desc)}」</div></div>
+      <button class="buy-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('favorOk',${x.pi},'${x.r.id}')">${isA?'接受':'同意'}</button>
+      <button class="equip-btn" style="width:auto;padding:6px 12px" onclick="inboxAct('favorNo',${x.pi},'${x.r.id}')">拒絕</button></div>`; });
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='inboxModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><h3 style="margin:0">📥 待辦收件匣${it.total?`　<span style="font-size:14px;color:var(--q1)">${it.total}</span>`:''}</h3><button class="t-expand" onclick="closeInbox()" style="font-size:18px">✕</button></div>
+    ${it.total?'':'<div style="text-align:center;padding:36px 10px;color:var(--muted)"><div style="font-size:46px">✅</div><div style="margin-top:8px;font-weight:700">全部清空了，辛苦了！</div><div style="font-size:12px;margin-top:4px">待審任務、兌換、出題、人情都沒有待辦</div></div>'}
+    ${sec('📮 待審任務（'+it.tasks.length+'）', taskRows)}
+    ${sec('🎁 待核兌換（'+it.redeems.length+'）', redeemRows)}
+    ${sec('❓ 待採納出題（'+it.quizzes.length+'）', quizRows)}
+    ${sec('🤝 待回人情（'+it.favors.length+'）', favorRows)}
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">核准＝發點數/鑽石，會通知對方；退回可填原因並給 24 小時寬限 🤝</div>
+  </div>`;
+  mask.onclick=closeInbox; document.body.appendChild(mask);
+}
+function closeInbox(){ const m=document.getElementById('inboxModal'); if(m)m.remove(); }
+/* 收件匣內動作：做完就地重整清單（不用關掉重開） */
+async function inboxAct(kind, a, b){
+  closeInbox();
+  if(kind==='approve') await approveTask(a);
+  else if(kind==='reject') await rejectTask(a);
+  else if(kind==='redeemOk') await decideRedeem(a,b,true);
+  else if(kind==='redeemNo') await decideRedeem(a,b,false);
+  else if(kind==='quizOk') await decideQuiz(a,b,true);
+  else if(kind==='quizNo') await decideQuiz(a,b,false);
+  else if(kind==='favorOk') await decideFavor(a,b,true);
+  else if(kind==='favorNo') await decideFavor(a,b,false);
+  refreshInboxBtn();
+  if(inboxItems().total) showInbox();   // 還有待辦→自動回到收件匣繼續清
+  else toast('📥 待辦清空了，辛苦了！');
+}
 /* ===== P0#5 治理儀表(主管限定)：全員鑽石損益一覽 + 回收率 + Worker 鑽石流水帳(明細帳稽核層) =====
    回收率=Σ花費÷Σ發行,健康區間 60-90%;<50%=通膨(鑽石堆著沒地方花→加快閃/調價),>100%=通縮(大家換到見底→加低價獎) */
 async function showGovDash(){
@@ -3922,7 +4101,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.11.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.11.4';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -4112,7 +4291,17 @@ function renderGcalBanner(){
 }
 
 // 每分鐘自動更新倒數 + 檢查逾期
-setInterval(()=>{ if(STATE.user && !document.getElementById('appView').classList.contains('hidden')){ renderBoard(); checkOverdue(); } }, 60000);
+/* 60 秒節奏：①重抓雲端(原本只重繪→開放單接走了/被指派新單都看不到,外勤最吃虧) ②重繪 ③逾期檢查 ④刷待辦數 ⑤補送離線佇列
+   有視窗開著(編輯/詳情/戰鬥)時跳過重抓,避免蓋掉正在填的東西 */
+setInterval(async ()=>{
+  if(!STATE.user || document.getElementById('appView').classList.contains('hidden')) return;
+  const busy=document.getElementById('taskModal')||document.getElementById('detailModal')||document.getElementById('battleModal')||document.getElementById('inboxModal');
+  if(!busy && CONFIG.MODE==='CLOUD' && navigator.onLine){
+    try{ const fresh=await dbLoadTasks(); STATE.tasks=fresh; STATE.offlineMode=false; }catch(e){}
+  }
+  renderBoard(); checkOverdue(); refreshInboxBtn(); flushPendQ();
+}, 60000);
+window.addEventListener('online', ()=>{ flushPendQ(); });   // 一恢復連線立刻補送(外勤走出機房那一刻)
 setInterval(()=>{ if(STATE.user && STATE.gcalToken && !document.getElementById('appView').classList.contains('hidden')) loadGcalToday(); }, 180000);   // Google 日曆每 3 分鐘刷新
 // 記住上次登入身份（方便 demo）— 只在 LOCAL 模式,避免殘留污染 CLOUD 的 Google 登入
 if(CONFIG.MODE!=='CLOUD'){ const last = localStorage.getItem('usled_last_user'); if(last && userById(last)) login(last); }
