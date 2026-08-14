@@ -2146,15 +2146,15 @@ function closeTeam(){ const m=document.getElementById('teamModal'); if(m)m.remov
    實物/體驗屬非經常性給與、不列入投保薪資，風險低。新增獎品前先問：這會不會變成「假」或「工時」？會就不要放。
    補時券是唯一例外：它是「當日班表順延且工時要補足」的排班彈性(優於勞基法)，不減工時不減工資，非給假。 */
 const REWARDS = [
-  {id:'rw_coffee', icon:'☕', name:'咖啡升級券',     price:40,  desc:'超商咖啡升大杯（第一個目標，兩三天就換得到）', qty:6},
+  {id:'rw_praise', icon:'📣', name:'老闆點名表揚',   price:40,  desc:'老闆在公司群親自寫一段你的具體事蹟公開表揚（不能只貼貼圖）— 零成本，但被看見的感覺最真實', qty:6},
   {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',     price:60,  desc:'主管請，60 元內', qty:6},
   {id:'rw_credit', icon:'🏗️', name:'作品掛名權',     price:80,  desc:'你組裝/安裝的屏，出貨照發 FB／官網掛名「本作品由○○○製作」（照片公司拍）'},
   {id:'rw_bento',  icon:'🍱', name:'感謝便當',       price:100, desc:'指定一天，公司請你吃飯，100 元內', qty:6},
   {id:'rw_snack',  icon:'🍗', name:'下午茶點心',     price:120, desc:'雞排＋飲料，工作到一半的小確幸', qty:4},
   {id:'rw_makeup', icon:'⏱️', name:'補時券一張',     price:150, desc:'遲到 10 分內當天用券：班表順延、下班補足工時才生效（優於勞基法的彈性，不是請假、不影響薪資與出勤紀錄；每月限 1 張）', qty:3, perUser:true},
-  {id:'rw_coupon', icon:'🎫', name:'200 元禮券',     price:200, desc:'全聯／超商擇一，最實用的一張', qty:3},
+  {id:'rw_class',  icon:'📚', name:'技能點播課',     price:200, desc:'指定你想學的（報價／焊接／維修／談客戶／Excel），老闆或主管 1 對 1 教你一小時 — 學起來是你的', qty:3},
   {id:'rw_treat',  icon:'🍢', name:'主管請客鹹酥雞', price:250, desc:'掛你的名義，主管請全公司鹹酥雞一次（200 元內，公司出錢；每月全公司限 1 次）', qty:3},
-  {id:'rw_desk',   icon:'🧰', name:'工位升級包',     price:400, desc:'自選 400 元內工位改善（護腰椅墊／小風扇／檯燈／站墊），東西歸你（內勤統一採購、不折現、每人每年 1 次）', qty:1, perUser:true},
+  {id:'rw_bosshr', icon:'👷', name:'老闆代班一小時', price:400, desc:'老闆親自頂你的崗位 1 小時（組裝／包裝／你最不想做的活都行），你在旁邊監工（提前 3 天預約、每季全公司限 2 張）', qty:2},
   {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘腳底按摩（內勤代訂、限本人不可折現、每季 1 張）— 站一整天的人最有感', qty:1, perUser:true},
 ];
 /* 限時隱藏獎：確定性亂數(日期 hash)→全公司同時看到、限量 1、時段內沒買就消失 */
@@ -2954,8 +2954,9 @@ async function buyConsum(id){ const it=itemDef(id); if(!it) return;
   GS.items=GS.items||{}; GS.items[id]=(GS.items[id]||0)+1; GS.spent+=it.price;
   if(!await saveGameState()){ await loadGameState(); refreshGameUI(); if(STATE.battle) renderBattle(); return; }   // B4：失敗重載雲端
   toast('已購買 '+it.name+' ✓'); refreshGameUI(); if(STATE.battle) renderBattle(); }
+const SELL_BACK=0.2, DROP_SELL=2;   // 2026-08 經濟再平衡：道具/裝備賣回 40%→20%、副本掉落品固定 5→2 鑽
 async function sellConsum(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
-  const back=Math.floor(it.price*0.4); GS.items[id]--; GS.spent-=back;
+  const back=Math.floor(it.price*SELL_BACK); GS.items[id]--; GS.spent-=back;
   if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
   toast('已賣出 '+it.name+' ＋'+back+' 鑽石'); refreshGameUI(); }
 async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) return;
@@ -2972,7 +2973,7 @@ async function useItem(id){ const it=itemDef(id); if(!it||itemCount(id)<=0) retu
 /* 裝備可賣出（40% 回收，避免低階裝備變垃圾） */
 async function sellItem(id){ const it=equipItem(id); if(!it||!owns(id)) return;
   const fromDrop=GS.dropped&&GS.dropped.includes(id);
-  const back=fromDrop?5:Math.floor(it.price*0.4);   // 副本掉落的固定 5 鑽(堵掉落→賣→再掉永動機)；買的維持 40%
+  const back=fromDrop?DROP_SELL:Math.floor(it.price*SELL_BACK);   // 副本掉落的固定 2 鑽(堵掉落→賣→再掉永動機)；買的 20%
   if(!await vConfirm({icon:'💰',title:'賣出裝備',msg:'賣掉「'+(it.name||(PET_RARITY[it.r].name+SLOTNAME[it.slot]))+'」（⚔️'+it.power+'）\n回收 '+back+' <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> 鑽石？'+(fromDrop?'\n（副本掉落品回收價固定）':''),okText:'賣出'})) return;
   if(!owns(id)){ toast('這件裝備已不在背包'); return; }   // confirm 期間可能已被賣掉,二次驗證
   GS.owned=GS.owned.filter(x=>x!==id); if(GS.dropped) GS.dropped=GS.dropped.filter(x=>x!==id); if(GS.gear&&GS.gear[it.slot]===id) GS.gear[it.slot]=null;
@@ -3306,7 +3307,8 @@ function equipCard(it){
   const stock=(owned||equipped||locked)?{inStock:true}:equipStock(it);
   let action;
   if(equipped) action=`<button class="equip-btn on" onclick="toggleEquip('${it.id}')">裝備中 ✓</button>`;
-  else if(owned) action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button><button class="sell-btn" onclick="sellItem('${it.id}')">賣 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${Math.floor(it.price*0.4)}</button>`;
+  else if(owned){ const isDrop=GS&&GS.dropped&&GS.dropped.includes(it.id);   // 掉落品回收價固定,標價要跟實拿一致(原本一律標 40% 但掉落品只給 5,按下去才變數字=被騙感)
+    action=`<button class="equip-btn" onclick="toggleEquip('${it.id}')">點我裝備</button><button class="sell-btn" onclick="sellItem('${it.id}')">賣 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${isDrop?DROP_SELL:Math.floor(it.price*SELL_BACK)}</button>`; }
   else if(locked) action=`<button class="buy-btn dis" disabled>🔒 Lv.${it.minLevel}</button>`;
   else if(!stock.inStock) action=`<button class="buy-btn dis" disabled>🚫 ${stock.restock}</button>`;
   else action=`<button class="buy-btn${bal<it.price?' dis':''}" ${bal<it.price?'disabled':''} onclick="buyItem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`;
@@ -3393,7 +3395,7 @@ function showShop(tab){
   let body;
   if(t==='eq'){ const cur=STATE.shopSlot, sd=EQUIP_SLOTS.find(s=>s.slot===cur)||EQUIP_SLOTS[0];
     body=`<div class="slot-chips">${EQUIP_SLOTS.map(s=>`<button class="slot-chip${s.slot===cur?' on':''}" onclick="showShop('eq_${s.slot}')">${s.name}</button>`).join('')}</div><div class="shop-slot-h">${sd.name}（戰力越高越強）</div><div class="shop-grid">${EQUIP[cur].map(equipCard).join('')}</div>`; }
-  else if(t==='item'){ syncHp(); body=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">❤️ 目前血量 ${Math.round(GS.hp)}%（每小時自然回 4%）— 道具可累積、戰鬥中可用、也能 40% 賣出</div><div class="rw-grid">${ITEMS.map(it=>{const n=itemCount(it.id); return `<div class="rw-card"><div class="rw-icon">${itemImg(it,38)}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${n>0?` <span style="color:var(--accent)">×${n}</span>`:''}</div><div class="rw-desc">${it.desc}</div></div>${n>0?`<button class="equip-btn" style="width:auto;padding:6px 9px" onclick="useItem('${it.id}')">用</button><button class="sell-btn" style="width:auto;padding:6px 8px;margin:0" onclick="sellConsum('${it.id}')">賣${Math.floor(it.price*0.4)}</button>`:''}<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 11px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="buyConsum('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button></div>`;}).join('')}</div>`; }
+  else if(t==='item'){ syncHp(); body=`<div style="font-size:12px;color:var(--muted);margin-bottom:10px">❤️ 目前血量 ${Math.round(GS.hp)}%（每小時自然回 4%）— 道具可累積、戰鬥中可用、也能 40% 賣出</div><div class="rw-grid">${ITEMS.map(it=>{const n=itemCount(it.id); return `<div class="rw-card"><div class="rw-icon">${itemImg(it,38)}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${n>0?` <span style="color:var(--accent)">×${n}</span>`:''}</div><div class="rw-desc">${it.desc}</div></div>${n>0?`<button class="equip-btn" style="width:auto;padding:6px 9px" onclick="useItem('${it.id}')">用</button><button class="sell-btn" style="width:auto;padding:6px 8px;margin:0" onclick="sellConsum('${it.id}')">賣${Math.floor(it.price*SELL_BACK)}</button>`:''}<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 11px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="buyConsum('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button></div>`;}).join('')}</div>`; }
   else if(t==='deco') body=`<div class="shop-slot-h">✨ 光環（擇一裝備）</div><div class="shop-grid">${SHOP.aura.map(x=>shopCosCard({...x,slot:'aura'})).join('')}</div><div class="shop-slot-h" style="margin-top:14px">🏅 稱號（擇一配戴）</div><div class="shop-grid">${SHOP.title.filter(x=>!x.grant).map(x=>shopCosCard({...x,slot:'title'})).join('')}</div>`;
   else if(t==='gift'){
     const myRd=(GS.redeem||[]).slice().reverse();
@@ -3427,10 +3429,14 @@ function closeShop(){ const m=document.getElementById('shopModal'); if(m)m.remov
 const DUNGEON_DAILY = 3;                  // 每日挑戰次數（鑽石不能太好賺）
 // 血量設計成「適當裝備約 3-4 題打完」(配合單次傷害上限＝血量/3)
 const BOSSES = [
-  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:2, dropR:2, minLevel:1,  minHits:5},   // minHits=保證至少答對幾題才破關(傷害上限=hp/minHits)
-  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:3, dropR:3, minLevel:5,  minHits:5},
-  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:5, dropR:4, minLevel:10, minHits:6},
-  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:8, dropR:5, minLevel:18, minHits:7},
+  /* ⚠️ 2026-08 經濟再平衡（Jason 拍板）：reward 砍半 2/3/5/8 → 1/2/3/4。
+     原因：重度玩家實測「副本月產出約 2,200 鑽 vs 任務約 300 鑽」＝答題比做事好賺 7 倍，甜點比正餐大。
+     遊戲是工作的甜點，不能變成主要收入。配套同步降：掉落品賣回 5→2、道具賣出 40%→20%、月詞綴 1.5/1.3→1.25/1.15。
+     刻意不動每日 3 次與 minHits——砍的是「單次收益」，不是「能玩的量」，體驗不縮水。 */
+  {id:'b1', name:'卡紙暴龍',   file:'monster_01.png', hp:40,  atk:8,  reward:1, dropR:2, minLevel:1,  minHits:5},   // minHits=保證至少答對幾題才破關(傷害上限=hp/minHits)
+  {id:'b2', name:'客訴海嘯',   file:'monster_02.png', hp:130, atk:12, reward:2, dropR:3, minLevel:5,  minHits:5},
+  {id:'b3', name:'庫存惡魔',   file:'monster_03.png', hp:280, atk:18, reward:3, dropR:4, minLevel:10, minHits:6},
+  {id:'b4', name:'死線收割者', file:'monster_04.png', hp:520, atk:26, reward:4, dropR:5, minLevel:18, minHits:7},
 ];
 const QUIZ = [
   {q:'一打(dozen)是幾個？',a:['24','12','10','16'],c:1,cat:'綜合',job:'all'},
@@ -3907,10 +3913,10 @@ function renderBattle(){
 const QUIZ_TIME=12;   // 每題秒數，超時=被怪攻擊
 /* 月度更新日（每月 5 號）的「本月詞綴」：每月輪一個副本加成，給運營節奏與期待感 */
 const MONTH_MODS=[
-  {key:'reward', name:'💰 獎勵月', desc:'本月副本鑽石 ×1.5', coinMul:1.5},
+  {key:'reward', name:'💰 獎勵月', desc:'本月副本鑽石 ×1.25', coinMul:1.25},   // 2026-08 經濟再平衡:1.5→1.25
   {key:'harvest',name:'🍀 豐收月', desc:'本月掉寶率 +15%',   dropAdd:0.15},
   {key:'crit',   name:'🎯 精準月', desc:'本月答對爆擊率 +15%', critAdd:0.15},
-  {key:'double', name:'⚡ 雙倍月', desc:'本月副本鑽石 ×1.3',  coinMul:1.3},
+  {key:'double', name:'⚡ 加倍月', desc:'本月副本鑽石 ×1.15',  coinMul:1.15},   // 1.3→1.15
 ];
 function monthMod(){ return MONTH_MODS[new Date().getMonth()%MONTH_MODS.length]; }
 function isUpdateDay(){ return isBeta() || new Date().getDate()===5; }   // 月度更新日
@@ -4076,7 +4082,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.12.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.12.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
