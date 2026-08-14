@@ -224,7 +224,7 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
 .overdue-title{font-size:21px;font-weight:800;color:var(--q1);margin-bottom:6px;text-align:center}
 .overdue-item{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:8px;border-left:3px solid var(--q1)}
 /* 任務卡可點擊進詳情 */
-.task{cursor:pointer}
+.task{cursor:pointer;user-select:none;-webkit-user-select:none}   /* 防長按1秒被 OS 文字選取搶走(pointercancel 清掉計時器→移分類選單開不出來) */
 .task:active{transform:scale(0.99)}
 /* 象限分頁 */
 .quad-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px}
@@ -853,6 +853,7 @@ async function login(uid){
   }
   renderBoard();
   initSwipe();
+  STATE.bootQ=[];             // ⬇ P0#3 開工卡收集模式:以下所有儀式/提醒進佇列,最後 bootFlush 合成一張卡(解連環彈窗+toast互蓋)
   checkOverdue();
   refreshBellState();   // 🔔 非同步刷新訂閱鈴狀態（不 await，不擋登入流程）
   await loadGameState();
@@ -863,12 +864,42 @@ async function login(uid){
   checkKudos();               // 新收到的感謝卡 → 粉光儀式
   checkStarter();             // 新人起步禮包(一次性)
   checkNewbieGrad();          // 新星之路全達標 → 頒新星稱號
-  if(!hasRole()) toast('🐾 還沒有 RPG 角色 — 到🎮養成中心做一次動物測驗，解鎖你的角色');
-  else if(roleDaysSince()>=180) toast('🐾 你的動物角色滿 180 天了，可到養成中心重測更新');
-  if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) toast('🎁 有 '+n+' 筆實體獎兌換待你核准（商店→實體獎）'); }
-  { const fp=favorPendingFor(STATE.user.id).length; if(fp) toast('🤝 有 '+fp+' 筆人情請求待你回覆（點頂列「人情」）'); }
-  if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) toast('📱 建議用手機操作任務牆（電腦＋手機同時開可能蓋掉彼此存檔）');
+  if(!hasRole()) bootCollect({pri:1, icon:'🐾', title:'還沒有 RPG 角色 — 做一次動物測驗解鎖', action:'showGameCenter()'});
+  else if(roleDaysSince()>=180) bootCollect({pri:1, icon:'🐾', title:'動物角色滿 180 天，可重測更新', action:'showGameCenter()'});
+  if(isSupervisor(STATE.user)){ const n=pendingRedeems().length; if(n) bootCollect({pri:6, icon:'🎁', title:n+' 筆實體獎兌換待你核准', action:'showGameCenter()'}); }
+  { const fp=favorPendingFor(STATE.user.id).length; if(fp) bootCollect({pri:6, icon:'🤝', title:fp+' 筆人情請求待你回覆', action:'showFavor()'}); }
+  if(isSupervisor(STATE.user)){ const pr=STATE.tasks.filter(t=>t.status==='submitted').length; if(pr) bootCollect({pri:6, icon:'📮', title:pr+' 件任務待你審核'}); }
+  if(!isSupervisor(STATE.user) && !('ontouchstart' in window) && window.innerWidth>900) bootCollect({pri:0, icon:'📱', title:'建議用手機操作（電腦＋手機同開可能互蓋存檔）'});
+  bootFlush();                // ⬆ 收集結束:合成單一開工卡(最高優先完整儀式+其餘一行清單)
   // Google 日曆已停用（Jason 2026-06：避免第二次登入太麻煩）
+}
+/* ===== P0#3 開工卡：登入儀式合流。所有 check* 事件收進單一佇列 → 一張卡：最高優先事件保留完整儀式感，其餘摺疊成一行(可點跳轉)。
+   解「登入連環彈窗轟炸」＋「toast 互相蓋掉只看得到最後一條」兩個問題。非登入時段各儀式照舊直接彈。 ===== */
+function bootCollect(evt){
+  if(Array.isArray(STATE.bootQ)){ STATE.bootQ.push(evt); return true; }   // 收集模式→排隊,由 bootFlush 統一渲染
+  return false;                                                            // 平時→呼叫端照舊自己彈
+}
+function closeBootCard(){ const m=document.getElementById('bootCard'); if(m) m.remove(); }
+function bootFlush(){
+  const q=STATE.bootQ||[]; STATE.bootQ=null;
+  if(!q.length) return;
+  q.sort((a,b)=>(b.pri||0)-(a.pri||0));
+  const top=q[0], rest=q.slice(1), c=top.color||'#38bdf8';
+  const rows=rest.map(e=>`<div style="display:flex;gap:8px;align-items:flex-start;${e.action?'cursor:pointer':''}" ${e.action?`onclick="event.stopPropagation();closeBootCard();${e.action}"`:''}><span>${e.icon||'•'}</span><span style="flex:1">${e.title}</span>${e.action?'<span style="color:var(--sky,#0b72c4);font-weight:700">›</span>':''}</div>`).join('');
+  const o=document.createElement('div'); o.className='lvup-mask'; o.id='bootCard';
+  o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
+    <div class="lvup-card" style="border:2px solid ${c};box-shadow:0 0 40px ${c};max-width:340px">
+      <div style="font-size:11px;color:var(--muted);letter-spacing:3px">☀️ 開工卡</div>
+      <div style="font-size:46px;margin-top:2px">${top.icon||'📋'}</div>
+      <div class="lvup-title" style="color:${c}">${top.title}</div>
+      ${top.sub?`<div class="lvup-lv" style="font-size:13px">${top.sub}</div>`:''}
+      ${top.action?`<button class="buy-btn" style="width:auto;padding:8px 18px;margin-top:8px" onclick="event.stopPropagation();closeBootCard();${top.action}">前往 ›</button>`:''}
+      ${rows?`<div style="margin-top:12px;border-top:1px dashed var(--border,#c2d8ea);padding-top:10px;text-align:left;font-size:13px;display:flex;flex-direction:column;gap:8px">${rows}</div>`:''}
+      <div class="lvup-hint">（點空白處關閉）</div>
+    </div>`;
+  o.onclick=()=>o.remove();
+  document.body.appendChild(o);
+  if((top.pri||0)>=3) sfxLevelUp();   // 有值得慶祝的事才響一聲;純資訊卡安靜(三秒鐵則:無長動畫、點任意處即關)
 }
 /* 登入回顧卡：上次登入後主管核准了你幾件任務、入帳多少點（付出被看見的字面時刻） */
 function checkApprovals(){
@@ -881,6 +912,7 @@ function checkApprovals(){
   const fresh=mine.filter(t=>new Date(t.approvedAt).getTime()>seen);
   if(fresh.length){
     const pts=fresh.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
+    if(bootCollect({pri:3, icon:'✅', color:'#22c55e', title:'主管核准了你的 '+fresh.length+' 件任務！', sub:'＋'+pts+' 點　你的付出被看見了 ✨'})){ localStorage.setItem(key,String(maxAt)); return; }
     const o=document.createElement('div'); o.className='lvup-mask'; o.id='apprMask';
     o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,#22c55ecc,transparent 70%)"></div>
       <div class="lvup-card" style="border:2px solid #22c55e;box-shadow:0 0 40px #22c55e">
@@ -895,6 +927,9 @@ function checkApprovals(){
   localStorage.setItem(key,String(maxAt));
 }
 function logout(){
+  // 先解除推播訂閱(要趁 token 還在時打;不解=下一位在這台登入的人會收到你的通知)
+  try{ fetch(CONFIG.PUSH.WORKER+'/unsubscribe',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:'{}'}).catch(()=>{});
+    if(navigator.serviceWorker&&navigator.serviceWorker.ready) navigator.serviceWorker.ready.then(r=>r.pushManager.getSubscription()).then(s=>{ if(s) s.unsubscribe(); }).catch(()=>{}); }catch(e){}
   STATE.user = null; STATE.googleToken=null;
   try{ localStorage.removeItem('usled_gtoken'); localStorage.removeItem('usled_wsess'); }catch(e){}   // 清 token/通行證快取
   clearSession();                                        // 清掉記住的登入
@@ -947,10 +982,10 @@ async function enablePush(){
   }catch(e){ toast('開啟提醒失敗：'+e.message); }
 }
 /* 通知 helper：fire-and-forget（絕不 await、絕不影響任務主流程；sandbox 測試模式不發） */
-function pushNotify(to, title, body){
+function pushNotify(to, title, body, urgent){
   if(STATE.sandbox) return;   // 🧪 測試模式：不發通知
   try{
-    fetch(CONFIG.PUSH.WORKER+'/notify',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({to,title,body})}).catch(()=>{});
+    fetch(CONFIG.PUSH.WORKER+'/notify',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({to,title,body,urgent:urgent===true})}).catch(()=>{});   // urgent=紅色急件:豁免推播靜默時段與日上限
   }catch(e){}
 }
 
@@ -1104,6 +1139,7 @@ function taskCardClick(e, id){
 const WIP_CAP = 5;   // 同時持有(已接、未提交)任務數上限，防囤單先搶後做
 async function acceptTask(id){
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
+  if(t.assigneeId && t.assigneeId!==STATE.user.id && !isSupervisor(STATE.user)){ toast('這張單已指派給'+((userById(t.assigneeId)||{}).name||'同事')+'，要轉單請找主管改派'); return; }   // 已指派的單不能搶走(改派走主管)
   const held=STATE.tasks.filter(x=>x.assigneeId===STATE.user.id && x.status==='open').length;
   if(held>=WIP_CAP){ toast('你手上已有 '+held+' 件待處理任務（上限 '+WIP_CAP+'），先完成幾件再接 🙂'); return; }
   // 重讀確認沒被同事搶走/已在處理(競態防護)
@@ -1132,7 +1168,7 @@ function renderTaskCard(t, hl){
       swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();openTaskModal('${t.id}')">編輯</button>`;
       if(t.status==='submitted' && (t.assigneeId!==STATE.user.id || isBeta())) swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();approveTask('${t.id}')">核准</button>`;
     } else {
-      if(!mine && t.status==='open') swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;
+      if(!mine && !a && t.status==='open') swipe += `<button class="swipe-btn accept" onclick="event.stopPropagation();acceptTask('${t.id}')">接單</button>`;   // !a=只有無人認領才可接,已指派給別人的單不能左滑搶走
       if(mine && t.status==='open') swipe += `<button class="swipe-btn submit" onclick="event.stopPropagation();submitTask('${t.id}')">提交</button>`;
       if(mine && t.status==='submitted') swipe += `<button class="swipe-btn edit" onclick="event.stopPropagation();unsubmitTask('${t.id}')">撤回</button>`;
     }
@@ -1311,12 +1347,12 @@ function duplicateTask(id){
   openTaskModal(null, t.quadrant);
   setTimeout(()=>{ const g=i=>document.getElementById(i);
     if(g('f_title')) g('f_title').value=t.title;
-    if(g('f_note')){ g('f_note').value=t.note||''; autoGrow(g('f_note')); }
+    if(g('f_note')){ g('f_note').value=(t.note||'').replace(/^\s*✓\s*/gm,''); autoGrow(g('f_note')); }   // 清掉步驟勾選狀態:複製的新任務步驟全部重來,否則一出生全勾=可直接提交
     if(g('f_points')) g('f_points').value=t.points||0;
     if(g('f_contribution')) g('f_contribution').value=t.contribution||0;
     if(g('f_favor')) g('f_favor').value=t.favor||0;
     if(g('f_glow')) g('f_glow').value=t.glow||'';
-    if(g('f_assignee')) g('f_assignee').value=t.assigneeId;
+    pickAssignee(t.assigneeId||'');   // 同步指派泡泡顯示(原只寫 hidden 欄位,畫面顯示「空白」實際卻指派原負責人)
     toast('已帶入內容，設定截止時間後按「新增」📋');
   },60);
 }
@@ -1406,7 +1442,8 @@ async function saveTask(){
   if(wasEdit && document.getElementById('detailModal')){ closeDetail(); showTaskDetail(task.id); }   // 編輯疊在詳情上:存檔後刷新底下的詳情(不然顯示舊資料)
   try{
     await dbUpsert(task); toast(wasEdit?'已儲存':'已新增任務');
-    if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],(quad==='q1'?'🔴 緊急任務指派給你':'📌 新任務指派給你'), title); }   // 🔔 B4-1 新增且指派他人;重要又緊急標紅
+    if(!wasEdit) renderBoard();   // 寫入後 id 由 t… 換成 r…,重繪讓卡片綁新 id(否則 60 秒內點卡片/左滑編輯找不到,會生出重複任務)
+    if(!wasEdit && assignee!==STATE.user.id){ const au=userById(assignee); if(au&&au.email) pushNotify([au.email],(quad==='q1'?'🔴 緊急任務指派給你':'📌 新任務指派給你'), title, quad==='q1'); }   // 🔔 B4-1 新增且指派他人;q1=急件(豁免推播靜默時段)
   }
   catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
@@ -1418,7 +1455,7 @@ async function submitTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t||t.
 async function reopenTask(id){
   if(!isAdmin()){ toast('只有經理能撤回已完成的任務'); return; }
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='done'){ toast('這張單狀態已變更'); return; }
-  if(!await vConfirm({icon:'↩️',title:'撤回完成',msg:'把「'+t.title+'」撤回為進行中？\n已發的點數/鑽石會自動收回。',okText:'撤回',danger:true})) return;
+  if(!await vConfirm({icon:'↩️',title:'撤回完成',msg:'把「'+esc(t.title)+'」撤回為進行中？\n已發的點數/鑽石會自動收回。',okText:'撤回',danger:true})) return;
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft||ft.status!=='done'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
   const t2=STATE.tasks.find(x=>x.id===id)||t;
   t2.status='open'; t2.earnedPoints=null; t2.approvedAt=null; t2.approvedById=null; t2.completedById=null; t2.submittedAt=null;
@@ -1432,19 +1469,21 @@ async function reopenTask(id){
 async function unsubmitTask(id){
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='submitted'){ toast('這張單狀態已變更'); return; }
   if(t.assigneeId!==STATE.user.id && !isSupervisor(STATE.user)){ toast('只能撤回自己提交的任務'); return; }
-  if(!await vConfirm({icon:'↩️',title:'撤回重做',msg:'把「'+t.title+'」撤回為進行中？\n（主管將看不到這筆待審核）',okText:'撤回'})) return;
+  if(!await vConfirm({icon:'↩️',title:'撤回重做',msg:'把「'+esc(t.title)+'」撤回為進行中？\n（主管將看不到這筆待審核）',okText:'撤回'})) return;
   const t2=STATE.tasks.find(x=>x.id===id); if(!t2||t2.status!=='submitted') { toast('這張單狀態已變更'); return; }
   t2.status='open'; t2.submittedAt=null; renderBoard();
   try{ await dbUpsert(t2); }catch(e){ toast('雲端寫入失敗：'+e.message); return; }
   toast('已撤回，繼續加油 💪');
 }
-async function approveTask(id){ let t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; }
+async function approveTask(id){ if(!isSupervisor(STATE.user)){ toast('只有主管能核准'); return; }   // 前端守衛(防 console 呼叫;Worker 端驗權為後續 P0)
+  let t=STATE.tasks.find(x=>x.id===id); if(!t) return; if(t.assigneeId===STATE.user.id && !isBeta()){ toast('自己的任務要請另一位主管核准 🤝'); return; }
   // 重讀確認還在待審核(競態防護,比照 acceptTask)
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
   t=STATE.tasks.find(x=>x.id===id)||t;
   t.earnedPoints=effectivePoints(t); t.status='done'; t.completedById=t.assigneeId; t.approvedAt=new Date().toISOString(); t.approvedById=STATE.user.id; renderBoard(); await dbUpsert(t); toast('已核准完成 🎉 ＋'+t.earnedPoints+' 點，這件已收進 🏆 戰績庫'); { const au=userById(t.assigneeId); if(au&&au.email) pushNotify([au.email],'✅ 任務核准 +'+t.earnedPoints+'點', t.title); }   // 🔔 B4-3
   checkLevelUp(); }
 async function rejectTask(id){
+  if(!isSupervisor(STATE.user)){ toast('只有主管能退回'); return; }
   let t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   // 重讀確認還在待審核(競態防護,比照 acceptTask)；要在 vPrompt 之前,避免填完理由才發現變了
   try{ const fresh=await dbLoadTasks(); const ft=fresh.find(x=>x.id===id); if(!ft || ft.status!=='submitted'){ STATE.tasks=fresh; renderBoard(); toast('這張單狀態已變更'); return; } STATE.tasks=fresh; }catch(e){}
@@ -1535,6 +1574,7 @@ async function toggleStep(id,idx){
   try{ await dbUpsert(t); }catch(e){ toast('雲端寫入失敗：'+e.message); }
 }
 async function moveTaskQuad(id, qid){
+  if(!isSupervisor(STATE.user)){ toast('只有主管能移動分類'); return; }
   const t=STATE.tasks.find(x=>x.id===id); if(!t) return;
   closeDetail();
   STATE.activeQuad=qid;
@@ -1716,7 +1756,7 @@ function showGameCenter(){
     </div>
     <div class="gc-actionrow">
       <button class="shop-open-btn" onclick="showShop()">🛒 進入商店</button>
-      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button><button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button><button class="shop-open-btn" style="flex:0 0 auto;background:#7c3aed;color:#fff" onclick="seasonReset()">🏁賽季歸零</button>`:''}
+      ${isAdmin()?`<button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button><button class="shop-open-btn" style="flex:0 0 auto;background:#22c55e;color:#06210f" onclick="grantTestCoins()">🧪+9999</button><button class="shop-open-btn" style="flex:0 0 auto;background:#ef4444;color:#fff" onclick="resetGame()">🧹重置</button><button class="shop-open-btn" style="flex:0 0 auto;background:#7c3aed;color:#fff" onclick="seasonReset()">🏁賽季歸零</button><button class="shop-open-btn" style="flex:0 0 auto;background:#0e7490;color:#fff" onclick="seasonSettle()">⚖️補結算</button>`:''}
     </div>
     <div class="detail-label">⚔️ 裝備 ・ 總戰力 ${g.power+gearPower()}</div>
     ${equipPanelHtml()}
@@ -1757,6 +1797,7 @@ function showGrowth(){
     <div class="modal-actions" style="margin-top:14px">
       <button class="equip-btn" onclick="closeGrowth();showMonthlyReview(true)">📅 上月回顧</button>
       <button class="equip-btn" onclick="showPricing()">📋 點數定價表</button>
+      ${isSupervisor(STATE.user)?`<button class="equip-btn" onclick="closeGrowth();showGovDash()">📊 治理儀表</button>`:''}
     </div>
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:12px">這是你真實付出的紀錄 ✨ 想玩角色/裝備/寵物請點頭像進「角色養成中心」</div>
     <button class="btn-logout" style="display:block;width:100%;margin-top:12px;padding:11px;background:var(--surface2);border:1px solid var(--border);border-radius:10px" onclick="closeGrowth();logout()">🚪 登出帳號</button>
@@ -1764,6 +1805,45 @@ function showGrowth(){
   mask.onclick=closeGrowth; document.body.appendChild(mask);
 }
 function closeGrowth(){ const m=document.getElementById('growthModal'); if(m)m.remove(); }
+/* ===== P0#5 治理儀表(主管限定)：全員鑽石損益一覽 + 回收率 + Worker 鑽石流水帳(明細帳稽核層) =====
+   回收率=Σ花費÷Σ發行,健康區間 60-90%;<50%=通膨(鑽石堆著沒地方花→加快閃/調價),>100%=通縮(大家換到見底→加低價獎) */
+async function showGovDash(){
+  if(!isSupervisor(STATE.user)) return;
+  const rows=(STATE.allPlayers||[]).map(p=>{
+    const uid=emailToUserId(p.email); if(!uid) return null;
+    const s=p.save||{}, earned=userEarnedCoins(uid)+teamPoolCoins(uid);
+    const issued=earned+(s.won||0)+(s.mchGain||0), bal=issued-(s.spent||0)-(s.seasonBase||0);
+    return {name:p.name||p.email, issued, won:s.won||0, spent:s.spent||0, base:s.seasonBase||0, bal, clears:s.clears||0, redeems:(s.redeem||[]).filter(r=>r.st==='ok').length};
+  }).filter(Boolean);
+  const tIssued=rows.reduce((a,r)=>a+r.issued,0), tSpent=rows.reduce((a,r)=>a+r.spent,0), tBase=rows.reduce((a,r)=>a+r.base,0);
+  const effIssued=Math.max(1,tIssued-tBase);   // 結算後的有效發行
+  const recyc=Math.round(tSpent/effIssued*100);
+  const rl=recyc>100?'🔵通縮(加低價獎)':(recyc>=60?'🟢健康':(recyc>=50?'🟡偏低':'🔴通膨(加快閃/調價)'));
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='govModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><h3 style="margin:0">📊 治理儀表</h3><button class="t-expand" onclick="document.getElementById('govModal').remove()" style="font-size:18px">✕</button></div>
+    <div class="detail-label">💎 鑽石損益（累計）</div>
+    <div style="font-size:13px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px">
+      發行 <b>${effIssued.toLocaleString()}</b> ・ 回收 <b>${tSpent.toLocaleString()}</b> ・ 回收率 <b>${recyc}%</b> ${rl}
+      ${tBase?`<div style="font-size:11px;color:var(--muted);margin-top:3px">（已扣賽季結算基準 ${tBase.toLocaleString()}）</div>`:''}
+    </div>
+    <div class="detail-label" style="margin-top:12px">👥 每人一覽</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+      <tr style="color:var(--muted);text-align:right"><th style="text-align:left;padding:4px">姓名</th><th>餘額</th><th>副本won</th><th>花費</th><th>闖關</th><th>兌換</th></tr>
+      ${rows.map(r=>`<tr style="text-align:right;border-top:1px solid var(--border)"><td style="text-align:left;padding:4px"><b>${esc(r.name)}</b></td><td>${r.bal.toLocaleString()}</td><td>${r.won.toLocaleString()}</td><td>${r.spent.toLocaleString()}</td><td>${r.clears}</td><td>${r.redeems}</td></tr>`).join('')}
+    </table></div>
+    <div class="detail-label" style="margin-top:12px">📒 鑽石流水帳（Worker 稽核層，最近 12 筆）</div>
+    <div id="govLedger" style="font-size:11px;color:var(--muted)">讀取中…</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:10px">⚠標記＝won 大增但闖關數沒動（自肥嫌疑）或數值倒退（改檔/歸零），值得人工看一眼。僅主管可見。</div>
+  </div>`;
+  mask.onclick=()=>mask.remove(); document.body.appendChild(mask);
+  try{
+    const r=await fetch(CONFIG.PUSH.WORKER+'/ledger',{headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||''}});
+    const j=await r.json(); const el=document.getElementById('govLedger'); if(!el) return;
+    if(!j.ok){ el.textContent='讀取失敗（'+(j.reason||r.status)+'）'; return; }
+    el.innerHTML=(j.entries||[]).slice(0,12).map(e=>`<div style="display:flex;gap:6px;border-top:1px dashed var(--border);padding:3px 0"><span>${esc(e.t||'')}</span><span><b>${esc(e.e||'')}</b></span><span style="flex:1">${e.dWon?('won'+(e.dWon>0?'+':'')+e.dWon):''} ${e.dSpent?('spent'+(e.dSpent>0?'+':'')+e.dSpent):''}</span><span>餘${e.bal}</span>${e.flag?'<span style="color:var(--q1)">⚠'+esc(e.flag)+'</span>':''}</div>`).join('')||'（還沒有紀錄：存檔有錢動時 Worker 會自動記）';
+  }catch(e){ const el=document.getElementById('govLedger'); if(el) el.textContent='讀取失敗'; }
+}
 /* 本月 KPI 進度 + 團隊績效池（純衍生即時計算） */
 function kpiPoolHtml(){
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
@@ -2020,6 +2100,7 @@ function pendingRedeems(){
   return out;
 }
 async function decideRedeem(pi, redId, ok){
+  if(!isSupervisor(STATE.user)){ toast('只有主管能核准兌換'); return; }
   const p=(STATE.allPlayers||[])[pi]; if(!p) return;
   if((STATE.user.email||'').toLowerCase()===p.email && !isBeta()){ toast('自己的兌換要請另一位主管核准 🤝'); return; }
   if((STATE.user.email||'').toLowerCase()!==p.email){ const fresh=await reloadOtherPlayer(p.email); if(!fresh){ toast('讀取員工最新存檔失敗，稍後再試'); return; } p.save=fresh.save; p.ragicId=fresh.ragicId; }   // D2：跨員工核准前重拉最新 GS，避免舊快照覆寫員工進度
@@ -2046,7 +2127,7 @@ async function writeOtherGS(p){
   const F=GAME_STORE.F, fd=new FormData();
   fd.append(F.email, p.email); fd.append(F.name, p.name||'');
   const uid=emailToUserId(p.email);
-  fd.append(F.balance, String(userEarnedCoins(uid)+teamPoolCoins(uid)+(p.save.won||0)+(p.save.mchGain||0)+(isBeta()?(p.save.bonus||0):0)-(p.save.spent||0)));   // 補團隊池,與 coinBalance 一致
+  fd.append(F.balance, String(userEarnedCoins(uid)+teamPoolCoins(uid)+(p.save.won||0)+(p.save.mchGain||0)+(isBeta()?(p.save.bonus||0):0)-(p.save.spent||0)-(p.save.seasonBase||0)));   // 補團隊池+扣結算基準,與 coinBalance 一致
   fd.append(F.save, JSON.stringify(p.save));
   fd.append(F.updated, isoToRagic(new Date().toISOString()));
   const r=await ragicFetchGS('/'+p.ragicId+'?api',{method:'POST',body:fd});
@@ -2117,7 +2198,7 @@ function checkFavorEarned(){   // 主管核准了含人情的任務 → 下次�
   const uid=STATE.user.id, key='usled_favor_seen_'+uid, cur=favorEarned(uid);
   const seen=parseInt(localStorage.getItem(key));
   if(isNaN(seen)){ localStorage.setItem(key,String(cur)); return; }
-  if(cur>seen){ favorCeremony(cur-seen,'公司'); }
+  if(cur>seen){ if(!bootCollect({pri:4, icon:'🤝', color:'#fbbf24', title:'恭喜獲得 '+(cur-seen)+' 人情點！', sub:'公司感謝你的協助 🙏'})) favorCeremony(cur-seen,'公司'); }
   if(cur!==seen) localStorage.setItem(key,String(cur));
 }
 function sendFavorReq(){
@@ -2199,7 +2280,8 @@ function checkKudos(){
   const seenRaw=localStorage.getItem(key);
   if(seenRaw===null){ localStorage.setItem(key,String(maxAt)); return; }
   const seen=parseInt(seenRaw)||0, fresh=list.filter(k=>new Date(k.at).getTime()>seen);
-  if(fresh.length) kudosCeremony(fresh);
+  if(fresh.length){ const its=fresh.slice(0,3).map(k=>'💌 '+esc(k.fromName)+'：「'+esc(k.msg||'謝謝你！')+'」').join('<br>');
+    if(!bootCollect({pri:5, icon:'🙏', color:'#f472b6', title:'你收到 '+fresh.length+' 張感謝卡！', sub:its})) kudosCeremony(fresh); }
   if(maxAt>seen) localStorage.setItem(key,String(maxAt));
 }
 function kudosCeremony(list){
@@ -2236,13 +2318,15 @@ function checkStarter(){
   if(userGameLevel(STATE.user.id)>=5 || (GS.owned||[]).length || (GS.clears||0)>0 || Object.keys(GS.pets||{}).length){ GS.starterClaimed=true; saveGameState(); return; }   // 老手/已有進度→只標記不發
   GS.starterClaimed=true; GS.won=(GS.won||0)+STARTER.coins;
   GS.pets=GS.pets||{}; if(!GS.pets[STARTER.petId]){ GS.pets[STARTER.petId]={exp:0}; if(!GS.activePet) GS.activePet=STARTER.petId; }
-  saveGameState(); starterCeremony();
+  saveGameState();
+  if(!bootCollect({pri:10, icon:'🎁', color:'#22c55e', title:'歡迎加入譽昇！', sub:'起步禮包：+'+STARTER.coins+' 鑽 ＆ 一隻小狗蛋 🐶<br>打開「新星之路」一步步認識任務牆'})) starterCeremony();
 }
 function checkNewbieGrad(){
   if(!GS || GS.newbieGradClaimed || !onboardDone()) return;
   if(userGameLevel(STATE.user.id)>=5){ GS.newbieGradClaimed=true; saveGameState(); return; }   // 老手不觸發畢業
   GS.newbieGradClaimed=true; GS.won=(GS.won||0)+200; GS.title='ti_newstar';
-  saveGameState(); newbieGradCeremony();
+  saveGameState();
+  if(!bootCollect({pri:9, icon:'🌱', color:'#22c55e', title:'新星之路畢業！', sub:'獲得稱號「譽昇新星」＋200 鑽 🎉'})) newbieGradCeremony();
 }
 function starterCeremony(){
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='starterMask';
@@ -2292,7 +2376,8 @@ function showMonthlyReview(manual){
   const now=new Date(); let y=now.getFullYear(), m=now.getMonth()-1; if(m<0){m=11;y--;}
   const key='usled_mreview_'+STATE.user.id+'_'+y+'-'+String(m+1).padStart(2,'0');
   const st=monthStatsFor(STATE.user.id,y,m);
-  if(!manual){ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); if(st.count===0) return; }
+  if(!manual){ if(localStorage.getItem(key)) return; localStorage.setItem(key,'1'); if(st.count===0) return;
+    if(bootCollect({pri:2, icon:'📅', title:(m+1)+' 月成長回顧出爐（完成 '+st.count+' 件）', action:'showMonthlyReview(true)'})) return; }
   const r=rankOf(st.lvA), c=r.color, up=st.lvA-st.lvB;
   const o=document.createElement('div'); o.className='lvup-mask'; o.id='mreviewMask';
   o.innerHTML=`<div class="lvup-flash" style="background:radial-gradient(circle,${c}cc,transparent 70%)"></div>
@@ -2394,7 +2479,7 @@ function checkLevelUp(){
   const prev=parseInt(localStorage.getItem(key));
   if(isNaN(prev)){ localStorage.setItem(key,String(lvl)); return; }   // 第一次只記錄不慶祝
   if(lvl!==prev) localStorage.setItem(key,String(lvl));
-  if(lvl>prev) playLevelUpCeremony(lvl);
+  if(lvl>prev){ if(!bootCollect({pri:8, icon:'🎉', color:'#38bdf8', title:'升級到 Lv.'+lvl+'！', sub:'「'+rankOf(lvl).name+'」'})) playLevelUpCeremony(lvl); }
 }
 
 /* ===================================================================
@@ -2688,7 +2773,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[]}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[], seasonBase:0}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -2744,7 +2829,7 @@ function userEarnedCoins(uid){
   const tp=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   return Math.floor(tp/COIN_PER_TPTS);
 }
-function coinBalance(){ if(!STATE.user) return 0; return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.mchGain)||0) + (isBeta()?((GS&&GS.bonus)||0):0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0); }   // bonus(測試)只在 beta 計入；正式站自動忽略殘留
+function coinBalance(){ if(!STATE.user) return 0; return userEarnedCoins(STATE.user.id) + teamPoolCoins(STATE.user.id) + ((GS&&GS.mchGain)||0) + (isBeta()?((GS&&GS.bonus)||0):0) + ((GS&&GS.won)||0) - (GS?GS.spent||0:0) - ((GS&&GS.seasonBase)||0); }   // bonus(測試)只在 beta 計入；seasonBase=換版結算固化值(P0#1):賽季歸零時把「任務衍生鑽+池金」凍結為起點,解決衍生財富歸不了零/spent清零變退款
 /* 貢獻值：earned=任務累積(終身,驅動等級)；spendable=可賣給商人換鑽石的餘額 */
 function contribEarned(uid){ return STATE.tasks.filter(t=>t.assigneeId===uid && t.status==='done').reduce((s,t)=>s+(t.contribution||0),0); }
 function contribSpendable(uid){ const e=contribEarned(uid); const sp=(uid===STATE.user.id&&GS)?(GS.contribSpent||0):0; return Math.max(0,e-sp); }
@@ -2765,6 +2850,28 @@ async function seasonReset(){
     await loadGameState(); refreshGameUI(); renderBoard();
     toast('🏁 賽季歸零完成：'+j.reset+'/'+j.total+' 筆存檔已重置');
   }catch(e){ toast('歸零失敗：'+e.message); }
+}
+/* ⚖️ 賽季補結算(管理員限定,P0#1 換版結算)：把每人「任務衍生鑽+團隊池」凍結成 GS.seasonBase → 鑽石餘額真正歸 0 起跑。
+   背景:歸零按鈕只清 GS 欄位,但 coinBalance 主體(earned+teamPool)是從任務歷史衍生、清不掉,且 spent 清零=歷史消費全額退款;
+   歸零後執行本結算一次,衍生財富被基準點抵銷,之後新任務/新池金照常累積。等級/貢獻/人情不受影響(只動鑽石)。 */
+async function seasonSettle(){
+  if(!isAdmin()) return;
+  const list=(STATE.allPlayers||[]).map(p=>{ const uid=emailToUserId(p.email); return uid?{p, uid, base:userEarnedCoins(uid)+teamPoolCoins(uid)}:null; }).filter(Boolean);
+  if(!list.length){ toast('沒有可結算的存檔'); return; }
+  const lines=list.map(x=>x.p.name+'：基準 '+(x.p.save.seasonBase||0)+' → '+x.base).join('\n');
+  if(!await vConfirm({icon:'⚖️',title:'賽季補結算',msg:'把每人「任務衍生鑽石＋團隊池」凍結為起點，鑽石餘額從 0 重新起跑：\n\n'+lines+'\n\n通常在賽季歸零後執行一次。會覆蓋舊結算值，執行前確認大家沒有在線上玩。',okText:'執行結算',danger:true})) return;
+  toast('結算中…請稍候');
+  let okN=0;
+  for(const x of list){
+    try{
+      x.p.save.seasonBase=x.base;
+      if((STATE.user.email||'').toLowerCase()===x.p.email){ GS.seasonBase=x.base; if(await saveGameState()) okN++; }
+      else{ await writeOtherGS(x.p); okN++; }
+    }catch(e){}
+    await new Promise(r=>setTimeout(r,450));   // Ragic 限流
+  }
+  await loadGameState(); refreshGameUI();
+  toast('⚖️ 補結算完成：'+okN+'/'+list.length+' 人鑽石歸 0 起跑');
 }
 /* 測試模式(沙盒,管理員限定)：開啟後所有雲端/本機寫入全部跳過,隨便玩;關閉或關視窗即還原雲端原狀 */
 async function toggleSandbox(){
@@ -3707,7 +3814,7 @@ async function endBattle(win){
     mask.innerHTML=`<div class="modal dark-zone" onclick="event.stopPropagation()" style="text-align:center">
       <div style="font-size:46px">💀</div>
       <h3 style="margin:6px 0">戰敗了…</h3>
-      <div style="font-size:13px;color:var(--muted)">❤️ 血量耗盡（剩 5%）。穿防具減傷、用補劑回血、答題更穩就能贏 💪<br><span style="font-size:11px">血量每小時自然回復 4%</span></div>
+      <div style="font-size:13px;color:var(--muted)">❤️ 血量耗盡（剩 ${isNewbie()?'30%（新手保底）':'5%'}）。穿防具減傷、用補劑回血、答題更穩就能贏 💪<br><span style="font-size:11px">血量每小時自然回復 4%</span></div>
       <div style="font-size:12px;color:var(--muted);margin-top:10px">今日剩 ${left}/${DUNGEON_DAILY} 次</div>
       <div class="modal-actions" style="margin-top:14px">
         ${left>0?`<button class="buy-btn" style="width:auto;padding:8px 16px" onclick="document.getElementById('battleModal').remove();showDungeon()">再挑戰</button>`:''}
@@ -3815,7 +3922,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.11.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.11.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
@@ -3957,6 +4064,7 @@ function checkOverdue(){
   if(Date.now()-ackAt < 3600000) return;   // 按過「我知道了」後 1 小時內不再提醒
   const mine = STATE.tasks.filter(t=> t.assigneeId===STATE.user.id && t.status!=='done' && t.dueAt && new Date(t.dueAt).getTime()<Date.now());
   if(mine.length===0) return;
+  if(bootCollect({pri:7, icon:'⚠️', color:'#ef4444', title:'你有 '+mine.length+' 件任務已逾期', sub:'逾期越久點數打折越多（只算上班時段，最低 50%）', action:'ackOverdue()'})) return;   // 開工卡模式:併入卡片,點前往=知道了
   const el = document.createElement('div'); el.id='overdueAlert'; el.className='modal-mask';
   el.innerHTML = `<div class="modal overdue-box" onclick="event.stopPropagation()">
     <div class="overdue-title">⚠ 你有 ${mine.length} 個任務已逾期！</div>
