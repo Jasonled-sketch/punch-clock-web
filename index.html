@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.0</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.1</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -893,6 +893,8 @@ function addDayShort(s) {  // 短日期 26/06/05(五)，手機單行用
   const days = ['日','一','二','三','四','五','六'];
   return `${String(s).slice(2, 10).replace(/-/g,'/')}(${days[dt.getDay()]})`;
 }
+// 🍱 午休不算遲到早退（2026/08/14，與 bot attCalc 同步）：[a,b] 缺口與午休(上午段迄~下午段起)的重疊分鐘
+function lunchGapW(sh, a, b) { if (!sh || !sh.am || !sh.pm) return 0; const ls = toMin(sh.am[1]), le = toMin(sh.pm[0]); return Math.max(0, Math.min(b, le) - Math.max(a, ls)); }
 // 扣除當日已核准請假後的「應出勤」上下班分鐘界線（修遲到/早退誤判：請假時段不算遲到早退）
 function effShiftBounds(sh, dayLeaves) {
   if (!sh) return { amStart: 0, pmEnd: 1440, fullDay: true };  // 未設班別(工讀常見)→視同全天、不計遲到早退；防 sh.am undefined 讓明細開不了(薛翊揚踩到)
@@ -2578,8 +2580,8 @@ async function viewReport() {
           const eff = effShiftBounds(sh, apprL.filter(l => l.date === r.date));  // 扣除當日請假＋補休時段
           if (eff.fullDay) return;
           let tsN = tsMapW[r.date] || 0; if (tsN && !(r.end_time && toMin(r.end_time) >= eff.pmEnd + tsN)) tsN = 0;   // 未補足=券無效
-          if (r.start_time) { const d = toMin(r.start_time) - (eff.amStart + tsN); if (d > 0) { lateCnt++; lateMin += d; } }
-          if (r.end_time)   { const d = (eff.pmEnd + tsN) - toMin(r.end_time);     if (d > 0) { earlyCnt++; earlyMin += d; } }
+          if (r.start_time) { const iM = toMin(r.start_time), b0 = eff.amStart + tsN, d = (iM - b0) - lunchGapW(sh, b0, iM); if (d > 0) { lateCnt++; lateMin += d; } }
+          if (r.end_time)   { const oM = toMin(r.end_time), b1 = eff.pmEnd + tsN, d = (b1 - oM) - lunchGapW(sh, oM, b1);     if (d > 0) { earlyCnt++; earlyMin += d; } }
         });
       }
 
@@ -2823,8 +2825,8 @@ function showReportDetail(email) {
       const eff = effShiftBounds(sh, apprForCalc.filter(l => l.start_date === r.date));  // 扣除當日請假時段
       if (eff.fullDay) return;
       let tsN = tsMapD[r.date] || 0; if (tsN && !(r.end_time && toMin(r.end_time) >= eff.pmEnd + tsN)) tsN = 0;   // ⏳ 補時券:未補足=無效
-      if (r.start_time) { const d = toMin(r.start_time) - (eff.amStart + tsN); if (d > 0) { lateMin += d; lateRows.push(`${addDayShort(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
-      if (r.end_time)   { const d = (eff.pmEnd + tsN) - toMin(r.end_time);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
+      if (r.start_time) { const iM = toMin(r.start_time), b0 = eff.amStart + tsN, d = (iM - b0) - lunchGapW(sh, b0, iM); if (d > 0) { lateMin += d; lateRows.push(`${addDayShort(r.date)}　${r.start_time} 上班　遲到 ${d} 分`); } }
+      if (r.end_time)   { const oM = toMin(r.end_time), b1 = eff.pmEnd + tsN, d = (b1 - oM) - lunchGapW(sh, oM, b1);     if (d > 0) { earlyMin += d; earlyRows.push(`${addDayShort(r.date)}　${r.end_time} 下班　早退 ${d} 分`); } }
     });
   }
   const teTotP = lateMin + earlyMin;                             // 補時券生效日已於上方逐日順延（與 attCalc 同步）；月累計>15分→全額扣(與全勤同門檻)
@@ -2926,21 +2928,24 @@ function showReportDetail(email) {
           const lastOut = cl.length ? toMin(cl[cl.length - 1].end_time) : null;
           let lateM = 0, earlyM = 0;
           let tsN1 = tsMapD[ds] || 0; if (tsN1 && !(lastOut != null && lastOut >= eff.pmEnd + tsN1)) tsN1 = 0;   // ⏳ 補時券:未補足=無效
-          if (firstIn != null && firstIn - (eff.amStart + tsN1) > 0) lateM = firstIn - (eff.amStart + tsN1);
-          if (lastOut != null && (eff.pmEnd + tsN1) - lastOut > 0) earlyM = (eff.pmEnd + tsN1) - lastOut;
+          if (firstIn != null) { const b0 = eff.amStart + tsN1, dL = (firstIn - b0) - lunchGapW(sh, b0, firstIn); if (dL > 0) lateM = dL; }
+          if (lastOut != null) { const b1 = eff.pmEnd + tsN1, dE = (b1 - lastOut) - lunchGapW(sh, lastOut, b1); if (dE > 0) earlyM = dE; }
           totLate += lateM; totEarly += earlyM;
-          const lt = []; if (lateM) lt.push(`遲到${lateM}分鐘`); if (earlyM) lt.push(`早退${earlyM}分鐘`);
+          const lt = []; if (lateM) lt.push(`遲到${lateM}分`); if (earlyM) lt.push(`早退${earlyM}分`);
           if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
         }
       }
-      dailyRows.push(`<div style="display:flex;align-items:flex-start"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}${otHtml ? `<div>${otHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div>${canEditPunch ? `<button class="pe-btn" title="請員工重新申報這天（作廢原打卡並通知他）" onclick="requestRedo('${email}','${ds}')">🔄</button><button class="pe-btn" title="直接修正時段（緊急用；建議優先請員工重報）" onclick="editPunchDay('${email}','${ds}')">✏️</button>` : ''}</div>`);
+      dailyRows.push(`<div style="display:flex;align-items:flex-start"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}${otHtml ? `<div>${otHtml}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}</div>${canEditPunch ? `<button class="pe-btn" title="請員工重新申報這天（作廢原打卡並通知他）" onclick="requestRedo('${email}','${ds}')">🔄</button><button class="pe-btn" title="直接修正時段（緊急用；建議優先請員工重報）" onclick="editPunchDay('${email}','${ds}')">✏️</button>` : ''}</div>`);
       continue;
     }
     if (rec && rec.start_time && rec.end_time) {
       const eff = effShiftBounds(sh, dayOff);
       let lateM = 0, earlyM = 0;
       let tsN2 = tsMapD[ds] || 0; if (tsN2 && toMin(rec.end_time) < eff.pmEnd + tsN2) tsN2 = 0;   // ⏳ 補時券:未補足=無效
-      if (sh && !eff.fullDay && isFull) { const a = toMin(rec.start_time) - (eff.amStart + tsN2); if (a > 0) lateM = a; const b = (eff.pmEnd + tsN2) - toMin(rec.end_time); if (b > 0) earlyM = b; }
+      if (sh && !eff.fullDay && isFull) {
+        const iM = toMin(rec.start_time), b0 = eff.amStart + tsN2, a = (iM - b0) - lunchGapW(sh, b0, iM); if (a > 0) lateM = a;
+        const oM = toMin(rec.end_time), b1 = eff.pmEnd + tsN2, b = (b1 - oM) - lunchGapW(sh, oM, b1); if (b > 0) earlyM = b;
+      }
       totLate += lateM; totEarly += earlyM;
       const mid = dayOff.find(o => o.s && o.e), full = dayOff.find(o => o.full);
       const wh = realWorkHours(rec, sh, isFull, dayOff);
@@ -2951,7 +2956,7 @@ function showReportDetail(email) {
         segHtml = `<span style="color:#2e7d32">${rec.start_time}-${rec.end_time}</span>`;
         workTxt = `<span style="color:#2e7d32">實工${wh}h</span>`;
         if (mid) restHtml = `<span style="color:#1565c0">${mid.s}-${mid.e} ${mid.type}${mid.h}h</span>`;
-        const lt = []; if (lateM) lt.push(`遲到${lateM}分鐘`); if (earlyM) lt.push(`早退${earlyM}分鐘`);
+        const lt = []; if (lateM) lt.push(`遲到${lateM}分`); if (earlyM) lt.push(`早退${earlyM}分`);
         if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
       }
     } else if (rec && rec.start_time) segHtml = `<span style="color:#e65100">${rec.start_time}- 待補下班卡</span>`;
@@ -2964,7 +2969,7 @@ function showReportDetail(email) {
     else if (isHol) continue;                                 // 純週末(無特殊日設定) → 不列
     else if (dMs < todayMs) { if (isCheng) continue; restHtml = `<span style="color:#c62828">未打卡</span>`; missCnt++; }  // 未打卡 → 日期下一行（承攬無固定班表,不列未打卡日）
     else continue;
-    dailyRows.push(`<div style="display:flex;align-items:flex-start"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}${otHtml ? `<div>${otHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div>${canEditPunch ? `<button class="pe-btn" title="請員工重新申報這天（作廢原打卡並通知他）" onclick="requestRedo('${email}','${ds}')">🔄</button><button class="pe-btn" title="直接修正時段（緊急用；建議優先請員工重報）" onclick="editPunchDay('${email}','${ds}')">✏️</button>` : ''}</div>`);
+    dailyRows.push(`<div style="display:flex;align-items:flex-start"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}${otHtml ? `<div>${otHtml}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}</div>${canEditPunch ? `<button class="pe-btn" title="請員工重新申報這天（作廢原打卡並通知他）" onclick="requestRedo('${email}','${ds}')">🔄</button><button class="pe-btn" title="直接修正時段（緊急用；建議優先請員工重報）" onclick="editPunchDay('${email}','${ds}')">✏️</button>` : ''}</div>`);
   }
   const urgentTotal = appr.filter(isUrgentLeave).length;
   const uTier = urgentTierCounts(appr);  // 三級：緊急<24 / 急件<72 / 一般<120
