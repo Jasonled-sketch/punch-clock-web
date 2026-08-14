@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.2</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.3</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2599,7 +2599,9 @@ async function viewReport() {
 
       // 曠職（正職）：逐日分析，過 72hr 未補單才算；緩衝期內列待補單
       const ab = isFull ? analyzeAbsence(w, recs, leaves, CUR_YEAR, CUR_MONTH + 1, specialSet, specialByDate) : { confirmed: 0, pending: [] };
-      const absent = ab.confirmed;
+      // ⭐ 曠職天數優先吃薪資核心（2026/08/14）：本地 analyzeAbsence 只認「開始日期在本月」的假單，
+      //    跨月長假會在第二個月被誤判曠職，造成「網頁說曠職 N 天、扣款卻是 $0」的畫面互打。
+      const absent = (_apiT && typeof _apiT.absent === 'number') ? _apiT.absent : ab.confirmed;
       const pendingAbsent = ab.pending.length;
       // ── 勞基法薪資計算：改吃 bot 單一 API（_apiS 有值就用，載入失敗才用本地算；數字已對照驗證一致）──
       const _apiS = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
