@@ -278,7 +278,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.1</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.2</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2563,9 +2563,14 @@ async function viewReport() {
       const totP = wr.reduce((s, r) => s + (Number(r.subtotal) || 0), 0);
       const attendDays = new Set(wr.map(r => r.date)).size;
 
-      // 遲到 / 早退（依班別時段）；工讀生時薪制不計
+      // 遲到 / 早退：⭐ 優先取自 bot 薪資核心（_apiS.teByDate/lateMin/earlyMin，2026/08/14 全面體檢後
+      //   核心已處理多段首進尾出／中段假／假日不判／午休／補時券順延／跨月假）；API 掛掉才用下方本地估算。
+      const _apiT = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
       let lateCnt = 0, lateMin = 0, earlyCnt = 0, earlyMin = 0;
-      if (sh && isFull) {
+      if (_apiT && _apiT.teByDate) {
+        lateMin = _apiT.lateMin || 0; earlyMin = _apiT.earlyMin || 0;
+        lateCnt = _apiT.lateCnt || 0; earlyCnt = _apiT.earlyCnt || 0;
+      } else if (sh && isFull) {
         // ⚠️ 請假「與補休」都要扣（Jason 2026/08/12 抓到）：補休和請假一樣「那段不用在公司」，
         //    漏扣會把「16:00 開始補休、16:01 打卡下班」誤判成早退 59 分 → 扣薪＋全勤失格。
         //    補休存在加班表(otAll 類型=補休)不在請假表，需另外併入。bot lib/attCalc.js 已同步修正。
@@ -2726,9 +2731,12 @@ function exportMonthDetail() {
       const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && !dayLv.length && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來(且未請假) → 不支薪扣一日
       if (!rec && !dayLv.length && !dayOt.length && !isDisasterAbsent) continue;  // 該日無任何資料 → 不列
       const lv = dayLv[0] || {}, ot = dayOt[0] || {};
-      // 遲到/早退（扣除當日請假時段）
+      // 遲到/早退：⭐ 取自薪資核心 teByDate（2026/08/14 起與月報、LINE 薪資單同一份數字；
+      //   舊版 CSV 自算會漏掉午休排除與補時券順延，月結對帳時與月報對不起來）
       let late = 0, early = 0;
-      if (sh && rec && isFull) {                               // 工讀生時薪制不計遲到/早退
+      const _apiC = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
+      if (_apiC && _apiC.teByDate) { const t = _apiC.teByDate[ds] || {}; late = t.l || 0; early = t.e || 0; }
+      else if (sh && rec && isFull) {                          // API 掛掉才本地估算（工讀生時薪制不計遲到/早退）
         const eff = effShiftBounds(sh, dayLv);
         if (!eff.fullDay) {
           const closedR = dayRecs.filter(r => r.end_time);
@@ -2819,8 +2827,18 @@ function showReportDetail(email) {
   const tsMapD = {};
   (otAll || []).filter(o => o.email === email && o.ot_type === '補時券' && o.status === 'approved' && (parseFloat(o.hours) || 0) > 0 && (o.date || '').startsWith(ym)).forEach(o => { tsMapD[o.date] = Math.min(10, parseFloat(o.hours) || 0); });
   const lateRows = [], earlyRows = [];
+  const teApi = (_apiS && _apiS.teByDate) ? _apiS.teByDate : null;   // ⭐ 逐日遲到早退取自薪資核心（多段/中段假/假日/午休/補時券全已處理）
   let lateMin = 0, earlyMin = 0;
-  if (sh && isFull) {                                          // 工讀生時薪制不計遲到/早退
+  if (teApi) {
+    Object.keys(teApi).sort().forEach(d => {
+      const t = teApi[d] || {};
+      const dayR = wr.filter(r => r.date === d);
+      const firstIn = dayR.length ? dayR.map(r => r.start_time).filter(Boolean).sort()[0] : '';
+      const outsD = dayR.map(r => r.end_time).filter(Boolean).sort();
+      if (t.l > 0) { lateMin += t.l; lateRows.push(`${addDayShort(d)}　${firstIn || ''} 上班　遲到 ${t.l} 分`); }
+      if (t.e > 0) { earlyMin += t.e; earlyRows.push(`${addDayShort(d)}　${outsD.length ? outsD[outsD.length - 1] : ''} 下班　早退 ${t.e} 分`); }
+    });
+  } else if (sh && isFull) {                                   // API 掛掉才本地估算（工讀生時薪制不計遲到/早退）
     wr.forEach(r => {
       const eff = effShiftBounds(sh, apprForCalc.filter(l => l.start_date === r.date));  // 扣除當日請假時段
       if (eff.fullDay) return;
@@ -2921,19 +2939,22 @@ function showReportDetail(email) {
       const wh = Math.round(recsT.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOff), 0) * 100) / 100;
       workTxt = `<span style="color:#2e7d32">實工${wh}h</span>`;
       if (sh && isFull) {                                     // 工讀生不計遲到
-        const eff = effShiftBounds(sh, dayOff);
-        if (!eff.fullDay) {
-          const cl = recsT.filter(r => r.end_time);
-          const firstIn = recsT[0].start_time ? toMin(recsT[0].start_time) : null;
-          const lastOut = cl.length ? toMin(cl[cl.length - 1].end_time) : null;
-          let lateM = 0, earlyM = 0;
-          let tsN1 = tsMapD[ds] || 0; if (tsN1 && !(lastOut != null && lastOut >= eff.pmEnd + tsN1)) tsN1 = 0;   // ⏳ 補時券:未補足=無效
-          if (firstIn != null) { const b0 = eff.amStart + tsN1, dL = (firstIn - b0) - lunchGapW(sh, b0, firstIn); if (dL > 0) lateM = dL; }
-          if (lastOut != null) { const b1 = eff.pmEnd + tsN1, dE = (b1 - lastOut) - lunchGapW(sh, lastOut, b1); if (dE > 0) earlyM = dE; }
-          totLate += lateM; totEarly += earlyM;
-          const lt = []; if (lateM) lt.push(`遲到${lateM}分`); if (earlyM) lt.push(`早退${earlyM}分`);
-          if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
+        let lateM = 0, earlyM = 0;
+        if (teApi) { const t = teApi[ds] || {}; lateM = t.l || 0; earlyM = t.e || 0; }   // ⭐ 取自薪資核心（多段一天只判一次）
+        else {
+          const eff = effShiftBounds(sh, dayOff);
+          if (!eff.fullDay) {
+            const cl = recsT.filter(r => r.end_time);
+            const firstIn = recsT[0].start_time ? toMin(recsT[0].start_time) : null;
+            const lastOut = cl.length ? toMin(cl[cl.length - 1].end_time) : null;
+            let tsN1 = tsMapD[ds] || 0; if (tsN1 && !(lastOut != null && lastOut >= eff.pmEnd + tsN1)) tsN1 = 0;   // ⏳ 補時券:未補足=無效
+            if (firstIn != null) { const b0 = eff.amStart + tsN1, dL = (firstIn - b0) - lunchGapW(sh, b0, firstIn); if (dL > 0) lateM = dL; }
+            if (lastOut != null) { const b1 = eff.pmEnd + tsN1, dE = (b1 - lastOut) - lunchGapW(sh, lastOut, b1); if (dE > 0) earlyM = dE; }
+          }
         }
+        totLate += lateM; totEarly += earlyM;
+        const lt = []; if (lateM) lt.push(`遲到${lateM}分`); if (earlyM) lt.push(`早退${earlyM}分`);
+        if (lt.length) lateHtml = `<span style="color:#c62828">${lt.join(' ')}</span>`;
       }
       dailyRows.push(`<div style="display:flex;align-items:flex-start"><span style="flex:0 0 88px;color:#777">${addDayShort(ds)}</span><div style="flex:1">${segHtml ? `<div>${segHtml}</div>` : ''}${restHtml ? `<div>${restHtml}</div>` : ''}${otHtml ? `<div>${otHtml}</div>` : ''}${lateHtml ? `<div>${lateHtml}</div>` : ''}</div><div style="text-align:right;white-space:nowrap;margin-left:8px">${workTxt ? `<div>${workTxt}</div>` : ''}</div>${canEditPunch ? `<button class="pe-btn" title="請員工重新申報這天（作廢原打卡並通知他）" onclick="requestRedo('${email}','${ds}')">🔄</button><button class="pe-btn" title="直接修正時段（緊急用；建議優先請員工重報）" onclick="editPunchDay('${email}','${ds}')">✏️</button>` : ''}</div>`);
       continue;
@@ -2941,8 +2962,9 @@ function showReportDetail(email) {
     if (rec && rec.start_time && rec.end_time) {
       const eff = effShiftBounds(sh, dayOff);
       let lateM = 0, earlyM = 0;
-      let tsN2 = tsMapD[ds] || 0; if (tsN2 && toMin(rec.end_time) < eff.pmEnd + tsN2) tsN2 = 0;   // ⏳ 補時券:未補足=無效
-      if (sh && !eff.fullDay && isFull) {
+      if (teApi) { const t = teApi[ds] || {}; lateM = t.l || 0; earlyM = t.e || 0; }        // ⭐ 取自薪資核心（假日/中段假/午休/補時券全已處理）
+      else if (sh && !eff.fullDay && isFull) {
+        let tsN2 = tsMapD[ds] || 0; if (tsN2 && toMin(rec.end_time) < eff.pmEnd + tsN2) tsN2 = 0;   // ⏳ 補時券:未補足=無效
         const iM = toMin(rec.start_time), b0 = eff.amStart + tsN2, a = (iM - b0) - lunchGapW(sh, b0, iM); if (a > 0) lateM = a;
         const oM = toMin(rec.end_time), b1 = eff.pmEnd + tsN2, b = (b1 - oM) - lunchGapW(sh, oM, b1); if (b > 0) earlyM = b;
       }
