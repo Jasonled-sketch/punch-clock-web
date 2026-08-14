@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>工程等級校準（Jason 專用）</title>
+<meta name="theme-color" content="#7c3aed">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{--vio:#7c3aed;--vio-d:#6d28d9;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f5f3ff;--ok:#16a34a;--bad:#ef4444}
+  body{font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;line-height:1.5;padding-bottom:40px}
+  .hidden{display:none!important}
+  #loginView{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;background:linear-gradient(160deg,#7c3aed,#4c1d95)}
+  #loginView h1{color:#fff;font-size:23px;font-weight:800}
+  #loginView p{color:#ddd6fe;margin:10px 0 30px;font-size:14px}
+  #gbtn{display:flex;justify-content:center;min-height:44px}
+  header{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+  header .ht{font-weight:800;font-size:16px;flex:1}
+  header button{border:1.5px solid var(--line);background:#fff;color:var(--vio-d);font-size:13px;font-weight:700;padding:7px 12px;border-radius:9px;font-family:inherit}
+  main{padding:14px;max-width:560px;margin:0 auto}
+  .prog{font-size:13px;font-weight:700;color:var(--vio-d);margin-bottom:10px;display:flex;justify-content:space-between}
+  .card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.08)}
+  .desc{font-size:16.5px;font-weight:800;line-height:1.4}
+  .sub{font-size:12.5px;color:var(--muted);margin:4px 0 12px}
+  .lb{font-size:13px;font-weight:700;color:#334155;margin:12px 0 6px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chips button{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:10px;padding:8px 10px;font-size:13px;font-weight:600;font-family:inherit}
+  .chips button.on{background:var(--vio);border-color:var(--vio);color:#fff}
+  .g8{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .g8 button{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:10px;padding:8px 2px;font-size:11.5px;font-weight:600;font-family:inherit}
+  .g8 button.on{background:var(--vio);border-color:var(--vio);color:#fff}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  input[type=number]{width:100%;font-size:16px;font-family:inherit;border:1.5px solid var(--line);border-radius:10px;padding:10px 11px;background:#fff}
+  input[type=number]:focus{outline:none;border-color:var(--vio)}
+  .price input{font-size:22px;font-weight:800;padding:13px;border-width:2px;border-color:#c4b5fd}
+  .score{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:13px;padding:12px 16px;margin-top:14px;color:#fff}
+  .score b{font-size:22px}
+  .score small{font-size:12px;opacity:.9;display:block}
+  .acts{display:flex;gap:9px;margin-top:14px}
+  .acts button{flex:1;border:none;padding:15px;border-radius:12px;font-size:16px;font-weight:800;font-family:inherit}
+  .acts .save{background:var(--vio);color:#fff}
+  .acts .skip{background:#fff;color:var(--muted);border:1.5px solid var(--line)}
+  /* 彙整 */
+  table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 6px;text-align:left}
+  th{color:var(--muted);font-weight:700;font-size:12px}
+  .big-copy{width:100%;border:none;background:var(--vio);color:#fff;font-size:16px;font-weight:800;padding:15px;border-radius:12px;font-family:inherit;margin-top:14px}
+  #toast{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);z-index:60;opacity:0;background:#0f172a;color:#fff;padding:11px 18px;border-radius:11px;font-size:14px;font-weight:600;transition:.3s;pointer-events:none}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="loginView">
+  <h1>🎯 工程等級校準</h1>
+  <p>Jason 專用｜逐案填「外包施工價」建立校準基準</p>
+  <div id="gbtn"></div>
+</div>
+
+<div id="appView" class="hidden">
+  <header>
+    <div class="ht">🎯 工程等級校準</div>
+    <button onclick="showSummary()">📊 彙整</button>
+    <button onclick="location.reload()">↻</button>
+  </header>
+  <main>
+    <div class="prog"><span id="pTxt">—</span><span id="pLeft"></span></div>
+    <div class="card" id="fillCard">
+      <div class="desc" id="cDesc">載入中…</div>
+      <div class="sub" id="cSub"></div>
+      <div class="lb">工務類型</div>
+      <div class="chips" id="cQuick"></div>
+      <div class="lb">使用梯子（設備門檻）</div>
+      <div class="g8" id="cLadder"></div>
+      <div class="lb">距離km／屏幕寬cm／高cm</div>
+      <div class="row3">
+        <input type="number" id="cKm" placeholder="來回km" oninput="calc()">
+        <input type="number" id="cW" placeholder="寬" oninput="calc()">
+        <input type="number" id="cH" placeholder="高" oninput="calc()">
+      </div>
+      <div class="lb">現場工時（小時，記得就填）</div>
+      <input type="number" id="cHr" placeholder="例 4" oninput="calc()">
+      <div class="lb">額外狀況（可複選）</div>
+      <div class="chips" id="cExtra"></div>
+      <div class="lb">💰 這案外包施工要多少錢？</div>
+      <div class="price"><input type="number" id="cPrice" placeholder="例 3500" oninput="calc()"></div>
+      <div class="score"><b id="sPt">0分</b><div><small>系統試算 ≈ <span id="sMoney">$0</span></small><small id="sDiff"></small></div></div>
+      <div class="acts">
+        <button class="skip" onclick="nextCard(1)">跳過</button>
+        <button class="save" onclick="saveCard()">儲存·下一筆</button>
+      </div>
+    </div>
+    <div class="card hidden" id="sumCard"></div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+const CFG={
+  WORKER:'https://punch-clock-proxy.yspe-led.workers.dev',
+  CLIENT_ID:'948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+  ALLOWED:['covernself@gmail.com']
+};
+/* 評級公式＝工務日誌 v1.21 同款（校準對象） */
+const BASE={'屏幕安裝':6,'招牌施作':6,'亮化施工':5,'燈具施作':5,'屏幕維修':5};
+const AREA_TYPES=['屏幕安裝','招牌施作'];
+const QUICK=Object.keys(BASE);
+const LADDERS=['未用梯','6尺梯','7尺梯','8尺梯','10尺梯','12尺梯','長拉梯','吊車'];
+const LSC={'未用梯':2,'6尺梯':5,'7尺梯':8,'8尺梯':11,'10尺梯':14,'12尺梯':16,'長拉梯':18,'吊車':20};
+const EXTRA=[["demo_m","拆舊機-中",3],["demo_l","拆舊機-大",6],["elec_c","電工複雜",4],["elec_d","長距配接",3],["switch","額外開關",3],["struct","結構鐵架",5],["signal","訊號網路",3],["rain","下雨",4]];
+function aS(a){return a<=0?0:a<=0.5?1:a<=1?3:a<=2?6:a<=3?10:a<=4.5?14:a<=6?18:a<=9?22:a<=14?26:30;}
+function kmS(k){return k<=0?0:k<=20?1:k<=40?3:k<=70?5:k<=110?6:8;}
+function hrS(h){return h<1?0:h<=2?2:h<=4?4:h<=6?6:8;}
+
+const S={token:null,rows:[],idx:0,quick:'',ladder:'',extra:{},data:{}};
+const $=id=>document.getElementById(id);
+function toast(m){const t=$('toast');t.textContent=m;t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>t.className='',2000);}
+function parseJwt(tok){const b=String(tok||'').split('.')[1]||'';let s=b.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s),n=bin.length,arr=new Uint8Array(n);for(let i=0;i<n;i++)arr[i]=bin.charCodeAt(i);return JSON.parse(new TextDecoder('utf-8').decode(arr));}
+function initGoogle(){
+  if(!(window.google&&google.accounts&&google.accounts.id))return setTimeout(initGoogle,300);
+  google.accounts.id.initialize({client_id:CFG.CLIENT_ID,callback:onSignIn,auto_select:true});
+  google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',shape:'pill',width:260});
+  google.accounts.id.prompt();
+}
+function onSignIn(resp){
+  try{
+    const p=parseJwt(resp.credential);
+    if(CFG.ALLOWED.indexOf((p.email||'').toLowerCase())<0){alert('此工具僅限 Jason 使用');return;}
+    S.token=resp.credential;
+    $('loginView').classList.add('hidden');$('appView').classList.remove('hidden');
+    loadData();
+  }catch(e){alert('登入失敗:'+e.message);}
+}
+function store(){try{localStorage.setItem('wl_calib_v1',JSON.stringify(S.data));}catch(e){}}
+function loadStore(){try{S.data=JSON.parse(localStorage.getItem('wl_calib_v1')||'{}');}catch(e){S.data={};}}
+async function loadData(){
+  loadStore();
+  try{
+    const r=await fetch(CFG.WORKER+'/calibrate-cases',{headers:{'X-Google-Token':S.token}});
+    const d=await r.json();
+    if(!d.ok){$('cDesc').textContent='載入失敗:'+(d.reason||r.status);return;}
+    S.rows=d.rows;
+    S.idx=S.rows.findIndex(x=>!S.data[x.no]);
+    if(S.idx<0)S.idx=0;
+    render();
+  }catch(e){$('cDesc').textContent='連線失敗，請重新整理';}
+}
+function guessType(desc){
+  if(/維修|檢修|更換/.test(desc))return'屏幕維修';
+  if(/亮化/.test(desc))return'亮化施工';
+  if(/燈具|照明|燈條/.test(desc))return'燈具施作';
+  if(/招牌/.test(desc))return'招牌施作';
+  return'屏幕安裝';
+}
+function render(){
+  $('fillCard').classList.remove('hidden');$('sumCard').classList.add('hidden');
+  const row=S.rows[S.idx];if(!row){$('cDesc').textContent='沒有案件';return;}
+  const done=Object.keys(S.data).length;
+  $('pTxt').textContent='第 '+(S.idx+1)+' / '+S.rows.length+' 筆';
+  $('pLeft').textContent='已填 '+done+' 筆';
+  $('cDesc').textContent=row.desc||row.cust||row.no;
+  $('cSub').textContent=[row.log,row.no,row.date,row.cust].filter(Boolean).join('｜');
+  const old=S.data[row.no]||{};
+  S.quick=old.quick||guessType(row.desc||'');
+  S.ladder=old.ladder||'';
+  S.extra={};(old.extra||[]).forEach(k=>S.extra[k]=true);
+  $('cKm').value=old.km!==undefined?old.km:(row.km||'');
+  $('cW').value=old.w||'';$('cH').value=old.h||'';$('cHr').value=old.hr||'';
+  $('cPrice').value=old.price||'';
+  const q=$('cQuick');q.innerHTML='';
+  QUICK.forEach(v=>{const b=document.createElement('button');b.textContent=v;if(v===S.quick)b.classList.add('on');
+    b.onclick=()=>{S.quick=v;[...q.children].forEach(c=>c.classList.toggle('on',c.textContent===v));calc();};q.appendChild(b);});
+  const l=$('cLadder');l.innerHTML='';
+  LADDERS.forEach(v=>{const b=document.createElement('button');b.textContent=v;if(v===S.ladder)b.classList.add('on');
+    b.onclick=()=>{S.ladder=(S.ladder===v?'':v);[...l.children].forEach(c=>c.classList.toggle('on',c.textContent===S.ladder));calc();};l.appendChild(b);});
+  const e=$('cExtra');e.innerHTML='';
+  EXTRA.forEach(o=>{const b=document.createElement('button');b.textContent=o[1]+'+'+o[2];if(S.extra[o[0]])b.classList.add('on');
+    b.onclick=()=>{S.extra[o[0]]=!S.extra[o[0]];b.classList.toggle('on',S.extra[o[0]]);calc();};e.appendChild(b);});
+  calc();
+}
+function score(){
+  const num=id=>parseFloat($(id).value)||0;
+  const base=BASE[S.quick]||0;
+  const area=AREA_TYPES.indexOf(S.quick)>=0?(num('cW')*num('cH'))/10000:0;
+  let sc=0;EXTRA.forEach(o=>{if(S.extra[o[0]])sc+=o[2];});if(sc>8)sc=8;
+  return base+aS(area)+(LSC[S.ladder]||0)+kmS(num('cKm'))+hrS(num('cHr'))+sc;
+}
+function calc(){
+  const pt=score();const est=pt*100;const price=parseFloat($('cPrice').value)||0;
+  $('sPt').textContent=pt+'分';
+  $('sMoney').textContent='$'+est.toLocaleString();
+  $('sDiff').textContent=price?('你填 $'+price.toLocaleString()+'（差 '+(price-est>0?'+':'')+(price-est).toLocaleString()+'）'):'';
+}
+function saveCard(){
+  const row=S.rows[S.idx];if(!row)return;
+  const price=parseFloat($('cPrice').value);
+  if(!(price>0)){toast('請填外包施工價');$('cPrice').focus();return;}
+  S.data[row.no]={no:row.no,log:row.log,desc:row.desc,date:row.date,
+    quick:S.quick,ladder:S.ladder,km:$('cKm').value,w:$('cW').value,h:$('cH').value,hr:$('cHr').value,
+    extra:EXTRA.filter(o=>S.extra[o[0]]).map(o=>o[0]),score:score(),price:price,at:new Date().toISOString().slice(0,10)};
+  store();toast('已存 ✓');nextCard();
+}
+function nextCard(skip){
+  for(let i=S.idx+1;i<S.rows.length;i++){if(!S.data[S.rows[i].no]){S.idx=i;render();return;}}
+  showSummary();
+}
+function showSummary(){
+  $('fillCard').classList.add('hidden');
+  const c=$('sumCard');c.classList.remove('hidden');
+  const arr=Object.values(S.data);
+  if(!arr.length){c.innerHTML='<div class="desc">還沒有資料</div><div class="sub">回去填幾筆再來看彙整</div><div class="acts"><button class="save" onclick="render()">回去填</button></div>';return;}
+  const avg=a=>a.reduce((s,x)=>s+x,0)/a.length;
+  const perPt=arr.filter(x=>x.score>0).map(x=>x.price/x.score);
+  const byType={};arr.forEach(x=>{(byType[x.quick]=byType[x.quick]||[]).push(x);});
+  let rows='';
+  Object.keys(byType).forEach(t=>{const a=byType[t];
+    rows+='<tr><td>'+t+'</td><td>'+a.length+'</td><td>'+Math.round(avg(a.map(x=>x.score)))+'分</td><td>$'+Math.round(avg(a.map(x=>x.price))).toLocaleString()+'</td><td>$'+Math.round(avg(a.filter(x=>x.score>0).map(x=>x.price/x.score)))+'</td></tr>';});
+  c.innerHTML='<div class="desc">📊 校準彙整（已填 '+arr.length+' 筆）</div>'+
+    '<div class="sub">系統目前公式＝分數×100；你的實價平均每分 <b>$'+(perPt.length?Math.round(avg(perPt)):0)+'</b></div>'+
+    '<table><tr><th>類型</th><th>筆</th><th>平均分</th><th>平均實價</th><th>每分$</th></tr>'+rows+'</table>'+
+    '<button class="big-copy" onclick="copyAll()">📋 複製全部資料給 Claude 分析</button>'+
+    '<div class="acts"><button class="skip" onclick="render()">← 繼續填</button></div>';
+}
+function copyAll(){
+  const txt='【工程等級校準資料】\n'+JSON.stringify(Object.values(S.data));
+  (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>toast('已複製，貼給 Claude 即可'))
+  .catch(()=>{prompt('手動複製以下內容',txt);});
+}
+window.onload=initGoogle;
+</script>
+</body>
+</html>
