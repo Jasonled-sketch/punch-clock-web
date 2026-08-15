@@ -2049,13 +2049,16 @@ const FAVOR_MONTH_CAP = 20;   // 人情點每人每月上限
    ⚠️ 原始碼是公開的(GitHub Pages)，這裡不寫任何金額換算與成本推算 */
 /* 星點＝任務難度分數（遊戲計分單位）。⚠️ 刻意不顯示任何金額換算——星點不是薪資、不能折現，
    顯示「一點值多少錢」會讓遊戲點數被主張有金錢價值(勞資顧問標示的風險點)。難度分級只描述工作內容本身。 */
+/* 星點定價表 — 任務牆專做「大家都能做的雜項事務」（Jason 2026-08 定調）。
+   工程大案件與組裝計件走 Ragic 另計 KPI，不進任務牆。誰願意多做雜項，誰就多拿星點。 */
 const PRICING = [
-  {cat:'文書跑腿', pts:'3–10',   ex:'報價單一張 3–5、寄信/包裹 3–5、文件整理 5–10'},
-  {cat:'搬運協助', pts:'5–20',   ex:'依重量與距離'},
-  {cat:'庫存出貨', pts:'10–30',  ex:'清點、備料、出貨包裝'},
-  {cat:'維修服務', pts:'50–150', ex:'檢修、換料、現場除錯'},
-  {cat:'安裝工程', pts:'150–600',ex:'半天 150–300、全天 300–600'},
-  {cat:'動腦救火', pts:'50–200', ex:'流程改善、新品打樣、重大客訴處理'},
+  {cat:'環境清潔', pts:'3–10',   ex:'掃地、倒垃圾、擦桌、廁所清潔、收工整理工作檯'},
+  {cat:'跑腿外出', pts:'5–15',   ex:'領件、寄件、送件、代買、跑銀行郵局'},
+  {cat:'材料進出', pts:'5–20',   ex:'拿材料、備料、進貨上架、依重量與距離'},
+  {cat:'出貨包裝', pts:'10–25',  ex:'清點、包裝、貼單、裝箱'},
+  {cat:'證照文件', pts:'10–30',  ex:'申請證件、跑公家機關、辦文件、資料建檔'},
+  {cat:'臨時支援', pts:'10–30',  ex:'補位、幫忙趕工、支援其他崗位'},
+  {cat:'動腦提案', pts:'20–50',  ex:'流程改善、環境改造提案被採納'},
   {cat:'加成',     pts:'急件×1.5 / 假日×2', ex:'主管開單時直接乘上'},
   {cat:'貢獻值',   pts:'5–20',   ex:'補位支援、主動救火、提案被採納（為公司額外付出）'},
   {cat:'人情點',   pts:'1–10',   ex:'幫主管私人事務；每月上限 '+FAVOR_MONTH_CAP+' 點（系統強制）'},
@@ -2065,7 +2068,7 @@ function showPricing(){
   const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='pricingModal';
   mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">📋 星點定價表</h3><button class="t-expand" onclick="closePricing()" style="font-size:18px">✕</button></div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px"><b style="color:var(--accent)">星點＝任務難度分數</b>，用來換鑽石、鑽石換獎勵（每 ${COIN_PER_TPTS} 星點 = 1 鑽石）。星點是<b>遊戲活動的計分單位，不是薪資、也不能折現</b>。定價標準公開一致、對事不對人；覺得某類任務給少了 → 開會提出來一起調，不私下喬。</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px"><b style="color:var(--accent)">星點＝雜項事務的計分</b>。任務牆放的是<b>大家都能做的雜項</b>（清潔、跑腿、拿料、辦文件…），誰願意多做誰就多拿星點；每 ${COIN_PER_TPTS} 星點 = 1 鑽石，鑽石可換補時券、年終抽獎券與各種實體獎。<br>星點是<b>活動計分單位，不是薪資、不能折現</b>；工程案件與組裝計件另在系統統計，不走這裡。定價公開一致、對事不對人；覺得某類給少了 → 開會一起調，不私下喬。</div>
     ${PRICING.map(p=>`<div class="price-row"><div class="price-cat">${p.cat}</div><div class="price-pts">${p.pts}</div><div class="price-ex">${p.ex}</div></div>`).join('')}
   </div>`;
   mask.onclick=closePricing; document.body.appendChild(mask);
@@ -4082,7 +4085,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.12.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.12.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;

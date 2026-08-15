@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>實體獎勾選｜USLED 任務牆</title>
+<style>
+:root{--bg:#eaf4fb;--surface:#fff;--surface2:#f5fafd;--border:#c2d8ea;--text:#16324a;--muted:#6b8299;--sky:#0b72c4;--ok:#22c55e;--warn:#f59e0b;--danger:#ef4444;--sh:0 1px 3px rgba(11,114,196,.08)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;line-height:1.6}
+.wrap{max-width:840px;margin:0 auto;padding:16px 14px 90px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{font-size:13px;color:var(--muted);margin-bottom:14px}
+.bar{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:14px;box-shadow:var(--sh);font-size:13px}
+.bar b{color:var(--sky)}
+.grp{font-size:13px;font-weight:800;color:var(--sky);margin:18px 0 8px;padding-left:2px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:11px 13px;margin-bottom:9px;box-shadow:var(--sh);display:flex;gap:11px;align-items:flex-start;cursor:pointer;transition:.12s;user-select:none}
+.card:active{transform:scale(.995)}
+.card.on{border-color:var(--sky);background:#f0f8ff;box-shadow:0 0 0 2px rgba(11,114,196,.15)}
+.ck{width:23px;height:23px;border-radius:6px;border:2px solid var(--border);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:900;color:transparent;font-size:14px;margin-top:2px}
+.card.on .ck{background:var(--sky);border-color:var(--sky);color:#fff}
+.ic{font-size:26px;flex:0 0 auto;width:32px;text-align:center}
+.mid{flex:1;min-width:0}
+.nm{font-weight:700;font-size:15px}
+.ds{font-size:12.5px;color:var(--muted);margin-top:2px}
+.tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.tag{font-size:10.5px;padding:1.5px 7px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+.tag.who{background:#e8f4ff;border-color:#b8ddff;color:#0b72c4}
+.tag.cost{background:#f0fdf4;border-color:#bbf7d0;color:#15803d}
+.tag.warn{background:#fffbeb;border-color:#fde68a;color:#b45309}
+.pz{flex:0 0 auto;text-align:right}
+.pz input{width:62px;padding:5px 6px;border:1px solid var(--border);border-radius:7px;font-size:14px;font-weight:800;text-align:center;color:var(--sky);background:var(--surface2);font-family:inherit}
+.pz small{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:12.5px;color:#78350f;margin:14px 0}
+.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:11px 14px;display:flex;gap:9px;align-items:center;box-shadow:0 -2px 12px rgba(11,114,196,.1)}
+.cnt{flex:1;font-size:13px}
+.cnt b{color:var(--sky);font-size:17px}
+button{font-family:inherit;font-size:14px;font-weight:700;border:none;border-radius:9px;padding:10px 16px;cursor:pointer}
+.btn{background:var(--sky);color:#fff}
+.btn2{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+#out{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:11px;margin-top:12px;display:none;max-height:300px;overflow:auto}
+@media(max-width:480px){.ic{display:none}.wrap{padding:12px 10px 90px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🎁 實體獎勾選</h1>
+<div class="sub">全部都是「拿得到、用得到、吃得到」的實際東西 — 零榮譽虛名、零假期。點一下勾選，價格可直接改。</div>
+
+<div class="bar">
+  <b>怎麼挑：</b>建議 <b>8–12 項</b>，價格帶要有梯度（讓新人兩三天換得到第一個、老手有一個月的目標）。<br>
+  目前員工月鑽石收入約 <b>350–1,100 鑽</b>（雜項星點 ÷10 ＋ 副本約 710）。
+</div>
+
+<div class="grp">🍜 吃喝類 — 最實際，當天就有感</div>
+<div id="list1"></div>
+<div class="grp">🧰 用品類 — 拿到手的東西</div>
+<div id="list2"></div>
+<div class="grp">🎟️ 優待類 — 省錢省事</div>
+<div id="list3"></div>
+<div class="grp">💆 放鬆類 — 身體真的累</div>
+<div id="list4"></div>
+
+<div class="note">
+⚠️ <b>手套護具、工作鞋要注意</b>：如果是職安法規定雇主「本來就該提供」的必要防護具，不能拿來當獎品換（會被主張規避雇主義務）。<br>
+✅ 正確做法：<b>基本款公司照發（義務）</b>，鑽石換的是「升級版／自選款」。上面的描述已經照這個寫法。
+</div>
+
+<div id="out"></div>
+</div>
+
+<div class="foot">
+  <div class="cnt">已選 <b id="n">0</b> 項 · 價格帶 <span id="range">—</span></div>
+  <button class="btn2" onclick="all(true)">全選</button>
+  <button class="btn" onclick="exp()">匯出給 Claude</button>
+</div>
+
+<script>
+const DATA=[
+ // g=分組 1吃喝 2用品 3優待 4放鬆
+ {g:1,id:'rw_drink',  ic:'🧋',nm:'手搖飲一杯',      p:60, ds:'主管請，60 元內。最基本、最常換的一張',                          who:'全員', cost:'成本 60'},
+ {g:1,id:'rw_bento',  ic:'🍱',nm:'感謝便當',        p:100,ds:'指定一天，公司請你吃飯，100 元內',                              who:'全員', cost:'成本 100'},
+ {g:1,id:'rw_snack',  ic:'🍗',nm:'下午茶點心',      p:120,ds:'雞排＋飲料，做到一半的小確幸',                                  who:'全員', cost:'成本 120'},
+ {g:1,id:'rw_stock',  ic:'🍜',nm:'零食補給箱',      p:150,ds:'自選 150 元內零食飲料泡麵，整箱放你抽屜慢慢吃',                 who:'廠內', cost:'成本 150'},
+ {g:1,id:'rw_supper', ic:'🍲',nm:'加班宵夜升級',    p:150,ds:'加班那天公司出 150 元宵夜，你自己指定要吃什麼（不是統一便當）', who:'加班的人', cost:'成本 150'},
+ {g:1,id:'rw_treat',  ic:'🍢',nm:'主管請客鹹酥雞',  p:250,ds:'掛你的名義，主管請全公司鹹酥雞一次（200 元內、每月全公司限 1 次）', who:'團隊', cost:'成本 200'},
+
+ {g:2,id:'rw_cool',   ic:'🧊',nm:'消暑三寶',        p:250,ds:'涼感毛巾＋運動飲料一箱＋涼感袖套（5–9 月限定）',                who:'外勤/廠內', cost:'成本 ~250'},
+ {g:2,id:'rw_glove',  ic:'🧤',nm:'手套護具「升級版」',p:300,ds:'基本款公司照發；這張換的是更好的組裝手套／護腕／護膝，自選一樣', who:'組裝', cost:'成本 300', warn:'基本款須公司提供'},
+ {g:2,id:'rw_power',  ic:'🔋',nm:'行動電源組',      p:350,ds:'行動電源＋充電線組，外出一整天不怕手機沒電',                    who:'外勤', cost:'成本 350'},
+ {g:2,id:'rw_bag',    ic:'🎒',nm:'外勤工具腰包',    p:400,ds:'好背好收的工具腰包／收納包，自己選款式，東西歸你',              who:'工程', cost:'成本 400'},
+ {g:2,id:'rw_shoe',   ic:'👟',nm:'工作鞋「升級版」',p:500,ds:'基本款公司照發；這張換的是防滑／鋼頭升級款，自選尺寸',          who:'廠內/外勤', cost:'成本 500', warn:'基本款須公司提供'},
+
+ {g:3,id:'rw_makeup', ic:'⏱️',nm:'補時券一張',      p:150,ds:'遲到 10 分內當天用券：班表順延、下班補足工時才生效（不是請假、不影響薪資與出勤紀錄；每月限 1 張）', who:'全員', cost:'成本 0'},
+ {g:3,id:'rw_raffle', ic:'🎰',nm:'年終抽獎券一張',  p:250,ds:'年終抽獎多一支籤，越早開始累積越有機會',                        who:'全員', cost:'走年終獎池'},
+ {g:3,id:'rw_wash',   ic:'🚗',nm:'洗車券一張',      p:300,ds:'岡山配合店家洗車一次，內勤代訂（限本人不折現）',                who:'有車的', cost:'成本 300'},
+ {g:3,id:'rw_movie',  ic:'🎬',nm:'電影票兩張',      p:300,ds:'兩張＝可以帶家人或另一半去，不是自己一個人看',                  who:'全員', cost:'成本 ~600'},
+
+ {g:4,id:'rw_massage',ic:'🦶',nm:'腳底按摩券',      p:600,ds:'岡山指定店家 40 分鐘，內勤代訂（限本人不折現、每季 1 張）',     who:'站一整天的', cost:'成本 600'},
+];
+const sel=new Set(DATA.map(d=>d.id));   // 預設全選，讓 Jason 用刪的比較快
+function render(){
+  [1,2,3,4].forEach(g=>{
+    document.getElementById('list'+g).innerHTML=DATA.filter(d=>d.g===g).map(d=>`
+      <div class="card${sel.has(d.id)?' on':''}" data-id="${d.id}" onclick="tog(event,'${d.id}')">
+        <div class="ck">✓</div><div class="ic">${d.ic}</div>
+        <div class="mid"><div class="nm">${d.nm}</div><div class="ds">${d.ds}</div>
+          <div class="tags"><span class="tag who">${d.who}</span><span class="tag cost">${d.cost}</span>${d.warn?`<span class="tag warn">⚠ ${d.warn}</span>`:''}</div>
+        </div>
+        <div class="pz"><input type="number" value="${d.p}" min="0" step="10" onclick="event.stopPropagation()" oninput="setP('${d.id}',this.value)"><small>鑽石</small></div>
+      </div>`).join('');
+  });
+  upd();
+}
+function tog(e,id){ if(e.target.tagName==='INPUT') return; sel.has(id)?sel.delete(id):sel.add(id);
+  document.querySelector('[data-id="'+id+'"]').classList.toggle('on',sel.has(id)); upd(); }
+function setP(id,v){ const d=DATA.find(x=>x.id===id); if(d) d.p=parseInt(v)||0; upd(); }
+function all(on){ if(on) DATA.forEach(d=>sel.add(d.id)); else sel.clear(); render(); }
+function upd(){
+  document.getElementById('n').textContent=sel.size;
+  const ps=DATA.filter(d=>sel.has(d.id)).map(d=>d.p).sort((a,b)=>a-b);
+  document.getElementById('range').textContent=ps.length?(ps[0]+'–'+ps[ps.length-1]+' 鑽'):'—';
+}
+function exp(){
+  const out=DATA.filter(d=>sel.has(d.id)).sort((a,b)=>a.p-b.p)
+    .map(d=>({id:d.id,icon:d.ic,name:d.nm,price:d.p,desc:d.ds}));
+  const el=document.getElementById('out');
+  el.style.display='block';
+  el.textContent='以下是我選定的實體獎，請寫進任務牆 REWARDS：\n\n'+JSON.stringify(out,null,1);
+  navigator.clipboard.writeText(el.textContent).then(
+    ()=>alert('已複製到剪貼簿 ✓\n直接貼給 Claude 就好'),
+    ()=>alert('請手動選取下方文字複製'));
+  el.scrollIntoView({behavior:'smooth'});
+}
+render();
+</script>
+</body>
+</html>
