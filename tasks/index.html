@@ -2152,17 +2152,20 @@ function closeTeam(){ const m=document.getElementById('teamModal'); if(m)m.remov
    ⚠️ 他否決過的類型別再提：榮譽虛名(表揚/掛名/命名)、咖啡券(公司有咖啡機)、現金禮券、自選採購類(工位升級包/工作鞋/工具包)。
    qty＝每季全公司限量；perUser:true 時＝每人每季限量。換完下季補貨(稀缺感＋控成本)。 */
 const REWARDS = [
+  /* 🎯 兩張主力券（Jason：員工最想要的就這兩張）＝公司現金成本最低的兩項，刻意做成常態供給：
+     補時券成本 0（排班彈性）、年終抽獎券走定額獎池（買越多單張期望值越低，公司總成本不變）。
+     它們吸走的鑽石越多，下面實物類的實際兌換就越少 ⇒ 需求與成本自然對齊。 */
   {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',     price:60,  desc:'主管請，60 元內。最基本、最常換的一張', qty:8},
-  {id:'rw_bento',  icon:'🍱', name:'感謝便當',       price:100, desc:'指定一天，公司請你吃飯，100 元內', qty:6},
+  {id:'rw_bento',  icon:'🍱', name:'感謝便當',       price:100, desc:'指定一天，公司請你吃飯，100 元內', qty:5},
   {id:'rw_snack',  icon:'🍗', name:'下午茶點心',     price:120, desc:'雞排＋飲料，做到一半的小確幸', qty:4},
   {id:'rw_makeup', icon:'⏱️', name:'補時券一張',     price:120, desc:'遲到 10 分內當天用券：班表順延、下班補足工時才生效（不是請假、不影響薪資與出勤紀錄；每月限 1 張）', qty:3, perUser:true},
-  {id:'rw_stock',  icon:'🍜', name:'零食補給箱',     price:150, desc:'自選 150 元內零食飲料泡麵，整箱放你抽屜慢慢吃', qty:4},
-  {id:'rw_supper', icon:'🍲', name:'加班宵夜升級',   price:150, desc:'加班那天公司出 150 元宵夜，你自己指定要吃什麼（不是統一便當）', qty:4},
+  {id:'rw_stock',  icon:'🍜', name:'零食補給箱',     price:150, desc:'自選 150 元內零食飲料泡麵，整箱放你抽屜慢慢吃', qty:3},
+  {id:'rw_supper', icon:'🍲', name:'加班宵夜升級',   price:150, desc:'加班那天公司出 150 元宵夜，你自己指定要吃什麼（不是統一便當）', qty:3},
   {id:'rw_treat',  icon:'🍢', name:'主管請客鹹酥雞', price:250, desc:'掛你的名義，主管請全公司鹹酥雞一次（200 元內、每月全公司限 1 次）', qty:3},
-  {id:'rw_raffle', icon:'🎰', name:'年終抽獎券一張', price:300, desc:'年終抽獎多一支籤，越早開始累積越有機會', qty:2, perUser:true},
-  {id:'rw_power',  icon:'🔋', name:'行動電源組',     price:350, desc:'行動電源＋充電線組，外出一整天不怕手機沒電', qty:2},
+  {id:'rw_power',  icon:'🔋', name:'行動電源組',     price:350, desc:'行動電源＋充電線組，外出一整天不怕手機沒電', qty:1},
+  {id:'rw_raffle', icon:'🎰', name:'年終抽獎券一張', price:500, desc:'年終抽獎多一支籤，越早開始累積越有機會（獎池固定，越早買越划算）', qty:12},   // 成本走年終定額獎池,不怕多買→不設每人上限、限量放寬
   {id:'rw_wash',   icon:'🚗', name:'洗車券一張',     price:600, desc:'岡山配合店家洗車一次，內勤代訂（限本人不折現）', qty:2},
-  {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘，內勤代訂（限本人不折現、每季 1 張）', qty:1, perUser:true},
+  {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘，內勤代訂（限本人不折現）', qty:2},   // 改全公司每季2張(原每人1張×6人=3600/季佔總成本41%)
   {id:'rw_movie',  icon:'🎬', name:'電影票兩張',     price:800, desc:'兩張＝可以帶家人或另一半去，不是自己一個人看', qty:1},
 ];
 /* 限時隱藏獎：確定性亂數(日期 hash)→全公司同時看到、限量 1、時段內沒買就消失 */
@@ -2277,12 +2280,43 @@ async function decideRedeem(pi, redId, ok){
       if(n>=def.qty){ toast('這個獎已被換完，自動婉拒'); ok=false; }
     }
   }
+  // ⏳ 補時券自動發券（出勤端 v5.2 API 已就緒）：核准當下呼叫出勤系統發券＋推 LINE 給員工。
+  // ⚠️ 硬規則：發不出去就改判婉拒走退款路徑——扣了星點卻沒拿到券是最傷信任的 bug。
+  // 出勤端另有「手上未使用的券只能有一張」的防囤規則，與這裡的季度限量獨立，所以發券失敗是正常會發生的情境。
+  let grantMsg='';
+  if(ok===true && r.rid==='rw_makeup' && !STATE.sandbox){
+    const res=await grantTimeshift(p.email);
+    if(!res.ok){ toast('發券失敗：'+res.reason+'（已退回星點）'); ok=false; }
+    else grantMsg='✅ 補時券已自動發到出勤系統，員工也收到 LINE 通知';
+  }
   r.st=ok?'ok':'no'; r.decidedAt=new Date().toISOString(); r.by=STATE.user.name;
   if(!ok) p.save.spent=Math.max(0,(p.save.spent||0)-r.price);
   if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
   if((STATE.user.email||'').toLowerCase()!==p.email){ const rw=rewardDef(r.rid); pushNotify([p.email],'🎁 兌換'+(ok?'已核准':'已婉拒'), rw?rw.name:''); }   // 🔔 B4-6 跨員工才通知
-  toast(ok?'已核准 ✓ 記得兌現給員工 🎁':'已婉拒，幣已退回'); refreshGameUI();
+  toast(ok?(grantMsg||'已核准 ✓ 記得兌現給員工 🎁'):'已婉拒，幣已退回'); refreshGameUI();
+}
+/* 呼叫出勤系統自動發補時券（bot v5.2 API）。⚠️ 憑證雙軌：任務牆的 7 天通行證是 taskwall-push 簽的，
+   punch-clock-proxy 用自己的 SESSION_SECRET 驗，未必認得 → 401 時自動改用 Google token 重試（比照 ragicFetch 模式）。 */
+async function grantTimeshift(targetEmail){
+  const url=CONFIG.RAGIC.WORKER+'/calc/grant-timeshift?email='+encodeURIComponent(STATE.user.email||'');
+  const body=JSON.stringify({target:targetEmail});
+  const call=async(hdr)=>{
+    const r=await fetch(url,{method:'POST', headers:Object.assign({'Content-Type':'application/json'},hdr), body});
+    const j=await r.json().catch(()=>({}));
+    return {status:r.status, j};
+  };
+  try{
+    const s=wsess();
+    if(s){ const a=await call({'X-Session-Token':s.token});
+      if(a.j && a.j.ok) return {ok:true};
+      if(a.status!==401 && a.status!==403) return {ok:false, reason:(a.j&&a.j.reason)||('HTTP '+a.status)};   // 業務規則拒絕(已有券/非正職)→直接回,不重試
+    }
+    if(!STATE.googleToken) return {ok:false, reason:'登入憑證不足，請先登出再重新用 Google 登入一次'};
+    const b=await call({'X-Google-Token':STATE.googleToken});
+    if(b.j && b.j.ok) return {ok:true};
+    return {ok:false, reason:(b.j&&b.j.reason)||('HTTP '+b.status)};
+  }catch(e){ return {ok:false, reason:'連線失敗 '+e.message}; }
 }
 async function writeOtherGS(p){
   if(STATE.sandbox) return {};   // 🧪 測試模式：跨員工寫入也跳過
@@ -4090,7 +4124,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.12.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.13.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
