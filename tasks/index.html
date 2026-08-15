@@ -2148,17 +2148,22 @@ function closeTeam(){ const m=document.getElementById('teamModal'); if(m)m.remov
    ②「用績效換假」這條鏈很容易被主張是勞務對價=工資 ③給久了變勞動條件，想停辦就是不利益變更。
    實物/體驗屬非經常性給與、不列入投保薪資，風險低。新增獎品前先問：這會不會變成「假」或「工時」？會就不要放。
    補時券是唯一例外：它是「當日班表順延且工時要補足」的排班彈性(優於勞基法)，不減工時不減工資，非給假。 */
+/* 12 項為 Jason 2026-08-15 逐項勾選＋親自定價的定案版（工具：rewards-pick.html）。
+   ⚠️ 他否決過的類型別再提：榮譽虛名(表揚/掛名/命名)、咖啡券(公司有咖啡機)、現金禮券、自選採購類(工位升級包/工作鞋/工具包)。
+   qty＝每季全公司限量；perUser:true 時＝每人每季限量。換完下季補貨(稀缺感＋控成本)。 */
 const REWARDS = [
-  {id:'rw_praise', icon:'📣', name:'老闆點名表揚',   price:40,  desc:'老闆在公司群親自寫一段你的具體事蹟公開表揚（不能只貼貼圖）— 零成本，但被看見的感覺最真實', qty:6},
-  {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',     price:60,  desc:'主管請，60 元內', qty:6},
-  {id:'rw_credit', icon:'🏗️', name:'作品掛名權',     price:80,  desc:'你組裝/安裝的屏，出貨照發 FB／官網掛名「本作品由○○○製作」（照片公司拍）'},
+  {id:'rw_drink',  icon:'🧋', name:'手搖飲一杯',     price:60,  desc:'主管請，60 元內。最基本、最常換的一張', qty:8},
   {id:'rw_bento',  icon:'🍱', name:'感謝便當',       price:100, desc:'指定一天，公司請你吃飯，100 元內', qty:6},
-  {id:'rw_snack',  icon:'🍗', name:'下午茶點心',     price:120, desc:'雞排＋飲料，工作到一半的小確幸', qty:4},
-  {id:'rw_makeup', icon:'⏱️', name:'補時券一張',     price:150, desc:'遲到 10 分內當天用券：班表順延、下班補足工時才生效（優於勞基法的彈性，不是請假、不影響薪資與出勤紀錄；每月限 1 張）', qty:3, perUser:true},
-  {id:'rw_class',  icon:'📚', name:'技能點播課',     price:200, desc:'指定你想學的（報價／焊接／維修／談客戶／Excel），老闆或主管 1 對 1 教你一小時 — 學起來是你的', qty:3},
-  {id:'rw_treat',  icon:'🍢', name:'主管請客鹹酥雞', price:250, desc:'掛你的名義，主管請全公司鹹酥雞一次（200 元內，公司出錢；每月全公司限 1 次）', qty:3},
-  {id:'rw_bosshr', icon:'👷', name:'老闆代班一小時', price:400, desc:'老闆親自頂你的崗位 1 小時（組裝／包裝／你最不想做的活都行），你在旁邊監工（提前 3 天預約、每季全公司限 2 張）', qty:2},
-  {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘腳底按摩（內勤代訂、限本人不可折現、每季 1 張）— 站一整天的人最有感', qty:1, perUser:true},
+  {id:'rw_snack',  icon:'🍗', name:'下午茶點心',     price:120, desc:'雞排＋飲料，做到一半的小確幸', qty:4},
+  {id:'rw_makeup', icon:'⏱️', name:'補時券一張',     price:120, desc:'遲到 10 分內當天用券：班表順延、下班補足工時才生效（不是請假、不影響薪資與出勤紀錄；每月限 1 張）', qty:3, perUser:true},
+  {id:'rw_stock',  icon:'🍜', name:'零食補給箱',     price:150, desc:'自選 150 元內零食飲料泡麵，整箱放你抽屜慢慢吃', qty:4},
+  {id:'rw_supper', icon:'🍲', name:'加班宵夜升級',   price:150, desc:'加班那天公司出 150 元宵夜，你自己指定要吃什麼（不是統一便當）', qty:4},
+  {id:'rw_treat',  icon:'🍢', name:'主管請客鹹酥雞', price:250, desc:'掛你的名義，主管請全公司鹹酥雞一次（200 元內、每月全公司限 1 次）', qty:3},
+  {id:'rw_raffle', icon:'🎰', name:'年終抽獎券一張', price:300, desc:'年終抽獎多一支籤，越早開始累積越有機會', qty:2, perUser:true},
+  {id:'rw_power',  icon:'🔋', name:'行動電源組',     price:350, desc:'行動電源＋充電線組，外出一整天不怕手機沒電', qty:2},
+  {id:'rw_wash',   icon:'🚗', name:'洗車券一張',     price:600, desc:'岡山配合店家洗車一次，內勤代訂（限本人不折現）', qty:2},
+  {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘，內勤代訂（限本人不折現、每季 1 張）', qty:1, perUser:true},
+  {id:'rw_movie',  icon:'🎬', name:'電影票兩張',     price:800, desc:'兩張＝可以帶家人或另一半去，不是自己一個人看', qty:1},
 ];
 /* 限時隱藏獎：確定性亂數(日期 hash)→全公司同時看到、限量 1、時段內沒買就消失 */
 const HIDDEN_REWARDS = [
@@ -4085,7 +4090,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.12.2';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.12.3';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
