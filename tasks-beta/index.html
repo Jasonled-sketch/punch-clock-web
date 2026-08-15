@@ -1019,6 +1019,15 @@ async function refreshBellState(){
     const reg=await navigator.serviceWorker.ready;
     const sub=await reg.pushManager.getSubscription();
     setBellState(!!sub);
+    // 瀏覽器輪換過訂閱 → sw.js 會在 Cache 留旗標；這裡補送到後端（SW 沒有使用者憑證，只能由頁面補）
+    if(sub){ try{
+      const c=await caches.open('usled-taskwall-shell-v1');
+      const pend=await c.match('__pending_sub__');
+      if(pend){
+        const r=await fetch(CONFIG.PUSH.WORKER+'/subscribe',{method:'POST',headers:{'X-Session-Token':(wsess()||{}).token||'','X-Google-Token':STATE.googleToken||'','Content-Type':'application/json'},body:JSON.stringify({sub:sub.toJSON()})});
+        if(r.ok) await c.delete('__pending_sub__');   // 補註冊成功才清旗標
+      }
+    }catch(e2){} }
   }catch(e){ setBellState(false); }
 }
 async function togglePush(){
@@ -1468,6 +1477,28 @@ function onPickMedia(e){
   reader.readAsDataURL(file);
   e.target.value='';
 }
+/* 員工提交完工照（黃偉智回報：做安裝的完工照就是驗收證據，掛不上單只能另外傳 LINE，有爭議時對他沒保障）
+   原本附圖只在主管的開單/編輯視窗裡，員工整條提交流程沒有任何上傳入口。 */
+async function addDoneShot(id, e){
+  const file=e.target.files&&e.target.files[0]; e.target.value='';
+  if(!file) return;
+  const t=STATE.tasks.find(x=>x.id===id);
+  if(!t||t.assigneeId!==STATE.user.id||t.status!=='open'){ toast('這張單目前不能加照片'); return; }
+  if((t.images||[]).length>=3){ toast('最多 3 張'); return; }
+  if(CONFIG.MODE!=='CLOUD'){ toast('本機模式不支援上傳'); return; }
+  toast('上傳照片中…');
+  const reader=new FileReader();
+  reader.onload=()=>compressImage(reader.result, 1200, async(small)=>{
+    try{
+      const url=await uploadToImgbb(small);
+      const fc=await freshCheck(id,'open');   // 寫前重讀，防蓋掉期間的其他變更
+      if(!fc.ok){ toast(fc.msg); return; }
+      const t2=fc.t; t2.images=[...(t2.images||[]), {type:'image', src:url}];
+      if(await dbUpsertQ(t2,'加完工照')){ toast('完工照已附上 ✓'); closeDetail(); showTaskDetail(id); }
+    }catch(err){ toast('上傳失敗：'+err.message); }
+  });
+  reader.readAsDataURL(file);
+}
 async function uploadToImgbb(dataUrl){
   const base64 = dataUrl.split(',')[1];
   const fd = new FormData(); fd.append('image', base64);
@@ -1609,7 +1640,7 @@ function showTaskDetail(id){
   const stMap={open:'待處理',submitted:'待主管審核',done:'已完成'};
   let actions='';
   if(t.status==='open'&&!mine) actions+=`<button class="btn-primary" onclick="acceptTask('${t.id}');closeDetail()">🙋 我來接單</button>`;
-  if(t.status==='open'&&mine) actions+=`<button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
+  if(t.status==='open'&&mine) actions+=`<label class="btn-soft" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px">📷 加完工照<input type="file" accept="image/*" capture="environment" style="display:none" onchange="addDoneShot('${t.id}',event)"></label><button class="btn-primary" onclick="submitTask('${t.id}');closeDetail()">✓ 我完成了</button>`;
   if(t.status==='submitted'&&mine) actions+=`<button class="btn-soft" onclick="unsubmitTask('${t.id}');closeDetail()">↩️ 撤回重做</button>`;
   if(t.status==='submitted'&&sup) actions+=`<button class="btn-good" onclick="approveTask('${t.id}');closeDetail()">核准</button><button class="btn-warn" onclick="rejectTask('${t.id}');closeDetail()">退回</button>`;
   if(t.status==='done'&&sup) actions+=`<button class="btn-soft" onclick="duplicateTask('${t.id}')">📋 複製為新任務</button>`;
@@ -1643,23 +1674,43 @@ function showTaskDetail(id){
 }
 function closeDetail(){ const m=document.getElementById('detailModal'); if(m)m.remove(); }
 /* 步驟 checklist(Jason:接單者逐項勾,全勾才能送完成)。勾選狀態=note 行首「✓ 」前綴,寫回 Ragic 主管也看得到進度 */
-function noteSteps(t){ const lines=(t.note||'').split('\n').filter(l=>l.trim()); return {total:lines.length, done:lines.filter(l=>/^\s*✓/.test(l)).length, lines}; }
+/* 步驟 vs 純提醒：主管在備註寫「這批趕件請優先」不該被當成待勾的步驟(員工得把提醒也勾掉才能提交,遇過會以為系統壞了)。
+   判準：**以「-」「・」「1.」「1)」開頭的行才是步驟**，其餘視為說明文字，照樣顯示但不計入 total、不擋提交。
+   全篇都沒有符合的行時 → 退回舊行為(整段每行都算步驟)，避免既有任務突然變成零步驟。 */
+const STEP_RE=/^\s*(?:[-－•・*]|\d+\s*[.)、])\s*/;
+/* 回傳的每一行都帶「原始行號 li」——渲染與勾選一律用 li，不用過濾後的序號（否則過濾一開，勾選就會勾到別行） */
+function noteSteps(t){
+  const raw=(t.note||'').split('\n');
+  const all=[]; raw.forEach((l,li)=>{ if(l.trim()) all.push({li, text:l}); });
+  const marked=all.filter(x=>STEP_RE.test(x.text.replace(/^\s*✓\s*/,'')));
+  const lines=marked.length?marked:all;   // 有標記就只認標記行；完全沒標記＝沿用舊行為（既有任務不受影響）
+  return {total:lines.length, done:lines.filter(x=>/^\s*✓/.test(x.text)).length, lines, all, strict:marked.length>0};
+}
 function noteChecklistHtml(t){
-  const {lines}=noteSteps(t);
+  const {lines, all, strict}=noteSteps(t);
   const can = t.status==='open' && t.assigneeId===STATE.user.id;
-  return lines.map((l,i)=>{ const d=/^\s*✓/.test(l); const txt=l.replace(/^\s*✓\s*/,'');
-    return `<div style="display:flex;align-items:flex-start;gap:9px;min-height:38px;padding:5px 0;border-bottom:1px dashed var(--border);${can?'cursor:pointer':''}" ${can?`onclick="toggleStep('${t.id}',${i})"`:''}>
+  const stepSet=new Set(lines.map(x=>x.li));
+  return all.map(x=>{
+    const isStep=stepSet.has(x.li), d=/^\s*✓/.test(x.text);
+    const txt=x.text.replace(/^\s*✓\s*/,'').replace(STEP_RE,'');
+    if(!isStep)   // 純提醒/說明：顯示但不給勾、不擋提交
+      return `<div style="display:flex;align-items:flex-start;gap:9px;padding:5px 0;border-bottom:1px dashed var(--border)">
+        <span style="width:22px;flex:0 0 auto;text-align:center;color:var(--muted)">💬</span>
+        <span style="flex:1;font-size:13.5px;line-height:1.5;color:var(--muted)">${esc(txt)}</span></div>`;
+    return `<div style="display:flex;align-items:flex-start;gap:9px;min-height:38px;padding:5px 0;border-bottom:1px dashed var(--border);${can?'cursor:pointer':''}" ${can?`onclick="toggleStep('${t.id}',${x.li})"`:''}>
       <span style="width:22px;height:22px;border-radius:6px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;${d?'background:var(--ok);color:#fff;border:2px solid var(--ok)':'border:2px solid var(--border);color:transparent'}">✓</span>
-      <span style="flex:1;font-size:14px;line-height:1.5;${d?'color:var(--muted)':''}">${esc(txt)}</span></div>`; }).join('');
+      <span style="flex:1;font-size:14px;line-height:1.5;${d?'color:var(--muted)':''}">${esc(txt)}</span></div>`;
+  }).join('') + (strict?'<div style="font-size:11px;color:var(--muted);margin-top:6px">💬 開頭的是說明，不用勾</div>':'');
 }
 /* 勾步驟：①只換 checklist 的 DOM（不再整個視窗關掉重開，訊號差時不再閃五次）
    ②連勾用 1 秒 debounce 合併成一次寫入（原本每勾一項寫一次雲端）
    ③寫前重讀比對（防舊畫面把已核准的單打回原形）；離線則進待送出佇列 */
 let _stepTimer=null, _stepDirty=null;
-function toggleStep(id,idx){
+function toggleStep(id,li){   // li=原始行號（與 noteSteps/noteChecklistHtml 同一把尺）
   const t=STATE.tasks.find(x=>x.id===id); if(!t||t.status!=='open'||t.assigneeId!==STATE.user.id) return;
-  const lines=(t.note||'').split('\n'); let k=-1;
-  for(let i=0;i<lines.length;i++){ if(lines[i].trim()){ k++; if(k===idx){ lines[i]=/^\s*✓/.test(lines[i])? lines[i].replace(/^(\s*)✓\s*/,'$1') : '✓ '+lines[i]; break; } } }
+  const lines=(t.note||'').split('\n');
+  if(li<0||li>=lines.length||!lines[li].trim()) return;
+  lines[li]=/^\s*✓/.test(lines[li]) ? lines[li].replace(/^(\s*)✓\s*/,'$1') : '✓ '+lines[li];
   t.note=lines.join('\n');
   const box=document.getElementById('stepBox'); if(box) box.innerHTML=noteChecklistHtml(t);   // 只換這塊，視窗不動
   const st=noteSteps(t), lbl=document.querySelector('#detailModal .detail-label b');
@@ -2256,6 +2307,8 @@ async function requestRedeem(rid){
 }
 async function cancelRedeem(id){
   const r=(GS.redeem||[]).find(x=>x.id===id); if(!r||r.st!=='pending') return;
+  // 快閃獎不可取消：否則手快的人可以「先佔位再取消」把限量 1 的快閃卡住，別人整場只看得到「已被搶走」
+  if(String(r.rid).indexOf('hw_')===0){ toast('快閃獎送出後不能取消（避免卡住別人的機會）🙏'); return; }
   r.st='cancel'; GS.spent-=r.price;
   if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }   // B4：失敗重載雲端
   toast('已取消，幣已退回'); refreshGameUI();
@@ -2500,7 +2553,7 @@ function onboardSteps(){
   const uid=STATE.user.id, mine=STATE.tasks.filter(t=>t.assigneeId===uid);
   return [
     {label:'完成第一個任務並被核准', ok: mine.some(t=>t.status==='done')},
-    {label:'賺到第一筆鑽石',         ok: coinBalance()>0},
+    {label:'靠任務賺到第一筆鑽石',   ok: userEarnedCoins(uid)>0},   // 原本判 coinBalance()>0,但起步禮包 300 鑽一發就自動達成=引導意義歸零
     {label:'打贏第一場副本',         ok: (GS&&GS.clears)>0},
     {label:'帶一隻寵物回家',         ok: !!(GS&&GS.pets&&Object.keys(GS.pets).length)},
     {label:'入手第一件裝備',         ok: !!(GS&&(GS.owned||[]).some(id=>equipItem(id)))},
@@ -3674,8 +3727,9 @@ function randomDrop(maxR){ const pool=[]; for(const k in EQUIP) EQUIP[k].forEach
 function bonusDrop(){
   if(Math.random()>=0.4) return null;   // 60% 沒有額外掉落（偶爾才有）
   const r=Math.random();
-  if(r<0.12){   // 罕見：寵物蛋（只給沒有的、非唯一一般寵物）
-    const pool=PETS.filter(p=>!p.unique && !(GS.pets&&GS.pets[p.id]));
+  if(r<0.12){   // 罕見：寵物蛋（只給沒有的、非唯一、**平價**寵物）
+    // ⚠️ 上限 400 鑽：原本不限價→兩週內免費掉到 980 老鷹/1050 老虎，高價寵定價形同虛設、商店寵物線直接死掉
+    const pool=PETS.filter(p=>!p.unique && (p.price||0)<=400 && !(GS.pets&&GS.pets[p.id]));
     if(pool.length){ const p=pool[Math.floor(Math.random()*pool.length)]; GS.pets=GS.pets||{}; GS.pets[p.id]={exp:0}; if(!GS.activePet) GS.activePet=p.id;
       return {rc:petTier(p.r).color, html:eggSvg(p,40), label:'寵物蛋 — '+p.name+'！🥚'}; }
   }
@@ -3744,7 +3798,15 @@ function doTeamBossAttack(){
 }
 async function answerTeamBoss(qi,idx){
   const q=quizPool()[qi], m=document.getElementById('tbAtkModal');
-  if(idx!==q.c){ if(m){ const ob=m.querySelector('.quiz-opts'); if(ob&&!m.querySelector('.tb-wrong')) ob.insertAdjacentHTML('afterend','<div class="tb-wrong" style="color:var(--q1);font-size:12px;margin-top:8px">答錯了，再選一次（答對才出力成功）</div>'); } return; }
+  // 答錯＝今天這次出力失敗，關掉視窗（原本可無限重選→四選一最多按四下必過，「答對才出力」形同虛設）
+  if(idx!==q.c){
+    if(m){ const ob=m.querySelector('.quiz-opts');
+      if(ob) ob.insertAdjacentHTML('afterend','<div class="tb-wrong" style="color:var(--q1);font-size:13px;margin-top:10px;font-weight:700">答錯了 — 正解是「'+esc(q.a[q.c])+'」<div style="font-weight:400;color:var(--muted);font-size:12px;margin-top:4px">今天還可以再挑戰一次，看清楚題目再選 💪</div></div>');
+      m.querySelectorAll('.quiz-opt').forEach(b=>{ b.style.pointerEvents='none'; b.style.opacity='.5'; });
+      setTimeout(()=>{ const mm=document.getElementById('tbAtkModal'); if(mm) mm.remove(); }, 2600);
+    }
+    return;
+  }
   if(m) m.remove();
   const ev=teamBossEvent(); if(!ev) return;
   if(!GS.teamBoss||GS.teamBoss.ev!==ev.id) GS.teamBoss={ev:ev.id,days:[],claimed:false};
@@ -3776,7 +3838,7 @@ function teamBossWinFx(){
   setTimeout(()=>{const x=document.getElementById('tbWinMask'); if(x)x.remove();},6000);
 }
 /* 員工出題進題庫：出題→主管採納→進動態題庫(掛名)+出題者得鑽石（補題庫枯竭、UGC+教育訓練） */
-const QUIZ_REWARD=30;
+const QUIZ_REWARD=30, QUIZ_PAID_MONTH=5;   // 每人每月最多 5 題採納計酬(超過仍收題但不給鑽,堵灌水換鑽)
 function showQuizSubmit(){
   const cats=['智力','常識','職場','產品','制度','技術'], mine=((GS&&GS.quizSub)||[]).slice().reverse();
   const o=document.createElement('div'); o.className='modal-mask'; o.id='quizSubModal';
@@ -3804,7 +3866,13 @@ async function submitQuiz(){
   if(raw.filter(x=>x).length<2){ toast('至少要 2 個選項'); return; }
   if(isNaN(ci)||!raw[ci]){ toast('標出正解（正解那欄不能空白）'); return; }
   const opts=raw.filter(x=>x), cc=raw.slice(0,ci).filter(x=>x).length;   // 去空白後正解的新索引
-  GS.quizSub=GS.quizSub||[]; GS.quizSub.push({id:'qz'+Date.now(), q, a:opts, c:cc, cat, st:'pending', at:new Date().toISOString()});
+  GS.quizSub=GS.quizSub||[];
+  { // 每月採納計酬上限：防「一晚灌 20 題灌水」→ 主管不好意思全婉拒就變成 600 鑽。超過上限仍可出題,只是不再給鑽
+    const ym=new Date().toISOString().slice(0,7);
+    const paid=GS.quizSub.filter(s=>s.st==='ok' && String(s.at).slice(0,7)===ym).length;
+    if(paid>=QUIZ_PAID_MONTH) toast('本月已有 '+paid+' 題被採納（計酬上限 '+QUIZ_PAID_MONTH+' 題），這題採納後不再給鑽，但一樣會進題庫 🙏');
+  }
+  GS.quizSub.push({id:'qz'+Date.now(), q, a:opts, c:cc, cat, st:'pending', at:new Date().toISOString()});
   if(!await saveGameState()){ await loadGameState(); return; } toast('已送出，等主管採納 ✍️'); closeQuizSubmit(); showQuizSubmit();
 }
 function quizSubPending(){ const out=[]; (STATE.allPlayers||[]).forEach((p,pi)=>{ (p.save.quizSub||[]).forEach(s=>{ if(s.st==='pending') out.push({pi,p,s}); }); }); return out; }
@@ -3815,10 +3883,15 @@ async function decideQuiz(pi, id, ok){
   if((STATE.user.email||'').toLowerCase()!==p.email){ const fresh=await reloadOtherPlayer(p.email); if(!fresh){ toast('讀取員工最新存檔失敗，稍後再試'); return; } p.save=fresh.save; p.ragicId=fresh.ragicId; }   // D2：跨員工採納前重拉最新 GS
   const s=(p.save.quizSub||[]).find(x=>x.id===id); if(!s||s.st!=='pending') return;
   s.st=ok?'ok':'no'; s.decidedAt=new Date().toISOString();
-  if(ok) p.save.won=(p.save.won||0)+QUIZ_REWARD;   // 出題者得鑽石
+  let paidNow=0;
+  if(ok){   // 每月計酬上限：超過的仍進題庫(內容照收)但不再給鑽,堵「灌水題換鑽」
+    const ym=String(s.at).slice(0,7);
+    const paid=(p.save.quizSub||[]).filter(x=>x.st==='ok' && x.id!==s.id && String(x.at).slice(0,7)===ym).length;
+    if(paid<QUIZ_PAID_MONTH){ p.save.won=(p.save.won||0)+QUIZ_REWARD; paidNow=QUIZ_REWARD; }
+  }
   if((STATE.user.email||'').toLowerCase()===p.email){ GS=Object.assign(blankGS(),p.save); if(p.ragicId!=null) GS._ragicId=p.ragicId; p.save=GS; if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; } }
   else { try{ await writeOtherGS(p); }catch(e){ toast('寫入失敗，稍後再試'); return; } }
-  toast(ok?('已採納 ✓ 進題庫並給 '+esc(p.name)+' +'+QUIZ_REWARD+' 鑽'):'已婉拒');
+  toast(ok?('已採納 ✓ 進題庫'+(paidNow?('並給 '+esc(p.name)+' +'+paidNow+' 鑽'):'（本月計酬已達上限，這題不給鑽）')):'已婉拒');
   const dm=document.getElementById('dungeonModal'); if(dm){ closeDungeon(); showDungeon(); }
 }
 function showDungeon(){
@@ -3860,9 +3933,12 @@ function quizPool(){
 function buildQuizOrder(pool){
   pool=pool||quizPool();
   if(GS && GS.quizVer!==QUIZ_VER){ GS.quizSeen=[]; GS.quizWrong=[]; GS.quizVer=QUIZ_VER; }   // 題庫大改版→舊索引作廢，清空重來
+  // ⚠️ 員工題(接在固定 QUIZ 之後)每被採納一題就會依題幹重排 → 舊索引指到別題。固定題庫有 QUIZ_VER 可清，員工題沒有。
+  // 解法：seen/wrong 只記固定題庫那一段，員工題不進錯題複習池（代價小、零錯位風險）
+  const fixedLen=QUIZ.filter(q=>quizJobMatch(q.job)).length;
 
   const sh=a=>{ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=a[i];a[i]=a[j];a[j]=t;} return a; };
-  const wrong=(GS.quizWrong||[]).filter(i=>i<pool.length), wset=new Set(wrong), sset=new Set(GS.quizSeen||[]);
+  const wrong=(GS.quizWrong||[]).filter(i=>i<fixedLen), wset=new Set(wrong), sset=new Set((GS.quizSeen||[]).filter(i=>i<fixedLen));   // 只認固定題庫段的索引
   const all=pool.map((_,i)=>i);
   const unseen=all.filter(i=>!sset.has(i)&&!wset.has(i));
   const rest=all.filter(i=>sset.has(i)&&!wset.has(i));
@@ -3872,7 +3948,7 @@ function callConfucius(){
   const bt=STATE.battle; if(!bt||(bt.hints||0)<=0) return; bt.hints--;
   const dmg=Math.min(attackPower(), Math.ceil(bt.boss.hp/(bt.boss.minHits||3))); bt.hp-=dmg; bt.hit={dmg,crit:false}; bt.msg='🧙 孔子曰：此題已解！造成 '+dmg+' 傷害';
   if(bt.hp<=0) return endBattle(true);
-  bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
+  bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=quizDeadline(bt); renderBattle();
 }
 /* 寶箱開箱儀式：點擊 → 震動 → 全屏對應稀有度光色 → 揭曉 */
 function showChest(coins, drop, left, bonus){
@@ -3919,7 +3995,9 @@ function startBattle(bossId){
   if(!GS.dungeon||GS.dungeon.day!==dungeonDay()) GS.dungeon={day:dungeonDay(),used:0};
   GS.dungeon.used++; saveGameState();
   const pool=quizPool();
-  STATE.battle={boss:b, hp:b.hp, pool, order:buildQuizOrder(pool), qi:0, msg:'答對攻擊；答錯或超時會被怪攻擊！', hints:petSkillVal('hint')||0, hit:null, shield:false, deadline:Date.now()+QUIZ_TIME*1000};
+  STATE.battle={boss:b, hp:b.hp, pool, order:buildQuizOrder(pool), qi:0, msg:'答對攻擊；答錯或超時會被怪攻擊！', hints:petSkillVal('hint')||0, hit:null, shield:false,
+    fixedLen:QUIZ.filter(q=>quizJobMatch(q.job)).length, paused:false, deadline:0};
+  STATE.battle.deadline=quizDeadline(STATE.battle);   // 依第一題的題型給秒(計算題 22 秒)
   closeDungeon(); renderBattle(); startQuizTimer();
 }
 function renderBattle(){
@@ -3937,12 +4015,14 @@ function renderBattle(){
       <div style="font-weight:800;margin-top:4px">${b.name} <span style="font-size:11px;color:var(--q1)">⚔️${b.atk}</span></div>
       <div class="hp-bar"><i style="width:${hpPct}%"></i><span>${Math.max(0,bt.hp)} / ${b.hp}</span></div>
       <div class="hp-bar me"><i style="width:${Math.max(0,Math.round(GS.hp))}%"></i><span>我方 ❤️ ${Math.max(0,Math.round(GS.hp))}%${bt.shield?' 🛡️':''}</span></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 攻擊 ${attackPower()}　🛡️ 防禦 ${gearDef()}　⏳ <b id="qTimer" style="color:var(--accent)">${Math.max(0,Math.ceil((bt.deadline-Date.now())/1000))}</b> 秒</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">⚔️ 攻擊 ${attackPower()}　🛡️ 防禦 ${gearDef()}　⏳ <b id="qTimer" style="color:var(--accent)">${bt.paused?'⏸':Math.max(0,Math.ceil((bt.deadline-Date.now())/1000))}</b> ${bt.paused?'':'秒'}
+        <button onclick="togglePause()" style="margin-left:8px;background:${bt.paused?'var(--ok)':'var(--surface2,#1e2d3d)'};color:${bt.paused?'#fff':'var(--muted)'};border:1px solid var(--border);border-radius:8px;padding:2px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${bt.paused?'▶ 繼續':'⏸ 暫停'}</button></div>
+      ${bt.paused?'<div style="font-size:12px;color:var(--ok);margin-top:4px">已暫停 — 忙完再回來，不會被怪打 👌</div>':''}
       <div class="battle-msg">${bt.msg}</div>
     </div>
     <div class="quiz-cat">${esc(q.cat)}題${q.by?` · 由 ${esc(q.by)} 出題`:''}</div>
-    <div class="quiz-q">${esc(q.q)}</div>
-    <div class="quiz-opts">${bt.opt.map(oi=>`<button class="quiz-opt" onclick="answerQuiz(${oi})">${esc(q.a[oi])}</button>`).join('')}</div>
+    <div class="quiz-q"${bt.paused?' style="filter:blur(7px);user-select:none"':''}>${esc(q.q)}</div>
+    <div class="quiz-opts"${bt.paused?' style="filter:blur(7px);pointer-events:none;user-select:none"':''}>${bt.opt.map(oi=>`<button class="quiz-opt" onclick="answerQuiz(${oi})">${esc(q.a[oi])}</button>`).join('')}</div>
     <div class="battle-items">
       ${ITEMS.map(it=>itemCount(it.id)>0?`<button class="item-btn" onclick="useItem('${it.id}')" title="${it.name}：${it.desc}">${itemImg(it,22)}×${itemCount(it.id)}</button>`:'').join('')}
       ${(bt.hints||0)>0?`<button class="confucius-btn" style="margin:0" onclick="callConfucius()">🧙 孔子（剩 ${bt.hints}）</button>`:''}
@@ -3952,7 +4032,19 @@ function renderBattle(){
   document.body.appendChild(mask);
   if(STATE.battle) STATE.battle.hit=null;   // 特效只播一次
 }
-const QUIZ_TIME=12;   // 每題秒數，超時=被怪攻擊
+/* 每題秒數：常識/職場題 12 秒夠，但「電學」是要心算的計算題（例：200W÷5V=?、5V×3A×60片=?），
+   休息時間腦子半關機時 12 秒常常看完題目就剩 5 秒 → 計算題給 22 秒。（李尹蘋回報） */
+const QUIZ_TIME=12, QUIZ_TIME_CALC=22, CALC_CATS=['電學'];
+function quizSecs(q){ return (q && CALC_CATS.includes(q.cat)) ? QUIZ_TIME_CALC : QUIZ_TIME; }
+function quizDeadline(bt){ const p=bt.pool||QUIZ, q=p[bt.order[bt.qi]]; return Date.now()+quizSecs(q)*1000; }
+/* 暫停鈕（李尹蘋回報：廠內打到一半被領班喊人，回來就是「⏰ 超時」扣血，一次中斷毀掉當天副本體驗）
+   暫停時題目與選項模糊化，防止「暫停偷查答案」；剩餘秒數凍結，回來接著跑 */
+function togglePause(){
+  const bt=STATE.battle; if(!bt) return;
+  if(!bt.paused){ bt.pausedLeft=Math.max(0,bt.deadline-Date.now()); bt.paused=true; }
+  else { bt.paused=false; bt.deadline=Date.now()+(bt.pausedLeft||0); }
+  renderBattle();
+}
 /* 月度更新日（每月 5 號）的「本月詞綴」：每月輪一個副本加成，給運營節奏與期待感 */
 const MONTH_MODS=[
   {key:'reward', name:'💰 獎勵月', desc:'本月副本鑽石 ×1.25', coinMul:1.25},   // 2026-08 經濟再平衡:1.5→1.25
@@ -3966,6 +4058,7 @@ function startQuizTimer(){
   stopQuizTimer();
   STATE.qTimer=setInterval(()=>{
     const bt=STATE.battle; if(!bt){ stopQuizTimer(); return; }
+    if(bt.paused){ bt.deadline=Date.now()+(bt.pausedLeft||0); return; }   // 暫停：把 deadline 一直往後推，計時凍住
     const left=Math.ceil((bt.deadline-Date.now())/1000);
     const el=document.getElementById('qTimer'); if(el){ el.textContent=Math.max(0,left); if(left<=5) el.style.color='var(--q1)'; }
     if(left<=0){ takeDamage('⏰ 超時！'); }
@@ -3975,7 +4068,7 @@ function stopQuizTimer(){ if(STATE.qTimer){ clearInterval(STATE.qTimer); STATE.q
 /* 被怪攻擊：傷害=怪攻擊力−防禦減傷（每 8 點防禦抵 1%），防護盾再減半，至少 3% */
 function takeDamage(prefix){
   const bt=STATE.battle; if(!bt) return;
-  const next=()=>{ bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle(); };
+  const next=()=>{ bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=quizDeadline(bt); renderBattle(); };
   if(bt.guard>0){ bt.guard--; bt.hit=null; bt.msg=(prefix||'')+'💗 護心符擋下傷害！'; return next(); }
   if(Math.random()<petSkillVal('dodge')){ bt.hit=null; bt.msg='✨ 幸運閃避！'+(prefix||'')+'毫髮無傷'; return next(); }
   let dmg=Math.max(3, bt.boss.atk - Math.floor(gearDef()/8));
@@ -3983,16 +4076,16 @@ function takeDamage(prefix){
   GS.hp=Math.max(0, GS.hp-dmg); GS.hpAt=Date.now();
   bt.hit=null; bt.msg=prefix+'被 '+bt.boss.name+' 攻擊 −'+dmg+'% ❤️';
   if(GS.hp<=0){ GS.hp=isNewbie()?30:5; return endBattle(false); }   // 留一口氣，不死鎖(新人保底較高,降低挫折)
-  bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle();
+  bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=quizDeadline(bt); renderBattle();
 }
 function answerQuiz(idx){
   const bt=STATE.battle; if(!bt) return; const qi=bt.order[bt.qi], q=(bt.pool||QUIZ)[qi];
   GS.quizSeen=GS.quizSeen||[]; GS.quizWrong=GS.quizWrong||[];
   if(idx===q.c){ const crit=Math.random()<(0.25+petSkillVal('crit')+(monthMod().critAdd||0)); const dmg=Math.min(attackPower()*(crit?2:1), Math.ceil(bt.boss.hp/(bt.boss.minHits||3))); bt.hp-=dmg; bt.hit={dmg,crit}; bt.msg=(crit?'⚡ 爆擊！':'✓ 答對！')+'造成 '+dmg+' 傷害';
-    if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi);
+    if(qi<bt.fixedLen){ if(!GS.quizSeen.includes(qi)) GS.quizSeen.push(qi); GS.quizWrong=GS.quizWrong.filter(x=>x!==qi); }   // 只記固定題庫段(員工題索引會隨採納漂移)
     if(bt.hp<=0) return endBattle(true);
-    bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=Date.now()+QUIZ_TIME*1000; renderBattle(); }
-  else { if(!GS.quizWrong.includes(qi)) GS.quizWrong.push(qi);
+    bt.qi=(bt.qi+1)%bt.order.length; bt.deadline=quizDeadline(bt); renderBattle(); }
+  else { if(qi<bt.fixedLen && !GS.quizWrong.includes(qi)) GS.quizWrong.push(qi);
     return takeDamage('✗ 答錯（正解：'+esc(q.a[q.c])+'）'); }   // 正解也要轉義(bt.msg 進 innerHTML)
 }
 function quitBattle(){ stopQuizTimer(); STATE.battle=null; saveGameState(); const m=document.getElementById('battleModal'); if(m)m.remove(); showDungeon(); }
@@ -4124,7 +4217,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.13.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.14.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;

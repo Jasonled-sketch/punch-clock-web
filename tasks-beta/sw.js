@@ -30,6 +30,23 @@ self.addEventListener('push', e => {
     data: { url: d.url || './' }
   }));
 });
+/* ── 訂閱輪換自救：瀏覽器會不定期換掉 endpoint，舊的推播回 410 → 後端把 KV 紀錄刪掉 → 從此再也收不到，
+   而前端的鈴鐺還亮著（getSubscription() 拿到的是新訂閱），使用者完全無感。這裡自動用新訂閱重新註冊。 ── */
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil((async () => {
+    try {
+      const opts = (e.oldSubscription && e.oldSubscription.options) || {};
+      const sub = e.newSubscription || await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: opts.applicationServerKey
+      });
+      if (!sub) return;
+      // 沒有使用者憑證可用（SW 沒有 localStorage）→ 交給頁面下次開啟時補；先把新訂閱暫存到 Cache 當旗標
+      const c = await caches.open(CACHE);
+      await c.put('__pending_sub__', new Response(JSON.stringify(sub.toJSON()), { headers: { 'Content-Type': 'application/json' } }));
+    } catch (err) {}
+  })());
+});
 self.addEventListener('notificationclick', e => {
   e.notification.close();
   const url = (e.notification.data && e.notification.data.url) || './';
