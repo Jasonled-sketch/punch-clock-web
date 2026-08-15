@@ -2163,7 +2163,7 @@ const REWARDS = [
   {id:'rw_supper', icon:'🍲', name:'加班宵夜升級',   price:150, desc:'加班那天公司出 150 元宵夜，你自己指定要吃什麼（不是統一便當）', qty:3},
   {id:'rw_treat',  icon:'🍢', name:'主管請客鹹酥雞', price:250, desc:'掛你的名義，主管請全公司鹹酥雞一次（200 元內、每月全公司限 1 次）', qty:3},
   {id:'rw_power',  icon:'🔋', name:'行動電源組',     price:350, desc:'行動電源＋充電線組，外出一整天不怕手機沒電', qty:1},
-  {id:'rw_raffle', icon:'🎰', name:'年終抽獎券一張', price:500, desc:'年終抽獎多一支籤，越早開始累積越有機會（獎池固定，越早買越划算）', qty:12},   // 成本走年終定額獎池,不怕多買→不設每人上限、限量放寬
+  {id:'rw_raffle', icon:'🎰', name:'年終抽獎券一張', price:500, desc:'年終抽獎一支籤，人人有獎、200 元起跳，最大獎 4,000（獎池固定，換的人越多單張期望值越低 → 越早換越划算）', qty:10},   // 成本走年終定額獎池;全年上限 40 張(10×4季)→池 20,000÷40=每張期望值至少 500 元=剛好等於定價,員工永遠不虧
   {id:'rw_wash',   icon:'🚗', name:'洗車券一張',     price:600, desc:'岡山配合店家洗車一次，內勤代訂（限本人不折現）', qty:2},
   {id:'rw_massage',icon:'🦶', name:'腳底按摩券',     price:600, desc:'岡山指定店家 40 分鐘，內勤代訂（限本人不折現）', qty:2},   // 改全公司每季2張(原每人1張×6人=3600/季佔總成本41%)
   {id:'rw_movie',  icon:'🎬', name:'電影票兩張',     price:800, desc:'兩張＝可以帶家人或另一半去，不是自己一個人看', qty:1},
@@ -4124,7 +4124,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.13.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.13.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
