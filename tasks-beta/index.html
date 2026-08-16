@@ -950,7 +950,9 @@ function bootCollect(evt){
 function closeBootCard(){ const m=document.getElementById('bootCard'); if(m) m.remove(); }
 function bootFlush(){
   const q=STATE.bootQ||[]; STATE.bootQ=null;
-  if(!q.length) return;
+  const oq=openqPending();                     // 🌅 今天還沒答開門紅 → 嵌在開工卡底部
+  if(!q.length && !oq) return;
+  if(!q.length){ q.push({pri:0, icon:'🌅', title:'早安，開工了', sub:'先來一題暖身 ⤵'}); }   // 只有開門紅時給個門面
   q.sort((a,b)=>(b.pri||0)-(a.pri||0));
   const top=q[0], rest=q.slice(1), c=top.color||'#38bdf8';
   const rows=rest.map(e=>`<div style="display:flex;gap:8px;align-items:flex-start;${e.action?'cursor:pointer':''}" ${e.action?`onclick="event.stopPropagation();closeBootCard();${e.action}"`:''}><span>${e.icon||'•'}</span><span style="flex:1">${e.title}</span>${e.action?'<span style="color:var(--sky,#0b72c4);font-weight:700">›</span>':''}</div>`).join('');
@@ -963,11 +965,70 @@ function bootFlush(){
       ${top.sub?`<div class="lvup-lv" style="font-size:13px">${top.sub}</div>`:''}
       ${top.action?`<button class="buy-btn" style="width:auto;padding:8px 18px;margin-top:8px" onclick="event.stopPropagation();closeBootCard();${top.action}">前往 ›</button>`:''}
       ${rows?`<div style="margin-top:12px;border-top:1px dashed var(--border,#c2d8ea);padding-top:10px;text-align:left;font-size:13px;display:flex;flex-direction:column;gap:8px">${rows}</div>`:''}
+      ${oq?`<div id="openqBox" style="margin-top:12px;border-top:1px dashed var(--border,#c2d8ea);padding-top:11px">${openqHtml(oq)}</div>`:''}
       <div class="lvup-hint">（點空白處關閉）</div>
     </div>`;
   o.onclick=()=>o.remove();
   document.body.appendChild(o);
   if((top.pri||0)>=3) sfxLevelUp();   // 有值得慶祝的事才響一聲;純資訊卡安靜(三秒鐵則:無長動畫、點任意處即關)
+}
+/* ===================================================================
+   🌅 每日開門紅一題（新鮮感引擎 #1）
+   每天第一次開 APP，在開工卡底部答一題「自己職務」的題目。
+   ⚠️ 設計原則（刻意的，別改回去）：
+   ①**答對 +3 鑽、答錯 +1 鑽** — 這是暖身不是考試，答錯照樣有東西拿，只是少一點
+   ②**不做連續天數 streak** — 漏一天不該有懲罰感（外勤/請假的人最容易斷，斷了就再也不想碰）
+   ③**不倒數計時** — 副本才需要壓力，這裡要輕鬆，30 秒內看完答完就好
+   ④**答錯一定顯示正解** — 每天 30 秒的教育訓練，答錯才是學到東西的那次
+   =================================================================== */
+const OPENQ_RIGHT=3, OPENQ_WRONG=1;
+function openqPending(){
+  if(!GS || STATE.gsLoadFailed || !STATE.user) return null;
+  if(GS.daily && GS.daily.day===dungeonDay()) return null;        // 今天答過了
+  const pool=quizPool(); if(!pool.length) return null;
+  const seed=dayHash(dungeonDay()+'|'+STATE.user.id);             // 同一人同一天固定同題(重整不換題),不同職務可能不同題
+  const qi=seed%pool.length;
+  const opt=pool[qi].a.map((_,i)=>i);                              // 選項也用種子洗牌,防「每天都選第一個」
+  for(let i=opt.length-1;i>0;i--){ const j=(seed>>(i*2))%(i+1); const t=opt[i]; opt[i]=opt[j]; opt[j]=t; }
+  return {qi, q:pool[qi], opt};
+}
+function openqHtml(oq){
+  const q=oq.q;
+  return `<div style="text-align:left">
+    <div style="font-size:11px;color:var(--muted);letter-spacing:1px">🌅 開門紅 · 今日一題（${esc(q.cat)}）</div>
+    <div style="font-size:14px;font-weight:700;line-height:1.5;margin:6px 0 9px">${esc(q.q)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${oq.opt.map(oi=>`<button class="equip-btn" data-oi="${oi}" style="width:100%;text-align:left;padding:9px 12px;font-size:13.5px;line-height:1.4" onclick="event.stopPropagation();answerOpenQ(${oq.qi},${oi})">${esc(q.a[oi])}</button>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:7px">答對 +${OPENQ_RIGHT} 鑽，答錯也有 +${OPENQ_WRONG} 鑽 — 每天一題，漏了不扣分 🙂</div>
+  </div>`;
+}
+async function answerOpenQ(qi, pick){
+  const box=document.getElementById('openqBox'); if(!box||!GS) return;
+  const pool=quizPool(), q=pool[qi]; if(!q) return;
+  if(GS.daily && GS.daily.day===dungeonDay()) return;              // 防連點重複給鑽
+  const right=(pick===q.c), gain=right?OPENQ_RIGHT:OPENQ_WRONG;
+  GS.daily={day:dungeonDay(), qi, right};
+  GS.won=(GS.won||0)+gain;
+  box.innerHTML=`<div style="text-align:left">
+    <div style="font-size:11px;color:var(--muted);letter-spacing:1px">🌅 開門紅 · 今日一題（${esc(q.cat)}）</div>
+    <div style="font-size:14px;font-weight:700;line-height:1.5;margin:6px 0 9px">${esc(q.q)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${q.a.map((a,i)=>{
+        const isAns=(i===q.c), isPick=(i===pick);
+        const bg=isAns?'rgba(34,197,94,.16)':(isPick?'rgba(239,68,68,.14)':'transparent');
+        const bd=isAns?'var(--ok,#22c55e)':(isPick?'var(--q1,#ef4444)':'var(--border,#c2d8ea)');
+        return `<div style="border:2px solid ${bd};background:${bg};border-radius:10px;padding:9px 12px;font-size:13.5px;line-height:1.4">${isAns?'✓ ':(isPick?'✗ ':'　')}${esc(a)}</div>`;
+      }).join('')}
+    </div>
+    <div style="margin-top:9px;font-size:13.5px;font-weight:700;color:${right?'var(--ok,#22c55e)':'var(--accent,#f0a500)'}">
+      ${right?'答對了！':'答錯沒關係，記起來就好'} ＋${gain} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">
+      <span style="font-weight:400;color:var(--muted);font-size:11.5px"> · 明天再來一題</span>
+    </div>
+  </div>`;
+  if(right) sfxLevelUp();
+  if(!await saveGameState()){ await loadGameState(); }             // 失敗就以雲端為準(明天會再出一次題,不會吃掉獎勵)
+  refreshGameUI();
 }
 /* 登入回顧卡：上次登入後主管核准了你幾件任務、入帳多少點（付出被看見的字面時刻） */
 function checkApprovals(){
@@ -3058,7 +3119,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[], seasonBase:0}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[], seasonBase:0, daily:null}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -4253,7 +4314,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.14.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.15.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
