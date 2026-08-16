@@ -225,6 +225,11 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
 .overdue-item{background:var(--surface2);border-radius:9px;padding:11px;margin-bottom:8px;border-left:3px solid var(--q1)}
 /* 任務卡可點擊進詳情 */
 .task{cursor:pointer;user-select:none;-webkit-user-select:none}   /* 防長按1秒被 OS 文字選取搶走(pointercancel 清掉計時器→移分類選單開不出來) */
+/* 🌟 今日幸運任務：星光呼吸框（安靜的標記，不彈窗不打斷） */
+.task.lucky{border:2px solid var(--accent,#f0a500);box-shadow:0 0 0 1px rgba(240,165,0,.25),0 0 14px rgba(240,165,0,.35);animation:luckyGlow 2.6s ease-in-out infinite}
+@keyframes luckyGlow{0%,100%{box-shadow:0 0 0 1px rgba(240,165,0,.25),0 0 10px rgba(240,165,0,.28)}50%{box-shadow:0 0 0 1px rgba(240,165,0,.4),0 0 20px rgba(240,165,0,.5)}}
+@media (prefers-reduced-motion:reduce){.task.lucky{animation:none}}
+.rw-card.wish{border-color:var(--accent,#f0a500);box-shadow:0 0 0 1px rgba(240,165,0,.3)}   /* ⭐ 我的目標 */
 .task:active{transform:scale(0.99)}
 /* 象限分頁 */
 .quad-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:12px}
@@ -572,6 +577,7 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
     </div>
     <div class="right">
       <span id="pendBadge" onclick="flushPendQ(true)" title="有離線變更待送出，點一下重試" style="display:none;align-items:center;background:var(--q2,#f59e0b);color:#fff;font-size:11px;font-weight:800;border-radius:12px;padding:3px 8px;cursor:pointer"></span>
+      <span id="wishChip" onclick="showShop('gift')" title="我的目標（點一下去商店）" style="display:none;align-items:center;gap:5px;background:var(--surface2,#eef6fc);border:1px solid var(--border,#c2d8ea);border-radius:12px;padding:2px 9px;cursor:pointer;font-size:11px;font-weight:700;max-width:140px;overflow:hidden"></span>
       <div class="me-chip" onclick="showMyTasks()" style="cursor:pointer" title="看我的任務">
         <div class="avatar" id="meAvatar"></div>
         <span class="nm" id="meName"></span>
@@ -723,6 +729,30 @@ async function freshCheck(id, expectStatus){
   if(!ft){ renderBoard(); return {ok:false, msg:'這張單已被刪除'}; }
   if(expectStatus && ft.status!==expectStatus){ renderBoard(); return {ok:false, msg:'這張單狀態已變更（目前：'+({open:'待處理',submitted:'待審核',done:'已完成'}[ft.status]||ft.status)+'）'}; }
   return {ok:true, t:ft};
+}
+/* ===== ⭐ 願望單目標進度條（新鮮感引擎 #5）
+   長按商店任一實體獎 → 設成目標 → topbar 常駐顯示「腳底按摩券 72%」，達標推播一次。
+   白帽的「擁有感」：把「還差多少」變成看得見的東西，比「你有幾鑽」有力得多。 ===== */
+let _wishTimer=null;
+function wishPressStart(e,id){ if(e.target.closest('button')) return; clearTimeout(_wishTimer); _wishTimer=setTimeout(()=>setWish(id),700); }
+function wishPressEnd(){ clearTimeout(_wishTimer); _wishTimer=null; }
+async function setWish(id){
+  if(!GS) return;
+  const it=rewardDef(id); if(!it) return;
+  if(GS.wish===id){ GS.wish=null; GS.wishHit=null; toast('已取消目標'); }
+  else { GS.wish=id; GS.wishHit=null; toast('⭐ 目標設定：'+it.name+'（頂列會顯示進度）'); }
+  await saveGameState(); renderWishChip();
+  const m=document.getElementById('shopModal'); if(m) showShop('gift');
+}
+function renderWishChip(){
+  const el=document.getElementById('wishChip'); if(!el) return;
+  const id=GS&&GS.wish, it=id?rewardDef(id):null;
+  if(!it){ el.style.display='none'; return; }
+  const bal=coinBalance(), pct=Math.min(100, Math.round(bal/it.price*100));
+  el.style.display='inline-flex';
+  el.innerHTML=`<span>${it.icon}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(it.name)}</span><b style="color:${pct>=100?'var(--ok,#22c55e)':'var(--sky,#0b72c4)'}">${pct}%</b>`;
+  // 達標推播一次（存 wishHit 防重複；計入推播預算）
+  if(pct>=100 && GS.wishHit!==id){ GS.wishHit=id; saveGameState(); pushNotify('self','⭐ 目標達成！','你存夠換「'+it.name+'」了，去商店兌換吧 🎁'); }
 }
 function updatePendBadge(){
   const n=pendQ().length, el=document.getElementById('pendBadge'); if(!el) return;
@@ -921,6 +951,7 @@ async function login(uid){
   renderBoard();
   initSwipe();
   updatePendBadge(); flushPendQ();   // ①有待送出的離線變更→登入時自動補送
+  renderWishChip();                  // 願望單目標進度
   STATE.bootQ=[];             // ⬇ P0#3 開工卡收集模式:以下所有儀式/提醒進佇列,最後 bootFlush 合成一張卡(解連環彈窗+toast互蓋)
   checkOverdue();
   refreshBellState();   // 🔔 非同步刷新訂閱鈴狀態（不 await，不擋登入流程）
@@ -1315,11 +1346,13 @@ function renderTaskCard(t, hl){
   }
   /* 單行卡(Jason 人性化定案):時間圓點+標題+審核icon+頭像;不放狀態徽章/倒數字/滑動提示(熟了就會長按滑動);細節進詳情 */
   const swN=(swipe.match(/swipe-btn/g)||[]).length;   // 按鈕數→滑動距離剛好等寬,不再出現空白欄
+  const lucky = t.status==='open' && t.id===luckyTaskId();   // 🌟 今日幸運任務：只加框與星星，不彈窗不打斷
   return `<div class="swipe-row">
     ${swipe?`<div class="swipe-actions">${swipe}</div>`:''}
-    <div class="task ${t.status==='done'?'done':''}" data-tid="${t.id}" data-swd="${swN*56}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
+    <div class="task ${t.status==='done'?'done':''}${lucky?' lucky':''}" data-tid="${t.id}" data-swd="${swN*56}" onclick="taskCardClick(event,'${t.id}')" style="border-left-color:${t.status==='done'?'var(--ok)':CONFIG.QUADRANTS.find(q=>q.id===t.quadrant).color}">
       <div style="display:flex;align-items:center;gap:8px;min-height:34px">
         ${t.status==='done'?`<span style="color:var(--ok);font-weight:900;flex:0 0 auto">✓</span>`:dueDot(t)}
+        ${lucky?'<span title="今日幸運任務：完成多拿 10% 鑽" style="flex:0 0 auto">🌟</span>':''}
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;${t.status==='done'?'color:var(--muted);font-weight:400':''}">${hl?hlMark(t.title,hl):esc(t.title)}</span>
         ${t.rejectNote&&t.status==='open'?`<span title="退回：${esc(t.rejectNote)}" style="flex:0 0 auto">↩️</span>`:''}
         ${t.status==='submitted'?'<span title="審核中" style="flex:0 0 auto">📮</span>':''}
@@ -1637,7 +1670,30 @@ async function submitTask(id){
   if(t.assigneeId!==STATE.user.id){ toast('這張單已改派給別人了'); renderBoard(); return; }
   t.status='submitted'; t.submittedAt=new Date().toISOString(); t.rejectNote=null; renderBoard();
   const ok=await dbUpsertQ(t,'提交任務');   // ①失敗不再靜默:進待送出佇列
-  if(ok){ toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」'); }   // 🔔 B4-2
+  if(ok){
+    toast('已提交，等主管審核 ✓'); pushNotify('supervisors','📮 有任務待審核', STATE.user.name+'提交了「'+t.title+'」');   // 🔔 B4-2
+    await claimLucky(t);   // 🌟 今日幸運任務加成（提交當下結算，寫自己的存檔）
+  }
+}
+/* ===== 🌟 今日幸運任務（新鮮感引擎 #2）
+   日期種子從「今天還沒完成的任務」選一件，全公司同一件，卡片標星光框。
+   誰做掉它，提交當下 +10% 鑽（封頂 5）。⚠️ 刻意設計：
+   ①**無彈窗**——標記而已，不打斷任何人；不想理它完全沒差
+   ②**人人同件、規則公示**——不是抽給某個人的特權，是「今天這件比較划算」
+   ③**提交時結算**（不是核准時）——寫自己的存檔就好，不用跨員工寫入；被退回也不收回（金額小，不值得為它做收回邏輯）===== */
+const LUCKY_PCT=0.10, LUCKY_CAP=5;
+function luckyTaskId(){
+  const pool=STATE.tasks.filter(t=>t.status==='open').map(t=>t.id).sort();   // 排序後才有穩定索引
+  if(!pool.length) return null;
+  return pool[dayHash(dungeonDay()+'|lucky')%pool.length];
+}
+function luckyBonus(t){ return Math.min(LUCKY_CAP, Math.max(1, Math.round((t.earnedPoints!=null?t.earnedPoints:(t.points||0))/COIN_PER_TPTS*LUCKY_PCT))); }
+async function claimLucky(t){
+  if(!GS || t.id!==luckyTaskId()) return;
+  const day=dungeonDay();
+  if(GS.luckyDay===day) return;                      // 一天只給一次（防同天做掉多件時重複領）
+  GS.luckyDay=day; const b=luckyBonus(t); GS.won=(GS.won||0)+b;
+  if(await saveGameState()){ toast('🌟 今日幸運任務！額外 +'+b+' 鑽'); sfxLevelUp(); refreshGameUI(); }
 }
 /* 撤回已完成(主管限定,戰績庫裡的案件重啟):done→open,點數/鑽石自動收回(純衍生重算);逾期給24hr寬限 */
 async function reopenTask(id){
@@ -2340,13 +2396,70 @@ function merchantState(){
   const next=MCH_WINDOWS.map(w=>w[0]).filter(s=>s>mins).sort((a,b)=>a-b)[0];
   return {active:false, nextText: next!=null?('下一場 '+fmt(next)):('今日已結束，明天午休 12:30 見'), windows:MCH_WINDOWS.map(w=>fmt(w[0])+'–'+fmt(w[1]))};
 }
+/* ===== 🧙‍♂️ 商人日日新（新鮮感引擎 #4）：每天換一件直售品 + 換一句台詞 + 收攤預告明天帶什麼。
+   零維護：全部用日期種子從既有裝備/道具池抽，不用每月手動配貨。 ===== */
+const MCH_LINES=[
+  '今天這件，我只帶了一件。','走過路過，明天就不是這個價了。','別問我哪來的，問就是有門路。',
+  '這東西在岡山找不到第二件。','老闆娘說今天要衝業績，你懂的。','我看你順眼，這件留給你。',
+  '別看它舊，戰場上救過人的。','早鳥有肉吃，晚了只剩湯。','昨天有人問這件，我說要留給有緣人。',
+  '我從南部一路揹上來的，摸摸看。','這批貨我自己也留了一件。','買不買隨你，反正明天就收攤了。',
+  '你這身裝備，配這件剛好。','別的攤位沒有，我保證。','今天心情好，你自己看著辦。',
+  '這件我猶豫很久要不要拿出來。','識貨的自然知道。','再看下去它就要跟別人走了。',
+];
+function mchDeal(){
+  const all=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>all.push({kind:'eq', it}));
+  ITEMS.forEach(it=>all.push({kind:'item', it}));
+  if(!all.length) return null;
+  const h=dayHash(dungeonDay()+'|deal');
+  return Object.assign({}, all[h%all.length], {line:MCH_LINES[h%MCH_LINES.length]});
+}
+function mchDealTomorrow(){
+  const d=new Date(Date.now()+8*3600000+86400000).toISOString().slice(0,10);
+  const all=[]; for(const k in EQUIP) EQUIP[k].forEach(it=>all.push({kind:'eq', it}));
+  ITEMS.forEach(it=>all.push({kind:'item', it}));
+  if(!all.length) return null;
+  return all[dayHash(d+'|deal')%all.length];
+}
+function dealName(d){ return d.kind==='eq' ? (PET_RARITY[d.it.r].name+SLOTNAME[d.it.slot]) : d.it.name; }
+function dealBought(){ return GS && GS.dealDay===dungeonDay(); }
+async function buyDeal(){
+  const d=mchDeal(); if(!d||!GS) return;
+  if(dealBought()){ toast('今天這件你已經帶走了 🙂'); return; }
+  if(!merchantState().active){ toast('🧙‍♂️ 商人不在，開市時間再來'); return; }
+  const it=d.it;
+  if(d.kind==='eq' && (GS.owned||[]).includes(it.id)){ toast('這件你已經有了'); return; }
+  if(coinBalance()<it.price){ toast('鑽石不足'); return; }
+  GS.spent=(GS.spent||0)+it.price; GS.dealDay=dungeonDay();
+  if(d.kind==='eq'){ GS.owned=GS.owned||[]; GS.owned.push(it.id); GS.gear=GS.gear||{}; if(!GS.gear[it.slot]) GS.gear[it.slot]=it.id; }
+  else { GS.items=GS.items||{}; GS.items[it.id]=(GS.items[it.id]||0)+1; }
+  if(!await saveGameState()){ await loadGameState(); refreshGameUI(); return; }
+  toast('🧙‍♂️ 成交！「'+dealName(d)+'」入手'); refreshGameUI();
+}
 function merchantBannerHtml(){
   const m=merchantState(), sp=contribSpendable(STATE.user.id);
-  if(!m.active) return `<div class="mch-banner off">🧙‍♂️ 神祕商人暫離 · ${m.nextText}<div style="font-size:10px;opacity:.8;margin-top:2px">每天午休 12:30–13:30 與晚上 21:00–22:00 各一場，收貢獻值換鑽石</div></div>`;
+  const d=mchDeal(), tm=mchDealTomorrow();
+  const dealRow=(()=>{
+    if(!d) return '';
+    const it=d.it, owned=d.kind==='eq'&&(GS.owned||[]).includes(it.id), got=dealBought();
+    const img=d.kind==='eq'?`<img src="${equipFile(it.id)}" style="width:34px;height:34px;object-fit:contain;flex:0 0 auto">`:itemImg(it,30);
+    return `<div style="display:flex;align-items:center;gap:9px;margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.25)">
+      ${img}
+      <div style="flex:1;min-width:0;text-align:left">
+        <div style="font-size:12px;font-weight:800">今日一物 · ${esc(dealName(d))}</div>
+        <div style="font-size:10.5px;opacity:.85">「${esc(d.line)}」</div>
+      </div>
+      ${got?'<span style="font-size:11px;opacity:.8">已帶走</span>':(owned?'<span style="font-size:11px;opacity:.8">已擁有</span>':
+        `<button class="mch-btn${coinBalance()<it.price?' dis':''}" ${coinBalance()<it.price?'disabled':''} onclick="buyDeal()" style="flex:0 0 auto"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`)}
+    </div>`;
+  })();
+  if(!m.active) return `<div class="mch-banner off">🧙‍♂️ 神祕商人暫離 · ${m.nextText}
+    <div style="font-size:10px;opacity:.8;margin-top:2px">每天午休 12:30–13:30 與晚上 21:00–22:00 各一場，收貢獻值換鑽石</div>
+    ${tm?`<div style="font-size:10.5px;opacity:.9;margin-top:4px">🎒 明天我帶「${esc(tm.name||(PET_RARITY[tm.r]?PET_RARITY[tm.r].name+SLOTNAME[tm.slot]:''))}」來，早點到。</div>`:''}</div>`;
   const left=CONTRIB_MONTH_CAP-contribMchUsed();
   return `<div class="mch-banner on">
     <div class="mch-h">🧙‍♂️ 神祕商人來了！<b>剩 ${m.leftMin} 分</b> · 你有 <b>${sp}</b> 貢獻值 · 本月還可換 <b>${left}</b> 點</div>
     <div class="mch-rates">${MERCHANT_RATES.map((r,i)=>{const no=sp<r.c||left<r.c; return `<button class="mch-btn${no?' dis':''}" ${no?'disabled':''} onclick="merchantExchange(${i})">${r.c} 貢獻 → ${r.d} <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"></button>`;}).join('')}</div>
+    ${dealRow}
   </div>`;
 }
 async function merchantExchange(ci){
@@ -2576,6 +2689,11 @@ function showFavor(){
     </div>
     ${kdGot.length?`<div class="detail-label" style="margin-top:12px">💌 我收到的感謝（本月 ${kudosMonthCount(me.id)} 張）</div>${kdGot.map(k=>`<div class="fv-row"><div style="flex:1;min-width:0"><b style="color:#f472b6">${esc(k.fromName)}</b><div class="fv-desc">「${esc(k.msg)}」</div></div></div>`).join('')}`:''}
     ${pend.length?`<div class="detail-label" style="color:var(--accent)">📨 待你回覆（${pend.length}）</div>${pend.map(x=>{const r=x.r,isA=r.kind==='assign';return `<div class="fv-row pend"><div style="flex:1;min-width:0"><b>${esc(r.fromName)}</b> ${isA?'想請你幫忙、給你':'想向你借用，願付'} <b style="color:var(--gold-text)">${r.favor}</b> 人情<div class="fv-desc">「${esc(r.desc)}」</div></div><button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${esc(r.id)}',true)">${isA?'接受':'同意'}</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideFavor(${x.pi},'${esc(r.id)}',false)">拒絕</button></div>`;}).join('')}`:''}
+    ${(new Date().getDay()===5)?`<div style="margin-top:12px;background:linear-gradient(120deg,rgba(244,114,182,.14),rgba(56,189,248,.12));border:1px solid #f472b6;border-radius:11px;padding:11px 13px;font-size:12.5px">
+      <b style="color:#f472b6">🎉 今天是週五收官日</b>
+      <div style="margin-top:4px;line-height:1.6">本週感謝卡還可送 <b>${Math.max(0,kdLeft)}</b> 張 — 想想這禮拜誰幫過你。<br>
+      <span style="color:var(--muted)">17:30 收工站會：唸出這週的感謝卡 → 報一下城市光彩點亮幾面 → 抽下週優先選任務權 🎲</span></div>
+    </div>`:''}
     <div class="detail-label" style="margin-top:14px">✍️ 提出請求</div>
     <div class="fv-form">
       <select id="fvTo" class="fv-in">${ppl.map(u=>`<option value="${u.id}">${u.name}（${u.title}）</option>`).join('')}</select>
@@ -3119,7 +3237,7 @@ const GAME_STORE = {
   N: { email:'員工Email', name:'姓名', balance:'獎勵幣餘額', save:'遊戲存檔', updated:'更新時間' },   // ⚠️ Ragic 欄位中文名，須與雲端一致(讀寫對照)，勿改
 };
 let GS = null;
-function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[], seasonBase:0, daily:null}; }
+function blankGS(){ return {spent:0, won:0, owned:[], gear:{}, equipped:{}, title:null, charId:'c1', pets:{}, activePet:null, dungeon:null, quizSeen:[], quizWrong:[], hp:100, hpAt:0, items:{}, feed:{}, redeem:[], contribSpent:0, clears:0, favorReq:[], dropped:[], teamBoss:null, kudos:[], quizSub:[], starterClaimed:false, newbieGradClaimed:false, role:null, roleHistory:[], seasonBase:0, daily:null, luckyDay:null, dealDay:null, wish:null, wishHit:null}; }
 /* 主角血量：跨場持續、每小時自然回 4%（慢慢回，避免沉迷也避免卡死） */
 function syncHp(){ if(!GS) return; if(GS.hp==null){ GS.hp=100; GS.hpAt=Date.now(); return; }
   const now=Date.now(), hrs=Math.max(0,(now-(GS.hpAt||now))/3600000);
@@ -3510,6 +3628,7 @@ async function setActivePet(id){ if(GS.pets&&GS.pets[id]){ GS.activePet=id; awai
 function refreshGameUI(){
   const g=document.getElementById('gameModal'); if(g){ const sc=g.querySelector('.modal'), top=sc?sc.scrollTop:0; closeGameCenter(); showGameCenter(); const n=document.querySelector('#gameModal .modal'); if(n) n.scrollTop=top; }
   const s=document.getElementById('shopModal'); if(s){ const sc=s.querySelector('.modal'), top=sc?sc.scrollTop:0; closeShop(); showShop(); const n=document.querySelector('#shopModal .modal'); if(n) n.scrollTop=top; }
+  renderWishChip();   // 目標進度跟著鑽石變動即時更新
 }
 /* 寵物卡（角色養成中心；只成長、可餵食、可切換夥伴） */
 function petCardHtml(){
@@ -3595,7 +3714,8 @@ function showShop(tab){
     body=`${pend.length?`<div class="detail-label" style="color:var(--accent)">⏳ 待你核准（${pend.length}）</div>${pend.map(x=>{const it=rewardDef(x.r.rid)||{}; const own=(STATE.user.email||'').toLowerCase()===x.p.email && !isBeta(); return `<div class="rd-row pend"><div style="flex:1;min-width:0"><b>${esc(x.p.name||x.p.email)}</b> 想換 ${it.icon||''}${it.name||x.r.rid}<div class="rd-sub"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${x.r.price} · ${new Date(x.r.at).toLocaleDateString()}</div></div>${own?'<span class="rd-st">待另一位主管核准</span>':`<button class="buy-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${esc(x.r.id)}',true)">核准</button><button class="equip-btn" style="width:auto;padding:6px 12px" onclick="decideRedeem(${x.pi},'${esc(x.r.id)}',false)">婉拒</button>`}</div>`;}).join('')}`:''}
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">用鑽石換真的獎勵（申請→主管核准→兌現）。每季限量、換完下季補貨 🎁<div style="font-size:10px;margin-top:5px;padding-top:5px;border-top:1px dashed var(--border)">本獎勵為公司提供之福利活動（恩惠性給與），非工資、不計入平均工資；以實物與體驗方式提供，恕不折換現金 — 感謝你與譽昇一起努力 🙏</div></div>
     ${(()=>{const hd=todayHidden(); if(!hd) return ''; const sold=soldCount(hd.id)>=hd.qty; return `<div class="rw-card hidden-rw${sold?' out':''}"><div class="rw-icon">${hd.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${hd.name}</div><div class="rw-desc">${hd.desc} 只到 ${hd.until}、全公司限 1 個！</div></div>${sold?'<span class="rw-out">已被搶走</span>':`<button class="buy-btn${bal<hd.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<hd.price?'disabled':''} onclick="requestRedeem('${hd.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${hd.price}</button>`}</div>`;})()}
-    <div class="rw-grid">${REWARDS.map(it=>{const used=rewardUsed(it), left=Math.max(0,(it.qty||99)-used), out=left<=0, lbl=it.perUser?('你本季剩 '+left+'/'+it.qty):('本季剩 '+left+'/'+it.qty); return `<div class="rw-card${out?' out':''}"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${it.name}${it.perUser?' <span style="font-size:9px;color:var(--accent)">每人每季限量</span>':''}</div><div class="rw-desc">${it.desc} · ${lbl}</div></div>${out?`<span class="rw-out">${it.perUser?'本季已換':'本季完售'}</span>`:`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="requestRedeem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`}</div>`;}).join('')}</div>
+    <div style="font-size:11px;color:var(--muted);margin:-4px 0 8px">💡 長按任一個獎品＝設成「我的目標」，頂列就會顯示存到幾 % 了</div>
+    <div class="rw-grid">${REWARDS.map(it=>{const used=rewardUsed(it), left=Math.max(0,(it.qty||99)-used), out=left<=0, lbl=it.perUser?('你本季剩 '+left+'/'+it.qty):('本季剩 '+left+'/'+it.qty), isWish=GS&&GS.wish===it.id; return `<div class="rw-card${out?' out':''}${isWish?' wish':''}" oncontextmenu="event.preventDefault();setWish('${it.id}');return false" onpointerdown="wishPressStart(event,'${it.id}')" onpointerup="wishPressEnd()" onpointercancel="wishPressEnd()" onpointerleave="wishPressEnd()"><div class="rw-icon">${it.icon}</div><div style="flex:1;min-width:0"><div class="rw-name">${isWish?'⭐ ':''}${it.name}${it.perUser?' <span style="font-size:9px;color:var(--accent)">每人每季限量</span>':''}</div><div class="rw-desc">${it.desc} · ${lbl}</div></div>${out?`<span class="rw-out">${it.perUser?'本季已換':'本季完售'}</span>`:`<button class="buy-btn${bal<it.price?' dis':''}" style="width:auto;padding:7px 12px;flex-shrink:0" ${bal<it.price?'disabled':''} onclick="event.stopPropagation();requestRedeem('${it.id}')"><img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石"> ${it.price}</button>`}</div>`;}).join('')}</div>
     ${myRd.length?`<div class="detail-label" style="margin-top:14px">📜 我的兌換</div>${myRd.slice(0,8).map(r=>{const it=rewardDef(r.rid)||{};return `<div class="rd-row">${it.icon||''} ${it.name||r.rid} · <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">${r.price}<span class="rd-st">${RD_ST[r.st]||r.st}</span>${r.st==='pending'?`<button class="equip-btn" style="width:auto;padding:4px 10px" onclick="cancelRedeem('${esc(r.id)}')">取消</button>`:''}</div>`;}).join('')}`:''}`;
   }
   else { const sp=activeSeasonPets(); body=`${sp.length?`<div class="shop-slot-h" style="color:var(--accent)">✨ 限定登場（期間限定）</div><div class="shop-grid">${sp.map(shopPetCard).join('')}</div><div class="shop-slot-h">一般寵物</div>`:''}<div class="shop-grid">${PETS.map(shopPetCard).join('')}</div>`; }
@@ -4314,7 +4434,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.15.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.16.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
