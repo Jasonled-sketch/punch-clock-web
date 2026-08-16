@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0e17">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <title>USLED 記帳 · 拍照入帳</title>
 <style>
 :root{
@@ -269,7 +272,9 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.7.0';
+// PWA：註冊 SW（僅供安裝，不做快取——帳務要即時、避免卡舊版）
+if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
 // 公司統編：掃到「賣方＝我們」的發票自動判為進項（收入）
@@ -1102,7 +1107,8 @@ function updateAuthUI(){
   const sess = getSavedSession();
   if (currentUser) {
     chip.classList.add('ok');
-    chip.textContent = '✅ ' + currentUser.email + (sess ? ' · 60天通行證有效' : ' · 待換發通行證');
+    const roleTag = (acctRole && acctRole.email === currentUser.email) ? (acctRole.admin ? ' · 管理者' : ' · 行政') : '';
+    chip.textContent = '✅ ' + currentUser.email + roleTag + (sess ? ' · 通行證有效' : ' · 待換發通行證');
   } else {
     chip.classList.remove('ok');
     chip.textContent = '🔐 未登入 · 點我 Google 登入';
@@ -1111,12 +1117,39 @@ function updateAuthUI(){
 document.getElementById('authChip').addEventListener('click', () => {
   if (!currentUser) showGoogleSignIn();
   else if (confirm('要登出 ' + currentUser.email + ' 嗎？')) {
-    currentUser = null;
+    currentUser = null; acctRole = null;
     localStorage.removeItem('acct_user');
     localStorage.removeItem('acct_session');
-    updateAuthUI();
+    localStorage.removeItem('acct_role');
+    updateAuthUI(); applyRoleUI();
   }
 });
+
+/* ── 權限分層：向 Worker 問角色（管理者/行政）；行政隱藏日結分頁（後端也擋，這裡只是 UI）── */
+let acctRole = null;
+try { acctRole = JSON.parse(localStorage.getItem('acct_role') || 'null'); } catch (_) {}
+function applyRoleUI(){
+  const admin = !!(acctRole && currentUser && acctRole.email === currentUser.email && acctRole.admin);
+  const dcTab = document.querySelector('.tab[data-mode="dc"]');
+  if (dcTab) dcTab.style.display = admin ? '' : 'none';
+  if (!admin) {
+    const cur = document.querySelector('.tab.on');
+    if (cur && cur.dataset.mode === 'dc') document.querySelector('.tab[data-mode="photo"]').click();
+  }
+}
+async function refreshAcctRole(){
+  const route = getApiRoute();
+  if (!route) { applyRoleUI(); return; }
+  try {
+    const r = await fetch(WORKER_URL + '/acct/role', { headers: route.headers });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.status === 'SUCCESS') {
+      acctRole = { email: String(j.email || '').toLowerCase(), admin: !!j.admin };
+      localStorage.setItem('acct_role', JSON.stringify(acctRole));
+    }
+  } catch (_) {}
+  applyRoleUI(); updateAuthUI();
+}
 
 function initGoogleSignIn(){
   function tryInit(){
@@ -1158,6 +1191,7 @@ function handleGoogleSignIn(response){
     updateAuthUI();
     toast('👋 ' + (currentUser.name || currentUser.email) + ' 已登入');
     exchangeSession();
+    refreshAcctRole();
   } catch (e) { toast('登入解析失敗：' + e.message); }
 }
 
@@ -1196,6 +1230,8 @@ function getApiRoute(){
 }
 updateAuthUI();
 initGoogleSignIn();
+applyRoleUI();
+if (currentUser) refreshAcctRole();
 
 /* ═══════════════ 核准入帳：查重 → 寫入 Ragic ═══════════════ */
 async function approveEntry(p, btn){
