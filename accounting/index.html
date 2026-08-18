@@ -302,6 +302,7 @@ const F = {
   serial: '1003129',  // 流水號（唯讀）
   photo: '1003138',   // 憑證照片（檔案欄位）
   proj: '1003242',    // 案號（2026-08-10 新增；工程案成本歸戶＋包裝提成品質判定用，選填）
+  pay: '1003250',     // 付款來源（2026-08-18 新增；錢從哪個口袋出，追資金來源用。選項須與支出紀錄表 1003248 完全一致）
 };
 
 // ── 歸類科目三層體系（同支出紀錄表：截圖選項＋971筆歷史記錄合併，2026-07-20）──
@@ -1005,6 +1006,10 @@ function renderResult(p){
                placeholder="Q26xxxx" value="${esc(state.projNo || '')}">
         <div id="projRecent" class="chips"></div>
       </div>
+      <div class="kv" style="display:block" id="payBlock">
+        <span class="k">付款來源<span class="src">這筆錢從哪個口袋出</span></span>
+        <select class="cat" id="paySrc"></select>
+      </div>
       <div class="kv"><span class="k">憑證照片</span>
         <span class="v">${state.photoBlob ? '📎 已附' + (state.photoName === 'live.jpg' ? '掃描畫面' : '原圖') : '<span style="color:var(--tx3)">無（貼碼模式）</span>'}</span></div>
       <div class="alert"><div class="ai">AI</div>
@@ -1037,6 +1042,27 @@ function setIO(io){
 /* ── 案號（2026-08-10）：工程案成本歸戶＋包裝提成品質判定的資料地基 ──
    設計重點（人性化 UI 鐵則）：不用連結欄改用純文字，摩擦低才有人填；
    最近用過的案號做成一鍵晶片；選到「補運費-失誤補發」自動轉琥珀色提示必填。 */
+/* ── 付款來源（2026-08-18）：選項必須與支出紀錄表 sheet 2 的「付款來源 1003248」逐字相同 ── */
+const PAY_OPTS = [
+  '公司帳戶(玉山 50145)', '公司帳戶(一銀 53103)', '門市櫃檯現金', '公司會計現金',
+  '經理個人戶(中信 94516)', '經理個人戶(玉山 55928)',
+  '經理個人信用卡(玉山)', '經理個人信用卡(富邦)', '經理個人信用卡(一銀)', '經理個人現金',
+  '員工代墊', '股東代墊(阿如)', '支付寶/淘寶餘額', 'LINE Pay/街口/悠遊卡', '蝦皮錢包扣抵',
+  '平台自動扣抵(非現金)', '貨到付款(現場代收)', '供應商折讓沖抵(非現金)', '尚未支付(掛應付)',
+  '內部調撥(帳戶←→零用金)', '其他/待確認',
+];
+const PAY_LS = 'usled_acct_last_pay';          // 記住上次選的，天天記帳不用每次重選
+const payLast = () => { try { return localStorage.getItem(PAY_LS) || ''; } catch (e) { return ''; } };
+const payVal = () => ((document.getElementById('paySrc') || {}).value || '');
+function initPaySelect(){
+  const sel = document.getElementById('paySrc');
+  if (!sel) return;
+  const last = payLast();
+  sel.innerHTML = '<option value="">— 請選（可留空，之後補）—</option>' +
+    PAY_OPTS.map(o => `<option value="${esc(o)}"${o === last ? ' selected' : ''}>${esc(o)}</option>`).join('');
+  sel.addEventListener('change', () => { try { localStorage.setItem(PAY_LS, payVal()); } catch (e) {} });
+}
+
 const PROJ_LS = 'usled_acct_recent_proj';
 const projRecent = () => { try { return JSON.parse(localStorage.getItem(PROJ_LS) || '[]'); } catch (e) { return []; } };
 function projRemember(no){
@@ -1068,7 +1094,7 @@ function initProjInput(){
       state.projNo = projVal(); syncChips();
     }));
   }
-  syncChips(); projSyncNeed();
+  syncChips(); projSyncNeed(); initPaySelect();
 }
 
 /* ── 歸類科目三層連動選單 ── */
@@ -1293,6 +1319,8 @@ async function approveEntry(p, btn){
     if (p.buyerName) fd.append(F.vendor, p.buyerName);
     const projNo = projVal();
     if (projNo) fd.append(F.proj, projNo);          // 案號（選填；空值不送，不覆蓋既有資料）
+    const paySrc = payVal();
+    if (paySrc) fd.append(F.pay, paySrc);           // 付款來源（選填；空值不送）
     // 歸類科目：進項＝營業收入；出項＝三層選單組合（同支出紀錄表體系）
     if (state.io === 'in') fd.append(F.category, '營業收入');
     else {
