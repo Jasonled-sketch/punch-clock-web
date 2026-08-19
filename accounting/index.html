@@ -272,7 +272,7 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.7.0';
+const APP_VERSION = '0.7.1';
 // PWA：註冊 SW（僅供安裝，不做快取——帳務要即時、避免卡舊版）
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
@@ -376,7 +376,8 @@ const SUGGEST_RULES = [
   [/利息|繳息/, ['B-營業費用', '財務費用', '銀行貸款利息']],
   [/充電|充電站|裕電|台達充電/, ['B-營業費用', '交通與車輛', '車輛充電費']],   // ⚠️在公司充的電已含水電費，勿重複記
   [/茶|咖啡|飲|便當|餐|麵|飯|烏龍|拿鐵|果汁/, ['B-營業費用', '人事費用', '員工福利']],
-  [/文具|影印|紙|筆|辦公用品/, ['B-營業費用', '租金辦公支出', '文具/辦公用品']],
+  // 文具事務（2026-08-19 補：LINE 拍「ART訂書針」判不出來 → 補訂書等常見文具詞；須與 bot lib/acctInvoice.js 同步）
+  [/文具|影印|辦公用品|訂書|釘書|事務機|碳粉|墨水|印表|信封|資料夾|文件夾|L夾|迴紋針|便利貼|白板|印章|印泥|膠水|立可白|橡皮擦|標籤紙|列印紙|影印紙|紙|筆/, ['B-營業費用', '租金辦公支出', '文具/辦公用品']],
   [/電費|台電|水費|自來水/, ['B-營業費用', '租金辦公支出', '水電費']],
   [/電信|網路|寬頻|遠傳|台哥大/, ['B-營業費用', '租金辦公支出', '網路/電話費']],
   [/工具|鑽頭|鋸|起子|鉗/, ['B-營業費用', '耗材工具', '小型工具']],
