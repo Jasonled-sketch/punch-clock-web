@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0e17">
 <link rel="manifest" href="manifest.json">
@@ -196,6 +197,7 @@ input.pin.dim{color:var(--tx3)}
     <button class="tab" data-view="project">🏗️ 專案</button>
     <button class="tab" data-view="flow">💰 收支</button>
     <button class="tab" data-view="plan">🎯 計畫</button>
+    <button class="tab" data-view="dc">💵 日結</button>
   </nav>
 
   <div class="filters">
@@ -243,7 +245,7 @@ input.pin.dim{color:var(--tx3)}
      Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
    ═══════════════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.2.0';
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
@@ -251,6 +253,11 @@ const WORKER_URL = 'https://usled-ragic-proxy.yspe-led.workers.dev';
 const GOOGLE_CLIENT_ID = '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com';
 const RAGIC_SHEET_URL = 'https://ap10.ragic.com/Fan28/ragicpersonal-finance/7';
 document.getElementById('ragicLink').href = RAGIC_SHEET_URL;
+const RAGIC_DC_URL = 'https://ap10.ragic.com/Fan28/ragicpersonal-finance/8';
+const DC = { serial: '1003145', date: '1003146', shift: '1003147', status: '1003148',
+  opening: '1003149', cashIn: '1003150', cashOut: '1003151', counted: '1003152',
+  diffCat: '1003153', counter: '1003154', note: '1003155' };
+const DC_TOLERANCE = 100;   // 差額容許值，與記帳系統 DIFF_TOLERANCE 同步
 
 // 進出項單據欄位 ID（與記帳系統同一份對照，改欄位兩邊都要改）
 const F = {
@@ -1113,12 +1120,158 @@ function planRefresh(){
   });
 }
 
+/* ═══════════════ 畫面五：日結（POS 收銀台，唯讀）═══════════════
+   資料源＝記帳系統日結場次（Ragic sheet 8，Odoo 四階段）。Worker 後端限管理者：
+   403 不是壞掉，是這個帳號本來就看不到現金，畫面要講清楚。 */
+const DCV = { rows: null, loading: false, err: null, at: 0, denied: false };
+async function loadDcData(force){
+  const route = getApiRoute();
+  if (!route || DCV.loading) return;
+  if (!force && DCV.rows && Date.now() - DCV.at < 60000) return;
+  DCV.loading = true; DCV.err = null; render();
+  try {
+    const r = await fetch(WORKER_URL + '/?sheet=dc&limit=1000', { headers: route.headers });
+    if (r.status === 401) throw new Error('登入過期，請重新登入');
+    if (r.status === 403) { DCV.denied = true; DCV.rows = []; DCV.at = Date.now(); DCV.loading = false; render(); return; }
+    if (!r.ok) throw new Error('讀取失敗 HTTP ' + r.status);
+    const j = await r.json();
+    const recs = [];
+    Object.values(j).forEach(x => {
+      if (!x || typeof x !== 'object' || x._ragicId == null) return;
+      const v = (n, f) => { const a = x[n]; return a != null && a !== '' ? a : (x[f] == null ? '' : x[f]); };
+      const opening = num(v('期初餘額', DC.opening)), cashIn = num(v('本場現金收入', DC.cashIn));
+      const cashOut = num(v('本場現金支出', DC.cashOut)), counted = num(v('實點金額', DC.counted));
+      const status = String(v('狀態', DC.status) || '').trim();
+      const theo = opening + cashIn - cashOut;
+      recs.push({
+        rid: x._ragicId, serial: String(v('流水號', DC.serial) || ''),
+        date: String(v('日期', DC.date) || '').replace(/-/g, '/'),
+        ym: ymOf(String(v('日期', DC.date) || '')),
+        shift: String(v('班別', DC.shift) || ''), status,
+        opening, cashIn, cashOut, counted, theo,
+        closed: status === '已過帳',
+        diff: status === '已過帳' ? counted - theo : null,   // 未過帳還沒實點，差額不存在
+        diffCat: String(v('差額歸類', DC.diffCat) || ''),
+        counter: String(v('點鈔人', DC.counter) || ''),
+        note: String(v('備註', DC.note) || ''),
+      });
+    });
+    recs.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.rid - a.rid));
+    DCV.rows = recs; DCV.denied = false; DCV.at = Date.now();
+  } catch (e) { DCV.err = e.message || String(e); }
+  DCV.loading = false; render();
+}
+/* 場次差額直條（正＝盈、負＝短）；沿用 .chart/.col.dv 樣式，最舊在左 */
+function dcChart(sessions){
+  const list = sessions.filter(s => s.diff != null).slice(0, 30).reverse();
+  if (!list.length) return '<div class="empty">這個區間沒有已過帳的場次</div>';
+  const maxPos = Math.max(1, ...list.map(s => Math.max(0, s.diff)));
+  const maxNeg = Math.max(0, ...list.map(s => Math.max(0, -s.diff)));
+  const top = niceTop(maxPos), bot = niceTop(Math.max(maxNeg, 1));
+  const upShare = maxNeg > 0 ? top / (top + bot) * 100 : 100;
+  const cols = list.map(s => {
+    const tip = '<b>' + esc(s.date) + (s.shift ? ' · ' + esc(s.shift) : '') + '</b>' +
+      tipRow('差額', fmtSign(s.diff), s.diff >= 0 ? 'var(--in)' : 'var(--out)') +
+      tipRow('理論餘額', fmt$(s.theo)) + tipRow('實點', fmt$(s.counted)) +
+      (s.counter ? tipRow('點鈔人', s.counter) : '');
+    const over = Math.abs(s.diff) > DC_TOLERANCE;
+    const cUp = over ? 'var(--warn)' : 'var(--in)', cDn = over ? 'var(--danger)' : 'var(--out)';
+    return '<div class="col dv" data-t="' + attrT(tip) + '">' +
+      '<div class="up-half" style="height:' + upShare + '%">' +
+        (s.diff > 0 ? '<i class="bar pos" style="height:' + Math.max(2, s.diff / top * 100) + '%;background:' + cUp + '"></i>' : '') + '</div>' +
+      '<div class="dn-half" style="height:' + (100 - upShare) + '%">' +
+        (s.diff < 0 ? '<i class="bar neg" style="height:' + Math.max(2, -s.diff / bot * 100) + '%;background:' + cDn + '"></i>' : '') + '</div>' +
+      '<span class="xl">' + esc(s.date.slice(5)) + '</span></div>';
+  }).join('');
+  return '<div class="chart' + (list.length > 8 ? ' dense' : '') + '"><div class="plot" style="height:130px">' +
+    '<div class="zero" style="bottom:' + (100 - upShare) + '%"></div>' +
+    '<div class="gv" style="bottom:' + (100 - upShare) + '%">0</div>' +
+    '<div class="cols">' + cols + '</div></div>' +
+    '<div class="legend"><b><span class="dot" style="background:var(--in)"></span>溢收</b>' +
+    '<b><span class="dot" style="background:var(--out)"></span>短少</b>' +
+    '<b><span class="dot" style="background:var(--warn)"></span>超容許值 ±$' + DC_TOLERANCE + '</b></div></div>';
+}
+function viewDc(){
+  if (DCV.denied) return `<div class="card"><div class="empty">
+    🔒 這個帳號沒有日結資料的權限<br>
+    <span style="font-size:12px">現金日結僅開放管理者（Worker 後端強制）。要開權限請調整 Worker 的日結白名單。</span></div></div>`;
+  if (DCV.err) return `<div class="alert err"><div class="ai">!</div><div class="txt"><b>日結讀取失敗</b>
+    <small>${esc(DCV.err)}</small></div></div>
+    <div style="text-align:center;margin-top:14px"><button class="mini acc" data-act="dc-reload">↻ 再試一次</button></div>`;
+  if (!DCV.rows) { loadDcData(); return '<div class="card"><div class="empty">⏳ 讀取日結場次…</div></div>'; }
+
+  const set = UI.range === 'all' ? null : new Set(rangeMonths());
+  const list = DCV.rows.filter(r => !set || set.has(r.ym));
+  const closed = list.filter(r => r.closed);
+  const open = list.find(r => !r.closed && r.status);
+  const totDiff = closed.reduce((s, r) => s + r.diff, 0);
+  const overs = closed.filter(r => Math.abs(r.diff) > DC_TOLERANCE);
+  const exact = closed.filter(r => r.diff === 0).length;
+
+  const rowsHtml = list.slice(0, 60).map(r => `
+    <tr>
+      <td class="k">${esc(r.date)}${r.shift ? '<small>' + esc(r.shift) + '</small>' : ''}</td>
+      <td>${r.closed ? '<span class="pill gray">已過帳</span>' : '<span class="pill warn">' + esc(r.status || '—') + '</span>'}</td>
+      <td class="num">${fmt$(r.opening)}</td>
+      <td class="num" style="color:var(--in)">${fmt$(r.cashIn)}</td>
+      <td class="num" style="color:var(--out)">${fmt$(r.cashOut)}</td>
+      <td class="num">${fmt$(r.theo)}</td>
+      <td class="num">${r.closed ? fmt$(r.counted) : '—'}</td>
+      <td class="num k">${r.diff == null ? '—' :
+        `<span class="pill ${r.diff === 0 ? 'ok' : Math.abs(r.diff) <= DC_TOLERANCE ? 'gray' : 'bad'}">${fmtSign(r.diff)}</span>`}</td>
+      <td>${esc(r.counter || '—')}${r.note ? '<small>' + esc(r.note.slice(0, 30)) + '</small>' : ''}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="kpis">
+      <div class="kpi"><div class="lb">區間場次</div><div class="vl">${closed.length}<span style="font-size:13px;color:var(--tx3)"> 場</span></div>
+        <div class="dt">${open ? '目前有一場「' + esc(open.status) + '」' : '目前沒有進行中的場次'}</div></div>
+      <div class="kpi"><div class="lb">累計差額（實點−理論）</div>
+        <div class="vl ${totDiff >= 0 ? 'up' : 'dn'}">${fmtSign(totDiff)}</div>
+        <div class="dt">正＝溢收、負＝短少</div></div>
+      <div class="kpi"><div class="lb">分毫不差場次</div><div class="vl">${closed.length ? fmtPct(pct(exact, closed.length), 0) : '—'}</div>
+        <div class="dt">${exact}／${closed.length} 場差額為 0</div></div>
+      <div class="kpi"><div class="lb">超容許值 ±$${DC_TOLERANCE}</div>
+        <div class="vl ${overs.length ? 'dn' : 'up'}">${overs.length}<span style="font-size:13px;color:var(--tx3)"> 場</span></div>
+        <div class="dt">${overs.length ? '最近：' + esc(overs[0].date) + '（' + fmtSign(overs[0].diff) + '）' : '這個區間沒有異常'}</div></div>
+    </div>
+    ${overs.length ? `<div class="alert"><div class="ai">⚖</div><div class="txt">
+      <b>${overs.length} 場差額超過容許值</b>
+      <small>${overs.slice(0, 3).map(r => esc(r.date) + ' ' + fmtSign(r.diff) + (r.note ? '（' + esc(r.note.slice(0, 16)) + '）' : '（沒寫原因）')).join('、')}${overs.length > 3 ? '…' : ''}
+      —— 差額已按規則入「現金短溢」科目，收支頁可追。</small></div></div>` : ''}
+    <div class="sec">場次差額走勢 <span class="hint">最近 30 場已過帳 · 滑過看明細</span></div>
+    <div class="card">${dcChart(list)}</div>
+    <div class="sec">日結場次 <span class="hint">共 ${list.length} 場${list.length > 60 ? '，顯示最近 60 場（匯出為全部）' : ''} · 期初鏈接上一場實點值，不可竄改</span></div>
+    <div class="card">
+      <div class="filters" style="margin-bottom:10px"><div class="spacer"></div>
+        <button class="mini" data-act="dc-reload">↻ 更新</button>
+        <button class="mini" data-act="csv-dc">⤓ 匯出日結 CSV</button></div>
+      <div class="tblwrap"><table class="tbl" style="min-width:760px">
+        <thead><tr><th>日期</th><th>狀態</th><th class="num">期初</th><th class="num">現金收</th><th class="num">現金支</th>
+          <th class="num">理論餘額</th><th class="num">實點</th><th class="num">差額</th><th>點鈔人／備註</th></tr></thead>
+        <tbody>${rowsHtml || '<tr><td colspan="9" class="empty">這個區間沒有日結場次</td></tr>'}</tbody>
+      </table></div>
+      <div style="text-align:center;margin-top:10px">
+        <a href="${RAGIC_DC_URL}" target="_blank" rel="noopener" style="color:var(--tx3);font-size:11.5px">在 Ragic 開啟日結原表 →</a></div>
+    </div>`;
+}
+function csvDc(){
+  const set = UI.range === 'all' ? null : new Set(rangeMonths());
+  const list = (DCV.rows || []).filter(r => !set || set.has(r.ym));
+  const head = ['日期', '班別', '狀態', '期初餘額', '現金收入', '現金支出', '理論餘額', '實點金額', '差額', '差額歸類', '點鈔人', '備註'];
+  const rows = list.map(r => [r.date, r.shift, r.status, r.opening, r.cashIn, r.cashOut, r.theo,
+    r.closed ? r.counted : '', r.diff == null ? '' : r.diff, r.diffCat, r.counter, r.note]);
+  downloadCSV(`USLED_日結場次_${UI.range}.csv`, [head].concat(rows));
+  toast('✓ 已匯出 ' + list.length + ' 場');
+}
+
 /* ═══════════════ 路由與事件 ═══════════════ */
 function render(){
   const body = $('viewBody');
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === UI.view));
   document.querySelectorAll('#rangeGrp button').forEach(b => b.classList.toggle('on', b.dataset.range === UI.range));
   $('rangeGrp').hidden = UI.view === 'plan';     // 計畫頁有自己的年度選擇，兩套期間會打架
+  $('taxGrp').hidden = UI.view === 'dc';         // 現金點的是鈔票，沒有未稅口徑
   document.querySelectorAll('#taxGrp button').forEach(b => b.classList.toggle('on', b.dataset.tax === UI.tax));
   updateAuthUI();
 
@@ -1145,13 +1298,14 @@ function render(){
   if (UI.view === 'overview') body.innerHTML = viewOverview();
   else if (UI.view === 'project') body.innerHTML = viewProject();
   else if (UI.view === 'flow') body.innerHTML = viewFlow();
+  else if (UI.view === 'dc') body.innerHTML = viewDc();
   else body.innerHTML = viewPlan();
 }
 
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { UI.view = t.dataset.view; render(); }));
 document.querySelectorAll('#rangeGrp button').forEach(b => b.addEventListener('click', () => { UI.range = b.dataset.range; render(); }));
 document.querySelectorAll('#taxGrp button').forEach(b => b.addEventListener('click', () => { UI.tax = b.dataset.tax; render(); }));
-$('btnReload').addEventListener('click', () => loadData(true));
+$('btnReload').addEventListener('click', () => { loadData(true); if (DCV.rows) loadDcData(true); });
 
 $('viewBody').addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
@@ -1172,6 +1326,8 @@ $('viewBody').addEventListener('click', e => {
   if (act === 'flow-bucket') { UI.flowBucket = el.dataset.v; return render(); }
   if (act === 'plan-year') { UI.planYear = el.dataset.v; return render(); }
   if (act === 'plan-in') return;                 // input 自己處理
+  if (act === 'dc-reload') return loadDcData(true);
+  if (act === 'csv-dc') return csvDc();
   if (act === 'csv-months') return csvMonths();
   if (act === 'csv-proj') return csvProjects();
   if (act === 'csv-flow') return csvFlow();
