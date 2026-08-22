@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e17">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<title>USLED 營運報表中心</title>
+<style>
+:root{
+  --bg:#0a0e17; --bg2:#111725; --card:#161d2e; --card2:#1b2334;
+  --line:#26304a; --grid:#1f2841; --tx:#e7ecf5; --tx2:#93a0bd; --tx3:#5f6c8a;
+  --brand:#2dd4bf; --brand2:#38bdf8;
+  --in:#34d399;   /* 收入（進項）— 沿用記帳系統既有語意色 */
+  --out:#fb7185;  /* 支出（出項）*/
+  --warn:#fbbf24; --danger:#f43f5e; --ok:#34d399;
+  /* 圖表類別色（固定順序，不循環）。以 dataviz validate_palette.js 實測：
+     dark 模式、surface #161d2e，相鄰配對 CVD ΔE 8.4（≥8）、正常視覺 ΔE 19.3（≥15）、對比全數 ≥3:1 → ALL PASS。
+     要換色請重跑驗證器，不要憑感覺調。 */
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --glow:0 0 0 1px rgba(45,212,191,.25), 0 8px 30px -8px rgba(45,212,191,.35);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC",system-ui,sans-serif;
+  background:radial-gradient(1200px 800px at 15% -10%,#132033 0%,#070a12 55%);color:var(--tx);min-height:100vh}
+.wrap{max-width:1120px;margin:0 auto;padding:18px 16px 70px}
+
+.hd{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.logo{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+  display:grid;place-items:center;font-weight:800;color:#04121a;font-size:19px;box-shadow:var(--glow);flex:0 0 auto}
+.hd h1{font-size:19px;margin:0;letter-spacing:.3px}
+.hd .sub{color:var(--tx2);font-size:12px;margin-top:2px}
+.ver{margin-left:auto;font-size:11px;color:var(--brand);border:1px solid rgba(45,212,191,.3);
+  padding:4px 10px;border-radius:20px;background:rgba(45,212,191,.07);white-space:nowrap}
+
+.authbar{margin-bottom:12px}
+.authchip{width:100%;padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--tx2);font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}
+.authchip.ok{color:var(--in);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.07)}
+
+.tabs{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto}
+.tab{flex:1;min-width:88px;padding:10px 6px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  color:var(--tx2);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.tab.on{background:rgba(45,212,191,.13);color:var(--brand);border-color:rgba(45,212,191,.35)}
+
+/* 篩選列：一律排在圖表上方一整列（dataviz interaction.md）*/
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.fgrp{display:flex;gap:5px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px}
+.fgrp button{border:0;background:transparent;color:var(--tx3);font-family:inherit;font-size:12px;font-weight:700;
+  padding:6px 11px;border-radius:9px;cursor:pointer;white-space:nowrap}
+.fgrp button.on{background:rgba(45,212,191,.14);color:var(--brand)}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--tx2);
+  font-family:inherit;font-size:12px;font-weight:700;padding:9px 13px;cursor:pointer}
+.mini:hover{color:var(--tx)}
+.mini.acc{color:var(--brand);border-color:rgba(45,212,191,.35)}
+.spacer{flex:1}
+
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px}
+.sec{margin:20px 2px 9px;font-size:12px;color:var(--tx3);font-weight:700;letter-spacing:.5px;
+  display:flex;align-items:baseline;gap:8px}
+.sec .hint{color:var(--tx3);font-weight:500;font-size:11px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.grid2{grid-template-columns:1fr}}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:11px}
+.kpi{background:linear-gradient(160deg,var(--card),var(--card2));border:1px solid var(--line);border-radius:16px;padding:13px 14px}
+.kpi .lb{font-size:11.5px;color:var(--tx2)}
+.kpi .vl{font-size:22px;font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+.kpi .dt{font-size:11px;color:var(--tx3);margin-top:5px}
+.kpi.hero .vl{font-size:27px}
+.up{color:var(--in)} .dn{color:var(--out)} .mute{color:var(--tx3)}
+
+/* 直條圖（HTML 版；細長條、4px 圓角資料端、2px 間隙、hairline 格線）*/
+.chart{position:relative;padding:16px 0 34px}
+.chart .plot{position:relative;height:180px}
+.chart .gl{position:absolute;left:0;right:0;height:1px;background:var(--grid)}
+.chart .gv{position:absolute;left:0;transform:translateY(-50%);font-size:10px;color:var(--tx3);
+  background:var(--card);padding:0 4px;font-variant-numeric:tabular-nums}
+.chart .cols{position:absolute;inset:0;display:flex;align-items:flex-end;gap:2px}
+.col{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;position:relative;
+  border-radius:8px 8px 0 0;cursor:default}
+.col:hover,.col.hot{background:rgba(255,255,255,.045)}
+.col .pair{display:flex;gap:2px;align-items:flex-end;justify-content:center;height:100%}
+.col .bar{width:11px;max-width:26%;border-radius:4px 4px 0 0;min-height:2px}
+.col .xl{position:absolute;left:0;right:0;bottom:-21px;text-align:center;font-size:10px;color:var(--tx3);
+  white-space:nowrap;overflow:hidden}
+.col.now .xl{color:var(--brand);font-weight:700}
+@media(max-width:620px){.chart.dense .col:nth-child(odd) .xl{display:none}}
+/* 有正負的淨利圖：以零線切成上下兩半 */
+.col.dv{justify-content:flex-start}
+.col.dv .up-half{display:flex;align-items:flex-end;justify-content:center}
+.col.dv .dn-half{display:flex;align-items:flex-start;justify-content:center}
+.col.dv .bar.pos{border-radius:4px 4px 0 0}
+.col.dv .bar.neg{border-radius:0 0 4px 4px}
+.zero{position:absolute;left:0;right:0;height:1px;background:var(--line)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--tx2);margin-top:20px;justify-content:center}
+.legend b{font-weight:600;display:inline-flex;align-items:center}
+.dot{width:8px;height:8px;border-radius:3px;display:inline-block;margin-right:6px}
+
+/* 橫向排行條 */
+.hb{display:grid;grid-template-columns:minmax(96px,150px) 1fr minmax(84px,auto);gap:11px;align-items:center;padding:7px 0}
+.hb .nm{font-size:12.5px;color:var(--tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .nm small{color:var(--tx3);font-size:10.5px;display:block;margin-top:1px}
+.hb .track{height:10px;background:var(--bg2);border-radius:5px;overflow:hidden;position:relative}
+.hb .fill{height:100%;border-radius:5px;min-width:2px}
+.hb .vv{text-align:right;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+
+/* 預算子彈條：實際填色 + 目標刻度 */
+.bul{padding:11px 0;border-bottom:1px solid var(--line)}
+.bul:last-child{border-bottom:0}
+.bul .top{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;margin-bottom:7px}
+.bul .top .r{font-variant-numeric:tabular-nums;font-weight:700}
+.bul .track{position:relative;height:12px;background:var(--bg2);border-radius:6px;overflow:hidden}
+.bul .fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;min-width:2px}
+.bul .mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--tx2);border-radius:1px}
+.bul .cap{display:flex;justify-content:space-between;font-size:10.5px;color:var(--tx3);margin-top:5px}
+
+/* 表格 */
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:520px}
+.tbl th{font-size:11px;color:var(--tx3);font-weight:700;text-align:left;padding:8px;border-bottom:1px solid var(--line);
+  white-space:nowrap;position:sticky;top:0;background:var(--card)}
+.tbl th.s{cursor:pointer;user-select:none}
+.tbl th.s:hover{color:var(--tx)}
+.tbl td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl td:first-child{white-space:nowrap}
+.tbl tr:last-child td{border-bottom:0}
+.tbl tbody tr:hover{background:rgba(255,255,255,.03)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tbl .k{font-weight:700}
+.tbl td small{color:var(--tx3);display:block;font-size:10.5px;margin-top:2px}
+.tbl tr.tot td{border-top:1px solid var(--line);font-weight:800;background:rgba(255,255,255,.02)}
+
+.pill{font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:700;white-space:nowrap}
+.pill.ok{background:rgba(52,211,153,.14);color:var(--ok)}
+.pill.warn{background:rgba(251,191,36,.16);color:var(--warn)}
+.pill.bad{background:rgba(244,63,94,.14);color:var(--danger)}
+.pill.gray{background:#222c42;color:var(--tx2)}
+
+.alert{display:flex;gap:11px;align-items:flex-start;border-radius:14px;padding:12px 13px;margin-top:10px;
+  background:linear-gradient(120deg,rgba(251,191,36,.12),rgba(251,191,36,.03));border:1px solid rgba(251,191,36,.28)}
+.alert.err{background:linear-gradient(120deg,rgba(244,63,94,.13),rgba(244,63,94,.04));border-color:rgba(244,63,94,.3)}
+.alert.ok{background:linear-gradient(120deg,rgba(52,211,153,.12),rgba(52,211,153,.03));border-color:rgba(52,211,153,.3)}
+.alert .ai{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;flex:0 0 auto;
+  background:rgba(251,191,36,.16);color:var(--warn);font-weight:800;font-size:13px}
+.alert.err .ai{background:rgba(244,63,94,.18);color:var(--danger)}
+.alert.ok .ai{background:rgba(52,211,153,.16);color:var(--ok)}
+.alert .txt{font-size:12.5px;line-height:1.65}
+.alert .txt small{color:var(--tx2);display:block;margin-top:3px;font-size:11.5px}
+.alert .txt b{color:var(--tx)}
+
+.empty{text-align:center;color:var(--tx3);padding:34px 16px;font-size:13px;line-height:1.9}
+.srch{background:var(--bg2);border:1px solid var(--line);border-radius:12px;color:var(--tx);
+  font-family:inherit;font-size:12.5px;padding:9px 12px;min-width:150px}
+.srch:focus{outline:none;border-color:rgba(45,212,191,.5)}
+input.pin{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:9px;color:var(--tx);
+  font-family:inherit;font-size:12.5px;padding:7px 9px;text-align:right;font-variant-numeric:tabular-nums}
+input.pin:focus{outline:none;border-color:rgba(45,212,191,.5)}
+input.pin.dim{color:var(--tx3)}
+
+.tip{position:fixed;z-index:80;background:#1b2334;border:1px solid var(--line);border-radius:11px;
+  padding:9px 12px;font-size:12px;line-height:1.7;box-shadow:0 12px 34px -12px #000;pointer-events:none;
+  max-width:240px;white-space:nowrap}
+.tip b{font-weight:700}
+.tip .r{display:flex;justify-content:space-between;gap:14px}
+.tip .r span:last-child{font-variant-numeric:tabular-nums;font-weight:700}
+.toast{position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);opacity:0;
+  background:#1b2334;color:var(--tx);border:1px solid var(--line);border-radius:13px;padding:11px 18px;
+  font-size:13px;transition:.25s;pointer-events:none;z-index:99;box-shadow:0 10px 30px -10px #000;max-width:88vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.foot{text-align:center;color:var(--tx3);font-size:11px;margin-top:30px;line-height:1.9}
+.foot a{color:var(--brand);text-decoration:none}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hd">
+    <div class="logo">U</div>
+    <div>
+      <h1>營運報表中心</h1>
+      <div class="sub">專案損益 · 月度收支 · 科目結構 · 預算達成</div>
+    </div>
+    <div class="ver" id="verTag">v0.0.0</div>
+  </header>
+
+  <div class="authbar">
+    <button class="authchip" id="authChip">🔐 未登入 · 點我 Google 登入</button>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab on" data-view="overview">📊 總覽</button>
+    <button class="tab" data-view="project">🏗️ 專案</button>
+    <button class="tab" data-view="flow">💰 收支</button>
+    <button class="tab" data-view="plan">🎯 計畫</button>
+  </nav>
+
+  <div class="filters">
+    <div class="fgrp" id="rangeGrp">
+      <button data-range="6">近 6 月</button>
+      <button data-range="12" class="on">近 12 月</button>
+      <button data-range="ytd">今年</button>
+      <button data-range="all">全部</button>
+    </div>
+    <div class="fgrp" id="taxGrp">
+      <button data-tax="net" class="on">未稅</button>
+      <button data-tax="gross">含稅</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="mini" id="btnReload">↻ 重新整理</button>
+  </div>
+
+  <main id="viewBody">
+    <div class="empty">載入中…</div>
+  </main>
+
+  <div class="foot">
+    資料源：Ragic 進出項單據（記帳系統即時同步）· 經 usled-ragic-proxy 讀取，本頁不寫入任何資料<br>
+    <a href="../accounting/" >📷 回記帳系統</a> ·
+    <a id="ragicLink" href="#" target="_blank" rel="noopener">在 Ragic 開啟原始表格 →</a>
+  </div>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+<div class="toast" id="toast"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   USLED 營運報表中心
+   ─────────────────────────────────────────────────────────────────────────
+   定位：唯讀報表層。所有數字都從記帳系統寫進 Ragic 的「進出項單據」(sheet 7) 推導，
+        本頁只 GET，不 POST——報表看錯可以重讀，寫錯帳要救很久。
+   會計口徑（依 TAXO 大類，與記帳系統 index.html 同一套）：
+     A-營業成本    → 損益：營業成本（毛利以此扣）
+     B-營業費用    → 損益：營業費用
+     D-折舊攤提    → 損益：費用；但「不是現金支出」→ 現金流要扣回來
+     C-資本支出    → 不進損益（買資產），只進現金流
+     E-融資支出    → 不進損益（還本金／代收代付的稅），只進現金流
+     F-往來與保證金 → 不進損益（押金是可退回的資產），只進現金流
+     Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const APP_VERSION = '0.1.0';
+if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
+document.getElementById('verTag').textContent = 'v' + APP_VERSION;
+
+const WORKER_URL = 'https://usled-ragic-proxy.yspe-led.workers.dev';
+const GOOGLE_CLIENT_ID = '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com';
+const RAGIC_SHEET_URL = 'https://ap10.ragic.com/Fan28/ragicpersonal-finance/7';
+document.getElementById('ragicLink').href = RAGIC_SHEET_URL;
+
+// 進出項單據欄位 ID（與記帳系統同一份對照，改欄位兩邊都要改）
+const F = {
+  serial: '1003129', io: '1003130', date: '1003131', invNo: '1003133', category: '1003134',
+  status: '1003136', items: '1003139', total: '1003140', tax: '1003141', source: '1003142',
+  vendor: '1003143', proj: '1003242', pay: '1003250',
+};
+// Ragic 這張表 naming=fid 不生效 → 中文名優先、欄位 ID 墊底（pitfall #14）
+const FN = {
+  serial: '流水號', io: '進/出項別', date: '日期', invNo: '發票號碼', category: '歸類科目',
+  status: '狀態', items: '品項明細', total: '金額(含稅)', tax: '稅額', source: '來源',
+  vendor: '廠商/客戶名', proj: '案號', pay: '付款來源',
+};
+
+// 大類 → 顯示名／損益處理方式
+const BUCKETS = {
+  A: { name: '營業成本',   pl: true,  cash: true,  color: 'var(--s2)' },
+  B: { name: '營業費用',   pl: true,  cash: true,  color: 'var(--s4)' },
+  C: { name: '資本支出',   pl: false, cash: true,  color: 'var(--s1)' },
+  D: { name: '折舊攤提',   pl: true,  cash: false, color: 'var(--s6)' },
+  E: { name: '融資支出',   pl: false, cash: true,  color: 'var(--s5)' },
+  FF:{ name: '往來保證金', pl: false, cash: true,  color: 'var(--s3)' },
+  Z: { name: '待分類',     pl: true,  cash: true,  color: 'var(--warn)' },
+};
+const BUCKET_ORDER = ['A', 'B', 'D', 'Z', 'C', 'E', 'FF'];
+
+/* ═══════════════ 小工具 ═══════════════ */
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+  ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+function num(v){ const n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; }
+function fmt$(n){ const v = Math.round(n || 0); return (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('zh-TW'); }
+function fmtSign(n){ const v = Math.round(n || 0); return (v > 0 ? '+$' : v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('zh-TW'); }
+// 軸標與小標用萬元（台灣人讀數字的單位；$1,234,567 在軸上沒人看得懂）
+function fmtWan(n){
+  const v = Math.abs(n || 0);
+  if (v >= 1e8) return (n / 1e8).toFixed(1).replace(/\.0$/, '') + '億';
+  if (v >= 1e4) return (n / 1e4).toFixed(v >= 1e6 ? 0 : 1).replace(/\.0$/, '') + '萬';
+  return String(Math.round(n || 0));
+}
+function pct(a, b){ return b ? (a / b * 100) : 0; }
+function fmtPct(p, digits){ return (isFinite(p) ? p.toFixed(digits == null ? 1 : digits) : '—') + '%'; }
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function ymOf(dateStr){ return String(dateStr || '').slice(0, 7).replace(/-/g, '/'); }
+function ymLabel(ym){ const [y, m] = ym.split('/'); return (+m === 1 ? y.slice(2) + '年' : '') + (+m) + '月'; }
+function monthsBack(n){
+  const out = [], d = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const x = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    out.push(x.getFullYear() + '/' + String(x.getMonth() + 1).padStart(2, '0'));
+  }
+  return out;
+}
+function thisYm(){ const d = new Date(); return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0'); }
+function thisYear(){ return String(new Date().getFullYear()); }
+// CSV：一定要 BOM，不然 Excel 開中文全是亂碼
+function downloadCSV(filename, rows){
+  const body = rows.map(r => r.map(c => {
+    const s = String(c == null ? '' : c);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + body], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+
+/* ═══════════════ Google 登入 + 60 天通行證（與記帳系統共用 localStorage，同網域免再登入）═══════════════ */
+let currentUser = null;
+try { currentUser = JSON.parse(localStorage.getItem('acct_user') || 'null'); } catch (_) {}
+
+function updateAuthUI(){
+  const chip = $('authChip'), sess = getSavedSession();
+  if (currentUser) {
+    chip.classList.add('ok');
+    chip.textContent = '✅ ' + currentUser.email + (sess ? ' · 通行證有效' : ' · 待換發通行證');
+  } else {
+    chip.classList.remove('ok');
+    chip.textContent = '🔐 未登入 · 點我 Google 登入';
+  }
+}
+$('authChip').addEventListener('click', () => {
+  if (!currentUser) showGoogleSignIn();
+  else if (confirm('要登出 ' + currentUser.email + ' 嗎？')) {
+    currentUser = null;
+    localStorage.removeItem('acct_user'); localStorage.removeItem('acct_session');
+    DATA.rows = null; updateAuthUI(); render();
+  }
+});
+function initGoogleSignIn(){
+  (function tryInit(){
+    if (typeof google === 'undefined' || !google.accounts) { setTimeout(tryInit, 500); return; }
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID, callback: handleGoogleSignIn,
+      auto_select: true, itp_support: true, cancel_on_tap_outside: false,
+    });
+    if (currentUser && !getSavedSession()) google.accounts.id.prompt();
+  })();
+}
+function showGoogleSignIn(){
+  if (typeof google === 'undefined' || !google.accounts) return toast('Google 載入中，稍後再試');
+  google.accounts.id.prompt(n => {
+    if (n.isNotDisplayed && (n.isNotDisplayed() || n.isSkippedMoment())) {
+      const btn = document.createElement('div');
+      document.body.appendChild(btn);
+      google.accounts.id.renderButton(btn, { theme: 'filled_blue', size: 'large' });
+      btn.style.cssText = 'position:fixed;top:60px;right:20px;z-index:9999;background:#fff;padding:10px;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+      setTimeout(() => btn.remove(), 30000);
+    }
+  });
+}
+function handleGoogleSignIn(response){
+  try {
+    const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    currentUser = {
+      email: (payload.email || '').toLowerCase(), name: payload.name || '',
+      idToken: response.credential, tokenExp: (parseInt(payload.exp, 10) || 0) * 1000,
+    };
+    localStorage.setItem('acct_user', JSON.stringify(currentUser));
+    updateAuthUI();
+    toast('👋 ' + (currentUser.name || currentUser.email) + ' 已登入');
+    exchangeSession();
+    loadData(true);
+  } catch (e) { toast('登入解析失敗：' + e.message); }
+}
+function getSavedSession(){
+  try {
+    const s = JSON.parse(localStorage.getItem('acct_session') || 'null');
+    if (s && s.session && s.exp > Date.now() && currentUser && s.email === currentUser.email) return s;
+  } catch (_) {}
+  return null;
+}
+let _sessExchanging = false;
+function exchangeSession(){
+  if (_sessExchanging || !currentUser || !currentUser.idToken) return;
+  if (currentUser.tokenExp && currentUser.tokenExp < Date.now()) return;
+  _sessExchanging = true;
+  fetch(WORKER_URL + '/auth/session', { method: 'POST', headers: { 'X-Google-Token': currentUser.idToken } })
+    .then(r => r.json())
+    .then(j => {
+      if (j && j.status === 'SUCCESS' && j.session) {
+        localStorage.setItem('acct_session', JSON.stringify(
+          { session: j.session, exp: j.exp, email: (j.email || currentUser.email).toLowerCase() }));
+        updateAuthUI();
+      }
+    })
+    .catch(() => {})
+    .then(() => { _sessExchanging = false; });
+}
+function getApiRoute(){
+  const s = getSavedSession();
+  if (s) {
+    if (s.exp - Date.now() < 7 * 864e5) exchangeSession();
+    return { headers: { 'X-Session-Token': s.session } };
+  }
+  if (currentUser && currentUser.idToken && (!currentUser.tokenExp || currentUser.tokenExp > Date.now()))
+    return { headers: { 'X-Google-Token': currentUser.idToken } };
+  return null;
+}
+
+/* ═══════════════ 讀取 Ragic（唯讀；分頁抓完整年度，不只 1000 筆）═══════════════ */
+const DATA = { rows: null, loading: false, err: null, loadedAt: 0, partial: false };
+const UI = {
+  view: 'overview', range: '12', tax: 'net',
+  projSort: { key: 'profit', dir: -1 }, projQ: '',
+  flowBucket: '', flowMonth: '', flowQ: '',
+  planYear: thisYear(),
+};
+
+function rv(x, key){
+  const a = x[FN[key]];
+  if (a != null && a !== '') return a;
+  const b = x[F[key]];
+  return b == null ? '' : b;
+}
+function bucketOf(l1){
+  const s = String(l1 || '').trim();
+  if (!s) return 'Z';
+  const k = s.charAt(0);
+  if (s.charAt(1) === '-' && 'ABCDEZ'.indexOf(k) >= 0) return k;
+  if (s.charAt(1) === '-' && k === 'F') return 'FF';   // F-往來與保證金（F 已被欄位表用掉，內部代號 FF）
+  return 'Z';
+}
+function normalize(x){
+  const io = String(rv(x, 'io') || '').trim();
+  const gross = num(rv(x, 'total'));
+  const taxAmt = num(rv(x, 'tax'));
+  const cat = String(rv(x, 'category') || '').trim();
+  const parts = cat.split('>').map(s => s.trim()).filter(Boolean);
+  const date = String(rv(x, 'date') || '').trim().replace(/-/g, '/');
+  const isIn = io === '進項';
+  return {
+    id: x._ragicId != null ? String(x._ragicId) : '',
+    serial: String(rv(x, 'serial') || ''),
+    io, isIn, date, ym: ymOf(date),
+    gross,
+    // 未稅＝含稅−稅額。稅額異常（空、負、大於總額）就退回含稅，寧可少扣不要扣出鬼數字
+    net: (taxAmt > 0 && taxAmt < gross) ? gross - taxAmt : gross,
+    tax: taxAmt,
+    cat, l1: parts[0] || '', l2: parts[1] || '', l3: parts[2] || '',
+    bucket: isIn ? 'REV' : bucketOf(parts[0]),
+    proj: String(rv(x, 'proj') || '').trim().toUpperCase(),
+    vendor: String(rv(x, 'vendor') || '').trim(),
+    items: String(rv(x, 'items') || '').trim(),
+    pay: String(rv(x, 'pay') || '').trim(),
+    status: String(rv(x, 'status') || '').trim(),
+    invNo: String(rv(x, 'invNo') || '').trim(),
+  };
+}
+function amt(r){ return UI.tax === 'net' ? r.net : r.gross; }
+
+async function loadData(force){
+  const route = getApiRoute();
+  if (!route) { DATA.rows = null; DATA.err = null; render(); return; }
+  if (DATA.loading) return;
+  if (!force && DATA.rows && Date.now() - DATA.loadedAt < 60000) return;
+  DATA.loading = true; DATA.err = null; render();
+  const PAGE = 1000, MAX_PAGES = 12;
+  try {
+    const seen = new Set(), rows = [];
+    let offset = 0, partial = false;
+    for (let p = 0; p < MAX_PAGES; p++) {
+      const url = WORKER_URL + '/?sheet=acct&limit=' + PAGE + (offset ? '&offset=' + offset : '');
+      const r = await fetch(url, { headers: route.headers });
+      if (r.status === 401) throw new Error('登入過期，請重新登入');
+      if (r.status === 403) throw new Error('此帳號未在 Worker 白名單，請找管理者開通');
+      if (!r.ok) throw new Error('讀取失敗 HTTP ' + r.status);
+      const j = await r.json();
+      const raw = Object.values(j).filter(v => v && typeof v === 'object' && !Array.isArray(v));
+      let fresh = 0;
+      raw.forEach(x => {
+        const rec = normalize(x);
+        const key = rec.id || (rec.serial + '|' + rec.date + '|' + rec.gross + '|' + rec.invNo);
+        if (!key || seen.has(key)) return;
+        if (!rec.date && !rec.gross) return;         // 空白列
+        seen.add(key); rows.push(rec); fresh++;
+      });
+      // 沒下一頁，或 Worker 不吃 offset（回同一批 → fresh=0）就停，避免無限翻頁
+      if (raw.length < PAGE || fresh === 0) break;
+      offset += PAGE;
+      if (p === MAX_PAGES - 1) partial = true;
+    }
+    rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+    DATA.rows = rows; DATA.loadedAt = Date.now(); DATA.partial = partial;
+  } catch (e) {
+    DATA.err = e.message || String(e);
+  }
+  DATA.loading = false; render();
+}
+
+/* ═══════════════ 彙總 ═══════════════ */
+function rangeMonths(){
+  if (UI.range === '6') return monthsBack(6);
+  if (UI.range === '12') return monthsBack(12);
+  if (UI.range === 'ytd') {
+    const y = new Date().getFullYear(), mNow = new Date().getMonth() + 1, out = [];
+    for (let m = 1; m <= mNow; m++) out.push(y + '/' + String(m).padStart(2, '0'));
+    return out;
+  }
+  const set = new Set((DATA.rows || []).map(r => r.ym).filter(Boolean));
+  return Array.from(set).sort();
+}
+function blankMonth(ym){
+  const b = {};
+  BUCKET_ORDER.forEach(k => { b[k] = 0; });
+  const bg = {};
+  BUCKET_ORDER.forEach(k => { bg[k] = 0; });
+  return { ym, rev: 0, revGross: 0, b, bg, cnt: 0, revCnt: 0 };
+}
+// 損益：營收 − (A 成本 + B 費用 + D 折舊 + Z 待分類)；C/E/F 不進損益
+function plExpense(m){ return m.b.A + m.b.B + m.b.D + m.b.Z; }
+function profitOf(m){ return m.rev - plExpense(m); }
+function grossProfitOf(m){ return m.rev - m.b.A; }
+// 現金：一律用含稅金額；折舊(D) 不是現金支出要排除
+function cashOutOf(m){ return m.bg.A + m.bg.B + m.bg.C + m.bg.E + m.bg.FF + m.bg.Z; }
+function cashNetOf(m){ return m.revGross - cashOutOf(m); }
+
+function aggregateMonths(rows, months){
+  const map = {};
+  months.forEach(ym => { map[ym] = blankMonth(ym); });
+  rows.forEach(r => {
+    const m = map[r.ym];
+    if (!m) return;
+    m.cnt++;
+    if (r.isIn) { m.rev += amt(r); m.revGross += r.gross; m.revCnt++; }
+    else { m.b[r.bucket] += amt(r); m.bg[r.bucket] += r.gross; }
+  });
+  return months.map(ym => map[ym]);
+}
+function sumMonths(ms){
+  const t = blankMonth('合計');
+  ms.forEach(m => {
+    t.rev += m.rev; t.revGross += m.revGross; t.cnt += m.cnt; t.revCnt += m.revCnt;
+    BUCKET_ORDER.forEach(k => { t.b[k] += m.b[k]; t.bg[k] += m.bg[k]; });
+  });
+  return t;
+}
+function rowsInRange(){
+  const rows = DATA.rows || [];
+  if (UI.range === 'all') return rows;
+  const set = new Set(rangeMonths());
+  return rows.filter(r => set.has(r.ym));
+}
+// 專案損益：收入＝該案號的進項；直接成本＝A 大類；其他歸戶＝B/C/D/E/Z；F 押金不算成本（可退回）
+function aggregateProjects(rows){
+  const map = new Map();
+  rows.forEach(r => {
+    const key = r.proj || '（未歸案）';
+    if (!map.has(key)) map.set(key, {
+      proj: key, rev: 0, cost: 0, other: 0, deposit: 0, cnt: 0, first: '', last: '', vendors: new Set(),
+    });
+    const p = map.get(key);
+    p.cnt++;
+    if (r.date) {
+      if (!p.first || r.date < p.first) p.first = r.date;
+      if (!p.last || r.date > p.last) p.last = r.date;
+    }
+    if (r.isIn) p.rev += amt(r);
+    else if (r.bucket === 'A') { p.cost += amt(r); if (r.vendor) p.vendors.add(r.vendor); }
+    else if (r.bucket === 'FF') p.deposit += amt(r);
+    else { p.other += amt(r); if (r.vendor) p.vendors.add(r.vendor); }
+  });
+  return Array.from(map.values()).map(p => ({
+    ...p,
+    gross: p.rev - p.cost,                       // 毛利
+    profit: p.rev - p.cost - p.other,            // 案件淨額（含分攤到案的費用）
+    marginPct: p.rev ? (p.rev - p.cost) / p.rev * 100 : null,
+    vendorCnt: p.vendors.size,
+  }));
+}
+function aggregateCats(rows, level){
+  const map = new Map();
+  rows.filter(r => !r.isIn).forEach(r => {
+    const key = level === 1 ? (r.l1 || 'Z-待分類')
+      : (r.l1 || 'Z-待分類') + (r.l2 ? ' > ' + r.l2 : ' > （未細分）');
+    if (!map.has(key)) map.set(key, { key, bucket: r.bucket, amt: 0, cnt: 0 });
+    const c = map.get(key); c.amt += amt(r); c.cnt++;
+  });
+  return Array.from(map.values()).sort((a, b) => b.amt - a.amt);
+}
+
+/* ═══════════════ 圖表元件（純 HTML/CSS，離線可跑、不吃 CDN）═══════════════ */
+function attrT(html){ return html.replace(/"/g, '&quot;'); }
+function tipRow(label, val, color){
+  return '<div class="r"><span>' + (color ? '<i class="dot" style="background:' + color + '"></i>' : '') +
+    esc(label) + '</span><span>' + esc(val) + '</span></div>';
+}
+// 軸刻度取整：讓格線落在好讀的數字上（1/2/2.5/5 × 10^n）
+function niceTop(peak){
+  if (!(peak > 0)) return 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(peak)));
+  const r = peak / mag;
+  const step = r <= 1 ? 1 : r <= 2 ? 2 : r <= 2.5 ? 2.5 : r <= 5 ? 5 : 10;
+  return step * mag;
+}
+function gridHtml(top, lines){
+  let h = '';
+  for (let i = 0; i <= lines; i++) {
+    const p = i / lines;
+    h += '<div class="gl" style="bottom:' + (p * 100) + '%"></div>' +
+         '<div class="gv" style="bottom:' + (p * 100) + '%">' + fmtWan(top * p) + '</div>';
+  }
+  return h;
+}
+/* 群組直條圖：同一軸、同一單位（元）。series = [{label,color,get(m)}] */
+function chartGrouped(months, series, tipExtra){
+  if (!months.length) return '<div class="empty">這個區間沒有資料</div>';
+  const peak = Math.max(1, ...months.map(m => Math.max(...series.map(s => s.get(m)))));
+  const top = niceTop(peak);
+  const now = thisYm();
+  const cols = months.map(m => {
+    const tip = '<b>' + esc(ymLabel(m.ym)) + '</b>' +
+      series.map(s => tipRow(s.label, fmt$(s.get(m)), s.color)).join('') +
+      (tipExtra ? tipExtra(m) : '');
+    const bars = series.map(s =>
+      '<i class="bar" style="height:' + Math.max(0.6, s.get(m) / top * 100) + '%;background:' + s.color + '"></i>').join('');
+    return '<div class="col' + (m.ym === now ? ' now' : '') + '" data-t="' + attrT(tip) + '">' +
+      '<div class="pair">' + bars + '</div><span class="xl">' + esc(ymLabel(m.ym)) + '</span></div>';
+  }).join('');
+  return '<div class="chart' + (months.length > 8 ? ' dense' : '') + '"><div class="plot">' + gridHtml(top, 4) +
+    '<div class="cols">' + cols + '</div></div>' +
+    '<div class="legend">' + series.map(s =>
+      '<b><span class="dot" style="background:' + s.color + '"></span>' + esc(s.label) + '</b>').join('') +
+    '</div></div>';
+}
+/* 正負直條圖（淨利）：零線切上下兩半，正綠負紅 */
+function chartDiverging(months, get, label){
+  if (!months.length) return '<div class="empty">這個區間沒有資料</div>';
+  const vals = months.map(get);
+  const maxPos = Math.max(0, ...vals), maxNeg = Math.max(0, ...vals.map(v => -v));
+  const top = niceTop(Math.max(maxPos, 1)), bot = niceTop(Math.max(maxNeg, 1));
+  const span = maxNeg > 0 ? top + bot : top;
+  const upShare = maxNeg > 0 ? top / span * 100 : 100;
+  const now = thisYm();
+  const cols = months.map((m, i) => {
+    const v = vals[i];
+    const hUp = v > 0 ? v / top * 100 : 0;
+    const hDn = v < 0 ? -v / bot * 100 : 0;
+    const tip = '<b>' + esc(ymLabel(m.ym)) + '</b>' +
+      tipRow(label, fmtSign(v), v >= 0 ? 'var(--in)' : 'var(--out)') +
+      tipRow('營收', fmt$(m.rev)) + tipRow('損益支出', fmt$(plExpense(m)));
+    return '<div class="col dv' + (m.ym === now ? ' now' : '') + '" data-t="' + attrT(tip) + '">' +
+      '<div class="up-half" style="height:' + upShare + '%">' +
+        (v > 0 ? '<i class="bar pos" style="height:' + Math.max(1, hUp) + '%;background:var(--in)"></i>' : '') + '</div>' +
+      '<div class="dn-half" style="height:' + (100 - upShare) + '%">' +
+        (v < 0 ? '<i class="bar neg" style="height:' + Math.max(1, hDn) + '%;background:var(--out)"></i>' : '') + '</div>' +
+      '<span class="xl">' + esc(ymLabel(m.ym)) + '</span></div>';
+  }).join('');
+  return '<div class="chart' + (months.length > 8 ? ' dense' : '') + '"><div class="plot">' +
+    '<div class="gl" style="bottom:100%"></div><div class="gv" style="bottom:100%">' + fmtWan(top) + '</div>' +
+    '<div class="zero" style="bottom:' + (100 - upShare) + '%"></div>' +
+    '<div class="gv" style="bottom:' + (100 - upShare) + '%">0</div>' +
+    (maxNeg > 0 ? '<div class="gl" style="bottom:0"></div><div class="gv" style="bottom:0">−' + fmtWan(bot) + '</div>' : '') +
+    '<div class="cols">' + cols + '</div></div>' +
+    '<div class="legend"><b><span class="dot" style="background:var(--in)"></span>獲利月</b>' +
+    '<b><span class="dot" style="background:var(--out)"></span>虧損月</b></div></div>';
+}
+/* 橫向排行條：單一數量級比大小 → 一個顏色，長度就是資訊 */
+function rankBars(items, color){
+  if (!items.length) return '<div class="empty">沒有資料</div>';
+  const peak = Math.max(1, ...items.map(i => Math.abs(i.value)));
+  return items.map(i => {
+    const c = i.color || color || 'var(--s1)';
+    return '<div class="hb"' + (i.tip ? ' data-t="' + attrT(i.tip) + '"' : '') + '>' +
+      '<div class="nm">' + esc(i.label) + (i.sub ? '<small>' + esc(i.sub) + '</small>' : '') + '</div>' +
+      '<div class="track"><div class="fill" style="width:' + (Math.abs(i.value) / peak * 100) + '%;background:' + c + '"></div></div>' +
+      '<div class="vv" style="color:' + (i.valColor || 'var(--tx)') + '">' + esc(i.valText || fmt$(i.value)) + '</div></div>';
+  }).join('');
+}
+/* 子彈條：實際 vs 目標（預算頁用）*/
+function bullet(label, actual, target, opts){
+  const o = opts || {};
+  const lower = !!o.lowerBetter;                 // 成本/費用：低於預算才是好
+  const p = target ? actual / target * 100 : 0;
+  const scale = Math.max(actual, target) * 1.15 || 1;
+  const good = target ? (lower ? actual <= target : actual >= target) : false;
+  const color = !target ? 'var(--tx3)' : good ? 'var(--in)' : (lower ? 'var(--out)' : 'var(--warn)');
+  return '<div class="bul"><div class="top"><span>' + esc(label) + '</span>' +
+    '<span class="r" style="color:' + color + '">' + (target ? fmtPct(p, 0) : '未設目標') + '</span></div>' +
+    '<div class="track"><div class="fill" style="width:' + Math.min(100, actual / scale * 100) + '%;background:' + color + '"></div>' +
+    (target ? '<div class="mark" style="left:' + Math.min(99.5, target / scale * 100) + '%"></div>' : '') + '</div>' +
+    '<div class="cap"><span>實際 ' + fmt$(actual) + '</span><span>' +
+    (target
+      ? (lower ? '預算 ' + fmt$(target) + (actual <= target ? '（還剩 ' + fmt$(target - actual) + ' 可用）' : '（超支 ' + fmt$(actual - target) + '）')
+               : '目標 ' + fmt$(target) + (actual >= target ? '（超標 ' + fmt$(actual - target) + '）' : '（還差 ' + fmt$(target - actual) + '）'))
+      : '去計畫頁設定目標') +
+    '</span></div></div>';
+}
+/* Tooltip：滑鼠移到條上就給數字，不用在每根條上印字（dataviz：不要每點都標數字）*/
+function initTips(){
+  const tip = $('tip');
+  const hide = () => { tip.hidden = true; };
+  const pos = e => {
+    const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX + pad, y = e.clientY - h - pad;
+    if (x + w > innerWidth - 8) x = e.clientX - w - pad;
+    if (y < 8) y = e.clientY + pad;
+    tip.style.left = Math.max(8, x) + 'px'; tip.style.top = y + 'px';
+  };
+  document.addEventListener('pointerover', e => {
+    const el = e.target && e.target.closest ? e.target.closest('[data-t]') : null;
+    if (!el) { hide(); return; }
+    tip.innerHTML = el.getAttribute('data-t'); tip.hidden = false; pos(e);
+  });
+  document.addEventListener('pointermove', e => { if (!tip.hidden) pos(e); });
+  document.addEventListener('scroll', hide, true);
+  document.addEventListener('pointerdown', hide);
+}
+
+/* ═══════════════ 畫面一：總覽 ═══════════════ */
+function viewOverview(){
+  const rows = rowsInRange(), months = rangeMonths(), ms = aggregateMonths(rows, months);
+  const cur = ms[ms.length - 1] || blankMonth(thisYm());
+  const prev = ms[ms.length - 2] || blankMonth('');
+  const tot = sumMonths(ms);
+  const profit = profitOf(cur), gp = grossProfitOf(cur);
+  const dRev = prev.rev ? pct(cur.rev - prev.rev, prev.rev) : null;
+
+  const unclassified = tot.b.Z;
+  const unclassifiedCnt = rows.filter(r => !r.isIn && r.bucket === 'Z').length;
+  const costNoProj = rows.filter(r => !r.isIn && r.bucket === 'A' && !r.proj);
+  const costNoProjAmt = costNoProj.reduce((s, r) => s + amt(r), 0);
+  const alerts = [];
+  if (unclassifiedCnt) alerts.push({ cls: '', ic: 'Z', t: `<b>${unclassifiedCnt} 筆待分類，共 ${fmt$(unclassified)}</b>` +
+    `<small>已保守列入費用（寧可獲利算少，不要虛胖）。到「收支」頁篩 Z-待分類，裁示完數字才準。</small>` });
+  if (costNoProjAmt > 0) alerts.push({ cls: '', ic: '案', t: `<b>${costNoProj.length} 筆營業成本沒填案號，共 ${fmt$(costNoProjAmt)}</b>` +
+    `<small>這些成本進得了損益、進不了專案報表——專案毛利會比實際好看。入帳時把案號補上是最省力的補救。</small>` });
+  if (DATA.partial) alerts.push({ cls: 'err', ic: '!', t: '<b>資料超過 12,000 筆，只讀到前段</b><small>報表可能不完整，請縮小期間或改用 Ragic 原表匯出。</small>' });
+  if (!alerts.length && tot.cnt) alerts.push({ cls: 'ok', ic: '✓', t: '<b>資料乾淨：沒有待分類、成本都有歸戶</b><small>這個區間的專案毛利可以直接拿來做決策。</small>' });
+
+  const kpis = `
+    <div class="kpis">
+      <div class="kpi hero"><div class="lb">本月營收 · ${esc(ymLabel(cur.ym))}</div>
+        <div class="vl up">${fmt$(cur.rev)}</div>
+        <div class="dt">${dRev == null ? '上月無資料' : (dRev >= 0 ? '▲ ' : '▼ ') + fmtPct(Math.abs(dRev), 0) + ' vs 上月'}</div></div>
+      <div class="kpi"><div class="lb">本月損益支出</div>
+        <div class="vl dn">${fmt$(plExpense(cur))}</div>
+        <div class="dt">成本 ${fmtWan(cur.b.A)} · 費用 ${fmtWan(cur.b.B)}${cur.b.D ? ' · 折舊 ' + fmtWan(cur.b.D) : ''}</div></div>
+      <div class="kpi"><div class="lb">本月淨利</div>
+        <div class="vl ${profit >= 0 ? 'up' : 'dn'}">${fmtSign(profit)}</div>
+        <div class="dt">淨利率 ${cur.rev ? fmtPct(pct(profit, cur.rev)) : '—'}</div></div>
+      <div class="kpi"><div class="lb">本月毛利</div>
+        <div class="vl">${fmtSign(gp)}</div>
+        <div class="dt">毛利率 ${cur.rev ? fmtPct(pct(gp, cur.rev)) : '—'}</div></div>
+      <div class="kpi"><div class="lb">本月現金淨流</div>
+        <div class="vl ${cashNetOf(cur) >= 0 ? 'up' : 'dn'}">${fmtSign(cashNetOf(cur))}</div>
+        <div class="dt">含資本／融資／押金，折舊不計（一律含稅）</div></div>
+      <div class="kpi"><div class="lb">區間累計淨利</div>
+        <div class="vl ${profitOf(tot) >= 0 ? 'up' : 'dn'}">${fmtSign(profitOf(tot))}</div>
+        <div class="dt">${esc(months[0] || '')} ～ ${esc(months[months.length - 1] || '')} · ${tot.cnt} 筆</div></div>
+    </div>`;
+
+  const chart1 = chartGrouped(ms, [
+    { label: '營收', color: 'var(--in)', get: m => m.rev },
+    { label: '損益支出', color: 'var(--out)', get: m => plExpense(m) },
+  ], m => tipRow('淨利', fmtSign(profitOf(m))) + tipRow('毛利率', m.rev ? fmtPct(pct(grossProfitOf(m), m.rev)) : '—'));
+
+  const rowsHtml = ms.map(m => `
+    <tr>
+      <td class="k">${esc(ymLabel(m.ym))}</td>
+      <td class="num">${fmt$(m.rev)}</td>
+      <td class="num">${fmt$(m.b.A)}</td>
+      <td class="num">${fmt$(grossProfitOf(m))}</td>
+      <td class="num ${grossProfitOf(m) >= 0 ? '' : 'dn'}">${m.rev ? fmtPct(pct(grossProfitOf(m), m.rev)) : '—'}</td>
+      <td class="num">${fmt$(m.b.B)}</td>
+      <td class="num">${m.b.D ? fmt$(m.b.D) : '—'}</td>
+      <td class="num ${m.b.Z ? 'warn' : ''}" style="${m.b.Z ? 'color:var(--warn)' : ''}">${m.b.Z ? fmt$(m.b.Z) : '—'}</td>
+      <td class="num k ${profitOf(m) >= 0 ? 'up' : 'dn'}">${fmtSign(profitOf(m))}</td>
+      <td class="num">${fmtSign(cashNetOf(m))}</td>
+    </tr>`).join('');
+
+  return kpis +
+    alerts.map(a => `<div class="alert ${a.cls}"><div class="ai">${esc(a.ic)}</div><div class="txt">${a.t}</div></div>`).join('') +
+    `<div class="sec">月度營收 vs 損益支出 <span class="hint">滑過長條看數字 · ${UI.tax === 'net' ? '未稅' : '含稅'}口徑</span></div>
+     <div class="card">${chart1}</div>
+     <div class="sec">月度淨利 <span class="hint">營收 − 成本 − 費用 − 折舊 − 待分類</span></div>
+     <div class="card">${chartDiverging(ms, profitOf, '淨利')}</div>
+     <div class="sec">月度損益表
+       <span class="hint">C 資本支出／E 融資／F 保證金不進損益，只反映在現金淨流</span></div>
+     <div class="card"><div class="tblwrap"><table class="tbl">
+       <thead><tr><th>月份</th><th class="num">營收</th><th class="num">營業成本</th><th class="num">毛利</th>
+         <th class="num">毛利率</th><th class="num">營業費用</th><th class="num">折舊</th><th class="num">待分類</th>
+         <th class="num">淨利</th><th class="num">現金淨流</th></tr></thead>
+       <tbody>${rowsHtml}
+         <tr class="tot"><td>合計</td><td class="num">${fmt$(tot.rev)}</td><td class="num">${fmt$(tot.b.A)}</td>
+           <td class="num">${fmt$(grossProfitOf(tot))}</td>
+           <td class="num">${tot.rev ? fmtPct(pct(grossProfitOf(tot), tot.rev)) : '—'}</td>
+           <td class="num">${fmt$(tot.b.B)}</td><td class="num">${fmt$(tot.b.D)}</td><td class="num">${fmt$(tot.b.Z)}</td>
+           <td class="num ${profitOf(tot) >= 0 ? 'up' : 'dn'}">${fmtSign(profitOf(tot))}</td>
+           <td class="num">${fmtSign(cashNetOf(tot))}</td></tr>
+       </tbody></table></div>
+       <div style="margin-top:12px;text-align:right"><button class="mini" data-act="csv-months">⤓ 匯出月報 CSV</button></div>
+     </div>`;
+}
+
+/* ═══════════════ 畫面二：專案 ═══════════════ */
+function viewProject(){
+  const rows = rowsInRange();
+  let ps = aggregateProjects(rows);
+  const q = UI.projQ.trim().toUpperCase();
+  if (q) ps = ps.filter(p => p.proj.indexOf(q) >= 0);
+  const key = UI.projSort.key, dir = UI.projSort.dir;
+  ps.sort((a, b) => {
+    const av = a[key], bv = b[key];
+    if (typeof av === 'string' || typeof bv === 'string') return String(bv).localeCompare(String(av)) * dir;
+    return ((av == null ? -Infinity : av) - (bv == null ? -Infinity : bv)) * dir;
+  });
+  const real = ps.filter(p => p.proj !== '（未歸案）');
+  const withRev = real.filter(p => p.rev > 0);
+  const totRev = real.reduce((s, p) => s + p.rev, 0);
+  const totCost = real.reduce((s, p) => s + p.cost, 0);
+  const totGross = totRev - totCost;
+
+  const top = real.slice().sort((a, b) => b.gross - a.gross);
+  const bars = top.slice(0, 10).map(p => ({
+    label: p.proj, sub: `收入 ${fmtWan(p.rev)} · 成本 ${fmtWan(p.cost)}`,
+    value: p.gross, color: p.gross >= 0 ? 'var(--in)' : 'var(--out)',
+    valColor: p.gross >= 0 ? 'var(--in)' : 'var(--out)', valText: fmtSign(p.gross),
+    tip: `<b>${esc(p.proj)}</b>` + tipRow('收入', fmt$(p.rev)) + tipRow('直接成本', fmt$(p.cost)) +
+      tipRow('毛利', fmtSign(p.gross)) + tipRow('毛利率', p.marginPct == null ? '—' : fmtPct(p.marginPct)),
+  }));
+
+  const body = ps.map(p => {
+    const open = UI.projOpen === p.proj;
+    const det = open ? projDetailHtml(rows, p.proj) : '';
+    return `<tr data-act="proj-open" data-proj="${esc(p.proj)}" style="cursor:pointer">
+      <td class="k">${open ? '▾ ' : '▸ '}${esc(p.proj)}${p.proj === '（未歸案）' ? ' <span class="pill gray">未歸戶</span>' : ''}</td>
+      <td class="num">${p.rev ? fmt$(p.rev) : '—'}</td>
+      <td class="num">${p.cost ? fmt$(p.cost) : '—'}</td>
+      <td class="num k ${p.gross >= 0 ? 'up' : 'dn'}">${fmtSign(p.gross)}</td>
+      <td class="num">${p.marginPct == null ? '<span class="mute">無收入</span>' :
+        `<span class="pill ${p.marginPct >= 30 ? 'ok' : p.marginPct >= 10 ? 'warn' : 'bad'}">${fmtPct(p.marginPct, 0)}</span>`}</td>
+      <td class="num">${p.other ? fmt$(p.other) : '—'}</td>
+      <td class="num ${p.profit >= 0 ? '' : 'dn'}">${fmtSign(p.profit)}</td>
+      <td class="num">${p.cnt}</td>
+      <td>${esc((p.first || '').slice(5))}${p.last && p.last !== p.first ? ' ～ ' + esc(p.last.slice(5)) : ''}<small>${esc((p.first || '').slice(0, 4))} 年起</small></td>
+    </tr>` + det;
+  }).join('');
+
+  const th = (k, label, cls) => `<th class="s ${cls || ''}" data-act="proj-sort" data-key="${k}">${label}${key === k ? (dir < 0 ? ' ↓' : ' ↑') : ''}</th>`;
+
+  return `
+    <div class="kpis">
+      <div class="kpi"><div class="lb">有帳的案子</div><div class="vl">${real.length}<span style="font-size:13px;color:var(--tx3)"> 案</span></div>
+        <div class="dt">其中 ${withRev.length} 案已有收入入帳</div></div>
+      <div class="kpi"><div class="lb">專案收入合計</div><div class="vl up">${fmt$(totRev)}</div>
+        <div class="dt">已歸戶到案號的進項</div></div>
+      <div class="kpi"><div class="lb">專案直接成本</div><div class="vl dn">${fmt$(totCost)}</div>
+        <div class="dt">A-營業成本，已歸戶部分</div></div>
+      <div class="kpi"><div class="lb">專案毛利</div><div class="vl ${totGross >= 0 ? 'up' : 'dn'}">${fmtSign(totGross)}</div>
+        <div class="dt">毛利率 ${totRev ? fmtPct(pct(totGross, totRev)) : '—'}</div></div>
+    </div>
+    <div class="alert"><div class="ai">i</div><div class="txt">
+      <b>專案數字只涵蓋「有填案號」的單據</b>
+      <small>案號是記帳時的選填欄位。沒填的成本會落在「（未歸案）」列，該案毛利就會偏高。要讓這頁準，入帳時案號要填好。</small></div></div>
+    <div class="sec">專案毛利排行 Top 10 <span class="hint">收入 − 直接成本(A)</span></div>
+    <div class="card">${rankBars(bars)}</div>
+    <div class="sec">全部案件 <span class="hint">點列展開該案明細 · 點欄位標題排序</span></div>
+    <div class="card">
+      <div class="filters" style="margin-bottom:10px">
+        <input class="srch" id="projQ" placeholder="搜尋案號…" value="${esc(UI.projQ)}">
+        <div class="spacer"></div>
+        <button class="mini" data-act="csv-proj">⤓ 匯出專案 CSV</button>
+      </div>
+      <div class="tblwrap"><table class="tbl">
+        <thead><tr>${th('proj', '案號')}${th('rev', '收入', 'num')}${th('cost', '直接成本', 'num')}${th('gross', '毛利', 'num')}
+          ${th('marginPct', '毛利率', 'num')}${th('other', '其他歸戶', 'num')}${th('profit', '案件淨額', 'num')}
+          ${th('cnt', '筆數', 'num')}${th('last', '期間')}</tr></thead>
+        <tbody>${body || '<tr><td colspan="9" class="empty">這個區間沒有資料</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+function projDetailHtml(rows, proj){
+  const list = rows.filter(r => (r.proj || '（未歸案）') === proj).slice(0, 60);
+  const items = list.map(r => `
+    <div class="hb" style="grid-template-columns:80px 1fr auto">
+      <div class="nm">${esc(r.date.slice(5))}<small>${esc(r.isIn ? '進項' : (r.l1 || '未歸類').replace(/^[A-Z]-/, ''))}</small></div>
+      <div class="nm" style="white-space:normal">${esc(r.vendor || r.items.slice(0, 30) || '—')}
+        <small>${esc(r.l2 || '')}${r.l3 ? ' · ' + esc(r.l3) : ''}${r.pay ? ' · ' + esc(r.pay) : ''}</small></div>
+      <div class="vv" style="color:${r.isIn ? 'var(--in)' : 'var(--out)'}">${r.isIn ? '+' : '−'}${fmt$(amt(r)).replace('$', '$')}</div>
+    </div>`).join('');
+  return `<tr><td colspan="9" style="background:var(--bg2);padding:10px 14px">
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:4px">${esc(proj)} 明細（最多 60 筆）</div>
+    ${items || '<div class="empty">沒有明細</div>'}</td></tr>`;
+}
+
+/* ═══════════════ 畫面三：收支結構 ═══════════════ */
+function viewFlow(){
+  const all = rowsInRange();
+  const months = rangeMonths();
+  const tot = sumMonths(aggregateMonths(all, months));
+
+  // 大類結構（類別色固定順序，最多 7 類——超過就該進表格了）
+  const bucketBars = BUCKET_ORDER.filter(k => tot.b[k] > 0).map(k => ({
+    label: k === 'FF' ? 'F-' + BUCKETS[k].name : k + '-' + BUCKETS[k].name,
+    sub: (BUCKETS[k].pl ? '進損益' : '不進損益') + (BUCKETS[k].cash ? '' : ' · 非現金'),
+    value: tot.b[k], color: BUCKETS[k].color,
+    valText: fmt$(tot.b[k]),
+    tip: `<b>${esc(BUCKETS[k].name)}</b>` + tipRow('金額', fmt$(tot.b[k])) +
+      tipRow('佔總支出', fmtPct(pct(tot.b[k], BUCKET_ORDER.reduce((s, x) => s + tot.b[x], 0)))),
+  }));
+
+  const cats = aggregateCats(all, 2).slice(0, 12);
+  const catBars = cats.map(c => ({
+    label: c.key.split(' > ')[1] || c.key, sub: c.key.split(' > ')[0].replace(/^[A-Z]-/, '') + ' · ' + c.cnt + ' 筆',
+    value: c.amt, color: BUCKETS[c.bucket] ? BUCKETS[c.bucket].color : 'var(--s1)',
+    tip: `<b>${esc(c.key)}</b>` + tipRow('金額', fmt$(c.amt)) + tipRow('筆數', c.cnt + ' 筆'),
+  }));
+
+  // 明細（篩選）
+  let list = all.slice();
+  if (UI.flowBucket === 'REV') list = list.filter(r => r.isIn);
+  else if (UI.flowBucket) list = list.filter(r => !r.isIn && r.bucket === UI.flowBucket);
+  if (UI.flowMonth) list = list.filter(r => r.ym === UI.flowMonth);
+  const fq = UI.flowQ.trim();
+  if (fq) list = list.filter(r => (r.vendor + ' ' + r.items + ' ' + r.cat + ' ' + r.proj + ' ' + r.invNo).indexOf(fq) >= 0);
+  const shown = list.slice(0, 200);
+  const detail = shown.map(r => `
+    <tr>
+      <td>${esc(r.date)}</td>
+      <td><span class="pill ${r.isIn ? 'ok' : 'gray'}">${esc(r.io || '?')}</span></td>
+      <td>${esc(r.vendor || '—')}<small>${esc(r.items.slice(0, 40))}</small></td>
+      <td>${esc(r.isIn ? '營業收入' : (r.l1 || '未歸類'))}<small>${esc([r.l2, r.l3].filter(Boolean).join(' · '))}</small></td>
+      <td>${esc(r.proj || '—')}</td>
+      <td>${esc(r.pay || '—')}</td>
+      <td class="num k" style="color:${r.isIn ? 'var(--in)' : 'var(--out)'}">${r.isIn ? '+' : '−'}${fmt$(amt(r))}</td>
+    </tr>`).join('');
+
+  const chip = (v, label) => `<button data-act="flow-bucket" data-v="${v}" class="${UI.flowBucket === v ? 'on' : ''}">${label}</button>`;
+  const monthOpts = ['<option value="">全部月份</option>'].concat(
+    months.slice().reverse().map(m => `<option value="${m}"${UI.flowMonth === m ? ' selected' : ''}>${esc(m)}</option>`)).join('');
+
+  return `
+    <div class="kpis">
+      <div class="kpi"><div class="lb">區間收入</div><div class="vl up">${fmt$(tot.rev)}</div><div class="dt">${tot.revCnt} 筆進項</div></div>
+      <div class="kpi"><div class="lb">區間支出</div><div class="vl dn">${fmt$(BUCKET_ORDER.reduce((s, k) => s + tot.b[k], 0))}</div>
+        <div class="dt">${tot.cnt - tot.revCnt} 筆出項（含非損益類）</div></div>
+      <div class="kpi"><div class="lb">損益支出</div><div class="vl">${fmt$(plExpense(tot))}</div><div class="dt">A+B+D+Z</div></div>
+      <div class="kpi"><div class="lb">現金流出</div><div class="vl">${fmt$(cashOutOf(tot))}</div><div class="dt">含稅、排除折舊</div></div>
+    </div>
+    <div class="grid2" style="margin-top:14px">
+      <div><div class="sec">支出大類結構</div><div class="card">${rankBars(bucketBars)}</div></div>
+      <div><div class="sec">支出分類 Top 12</div><div class="card">${rankBars(catBars)}</div></div>
+    </div>
+    <div class="sec">單據明細 <span class="hint">共 ${list.length} 筆${list.length > 200 ? '，畫面顯示前 200 筆（匯出為全部）' : ''}</span></div>
+    <div class="card">
+      <div class="filters" style="margin-bottom:10px">
+        <div class="fgrp">${chip('', '全部')}${chip('REV', '收入')}${BUCKET_ORDER.map(k =>
+          chip(k, (k === 'FF' ? 'F' : k) + '-' + BUCKETS[k].name)).join('')}</div>
+        <select class="srch" id="flowMonth">${monthOpts}</select>
+        <input class="srch" id="flowQ" placeholder="搜尋廠商／品項／案號…" value="${esc(UI.flowQ)}">
+        <div class="spacer"></div>
+        <button class="mini" data-act="csv-flow">⤓ 匯出明細 CSV</button>
+      </div>
+      <div class="tblwrap"><table class="tbl">
+        <thead><tr><th>日期</th><th>類型</th><th>廠商／品項</th><th>歸類科目</th><th>案號</th><th>付款來源</th><th class="num">金額</th></tr></thead>
+        <tbody>${detail || '<tr><td colspan="7" class="empty">沒有符合的單據</td></tr>'}</tbody>
+      </table></div>
+    </div>`;
+}
+
+/* ═══════════════ 畫面四：計畫（預算 vs 實際）═══════════════
+   目標存在這台裝置的 localStorage：報表是唯讀層，不寫 Ragic。
+   要跨裝置／跨人共用，用下方「匯出 JSON」搬，或之後另開一張 Ragic 預算表再改成雲端存。 */
+const PLAN_KEY = 'usled_report_plan_v1';
+let PLAN = (function(){ try { return JSON.parse(localStorage.getItem(PLAN_KEY) || '{}'); } catch (_) { return {}; } })();
+function planSave(){ try { localStorage.setItem(PLAN_KEY, JSON.stringify(PLAN)); } catch (_) { toast('⚠ 儲存失敗（瀏覽器空間不足？）'); } }
+function planGet(ym){ const p = PLAN[ym] || {}; return { rev: num(p.rev), cogs: num(p.cogs), opex: num(p.opex) }; }
+function planSet(ym, k, v){ PLAN[ym] = PLAN[ym] || {}; PLAN[ym][k] = num(v) || 0; planSave(); }
+function monthsOfYear(y){ const out = []; for (let m = 1; m <= 12; m++) out.push(y + '/' + String(m).padStart(2, '0')); return out; }
+
+// 年度實際 vs 目標的所有數字集中算一次，畫面與「就地更新」共用同一份
+function planCalc(y){
+  const months = monthsOfYear(y);
+  const ms = aggregateMonths(DATA.rows || [], months);
+  const nowYm = thisYm();
+  const curIdx = months.indexOf(nowYm);
+  // 年度累計只算到當月：未來月份沒有實際值，拿全年目標比會永遠不及格
+  const upto = curIdx >= 0 ? curIdx + 1 : ms.length;
+  const actYtd = sumMonths(ms.slice(0, upto));
+  const sumPlan = list => list.reduce((s, m) => {
+    const p = planGet(m); s.rev += p.rev; s.cogs += p.cogs; s.opex += p.opex; return s;
+  }, { rev: 0, cogs: 0, opex: 0 });
+  return {
+    y, months, ms, nowYm, curIdx, upto, actYtd,
+    planYtd: sumPlan(months.slice(0, upto)), planYear: sumPlan(months),
+    cur: curIdx >= 0 ? ms[curIdx] : null, curPlan: curIdx >= 0 ? planGet(nowYm) : null,
+  };
+}
+function planKpisHtml(a){
+  const p = a.planYtd;
+  return `
+    <div class="kpi hero"><div class="lb">${esc(a.y)} 年累計營收（至 ${esc(ymLabel(a.months[a.upto - 1] || a.months[0]))}）</div>
+      <div class="vl up">${fmt$(a.actYtd.rev)}</div>
+      <div class="dt">${p.rev ? '目標 ' + fmt$(p.rev) + ' · 達成 ' + fmtPct(pct(a.actYtd.rev, p.rev), 0) : '尚未設目標'}</div></div>
+    <div class="kpi"><div class="lb">累計營業成本</div><div class="vl">${fmt$(a.actYtd.b.A)}</div>
+      <div class="dt">${p.cogs ? '預算 ' + fmt$(p.cogs) + ' · 用掉 ' + fmtPct(pct(a.actYtd.b.A, p.cogs), 0) : '尚未設預算'}</div></div>
+    <div class="kpi"><div class="lb">累計營業費用</div><div class="vl">${fmt$(a.actYtd.b.B)}</div>
+      <div class="dt">${p.opex ? '預算 ' + fmt$(p.opex) + ' · 用掉 ' + fmtPct(pct(a.actYtd.b.B, p.opex), 0) : '尚未設預算'}</div></div>
+    <div class="kpi"><div class="lb">累計淨利</div>
+      <div class="vl ${profitOf(a.actYtd) >= 0 ? 'up' : 'dn'}">${fmtSign(profitOf(a.actYtd))}</div>
+      <div class="dt">${p.rev || p.cogs || p.opex ? '目標 ' + fmtSign(p.rev - p.cogs - p.opex) : '全年目標營收 ' + fmt$(a.planYear.rev)}</div></div>`;
+}
+function planBulletsHtml(a){
+  if (!a.cur) return '<div class="empty">本月不在 ' + esc(a.y) + ' 年度內</div>';
+  const p = a.curPlan;
+  return bullet('本月營收 vs 目標', a.cur.rev, p.rev) +
+    bullet('本月營業成本 vs 預算', a.cur.b.A, p.cogs, { lowerBetter: true }) +
+    bullet('本月營業費用 vs 預算', a.cur.b.B, p.opex, { lowerBetter: true }) +
+    bullet('本月淨利 vs 目標', profitOf(a.cur), p.rev - p.cogs - p.opex);
+}
+// 每列的三個推導欄（達成率／目標淨利／營收差異）——就地更新只換這幾格，不動輸入框
+function planCellRate(m, p, future){
+  if (!p.rev || (future && !m.rev)) return '<span class="mute">—</span>';
+  const r = pct(m.rev, p.rev);
+  return `<span class="pill ${r >= 100 ? 'ok' : r >= 80 ? 'warn' : 'bad'}">${fmtPct(r, 0)}</span>`;
+}
+function planCellPP(p){
+  return (p.rev || p.cogs || p.opex) ? fmtSign(p.rev - p.cogs - p.opex) : '<span class="mute">—</span>';
+}
+function planCellGap(m, p){
+  if (!p.rev || !m.cnt) return '<span class="mute">—</span>';
+  const g = m.rev - p.rev;
+  return `<span style="color:${g >= 0 ? 'var(--in)' : 'var(--out)'}">${fmtSign(g)}</span>`;
+}
+function viewPlan(){
+  const a = planCalc(UI.planYear);
+  const hasPlan = a.planYear.rev + a.planYear.cogs + a.planYear.opex > 0;
+
+  const rowsHtml = a.months.map((ym, i) => {
+    const m = a.ms[i], p = planGet(ym), future = ym > a.nowYm;
+    const inp = (k, v) => `<input class="pin${v ? '' : ' dim'}" type="number" inputmode="numeric" step="1000" min="0"
+      data-act="plan-in" data-ym="${ym}" data-k="${k}" value="${v || ''}" placeholder="0">`;
+    return `<tr${ym === a.nowYm ? ' style="background:rgba(45,212,191,.06)"' : ''}>
+      <td class="k">${esc(ymLabel(ym))}${ym === a.nowYm ? ' <span class="pill ok">本月</span>' : ''}</td>
+      <td>${inp('rev', p.rev)}</td>
+      <td class="num">${future && !m.rev ? '<span class="mute">—</span>' : fmt$(m.rev)}</td>
+      <td class="num" id="pd-rate-${ym}">${planCellRate(m, p, future)}</td>
+      <td>${inp('cogs', p.cogs)}</td>
+      <td class="num">${m.b.A ? fmt$(m.b.A) : '<span class="mute">—</span>'}</td>
+      <td>${inp('opex', p.opex)}</td>
+      <td class="num">${m.b.B ? fmt$(m.b.B) : '<span class="mute">—</span>'}</td>
+      <td class="num" id="pd-pp-${ym}">${planCellPP(p)}</td>
+      <td class="num k ${profitOf(m) >= 0 ? 'up' : 'dn'}">${m.cnt ? fmtSign(profitOf(m)) : '<span class="mute">—</span>'}</td>
+      <td class="num" id="pd-gap-${ym}">${planCellGap(m, p)}</td>
+    </tr>`;
+  }).join('');
+
+  const yearChips = [String(+UI.planYear - 1), UI.planYear, String(+UI.planYear + 1)].map(v =>
+    `<button data-act="plan-year" data-v="${v}" class="${v === UI.planYear ? 'on' : ''}">${v} 年</button>`).join('');
+
+  return `
+    <div class="filters">
+      <div class="fgrp">${yearChips}</div>
+      <div class="spacer"></div>
+      <button class="mini" data-act="plan-fill-avg">近 3 月實際帶入</button>
+      <button class="mini" data-act="plan-spread">本月數字套全年</button>
+      <button class="mini" data-act="plan-export">⤓ 匯出目標</button>
+      <button class="mini" data-act="plan-import">⤒ 匯入目標</button>
+      <button class="mini" data-act="plan-clear">清空年度</button>
+    </div>
+    ${hasPlan ? '' : `<div class="alert"><div class="ai">🎯</div><div class="txt">
+      <b>還沒設定 ${esc(UI.planYear)} 年目標</b>
+      <small>在下面表格直接輸入每月「營收目標／成本預算／費用預算」，達成率與差異會即時算給你。
+      懶得逐月填就按「近 3 月實際帶入」拿實績當基準，再手動調。</small></div></div>`}
+    <div class="kpis" id="planKpis" style="margin-top:${hasPlan ? '0' : '12px'}">${planKpisHtml(a)}</div>
+    <div class="sec">本月達成度 <span class="hint">灰線＝目標刻度；成本／費用是「越低越好」</span></div>
+    <div class="card" id="planBullets">${planBulletsHtml(a)}</div>
+    <div class="sec">${esc(UI.planYear)} 年月度目標與實際
+      <span class="hint">白框可直接輸入，數字即時重算 · ${UI.tax === 'net' ? '未稅' : '含稅'}口徑</span></div>
+    <div class="card"><div class="tblwrap"><table class="tbl" style="min-width:900px">
+      <thead><tr><th>月份</th><th>營收目標</th><th class="num">實際營收</th><th class="num">達成</th>
+        <th>成本預算</th><th class="num">實際成本</th><th>費用預算</th><th class="num">實際費用</th>
+        <th class="num">目標淨利</th><th class="num">實際淨利</th><th class="num">營收差異</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table></div></div>
+    <div class="alert"><div class="ai">i</div><div class="txt">
+      <b>目標存在這台裝置</b>
+      <small>換手機或換電腦看不到——先「匯出目標」存成 JSON，在另一台「匯入目標」即可。
+      之後要多人共用，就在 Ragic 開一張預算表，本頁改讀那張表即可（不影響其他功能）。</small></div></div>
+    <input type="file" id="planFile" accept="application/json,.json" hidden>`;
+}
+/* 就地更新：使用者還在打字時「絕不」重畫整個畫面——重畫會吃掉游標，也會弄丟還沒送出的那一格。
+   只換推導出來的幾格數字（達成率／目標淨利／差異）＋上方 KPI 與子彈條。 */
+function planRefresh(){
+  if (UI.view !== 'plan' || !$('planKpis')) return;
+  const a = planCalc(UI.planYear);
+  $('planKpis').innerHTML = planKpisHtml(a);
+  $('planBullets').innerHTML = planBulletsHtml(a);
+  a.months.forEach((ym, i) => {
+    const m = a.ms[i], p = planGet(ym);
+    const set = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
+    set('pd-rate-' + ym, planCellRate(m, p, ym > a.nowYm));
+    set('pd-pp-' + ym, planCellPP(p));
+    set('pd-gap-' + ym, planCellGap(m, p));
+  });
+}
+
+/* ═══════════════ 路由與事件 ═══════════════ */
+function render(){
+  const body = $('viewBody');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.view === UI.view));
+  document.querySelectorAll('#rangeGrp button').forEach(b => b.classList.toggle('on', b.dataset.range === UI.range));
+  $('rangeGrp').hidden = UI.view === 'plan';     // 計畫頁有自己的年度選擇，兩套期間會打架
+  document.querySelectorAll('#taxGrp button').forEach(b => b.classList.toggle('on', b.dataset.tax === UI.tax));
+  updateAuthUI();
+
+  if (!getApiRoute()) {
+    body.innerHTML = `<div class="card"><div class="empty">
+      🔐 請先用公司 Google 帳號登入，才能讀取帳務資料<br>
+      <span style="font-size:12px">本頁只讀不寫；權限與記帳系統同一份白名單</span><br><br>
+      <button class="mini acc" data-act="login">Google 登入</button></div></div>`;
+    return;
+  }
+  if (DATA.err) {
+    body.innerHTML = `<div class="alert err"><div class="ai">!</div><div class="txt"><b>讀取失敗</b>
+      <small>${esc(DATA.err)}</small></div></div>
+      <div style="text-align:center;margin-top:14px"><button class="mini acc" data-act="reload">↻ 再試一次</button></div>`;
+    return;
+  }
+  if (!DATA.rows) {
+    body.innerHTML = '<div class="card"><div class="empty">⏳ 讀取 Ragic 帳務資料…</div></div>';
+    if (!DATA.loading) loadData();
+    return;
+  }
+  if (DATA.loading) toast('更新中…');
+
+  if (UI.view === 'overview') body.innerHTML = viewOverview();
+  else if (UI.view === 'project') body.innerHTML = viewProject();
+  else if (UI.view === 'flow') body.innerHTML = viewFlow();
+  else body.innerHTML = viewPlan();
+}
+
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => { UI.view = t.dataset.view; render(); }));
+document.querySelectorAll('#rangeGrp button').forEach(b => b.addEventListener('click', () => { UI.range = b.dataset.range; render(); }));
+document.querySelectorAll('#taxGrp button').forEach(b => b.addEventListener('click', () => { UI.tax = b.dataset.tax; render(); }));
+$('btnReload').addEventListener('click', () => loadData(true));
+
+$('viewBody').addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el) return;
+  const act = el.dataset.act;
+  if (act === 'login') return showGoogleSignIn();
+  if (act === 'reload') return loadData(true);
+  if (act === 'proj-sort') {
+    const k = el.dataset.key;
+    if (UI.projSort.key === k) UI.projSort.dir *= -1;
+    else UI.projSort = { key: k, dir: -1 };
+    return render();
+  }
+  if (act === 'proj-open') {
+    UI.projOpen = UI.projOpen === el.dataset.proj ? '' : el.dataset.proj;
+    return render();
+  }
+  if (act === 'flow-bucket') { UI.flowBucket = el.dataset.v; return render(); }
+  if (act === 'plan-year') { UI.planYear = el.dataset.v; return render(); }
+  if (act === 'plan-in') return;                 // input 自己處理
+  if (act === 'csv-months') return csvMonths();
+  if (act === 'csv-proj') return csvProjects();
+  if (act === 'csv-flow') return csvFlow();
+  if (act === 'plan-export') return planExport();
+  if (act === 'plan-import') return $('planFile').click();
+  if (act === 'plan-clear') return planClear();
+  if (act === 'plan-spread') return planSpread();
+  if (act === 'plan-fill-avg') return planFillAvg();
+});
+// 輸入框：打字時只存不重畫（重畫會把游標踢掉），離開欄位才重算畫面
+$('viewBody').addEventListener('input', e => {
+  const el = e.target;
+  if (el.dataset && el.dataset.act === 'plan-in') {
+    planSet(el.dataset.ym, el.dataset.k, el.value);
+    el.classList.toggle('dim', !num(el.value));
+    planRefresh();                                // 只換推導欄，輸入框與游標不動
+    return;
+  }
+  if (el.id === 'projQ') { UI.projQ = el.value; clearTimeout(el._t); el._t = setTimeout(render, 260); return; }
+  if (el.id === 'flowQ') { UI.flowQ = el.value; clearTimeout(el._t); el._t = setTimeout(render, 260); return; }
+});
+$('viewBody').addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset && el.dataset.act === 'plan-in') { planSet(el.dataset.ym, el.dataset.k, el.value); planRefresh(); return; }
+  if (el.id === 'flowMonth') { UI.flowMonth = el.value; render(); return; }
+  if (el.id === 'planFile' && el.files && el.files[0]) {
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const j = JSON.parse(fr.result);
+        const src = j && j.plan ? j.plan : j;
+        if (!src || typeof src !== 'object') throw new Error('格式不對');
+        Object.keys(src).forEach(ym => {
+          if (!/^\d{4}\/\d{2}$/.test(ym)) return;
+          PLAN[ym] = { rev: num(src[ym].rev), cogs: num(src[ym].cogs), opex: num(src[ym].opex) };
+        });
+        planSave(); toast('✓ 目標已匯入'); render();
+      } catch (err) { toast('匯入失敗：' + err.message); }
+    };
+    fr.readAsText(el.files[0]);
+  }
+});
+
+/* ═══════════════ 匯出 ═══════════════ */
+function csvMonths(){
+  const months = rangeMonths(), ms = aggregateMonths(rowsInRange(), months);
+  const head = ['月份', '營收', '營業成本A', '毛利', '毛利率%', '營業費用B', '折舊D', '待分類Z', '損益支出', '淨利', '淨利率%', '現金流出', '現金淨流'];
+  const rows = ms.map(m => [m.ym, Math.round(m.rev), Math.round(m.b.A), Math.round(grossProfitOf(m)),
+    m.rev ? pct(grossProfitOf(m), m.rev).toFixed(1) : '', Math.round(m.b.B), Math.round(m.b.D), Math.round(m.b.Z),
+    Math.round(plExpense(m)), Math.round(profitOf(m)), m.rev ? pct(profitOf(m), m.rev).toFixed(1) : '',
+    Math.round(cashOutOf(m)), Math.round(cashNetOf(m))]);
+  downloadCSV(`USLED_月度損益_${UI.tax === 'net' ? '未稅' : '含稅'}_${months[0]}-${months[months.length - 1]}.csv`.replace(/\//g, ''), [head].concat(rows));
+  toast('✓ 已匯出月報');
+}
+function csvProjects(){
+  const ps = aggregateProjects(rowsInRange());
+  const head = ['案號', '收入', '直接成本A', '毛利', '毛利率%', '其他歸戶', '押金保證金', '案件淨額', '筆數', '起', '迄'];
+  const rows = ps.sort((a, b) => b.gross - a.gross).map(p => [p.proj, Math.round(p.rev), Math.round(p.cost),
+    Math.round(p.gross), p.marginPct == null ? '' : p.marginPct.toFixed(1), Math.round(p.other),
+    Math.round(p.deposit), Math.round(p.profit), p.cnt, p.first, p.last]);
+  downloadCSV(`USLED_專案損益_${UI.range}.csv`, [head].concat(rows));
+  toast('✓ 已匯出專案損益');
+}
+function csvFlow(){
+  let list = rowsInRange();
+  if (UI.flowBucket === 'REV') list = list.filter(r => r.isIn);
+  else if (UI.flowBucket) list = list.filter(r => !r.isIn && r.bucket === UI.flowBucket);
+  if (UI.flowMonth) list = list.filter(r => r.ym === UI.flowMonth);
+  const fq = UI.flowQ.trim();
+  if (fq) list = list.filter(r => (r.vendor + ' ' + r.items + ' ' + r.cat + ' ' + r.proj + ' ' + r.invNo).indexOf(fq) >= 0);
+  const head = ['日期', '進出項', '廠商/客戶', '品項明細', '歸類科目', '案號', '付款來源', '發票號碼', '含稅金額', '稅額', '未稅金額', '流水號'];
+  const rows = list.map(r => [r.date, r.io, r.vendor, r.items, r.cat, r.proj, r.pay, r.invNo,
+    Math.round(r.gross), Math.round(r.tax), Math.round(r.net), r.serial]);
+  downloadCSV(`USLED_單據明細_${UI.range}.csv`, [head].concat(rows));
+  toast('✓ 已匯出 ' + list.length + ' 筆');
+}
+function planExport(){
+  const blob = new Blob([JSON.stringify({ app: 'usled-report-plan', version: 1, plan: PLAN }, null, 2)],
+    { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'USLED_營運目標_' + UI.planYear + '.json';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast('✓ 目標已匯出');
+}
+function planClear(){
+  if (!confirm('要清空 ' + UI.planYear + ' 年的所有目標嗎？（其他年度不受影響）')) return;
+  monthsOfYear(UI.planYear).forEach(ym => { delete PLAN[ym]; });
+  planSave(); toast('已清空 ' + UI.planYear + ' 年目標'); render();
+}
+function planSpread(){
+  const src = planGet(thisYm());
+  if (!(src.rev || src.cogs || src.opex)) return toast('本月還沒填數字，先填一列再套用');
+  if (!confirm('把本月的目標數字套到 ' + UI.planYear + ' 年 12 個月？已填的會被覆蓋。')) return;
+  monthsOfYear(UI.planYear).forEach(ym => { PLAN[ym] = { rev: src.rev, cogs: src.cogs, opex: src.opex }; });
+  planSave(); toast('✓ 已套用到全年'); render();
+}
+function planFillAvg(){
+  const last3 = monthsBack(4).slice(0, 3);        // 不含本月（本月還沒過完，平均會偏低）
+  const ms = aggregateMonths(DATA.rows || [], last3);
+  const withData = ms.filter(m => m.cnt);
+  if (!withData.length) return toast('近 3 個月沒有資料可參考');
+  const avg = k => Math.round(withData.reduce((s, m) => s + k(m), 0) / withData.length / 1000) * 1000;
+  const base = { rev: avg(m => m.rev), cogs: avg(m => m.b.A), opex: avg(m => m.b.B) };
+  if (!confirm(`以近 ${withData.length} 個月實際平均填入 ${UI.planYear} 年 12 個月？\n\n營收 ${fmt$(base.rev)}／成本 ${fmt$(base.cogs)}／費用 ${fmt$(base.opex)}\n（已填的會被覆蓋，之後可逐月手動調整）`)) return;
+  monthsOfYear(UI.planYear).forEach(ym => { PLAN[ym] = { rev: base.rev, cogs: base.cogs, opex: base.opex }; });
+  planSave(); toast('✓ 已用實績帶入，記得手動微調'); render();
+}
+
+/* ═══════════════ 啟動 ═══════════════ */
+initTips();
+updateAuthUI();
+initGoogleSignIn();
+render();
+if (getApiRoute()) loadData();
+</script>
+</body>
+</html>

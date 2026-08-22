@@ -272,7 +272,7 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.7.1';
+const APP_VERSION = '0.7.2';
 // PWA：註冊 SW（僅供安裝，不做快取——帳務要即時、避免卡舊版）
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
@@ -1448,8 +1448,9 @@ async function loadDashboard(){
           <b><span class="dot" style="background:var(--out)"></span>出項</b></div></div>
       <div class="sec">最近 10 筆</div>
       <div class="card" style="padding:4px 14px">${rows}</div>
-      <div style="text-align:center;margin-top:12px">
-        <a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener" style="color:var(--brand);font-size:12.5px">在 Ragic 開啟完整表格 →</a>
+      <div style="text-align:center;margin-top:14px;line-height:2.1">
+        <a href="../report/" style="color:var(--brand);font-size:12.5px;font-weight:700">📊 營運報表中心（專案損益 · 月度收支 · 預算達成）</a><br>
+        <a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener" style="color:var(--tx2);font-size:12px">在 Ragic 開啟完整表格 →</a>
       </div>`;
   } catch (e) {
     body.innerHTML = '<div style="padding:10px;color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>';
