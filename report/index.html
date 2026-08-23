@@ -256,7 +256,7 @@ input.pin.dim{color:var(--tx3)}
      Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
    ═══════════════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
@@ -843,8 +843,11 @@ function viewOverview(){
     return `<div class="alert err"><div class="ai">!</div><div class="txt">
       <b>API 有回應，但一筆紀錄都解析不到</b>
       <small>${esc(DATA.diag || '回應是空的')}</small>
-      <small style="margin-top:6px">交叉確認：開記帳 App 的「📊 總覽」分頁——同一條 API。那邊有數字＝報表解析要修（把上面這行截圖給 Claude）；那邊也空＝Worker 的 ?sheet=acct 路由或權限問題。</small></div></div>
-      <div style="text-align:center;margin-top:14px"><button class="mini acc" data-act="reload">↻ 重新讀取</button></div>`;
+      <small style="margin-top:6px">按下面「🔬 連線測試」跑四條路由，把整張畫面截圖傳給 Claude 即可遠端定位。</small></div></div>
+      <div style="text-align:center;margin-top:14px">
+        <button class="mini acc" data-act="probe">🔬 連線測試</button>
+        <button class="mini" data-act="reload">↻ 重新讀取</button></div>
+      ${probeHtml()}`;
   }
   const unclassified = tot.b.Z;
   const unclassifiedCnt = rows.filter(r => !r.isIn && r.bucket === 'Z').length;
@@ -1452,6 +1455,46 @@ function csvDc(){
   toast('✓ 已匯出 ' + list.length + ' 場');
 }
 
+/* ── 連線測試：四條路由的原始回應，貼圖即可遠端判讀 ──
+   acct 空但 dc 有資料 → acct 路由的過濾器問題；兩個都空 → Worker 的 Ragic 金鑰變 guest
+   （pitfalls：PowerShell pipe 設 secret 帶 \r\n）；health 沒有 acct 旗標 → 路由沒部署。 */
+let PROBE = null;
+async function runProbe(){
+  const route = getApiRoute();
+  if (!route) return toast('請先登入');
+  const sess = getSavedSession();
+  PROBE = { running: true, items: [], auth: (sess ? '60天通行證' : 'Google Token') + ' · ' + (currentUser ? currentUser.email : '?') };
+  render();
+  const tests = [
+    ['健康檢查 GET /', WORKER_URL + '/', {}],
+    ['進出項 GET ?sheet=acct&limit=3', WORKER_URL + '/?sheet=acct&limit=3', route.headers],
+    ['日結 GET ?sheet=dc&limit=3', WORKER_URL + '/?sheet=dc&limit=3', route.headers],
+    ['角色 GET /acct/role', WORKER_URL + '/acct/role', route.headers],
+  ];
+  for (const [name, url, headers] of tests) {
+    try {
+      const r = await fetch(url, { headers });
+      const txt = await r.text();
+      PROBE.items.push({ name, status: 'HTTP ' + r.status, body: txt.slice(0, 300) || '（空回應）' });
+    } catch (e) {
+      PROBE.items.push({ name, status: '網路錯誤', body: e.message });
+    }
+  }
+  PROBE.running = false;
+  render();
+}
+function probeHtml(){
+  if (!PROBE) return '';
+  const rows = PROBE.items.map(i => `
+    <div style="padding:9px 0;border-bottom:1px dashed var(--line)">
+      <div style="font-size:12px;font-weight:700">${esc(i.name)} <span class="pill ${i.status === 'HTTP 200' ? 'ok' : 'bad'}">${esc(i.status)}</span></div>
+      <div style="font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--tx2);word-break:break-all;margin-top:4px;line-height:1.6">${esc(i.body)}</div>
+    </div>`).join('');
+  return `<div class="card" style="margin-top:14px">
+    <div style="font-size:11.5px;color:var(--tx3);margin-bottom:4px">🔬 連線測試 · 認證：${esc(PROBE.auth)}${PROBE.running ? ' · 測試中…' : ''}</div>
+    ${rows}</div>`;
+}
+
 /* ═══════════════ 路由與事件 ═══════════════ */
 function render(){
   const body = $('viewBody');
@@ -1500,6 +1543,7 @@ $('viewBody').addEventListener('click', e => {
   const act = el.dataset.act;
   if (act === 'login') return showGoogleSignIn();
   if (act === 'reload') return loadData(true);
+  if (act === 'probe') return runProbe();
   if (act === 'proj-sort') {
     const k = el.dataset.key;
     if (UI.projSort.key === k) UI.projSort.dir *= -1;
