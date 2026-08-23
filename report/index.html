@@ -256,7 +256,7 @@ input.pin.dim{color:var(--tx3)}
      Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
    ═══════════════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.3.3';
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
@@ -395,6 +395,7 @@ function handleGoogleSignIn(response){
     updateAuthUI();
     toast('👋 ' + (currentUser.name || currentUser.email) + ' 已登入');
     exchangeSession();
+    if (_probeWantsToken) { _probeWantsToken = false; runProbeCore(); return; }
     loadData(true);
   } catch (e) { toast('登入解析失敗：' + e.message); }
 }
@@ -1459,7 +1460,24 @@ function csvDc(){
    acct 空但 dc 有資料 → acct 路由的過濾器問題；兩個都空 → Worker 的 Ragic 金鑰變 guest
    （pitfalls：PowerShell pipe 設 secret 帶 \r\n）；health 沒有 acct 旗標 → 路由沒部署。 */
 let PROBE = null;
+let _probeWantsToken = false;
 async function runProbe(){
+  const route = getApiRoute();
+  if (!route) return toast('請先登入');
+  const tokenOK = currentUser && currentUser.idToken && (!currentUser.tokenExp || currentUser.tokenExp > Date.now());
+  if (!tokenOK && typeof google !== 'undefined' && google.accounts) {
+    // Token 過期 → 先靜默換新（auto_select 登過的帳號免點）；拿到後 handleGoogleSignIn 會自動重跑
+    _probeWantsToken = true;
+    PROBE = { running: true, items: [{ name: '正在向 Google 換新憑證…', status: '等待',
+      body: '若跳出帳號選單請點選你的帳號；最多等 8 秒會自動繼續（沒換到就跑四條版）。' }], auth: '換發憑證中' };
+    render();
+    try { google.accounts.id.prompt(); } catch (_) {}
+    setTimeout(() => { if (_probeWantsToken) { _probeWantsToken = false; runProbeCore(); } }, 8000);
+    return;
+  }
+  runProbeCore();
+}
+async function runProbeCore(){
   const route = getApiRoute();
   if (!route) return toast('請先登入');
   const sess = getSavedSession();
@@ -1496,7 +1514,7 @@ function probeHtml(){
   if (!PROBE) return '';
   const rows = PROBE.items.map(i => `
     <div style="padding:9px 0;border-bottom:1px dashed var(--line)">
-      <div style="font-size:12px;font-weight:700">${esc(i.name)} <span class="pill ${i.status === 'HTTP 200' ? 'ok' : i.status === '略過' ? 'gray' : 'bad'}">${esc(i.status)}</span></div>
+      <div style="font-size:12px;font-weight:700">${esc(i.name)} <span class="pill ${i.status === 'HTTP 200' ? 'ok' : (i.status === '略過' || i.status === '等待') ? 'gray' : 'bad'}">${esc(i.status)}</span></div>
       <div style="font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--tx2);word-break:break-all;margin-top:4px;line-height:1.6">${esc(i.body)}</div>
     </div>`).join('');
   return `<div class="card" style="margin-top:14px">
