@@ -162,6 +162,17 @@ input.pin{width:100%;background:var(--bg2);border:1px solid var(--line);border-r
 input.pin:focus{outline:none;border-color:rgba(45,212,191,.5)}
 input.pin.dim{color:var(--tx3)}
 
+.dwrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap;justify-content:center}
+.dwrap svg{flex:0 0 auto}
+.dlg{flex:1;min-width:200px;max-width:340px}
+.dlg .r{display:flex;align-items:center;gap:9px;padding:6px 0;font-size:12.5px;border-bottom:1px dashed var(--line)}
+.dlg .r:last-child{border-bottom:0}
+.dlg .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dlg .nm small{color:var(--tx3);margin-left:5px}
+.dlg .pc{color:var(--tx2);font-variant-numeric:tabular-nums;width:44px;text-align:right}
+.dlg .amt{font-weight:700;font-variant-numeric:tabular-nums;min-width:76px;text-align:right}
+.gl.avg{background:var(--tx2);opacity:.8}
+.gv.avgv{left:auto;right:0}
 .tip{position:fixed;z-index:80;background:#1b2334;border:1px solid var(--line);border-radius:11px;
   padding:9px 12px;font-size:12px;line-height:1.7;box-shadow:0 12px 34px -12px #000;pointer-events:none;
   max-width:240px;white-space:nowrap}
@@ -245,7 +256,7 @@ input.pin.dim{color:var(--tx3)}
      Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
    ═══════════════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.3.0';
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
@@ -427,7 +438,7 @@ const DATA = { rows: null, loading: false, err: null, loadedAt: 0, partial: fals
 const UI = {
   view: 'overview', range: '12', tax: 'net',
   projSort: { key: 'profit', dir: -1 }, projQ: '',
-  flowBucket: '', flowMonth: '', flowQ: '',
+  flowBucket: '', flowMonth: '', flowQ: '', pieMonth: '', catTrend: '',
   planYear: thisYear(),
 };
 
@@ -444,6 +455,25 @@ function bucketOf(l1){
   if (s.charAt(1) === '-' && 'ABCDEZ'.indexOf(k) >= 0) return k;
   if (s.charAt(1) === '-' && k === 'F') return 'FF';   // F-往來與保證金（F 已被欄位表用掉，內部代號 FF）
   return 'Z';
+}
+function looksLikeRecord(x){
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return false;
+  if (x._ragicId != null) return true;
+  return Object.keys(FN).some(k => x[FN[k]] != null) || Object.keys(F).some(k => x[F[k]] != null);
+}
+// Worker 回應可能是 {ragicId:{...}} 平鋪，也可能包一層 {data:{...}}／[...]；都剝開找紀錄
+function extractRecords(j){
+  if (!j || typeof j !== 'object') return [];
+  let recs = (Array.isArray(j) ? j : Object.values(j)).filter(looksLikeRecord);
+  if (!recs.length) {
+    for (const k of ['data', 'records', 'result', 'rows']) {
+      if (j[k] && typeof j[k] === 'object') {
+        recs = (Array.isArray(j[k]) ? j[k] : Object.values(j[k])).filter(looksLikeRecord);
+        if (recs.length) break;
+      }
+    }
+  }
+  return recs;
 }
 function normalize(x){
   const io = String(rv(x, 'io') || '').trim();
@@ -490,7 +520,16 @@ async function loadData(force){
       if (r.status === 403) throw new Error('此帳號未在 Worker 白名單，請找管理者開通');
       if (!r.ok) throw new Error('讀取失敗 HTTP ' + r.status);
       const j = await r.json();
-      const raw = Object.values(j).filter(v => v && typeof v === 'object' && !Array.isArray(v));
+      if (j && (j.status === 'ERROR' || j.error)) throw new Error(j.msg || j.reason || j.error || 'Worker 回報錯誤');
+      const raw = extractRecords(j);
+      // 空手而回時把回應形狀記下來，畫面直接告訴管理者卡在哪，不用猜
+      if (p === 0 && !raw.length) {
+        const ks = Object.keys(j || {});
+        const v0 = j ? j[ks[0]] : null;
+        DATA.diag = 'HTTP ' + r.status + ' · 回應 ' + ks.length + ' 個 key（' + ks.slice(0, 5).join(', ') + '）' +
+          (v0 && typeof v0 === 'object' ? ' · 首筆欄位：' + Object.keys(v0).slice(0, 6).join('／')
+            : v0 != null ? ' · 首值：' + String(v0).slice(0, 60) : '');
+      } else if (p === 0) DATA.diag = '';
       let fresh = 0;
       raw.forEach(x => {
         const rec = normalize(x);
@@ -629,6 +668,7 @@ function gridHtml(top, lines){
 /* 群組直條圖：同一軸、同一單位（元）。series = [{label,color,get(m)}] */
 function chartGrouped(months, series, tipExtra){
   if (!months.length) return '<div class="empty">這個區間沒有資料</div>';
+  if (!months.some(m => series.some(s => s.get(m) > 0))) return '<div class="empty">這個區間沒有資料</div>';
   const peak = Math.max(1, ...months.map(m => Math.max(...series.map(s => s.get(m)))));
   const top = niceTop(peak);
   const now = thisYm();
@@ -651,6 +691,7 @@ function chartGrouped(months, series, tipExtra){
 function chartDiverging(months, get, label){
   if (!months.length) return '<div class="empty">這個區間沒有資料</div>';
   const vals = months.map(get);
+  if (!vals.some(v => v !== 0)) return '<div class="empty">這個區間沒有資料</div>';
   const maxPos = Math.max(0, ...vals), maxNeg = Math.max(0, ...vals.map(v => -v));
   const top = niceTop(Math.max(maxPos, 1)), bot = niceTop(Math.max(maxNeg, 1));
   const span = maxNeg > 0 ? top + bot : top;
@@ -690,6 +731,64 @@ function rankBars(items, color){
       '<div class="track"><div class="fill" style="width:' + (Math.abs(i.value) / peak * 100) + '%;background:' + c + '"></div></div>' +
       '<div class="vv" style="color:' + (i.valColor || 'var(--tx)') + '">' + esc(i.valText || fmt$(i.value)) + '</div></div>';
   }).join('');
+}
+/* 甜甜圈：單月支出結構（部分對整體、≤7 段、2.5px 表面間隙、中心放總額）
+   比大小請看旁邊圖例的數字——圓餅只負責「一眼看出誰佔大頭」 */
+function donut(items, centerTop, centerSub){
+  const total = items.reduce((s, i) => s + i.value, 0);
+  if (!(total > 0)) return '<div class="empty">這個月沒有支出</div>';
+  const R = 54, C = 2 * Math.PI * R, gap = 2.5;
+  let acc = 0;
+  const segs = items.map(i => {
+    const share = i.value / total;
+    const len = Math.max(1, share * C - gap);
+    const el = `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${i.color}" stroke-width="21"
+      stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-acc * C}" data-t="${attrT(
+        '<b>' + esc(i.label) + '</b>' + tipRow('金額', fmt$(i.value)) + tipRow('佔比', fmtPct(share * 100)))}"/>`;
+    acc += share;
+    return el;
+  }).join('');
+  const legend = items.map(i => `
+    <div class="r"><span class="dot" style="background:${i.color}"></span>
+      <span class="nm">${esc(i.label)}${i.sub ? '<small>' + esc(i.sub) + '</small>' : ''}</span>
+      <span class="pc">${fmtPct(i.value / total * 100, 0)}</span>
+      <span class="amt">${fmt$(i.value)}</span></div>`).join('');
+  return `<div class="dwrap">
+    <svg width="150" height="150" viewBox="0 0 140 140">
+      <g transform="rotate(-90 70 70)">${segs}</g>
+      <text x="70" y="66" text-anchor="middle" fill="var(--tx)" font-size="16" font-weight="800">${esc(centerTop)}</text>
+      <text x="70" y="84" text-anchor="middle" fill="var(--tx3)" font-size="10">${esc(centerSub)}</text>
+    </svg>
+    <div class="dlg">${legend}</div></div>`;
+}
+/* 單一分類 年月均線圖：月度長條＋平均線；高於平均 30% 的月份變琥珀色＝該去查的月份 */
+function catAvg(vals){
+  const nz = vals.filter(v => v > 0);
+  return nz.length ? nz.reduce((a, b) => a + b, 0) / nz.length : 0;
+}
+function catTrendChart(months, vals){
+  if (!vals.some(v => v > 0)) return '<div class="empty">這個區間沒有這個分類的支出</div>';
+  const avg = catAvg(vals);
+  const peak = Math.max(...vals, avg);
+  const top = niceTop(peak);
+  const now = thisYm();
+  const cols = months.map((ym, i) => {
+    const v = vals[i], hot = avg > 0 && v > avg * 1.3;
+    const tip = '<b>' + esc(ymLabel(ym)) + '</b>' + tipRow('金額', fmt$(v)) +
+      tipRow('vs 平均', avg > 0 ? (v >= avg ? '+' : '−') + fmtPct(Math.abs(v - avg) / avg * 100, 0) : '—');
+    return '<div class="col' + (ym === now ? ' now' : '') + '" data-t="' + attrT(tip) + '">' +
+      '<div class="pair"><i class="bar" style="height:' + Math.max(0.6, v / top * 100) + '%;background:' +
+      (hot ? 'var(--warn)' : 'var(--s1)') + '"></i></div>' +
+      '<span class="xl">' + esc(ymLabel(ym)) + '</span></div>';
+  }).join('');
+  const nzCnt = vals.filter(v => v > 0).length;
+  return '<div class="chart' + (months.length > 8 ? ' dense' : '') + '"><div class="plot">' + gridHtml(top, 4) +
+    '<div class="gl avg" style="bottom:' + (avg / top * 100) + '%"></div>' +
+    '<div class="gv avgv" style="bottom:' + (avg / top * 100) + '%">平均 ' + fmtWan(avg) + '</div>' +
+    '<div class="cols">' + cols + '</div></div>' +
+    '<div class="legend"><b><span class="dot" style="background:var(--s1)"></span>月支出</b>' +
+    '<b><span class="dot" style="background:var(--warn)"></span>高於平均 30%＋</b>' +
+    '<b><span class="dot" style="background:var(--tx2)"></span>平均（有支出的 ' + nzCnt + ' 個月）</b></div></div>';
 }
 /* 子彈條：實際 vs 目標（預算頁用）*/
 function bullet(label, actual, target, opts){
@@ -740,6 +839,13 @@ function viewOverview(){
   const profit = profitOf(cur), gp = grossProfitOf(cur);
   const dRev = prev.rev ? pct(cur.rev - prev.rev, prev.rev) : null;
 
+  if (!(DATA.rows || []).length) {
+    return `<div class="alert err"><div class="ai">!</div><div class="txt">
+      <b>API 有回應，但一筆紀錄都解析不到</b>
+      <small>${esc(DATA.diag || '回應是空的')}</small>
+      <small style="margin-top:6px">交叉確認：開記帳 App 的「📊 總覽」分頁——同一條 API。那邊有數字＝報表解析要修（把上面這行截圖給 Claude）；那邊也空＝Worker 的 ?sheet=acct 路由或權限問題。</small></div></div>
+      <div style="text-align:center;margin-top:14px"><button class="mini acc" data-act="reload">↻ 重新讀取</button></div>`;
+  }
   const unclassified = tot.b.Z;
   const unclassifiedCnt = rows.filter(r => !r.isIn && r.bucket === 'Z').length;
   const costNoProj = rows.filter(r => !r.isIn && r.bucket === 'A' && !r.proj);
@@ -931,6 +1037,68 @@ function viewFlow(){
     tip: `<b>${esc(c.key)}</b>` + tipRow('金額', fmt$(c.amt)) + tipRow('筆數', c.cnt + ' 筆'),
   }));
 
+  // ── 月度支出結構（圓餅）──
+  const expMonths = months.filter(ym => all.some(r => !r.isIn && r.ym === ym));
+  if (!UI.pieMonth || expMonths.indexOf(UI.pieMonth) < 0) UI.pieMonth = expMonths[expMonths.length - 1] || '';
+  const pieMonthOpts = expMonths.slice().reverse().map(m =>
+    `<option value="${m}"${UI.pieMonth === m ? ' selected' : ''}>${esc(m)}</option>`).join('') || '<option value="">（沒有支出月份）</option>';
+  const pieRows = all.filter(r => !r.isIn && r.ym === UI.pieMonth);
+  const pieTotal = pieRows.reduce((s, r) => s + amt(r), 0);
+  const pieItems = BUCKET_ORDER.map(k => ({
+    label: (k === 'FF' ? 'F-' : k + '-') + BUCKETS[k].name, color: BUCKETS[k].color,
+    value: pieRows.filter(r => r.bucket === k).reduce((s, r) => s + amt(r), 0),
+    sub: BUCKETS[k].pl ? '' : '不進損益',
+  })).filter(i => i.value > 0).sort((a, b) => b.value - a.value);
+  const pieHtml = donut(pieItems, fmtWan(pieTotal), esc((UI.pieMonth || '').replace('/', '年') + '月支出'));
+  // ── 各月最大支出（以 L2 分類）──
+  const topPerMonth = months.slice().reverse().map(ym => {
+    const mr = all.filter(r => !r.isIn && r.ym === ym);
+    if (!mr.length) return '';
+    const mTot = mr.reduce((s, r) => s + amt(r), 0);
+    const byL2 = new Map();
+    mr.forEach(r => {
+      const key = (r.l1 || 'Z-待分類') + (r.l2 ? ' > ' + r.l2 : '');
+      const c = byL2.get(key) || { key, bucket: r.bucket, amt: 0 };
+      c.amt += amt(r); byL2.set(key, c);
+    });
+    const top = Array.from(byL2.values()).sort((a, b) => b.amt - a.amt)[0];
+    const share = pct(top.amt, mTot);
+    return `<tr><td class="k">${esc(ymLabel(ym))}</td><td class="num">${fmt$(mTot)}</td>
+      <td><span class="dot" style="background:${BUCKETS[top.bucket] ? BUCKETS[top.bucket].color : 'var(--s1)'}"></span>${esc(top.key)}</td>
+      <td class="num">${fmt$(top.amt)}</td>
+      <td class="num"><span class="pill ${share >= 50 ? 'warn' : 'gray'}">${fmtPct(share, 0)}</span></td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">沒有支出資料</td></tr>';
+  // ── 單一分類 年月均線（預設水電費）──
+  const ctMap = new Map();
+  all.filter(r => !r.isIn).forEach(r => {
+    const key = r.l3 ? 'l3:' + r.l3 : (r.l2 ? 'l2:' + r.l2 : '');
+    if (!key) return;
+    const c = ctMap.get(key) || { key, label: r.l3 || r.l2, sub: r.l3 ? r.l2 : r.l1, amt: 0 };
+    c.amt += amt(r); ctMap.set(key, c);
+  });
+  const ctList = Array.from(ctMap.values()).sort((a, b) => b.amt - a.amt);
+  if (!UI.catTrend || !ctMap.has(UI.catTrend)) {
+    const water = ctList.find(c => c.label === '水電費');
+    UI.catTrend = water ? water.key : (ctList[0] ? ctList[0].key : '');
+  }
+  const catOpts = ctList.map(c =>
+    `<option value="${esc(c.key)}"${UI.catTrend === c.key ? ' selected' : ''}>${esc(c.label)}（${esc(c.sub)}）· ${fmtWan(c.amt)}</option>`).join('') ||
+    '<option value="">（沒有已分類的支出）</option>';
+  const ctSel = ctMap.get(UI.catTrend);
+  const ctVals = months.map(ym => all.filter(r => !r.isIn && r.ym === ym &&
+    (UI.catTrend.slice(0, 3) === 'l3:' ? r.l3 === UI.catTrend.slice(3) : r.l2 === UI.catTrend.slice(3))
+  ).reduce((s, r) => s + amt(r), 0));
+  const trendHtml = ctSel ? catTrendChart(months, ctVals) : '<div class="empty">沒有可分析的分類</div>';
+  let trendNote = '';
+  if (ctSel) {
+    const avg = catAvg(ctVals);
+    const hot = months.map((ym, i) => ({ ym, v: ctVals[i] })).filter(x => avg > 0 && x.v > avg * 1.3);
+    trendNote = hot.length
+      ? `<div class="alert" style="margin-top:4px"><div class="ai">⚠</div><div class="txt">
+          <b>${esc(ctSel.label)}：${hot.length} 個月明顯高於平均（${fmt$(Math.round(avg))}／月）</b>
+          <small>${hot.map(x => esc(ymLabel(x.ym)) + ' ' + fmt$(x.v) + '（+' + fmtPct((x.v - avg) / avg * 100, 0) + '）').join('、')} —— 點上方「單據明細」搜這個分類看是哪幾張單。</small></div></div>`
+      : `<div style="text-align:center;color:var(--tx3);font-size:11.5px;margin-top:6px">每月都在平均值 ±30% 內，${esc(ctSel.label)}沒有異常月份</div>`;
+  }
   // 明細（篩選）
   let list = all.slice();
   if (UI.flowBucket === 'REV') list = list.filter(r => r.isIn);
@@ -965,6 +1133,25 @@ function viewFlow(){
     <div class="grid2" style="margin-top:14px">
       <div><div class="sec">支出大類結構</div><div class="card">${rankBars(bucketBars)}</div></div>
       <div><div class="sec">支出分類 Top 12</div><div class="card">${rankBars(catBars)}</div></div>
+    </div>
+    <div class="sec">月度支出結構 <span class="hint">選月份看支出都花去哪 · 圖例＝金額與佔比</span></div>
+    <div class="card">
+      <div class="filters" style="margin-bottom:12px">
+        <select class="srch" id="pieMonth">${pieMonthOpts}</select>
+      </div>
+      ${pieHtml}
+    </div>
+    <div class="sec">各月最大支出 <span class="hint">每個月佔比最大的分類——換人就值得看一眼</span></div>
+    <div class="card"><div class="tblwrap"><table class="tbl" style="min-width:430px">
+      <thead><tr><th>月份</th><th class="num">支出合計</th><th>最大分類</th><th class="num">金額</th><th class="num">佔比</th></tr></thead>
+      <tbody>${topPerMonth}</tbody></table></div></div>
+    <div class="sec">單一分類 年月均線 <span class="hint">灰線＝區間平均；琥珀色＝高於平均 30% 的月份</span></div>
+    <div class="card">
+      <div class="filters" style="margin-bottom:8px">
+        <select class="srch" id="catTrendSel" style="max-width:280px">${catOpts}</select>
+      </div>
+      ${trendHtml}
+      ${trendNote}
     </div>
     <div class="sec">單據明細 <span class="hint">共 ${list.length} 筆${list.length > 200 ? '，畫面顯示前 200 筆（匯出為全部）' : ''}</span></div>
     <div class="card">
@@ -1353,6 +1540,8 @@ $('viewBody').addEventListener('change', e => {
   const el = e.target;
   if (el.dataset && el.dataset.act === 'plan-in') { planSet(el.dataset.ym, el.dataset.k, el.value); planRefresh(); return; }
   if (el.id === 'flowMonth') { UI.flowMonth = el.value; render(); return; }
+  if (el.id === 'pieMonth') { UI.pieMonth = el.value; render(); return; }
+  if (el.id === 'catTrendSel') { UI.catTrend = el.value; render(); return; }
   if (el.id === 'planFile' && el.files && el.files[0]) {
     const fr = new FileReader();
     fr.onload = () => {
