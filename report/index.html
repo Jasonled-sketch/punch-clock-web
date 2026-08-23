@@ -256,7 +256,7 @@ input.pin.dim{color:var(--tx3)}
      Z-待分類      → 保守列為費用，並在總覽用警示條逼出來裁示（看不見的成本最貴）
    ═══════════════════════════════════════════════════════════════════════ */
 
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
 
@@ -1471,6 +1471,15 @@ async function runProbe(){
     ['日結 GET ?sheet=dc&limit=3', WORKER_URL + '/?sheet=dc&limit=3', route.headers],
     ['角色 GET /acct/role', WORKER_URL + '/acct/role', route.headers],
   ];
+  // 通行證 vs Google Token：acct 各打一次。若通行證空、Google Token 有資料
+  // → Worker 的 admin 豁免只認 X-Google-Token（v0.7.0 權限分層的漏網）
+  if (currentUser && currentUser.idToken && (!currentUser.tokenExp || currentUser.tokenExp > Date.now())) {
+    tests.push(['進出項 GET（改用 Google Token 認證）', WORKER_URL + '/?sheet=acct&limit=3',
+      { 'X-Google-Token': currentUser.idToken }]);
+  } else {
+    PROBE.items.push({ name: '進出項 GET（改用 Google Token 認證）', status: '略過',
+      body: 'Google Token 已過期。請登出→重新登入後「馬上」再按一次連線測試，這行就會有結果。' });
+  }
   for (const [name, url, headers] of tests) {
     try {
       const r = await fetch(url, { headers });
@@ -1487,7 +1496,7 @@ function probeHtml(){
   if (!PROBE) return '';
   const rows = PROBE.items.map(i => `
     <div style="padding:9px 0;border-bottom:1px dashed var(--line)">
-      <div style="font-size:12px;font-weight:700">${esc(i.name)} <span class="pill ${i.status === 'HTTP 200' ? 'ok' : 'bad'}">${esc(i.status)}</span></div>
+      <div style="font-size:12px;font-weight:700">${esc(i.name)} <span class="pill ${i.status === 'HTTP 200' ? 'ok' : i.status === '略過' ? 'gray' : 'bad'}">${esc(i.status)}</span></div>
       <div style="font-family:ui-monospace,Consolas,monospace;font-size:10.5px;color:var(--tx2);word-break:break-all;margin-top:4px;line-height:1.6">${esc(i.body)}</div>
     </div>`).join('');
   return `<div class="card" style="margin-top:14px">
