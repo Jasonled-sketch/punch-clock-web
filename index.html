@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.3</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.4</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2091,10 +2091,39 @@ async function renderLive() {
       });
       h += '</div></div>';
     }
+    h += '<div id="wlDyn" class="live-grp" style="display:none"></div>';   // 工務日誌動態卡(獨立載入,壞了不影響戰情牆)
     h += `<div class="live-updated">資料更新於 ${d.now}（唯讀畫面，審核請至各分頁；點 🔄 更新）</div>`;
     setView(h + '</div>');
+    loadWorklogDyn();
   } catch (e) {
     setView(`<div class="view"><div class="live-top"><span class="live-title">即時現況</span><button class="live-refresh" onclick="renderLive()">🔄 重新整理</button></div><div class="err-box">${e.message}</div></div>`);
+  }
+}
+
+// 工務日誌動態（owner/hr 專用;Worker /worklog-status 端點也鎖角色）——完全獨立於出勤計算,只是顯示
+async function loadWorklogDyn() {
+  const box = document.getElementById('wlDyn'); if (!box) return;
+  const escW = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  try {
+    const res = await authedFetch(`${CONFIG.WORKER_URL}/worklog-status`);
+    if (res.status === 403) return;                          // 非管理者:整卡不顯示
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json(); if (!d.ok) throw new Error(d.reason || '讀取失敗');
+    let h = `<div class="live-grp-hd">📋 工務日誌動態<span class="cnt" style="background:#7c3aed">${d.todayEntries.length}</span></div>`;
+    h += '<div style="padding:10px 14px;font-size:13.5px;line-height:2">';
+    if (d.todayEntries.length) {
+      h += '✅ 今日繳交：' + d.todayEntries.map(e =>
+        `<b>${escW(e.lead)}</b> ${e.time || ''} ${escW(e.subject || e.log)}${e.score !== null ? `（${e.score}分）` : ''}`).join('、') + '<br>';
+    } else { h += '💤 今天還沒有人交日誌<br>'; }
+    if (d.missing.length) h += `<span style="color:#dc2626;font-weight:700">⚠️ 已打卡未交日誌：${d.missing.map(escW).join('、')}</span><br>`;
+    if (d.week.length) h += '📅 近 7 天：' + d.week.map(w => `${escW(w.name)} ${w.count} 筆${w.avg !== null ? `・均 ${w.avg} 分` : ''}`).join('｜') + '<br>';
+    if (d.pendingNew.length) h += `🆕 進行中未建日誌 ${d.pendingNew.length} 件：` + d.pendingNew.slice(0, 5).map(p => escW(p.desc || p.no)).join('、') + (d.pendingNew.length > 5 ? '…' : '') + '<br>';
+    if (d.rework.length) h += '🔁 二次工：' + d.rework.slice(0, 5).map(r => `${escW(r.desc || r.log)}（${r.used} 次）`).join('、');
+    box.innerHTML = h + '</div>';
+    box.style.display = '';
+  } catch (e) {
+    box.innerHTML = `<div style="padding:8px 14px;font-size:12px;color:#9ca3af">工務日誌動態載入失敗（${escW(e.message)}）</div>`;
+    box.style.display = '';
   }
 }
 
