@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>來回距離調配（Jason 專用）</title>
+<meta name="theme-color" content="#0d9488">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  :root{--teal:#0d9488;--teal-d:#0f766e;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f0fdfa}
+  body{font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--ink);font-size:16px;padding-bottom:50px}
+  .hidden{display:none!important}
+  #loginView{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;background:linear-gradient(160deg,#0d9488,#134e4a)}
+  #loginView h1{color:#fff;font-size:23px;font-weight:800}
+  #loginView p{color:#99f6e4;margin:10px 0 30px;font-size:14px}
+  header{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;align-items:center;gap:10px}
+  header .ht{font-weight:800;font-size:16px;flex:1}
+  header input{border:1.5px solid var(--line);border-radius:9px;padding:7px 10px;font-size:14px;font-family:inherit;width:130px}
+  main{padding:12px;max-width:640px;margin:0 auto}
+  .hint{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+  .row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+  .row .tx{flex:1;min-width:0}
+  .row .tx b{display:block;font-size:11px;color:var(--teal-d);font-weight:700}
+  .row .tx span{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .row input{width:84px;font-size:17px;font-weight:800;text-align:center;border:1.5px solid var(--line);border-radius:10px;padding:9px 6px;font-family:inherit;flex:none}
+  .row input:focus{outline:none;border-color:var(--teal)}
+  .row input.saved{border-color:#16a34a;background:#f0fdf4}
+  .row input.err{border-color:#ef4444;background:#fef2f2}
+  .row .u{font-size:12px;color:var(--muted);flex:none}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;opacity:0;background:#0f172a;color:#fff;padding:10px 18px;border-radius:11px;font-size:14px;font-weight:600;transition:.3s;pointer-events:none}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="loginView">
+  <h1>🚗 來回距離調配</h1>
+  <p>Jason 專用｜改完自動存回 Ragic 施工紀錄</p>
+  <div id="gbtn"></div>
+</div>
+
+<div id="appView" class="hidden">
+  <header>
+    <div class="ht">🚗 來回距離</div>
+    <input type="search" id="q" placeholder="搜尋案件…" oninput="renderList()">
+  </header>
+  <main>
+    <div class="hint">直接改數字，離開欄位自動儲存（綠框＝已存）。單位：公里・來回。</div>
+    <div id="list">載入中…</div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+const CFG={WORKER:'https://punch-clock-proxy.yspe-led.workers.dev',
+  CLIENT_ID:'948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+  ALLOWED:['covernself@gmail.com']};
+const S={token:null,rows:[]};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('toast');t.textContent=m;t.className='show';clearTimeout(t._h);t._h=setTimeout(()=>t.className='',1800);}
+function parseJwt(tok){const b=String(tok||'').split('.')[1]||'';let s=b.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const bin=atob(s),n=bin.length,arr=new Uint8Array(n);for(let i=0;i<n;i++)arr[i]=bin.charCodeAt(i);return JSON.parse(new TextDecoder('utf-8').decode(arr));}
+function initGoogle(){
+  if(!(window.google&&google.accounts&&google.accounts.id))return setTimeout(initGoogle,300);
+  google.accounts.id.initialize({client_id:CFG.CLIENT_ID,callback:onSignIn,auto_select:true});
+  google.accounts.id.renderButton($('gbtn'),{theme:'filled_black',size:'large',shape:'pill',width:260});
+  google.accounts.id.prompt();
+}
+function onSignIn(resp){
+  try{
+    const p=parseJwt(resp.credential);
+    if(CFG.ALLOWED.indexOf((p.email||'').toLowerCase())<0){alert('此工具僅限 Jason 使用');return;}
+    S.token=resp.credential;
+    $('loginView').classList.add('hidden');$('appView').classList.remove('hidden');
+    load();
+  }catch(e){alert('登入失敗:'+e.message);}
+}
+async function load(){
+  try{
+    const r=await fetch(CFG.WORKER+'/calibrate-cases',{headers:{'X-Google-Token':S.token}});
+    const d=await r.json();
+    if(!d.ok){$('list').textContent='載入失敗:'+(d.reason||r.status);return;}
+    S.rows=d.rows;renderList();
+  }catch(e){$('list').textContent='連線失敗，請重新整理';}
+}
+function renderList(){
+  const q=($('q').value||'').trim().toUpperCase();
+  const rows=S.rows.filter(r=>!q||((r.no||'')+' '+(r.log||'')+' '+(r.desc||'')+' '+(r.cust||'')).toUpperCase().includes(q));
+  if(!rows.length){$('list').innerHTML='<div class="hint">查無案件</div>';return;}
+  $('list').innerHTML=rows.map(r=>
+    '<div class="row"><div class="tx"><b>'+esc(r.log||r.no)+'｜'+esc(r.no)+'</b>'+
+    '<span>'+esc(r.desc||r.cust||'(無敘述)')+'</span></div>'+
+    '<input type="number" inputmode="decimal" value="'+esc(r.km||'')+'" placeholder="km" '+
+    'onchange="saveKm(this,'+r.rid+')"><div class="u">km</div></div>').join('');
+}
+async function saveKm(el,rid){
+  const km=parseFloat(el.value);
+  el.classList.remove('saved','err');
+  if(!(km>=0)){el.classList.add('err');return;}
+  try{
+    const r=await fetch(CFG.WORKER+'/calibrate-km',{method:'POST',
+      headers:{'X-Google-Token':S.token,'Content-Type':'application/json'},
+      body:JSON.stringify({rid:rid,km:km})});
+    const d=await r.json();
+    if(d.ok){el.classList.add('saved');const row=S.rows.find(x=>x.rid===rid);if(row)row.km=String(km);toast('已存 '+km+' km ✓');}
+    else{el.classList.add('err');toast('儲存失敗:'+(d.reason||''));}
+  }catch(e){el.classList.add('err');toast('訊號不穩，請再試');}
+}
+window.onload=initGoogle;
+</script>
+</body>
+</html>
