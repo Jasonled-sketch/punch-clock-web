@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.4</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.5</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2119,6 +2119,16 @@ async function loadWorklogDyn() {
     if (d.week.length) h += '📅 近 7 天：' + d.week.map(w => `${escW(w.name)} ${w.count} 筆${w.avg !== null ? `・均 ${w.avg} 分` : ''}`).join('｜') + '<br>';
     if (d.pendingNew.length) h += `🆕 進行中未建日誌 ${d.pendingNew.length} 件：` + d.pendingNew.slice(0, 5).map(p => escW(p.desc || p.no)).join('、') + (d.pendingNew.length > 5 ? '…' : '') + '<br>';
     if (d.rework.length) h += '🔁 二次工：' + d.rework.slice(0, 5).map(r => `${escW(r.desc || r.log)}（${r.used} 次）`).join('、');
+    // 增益試算(影子期):有工務代號的案 W目標人時 vs 日誌實際人時;G>0 對分,月上限6000
+    if (d.gains && d.gains.items && d.gains.items.length) {
+      const g = d.gains;
+      h += `<div style="margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1"><b>⚡ ${escW(g.month)} 增益試算（影子期・未發放）</b><br>`;
+      g.items.slice(0, 6).forEach(it => {
+        const col = it.far ? '#9ca3af' : (it.G > 0 ? '#15803d' : (it.G < 0 ? '#b91c1c' : '#6b7280'));
+        h += `<span style="font-family:monospace">${escW(it.code)}</span> ${escW(it.no)}：目標 ${it.targetMH} 人時／實際 ${it.actMH}　<b style="color:${col}">${it.far ? '遠程另議' : (it.G > 0 ? '+' : '') + '$' + it.G.toLocaleString()}</b><br>`;
+      });
+      h += `月增益池 $${g.pool.toLocaleString()} → 團隊半份 <b>$${g.capped.toLocaleString()}</b>${g.capHit ? '（已達 $6,000 上限）' : ''}</div>`;
+    }
     box.innerHTML = h + '</div>';
     box.style.display = '';
   } catch (e) {

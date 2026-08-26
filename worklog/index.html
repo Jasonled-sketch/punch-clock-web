@@ -2,7 +2,6 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>USLED 工務行程日誌</title>
 <meta name="theme-color" content="#0ea5e9">
@@ -475,8 +474,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.21';
+const APP_VERSION='1.22';
 const CHANGELOG=[
+  'v1.22　2026/08/26',
+  '· 任務卡與已選卡顯示「工務代號」（派件時定的，例 工A40+25）',
+  '',
   'v1.21　2026/07/19',
   '· 修正任務清單跑版（卡片被壓扁看不見）；恢復列 12 筆',
   '· 移除涼水費提醒（涼水費依工程等級另計，等級定義確定後再上）',
@@ -860,6 +862,7 @@ function renderCaseSel(){
   if(!S.caseNo){ w.innerHTML=''; return; }
   const c=findCase(S.caseNo);
   w.innerHTML='<div class="case-sel"><div style="display:flex;width:100%;align-items:center">已選 '+esc(S.logNo||S.caseNo)+'（'+esc(S.caseNo)+'）'+
+    (c&&c.code?'<span style="margin-left:8px;font-weight:800;background:#0c4a6e;color:#fff;padding:2px 9px;border-radius:8px;font-size:13px">'+esc(c.code)+'</span>':'')+
     '<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'+
     (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+'</div>';
 }
@@ -886,8 +889,8 @@ function renderCaseList(){
     let tag, cls='';
     if(S.ensuring===c.no){ tag='⏳ 建立日誌中…'; }
     else if(S.confirmNo===c.no){ tag='❗再點一次確認建立日誌'; cls='warn'; }
-    else if(c.log){ tag=esc(c.log); }
-    else { tag='🆕 '+esc(c.no); }
+    else if(c.log){ tag=esc(c.log)+(c.code?'　'+esc(c.code):''); }
+    else { tag='🆕 '+esc(c.no)+(c.code?'　'+esc(c.code):''); }
     if(S.caseNo===c.no) cls='on';
     const n=c.used||0;                                       // 被工務日誌登打過的次數(0=首次,1=二次工,2=三次工…)
     const uc='<i class="uc '+(n===0?'u0':(n===1?'u1':'u2'))+'">'+n+'</i>';
