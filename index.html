@@ -4511,7 +4511,7 @@ async function viewMsgKpi() {
   const to = new Date(), from = new Date(Date.now() - (_MK_DAYS - 1) * 86400000);
   try {
     const q = new URLSearchParams({ from: ds(from), to: ds(to) });
-    if (_MK_EMAIL) q.set('email', _MK_EMAIL);
+    if (_MK_EMAIL) q.set('who', _MK_EMAIL);   // 用 who 不用 email：Worker 會把呼叫者 email 注入 ?email=
     const r = await authedFetch(`${CONFIG.WORKER_URL}/calc/msg-kpi?${q}`);
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) throw new Error(j.reason || `HTTP ${r.status}`);
@@ -4528,13 +4528,15 @@ async function viewMsgKpi() {
 }
 
 function buildMsgKpiHTML(j) {
+  // detail=true 只給 MSGKPI_DETAIL_EMAILS 名單內的人（老闆）。其他人後端根本不回明細欄位，
+  // 頁面自動縮成「只有回覆率」。下班後回覆＝老闆私下看的年終參考，不列入公開考核。
+  const detail = j.detail !== false;
   const P = j.people || [], A = j.anchors || [], D = j.days || [];
   const opts = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '測試號')
     .map(w => `<option value="${w.email}" ${_MK_EMAIL === w.email ? 'selected' : ''}>${w.name}</option>`).join('');
 
   const totReq = P.reduce((s, p) => s + p.required, 0);
   const totAck = P.reduce((s, p) => s + p.acked, 0);
-  const totHard = P.reduce((s, p) => s + p.acked_hard, 0);
   const teamRate = totReq ? Math.round(totAck / totReq * 100) : null;
 
   let h = `<div class="view">
@@ -4543,7 +4545,7 @@ function buildMsgKpiHTML(j) {
         <option value="">全部員工</option>${opts}</select>
       <select onchange="_MK_DAYS=Number(this.value);viewMsgKpi()" style="padding:8px;border:1px solid #dadce0;border-radius:8px">
         ${[[7, '近7天'], [30, '近30天'], [90, '近90天']].map(([v, t]) => `<option value="${v}" ${_MK_DAYS === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
-      <button onclick="mkAnnounceDialog()" style="padding:8px 12px;border:0;border-radius:8px;background:${MK_ON};color:#fff;font-weight:600;cursor:pointer">📢 發公告</button>
+      ${detail ? `<button onclick="mkAnnounceDialog()" style="padding:8px 12px;border:0;border-radius:8px;background:${MK_ON};color:#fff;font-weight:600;cursor:pointer">📢 發公告</button>` : ''}
     </div>`;
 
   if (!totReq) {
@@ -4554,14 +4556,15 @@ function buildMsgKpiHTML(j) {
     return h;
   }
 
-  // ── 頭條數字（不是圖表：單一數字用大字比畫成圖好讀）──
+  // ── 頭條數字（單一數字用大字比畫成圖好讀）──
+  const totHard = detail ? P.reduce((s, p) => s + p.acked_hard, 0) : 0;
   h += `<div style="display:flex;gap:8px;margin-bottom:14px">
     ${mkTile('團隊回覆率', teamRate == null ? '—' : teamRate + '%', `${totAck} / ${totReq} 則`)}
-    ${mkTile('其中明確回應', totReq ? Math.round(totHard / totReq * 100) + '%' : '—', `按鈕或引用 ${totHard} 則`)}
-    ${mkTile('需回覆訊息', String(A.length), `近 ${_MK_DAYS} 天`)}
+    ${detail ? mkTile('其中明確回應', totReq ? Math.round(totHard / totReq * 100) + '%' : '—', `按鈕或引用 ${totHard} 則`) : ''}
+    ${detail ? mkTile('需回覆訊息', String(A.length), `近 ${_MK_DAYS} 天`) : mkTile('統計人數', String(P.length), `近 ${_MK_DAYS} 天`)}
   </div>`;
 
-  // ── 每日趨勢 ──
+  // ── 每日趨勢（回覆率，公開）──
   if (D.filter(d => d.rate != null).length >= 2) {
     h += `<div style="background:#fff;border-radius:12px;padding:14px 12px 8px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
       <div style="font-size:13px;font-weight:700;color:#3c4043;margin:0 4px 8px">每日團隊回覆率</div>
@@ -4569,23 +4572,29 @@ function buildMsgKpiHTML(j) {
     </div>`;
   }
 
-  // ── 個人排行（堆疊長條：上班內 / 下班後 / 未回）──
-  h += `<div style="display:flex;align-items:center;gap:14px;margin:0 2px 8px;font-size:12px;color:#5f6368">
+  // ── 個人回覆率排行 ──
+  // 明細身分：堆疊長條拆上班內／下班後。一般身分：單色長條，只講回覆率（單一序列不需圖例）。
+  if (detail) {
+    h += `<div style="display:flex;align-items:center;gap:14px;margin:0 2px 8px;font-size:12px;color:#5f6368">
       <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_ON};margin-right:5px;vertical-align:-1px"></i>上班時段回覆</span>
       <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_OFF};margin-right:5px;vertical-align:-1px"></i>下班後回覆</span>
       <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_MISS};margin-right:5px;vertical-align:-1px"></i>未回</span>
-    </div>
-    <div style="background:#fff;border-radius:12px;padding:6px 12px 12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">`;
+    </div>`;
+  } else {
+    h += `<div style="font-size:13px;font-weight:700;color:#3c4043;margin:0 2px 8px">個人回覆率</div>`;
+  }
+  h += `<div style="background:#fff;border-radius:12px;padding:6px 12px 12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">`;
 
   P.slice().sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1)).forEach(p => {
-    const on = p.required ? p.acked_on / p.required * 100 : 0;
-    const off = p.required ? p.acked_off / p.required * 100 : 0;
+    const rate = p.rate ?? 0;
+    const on = detail && p.required ? p.acked_on / p.required * 100 : rate;
+    const off = detail && p.required ? p.acked_off / p.required * 100 : 0;
     const miss = Math.max(0, 100 - on - off);
     const lag = p.median_lag_min == null ? '—' : (p.median_lag_min >= 60 ? (p.median_lag_min / 60).toFixed(1) + ' 小時' : p.median_lag_min + ' 分');
     h += `<div style="padding:10px 0;border-bottom:1px solid #f1f3f4">
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
         <span style="font-weight:600;font-size:14px;color:#202124">${p.name || p.email}</span>
-        <span style="margin-left:auto;font-weight:700;font-size:15px;color:#202124">${p.rate}%</span>
+        <span style="margin-left:auto;font-weight:700;font-size:15px;color:#202124">${rate}%</span>
       </div>
       <div style="display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;background:#fff">
         ${on > 0 ? `<div style="width:${on}%;background:${MK_ON}"></div>` : ''}
@@ -4594,12 +4603,42 @@ function buildMsgKpiHTML(j) {
       </div>
       <div style="font-size:12px;color:#5f6368;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">
         <span>需回 ${p.required}・已回 ${p.acked}</span>
-        <span>明確 ${p.acked_hard}（${p.rate_hard}%）</span>
+        ${detail ? `<span>明確 ${p.acked_hard}（${p.rate_hard}%）</span>
         <span>上班內 ${p.acked_on}・下班後 ${p.acked_off}</span>
         <span>中位回覆 ${lag}</span>
-        <span style="color:#9aa0a6">群裡發言 ${p.spoke}</span>
+        <span style="color:#9aa0a6">群裡發言 ${p.spoke}</span>` : ''}
       </div></div>`;
   });
+  h += `</div>`;
+
+  if (!detail) {
+    h += `<div style="font-size:11px;color:#9aa0a6;margin-top:14px;line-height:1.8">
+      ※ 回覆率＝有回應的則數 ÷ 該回應的則數。上班／下班的拆分、回覆速度、發言數不列在這裡。<br>
+      ※ LINE 官方沒有開放「已讀」和「按讚(表情回應)」的資料，任何系統都抓不到。</div></div>`;
+    return h;
+  }
+
+  // ── 下班後回覆：老闆私人檢視，年終參考用（不列入公開考核分數）──
+  const offRank = P.filter(p => p.acked_off > 0).sort((a, b) => b.acked_off - a.acked_off);
+  h += `<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:700;color:#92400e">🔒 下班後回覆（只有你看得到）</div>
+    <div style="font-size:12px;color:#92400e;opacity:.85;margin:4px 0 10px;line-height:1.7">
+      不列入公開考核分數，也不出現在其他人的畫面。累積下來當年終的參考。</div>`;
+  if (!offRank.length) {
+    h += `<div style="font-size:13px;color:#92400e">這段期間沒有人在下班後回過。</div>`;
+  } else {
+    const top = offRank[0].acked_off;
+    offRank.forEach(p => {
+      const share = p.acked ? Math.round(p.acked_off / p.acked * 100) : 0;
+      h += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0">
+        <span style="flex:0 0 5.5em;font-size:13px;color:#202124;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name || p.email}</span>
+        <span style="flex:1;height:10px;border-radius:5px;background:#fef3c7;overflow:hidden">
+          <span style="display:block;height:100%;width:${Math.round(p.acked_off / top * 100)}%;background:${MK_OFF}"></span></span>
+        <span style="flex:0 0 auto;font-size:12px;color:#92400e;font-weight:600">${p.acked_off} 則</span>
+        <span style="flex:0 0 auto;font-size:11px;color:#b45309;opacity:.8">佔他 ${share}%</span>
+      </div>`;
+    });
+  }
   h += `</div>`;
 
   // ── 逐則追蹤：哪一則誰沒回 ──
@@ -4627,7 +4666,8 @@ function buildMsgKpiHTML(j) {
     ※「已回」只認三件事：按「收到」鈕、引用回覆該則、或在該則之後的時間窗內於群裡發言。
     前兩種是<b>明確回應</b>，第三種是推定，考核建議看「明確」。<br>
     ※ LINE 官方沒有開放「已讀」和「按讚(表情回應)」的資料，任何系統都抓不到，本頁不含這兩項。<br>
-    ※ 上班／下班以當事人當天實際打卡區間判定；未打卡、請假、假日一律算下班後。</div></div>`;
+    ※ 上班／下班以當事人當天實際打卡區間判定；未打卡、請假、假日一律算下班後。<br>
+    ※ 這一頁的明細（含下班後那塊）只有你看得到，其他管理者開同一頁只會看到回覆率。</div></div>`;
   return h;
 }
 

@@ -8,6 +8,7 @@ process.env.MSGKPI_GROUP_ID = 'G1';
 process.env.MSGKPI_SLA_ON_MIN = '30';
 process.env.MSGKPI_SLA_OFF_MIN = '720';
 process.env.LINE_TOKEN_3 = 'dummy';
+process.env.MSGKPI_DETAIL_EMAILS = 'boss@x.com';   // 只有老闆看得到明細
 
 const kpi = require('../lib/msgkpi.js');
 
@@ -49,6 +50,15 @@ const msg = (uid, text, extra = {}) => ({
   type: 'message', timestamp: Date.now(), source: { type: 'group', groupId: 'G1', userId: uid },
   replyToken: 'RT', message: { type: 'text', id: 'M' + Math.random().toString(36).slice(2), text, ...extra }
 });
+
+const app = { routes: {}, get(p, h) { this.routes['GET ' + p] = h; }, post(p, h) { this.routes['POST ' + p] = h; } };
+const callApi = async query => {
+  if (!app.routes['GET /api/calc/msg-kpi']) kpi.mountRoutes(app, () => true);
+  let out;
+  await app.routes['GET /api/calc/msg-kpi']({ query, get: () => null },
+    { json: j => { out = j; }, status() { return this; } });
+  return out;
+};
 
 test('群組回覆 KPI 全流程', { skip: DB ? false : '需要 DATABASE_URL（指向一個測試用 Postgres）' }, async t => {
   await pool.query(`DROP TABLE IF EXISTS msg_anchor, msg_ack, msg_raw, msg_kpi_daily`);
@@ -158,15 +168,9 @@ test('群組回覆 KPI 全流程', { skip: DB ? false : '需要 DATABASE_URL（�
     assert.equal(n, '3');
   });
 
-  await t.test('API 彙總：回覆率 / 準時率 / 未回名單', async () => {
-    const app = { routes: {}, get(p, h) { this.routes['GET ' + p] = h; }, post(p, h) { this.routes['POST ' + p] = h; } };
-    kpi.mountRoutes(app, () => true);
-    let out;
-    await app.routes['GET /api/calc/msg-kpi'](
-      { query: {}, get: () => null },
-      { json: j => { out = j; }, status() { return this; } });
-
-    assert.equal(out.ok, true);
+  await t.test('API 彙總（老闆身分）：回覆率 / 明確回應率 / 未回名單', async () => {
+    const out = await callApi({ email: 'boss@x.com' });
+    assert.equal(out.detail, true);
     const p = Object.fromEntries(out.people.map(x => [x.email, x]));
     assert.equal(p['a@x.com'].rate, 100);          // 3/3
     assert.equal(p['a@x.com'].rate_hard, 33);      // 但只有 1/3 是明確回應，其餘靠時間窗推定
@@ -179,6 +183,29 @@ test('群組回覆 KPI 全流程', { skip: DB ? false : '需要 DATABASE_URL（�
     const ann = out.anchors.find(a => a.kind === 'announce');
     assert.deepEqual(ann.missing, ['小華']);       // 公告只有小華完全沒回
     assert.ok(out.days.length >= 1);
+  });
+
+  await t.test('非老闆身分：只拿得到回覆率，下班後/速度/發言數/逐則名單完全不回傳', async () => {
+    const out = await callApi({ email: 'hr@x.com' });          // 有權限開這頁，但不在明細名單
+    assert.equal(out.detail, false);
+    assert.deepEqual(Object.keys(out.people[0]).sort(), ['acked', 'email', 'name', 'rate', 'required']);
+    assert.equal(out.people.find(p => p.email === 'b@x.com').rate, 50);   // 回覆率照給
+    assert.deepEqual(Object.keys(out.days[0]).sort(), ['day', 'rate']);
+    assert.deepEqual(out.anchors, []);                          // 逐則清單整個不給
+    assert.equal(out.sla, undefined);
+    // 下班後那塊絕對不能外流
+    assert.ok(!JSON.stringify(out).includes('acked_off'));
+    assert.ok(!JSON.stringify(out).includes('週會改期'));
+  });
+
+  await t.test('沒帶身分（Worker 沒注入 email）→ 一律當作非老闆', async () => {
+    assert.equal((await callApi({})).detail, false);
+  });
+
+  await t.test('who 參數只看某一個人（不能用 email，那個被 Worker 拿去注入身分了）', async () => {
+    const out = await callApi({ email: 'boss@x.com', who: 'b@x.com' });
+    assert.equal(out.people.length, 1);
+    assert.equal(out.people[0].email, 'b@x.com');
   });
 
   await pool.end();

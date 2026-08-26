@@ -25,7 +25,12 @@ const CFG = {
   slaOff:    () => Number(process.env.MSGKPI_SLA_OFF_MIN || 720),  // 下班後該多久內回（12h）
   keepDays:  () => Number(process.env.MSGKPI_KEEP_DAYS || 180),    // 原始發言保留天數
   storeText: () => process.env.MSGKPI_STORE_TEXT !== '0',          // 0=不存訊息內容，只存有無發言
-  enabled:   () => process.env.MSGKPI_OFF !== '1'
+  enabled:   () => process.env.MSGKPI_OFF !== '1',
+  // 誰看得到「明細」＝下班後回覆拆分、明確/推定、回覆速度、群裡發言數、逐則未回名單。
+  // 其他人（含 hr／主管）只看得到「回覆率」。Jason 2026/08/26：下班後那塊不公開，
+  // 老闆自己看紀錄、年終時參考；不列入公開考核分數，避開下班回訊息被主張為工時的爭議。
+  detailEmails: () => new Set((process.env.MSGKPI_DETAIL_EMAILS || 'covernself@gmail.com')
+                     .toLowerCase().split(',').map(x => x.trim()).filter(Boolean))
 };
 
 // ── 台灣時間工具（與 index.js 同一套：UTC+8 後取 getUTC*）──
@@ -346,11 +351,15 @@ function mountRoutes(app, guard, jsonMw) {
       await ensure();
       const to = req.query.to || twDay();
       const from = req.query.from || twDay(Date.now() - 29 * 86400000);
-      const email = req.query.email || null;
+      // ⚠️ 篩選單一員工用 who，不能用 email：Worker 轉發時會把「呼叫者的 email」注入 ?email=（與
+      //    /calc/punch-edit 等路由同一套），兩者同名會打架。
+      const who = req.query.who || null;
+      const viewer = String(req.query.email || '').trim().toLowerCase();
+      const detail = CFG.detailEmails().has(viewer);
 
       // 人員彙總直接從原始錨點/回應算（不是把每日中位數再平均，那樣中位數會失真）
       const people = (await pool.query(`${AGG_SQL} SELECT * FROM agg ORDER BY required DESC, acked DESC`,
-        [from, to, CFG.slaOn(), CFG.slaOff(), email])).rows
+        [from, to, CFG.slaOn(), CFG.slaOff(), who])).rows
         .map(p => ({ ...p,
           rate: p.required ? Math.round(p.acked / p.required * 100) : null,
           rate_hard: p.required ? Math.round(p.acked_hard / p.required * 100) : null,
@@ -360,7 +369,7 @@ function mountRoutes(app, guard, jsonMw) {
       const days = (await pool.query(`
         SELECT day::text, sum(required)::int AS required, sum(acked)::int AS acked
         FROM msg_kpi_daily WHERE day BETWEEN $1 AND $2 AND ($3::text IS NULL OR email=$3)
-        GROUP BY day ORDER BY day`, [from, to, email])).rows
+        GROUP BY day ORDER BY day`, [from, to, who])).rows
         .map(d => ({ ...d, rate: d.required ? Math.round(d.acked / d.required * 100) : null }));
 
       const anchors = (await pool.query(`
@@ -374,7 +383,12 @@ function mountRoutes(app, guard, jsonMw) {
           AND a.created_at <  ($2::date + 1)::timestamp AT TIME ZONE 'Asia/Taipei'
         ORDER BY a.created_at DESC LIMIT 100`, [from, to])).rows;
 
-      res.json({ ok: true, from, to, sla: { on: CFG.slaOn(), off: CFG.slaOff() }, people, days, anchors });
+      if (!detail) {   // 只公開回覆率：拆分/速度/發言數/逐則未回名單一律不回傳（不是前端藏起來，是後端根本不給）
+        return res.json({ ok: true, detail: false, from, to,
+          people: people.map(p => ({ email: p.email, name: p.name, required: p.required, acked: p.acked, rate: p.rate })),
+          days: days.map(d => ({ day: d.day, rate: d.rate })), anchors: [] });
+      }
+      res.json({ ok: true, detail: true, from, to, sla: { on: CFG.slaOn(), off: CFG.slaOff() }, people, days, anchors });
     } catch (e) { console.error('calc/msg-kpi:', e.message); res.status(500).json({ ok: false, reason: e.message }); }
   });
 
