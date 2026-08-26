@@ -1,0 +1,47 @@
+diff --git a/index.js b/index.js
+index e4c235c..c3fd404 100644
+--- a/index.js
++++ b/index.js
+@@ -6,6 +6,15 @@ const https = require('https');
+ const app = express();
+ const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
++// 群組訊息回覆 KPI（誰回了、多久回、上班內還是下班後）；設定看 MSGKPI_* 環境變數，MSGKPI_OFF=1 可整組停用
++// 依賴一律包成 getter/箭頭函式延後取值：attIsMgr / attIsTestW / ATT_FID 都是檔案後段才宣告的 const，
++// 在這裡直接寫變數名會踩到 TDZ，整個服務開不起來。
++const msgkpi = require('./lib/msgkpi').init(pool, {
++  punchRagicGet: (...a) => punchRagicGet(...a),
++  attIsMgr: e => attIsMgr(e),
++  attIsTestW: w => attIsTestW(w),
++  get ATT_FID() { return ATT_FID; }
++});
+ // 🔴 客服 AI 的口吻與知識唯一真相 = docs/ai-training/（改 .md 就是改 AI，不要在這裡寫死 prompt）
+ const aiPrompt = require('./lib/aiPrompt');
+ // Web Push（手機推播）：VAPID 金鑰在 Railway；未設定時推播功能靜默停用，不影響其他功能
+@@ -2999,6 +3008,7 @@ ${toExp ? '出項（支出）→ 支出紀錄表' : '進項（收入）→ 進
+             console.log(`[group] ${ev.source.type} id=${gid}`);
+             try { await attClient.replyMessage({ replyToken: ev.replyToken, messages: [{ type: 'text', text: `本群組 ID：\n${gid}\n\n把它設為 Railway 變數 PUNCH_REMIND_GROUP_ID，即可啟用每日 09:00 / 18:30 打卡群組提醒。` }] }); } catch (e) {}
+           }
++          try { await msgkpi.handleGroupEvent(ev); } catch (e) { console.error('[msgkpi] 事件處理失敗:', e.message); }  // 統計失敗絕不可影響群組原本的功能
+           continue;
+         }
+         if (ev.source.type !== 'user') continue;
+@@ -4250,6 +4260,9 @@ liff.init({liffId:LIFF_ID}).then(function(){
+       res.json(await attRosterSnapshot());
+     } catch (e) { console.error('calc/roster-now:', e.message); res.status(500).json({ ok: false, reason: e.message }); }
+   });
++  // 回覆 KPI：GET /api/calc/msg-kpi（統計）、POST /api/calc/msg-announce（發帶「收到」鈕的公告卡）
++  msgkpi.mountRoutes(app, req => CALC_KEY && req.get('X-Calc-Key') === CALC_KEY, express.json({ limit: '64kb' }));
++
+   // GET /api/calc/audit → 行為紀錄查詢（管理者專用；Jason 2026/08/10）
+   //   誰、何時、做了什麼——含超時詢問的回應（stay_ask/stay_reply_*）、加班申請與延長、
+   //   打卡修正、發薪資單、以及員工在 LINE 點的每個指令（cmd）。
+@@ -6847,6 +6860,8 @@ cron.schedule('* * * * *', async () => {
+     if (!isWeekend && hhmm === '16:50' && attTillRemindJob) { try { await attTillRemindJob(); } catch (e) { console.error('attTillRemindJob:', e.message); } }  // 平日 16:50 提醒行政點鈔（行政17:00下班）
+     if (!isWeekend && hhmm === '17:30' && attTillCheckJob) { try { await attTillCheckJob(); } catch (e) { console.error('attTillCheckJob:', e.message); } }    // 平日 17:30 未日結/異常 → 推播管理者
+         if (hhmm === '09:05' && attDailyJob) { try { await attDailyJob(); } catch (e) { console.error('attDailyJob:', e.message); } }  // 每日 09:05 出勤助手日常工作（特休到期提醒；60/30天節點可能落在週末故不分平假日）
++    if (hhmm === '23:50') { try { await msgkpi.rollup(3); } catch (e) { console.error('msgkpi.rollup:', e.message); } }  // 每日 23:50 結算回覆 KPI（重算近 3 天，補記晚回的）
++    if (hhmm === '04:10') { try { await msgkpi.purge(); } catch (e) { console.error('msgkpi.purge:', e.message); } }     // 每日 04:10 清逾期的原始群組發言
+     if (attOtScanJob) { try { await attOtScanJob(); } catch (e) { console.error('attOtScanJob:', e.message); } }  // 每分鐘：加班逾期關閉+剩2h/30分節點提醒
+     if (attStayAskJob && Number(hhmm.slice(3)) % 5 === 0) { try { await attStayAskJob(); } catch (e) { console.error('attStayAskJob:', e.message); } }  // 每5分鐘：下班+15分未打卡→推「要加班嗎/我要下班了」二選一
+     if (attLateWatchJob) { try { await attLateWatchJob(); } catch (e) { console.error('attLateWatchJob:', e.message); } }  // 每分鐘：遲到/未打下班 → 管理者手機推播(PWA)

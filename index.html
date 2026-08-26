@@ -1190,7 +1190,8 @@ function renderAdminTabs() {
     tab('live','即時現況') + tab('overview','總覽') + tab('acal','月曆') + tab('arec','明細') +
     `<button class="tab-btn" id="tab-areq" onclick="switchTab('areq')">補登審核<span class="tab-badge hidden" id="req-badge">0</span></button>` +
     tab('report','月報') + (ROLE === 'deptmgr' ? '' : tab('wrkrs','工讀生')) + tab('aleave','請假審核') +   // 工讀生分頁=薪資設定管理,deptmgr 不顯示
-    tab('aot','加班審核') + tab('aannounce','公告管理') + (ROLE === 'deptmgr' ? '' : tab('audit','行為紀錄'));
+    tab('aot','加班審核') + tab('aannounce','公告管理') +
+    (ROLE === 'deptmgr' ? '' : tab('msgkpi','回覆KPI') + tab('audit','行為紀錄'));
   updateBadge();
 }
 
@@ -1221,6 +1222,7 @@ function switchTab(t) {
     aleave: viewAdminLeave,
     aot: viewAdminOt,
     aannounce: viewAdminAnnounce,
+    msgkpi: viewMsgKpi,
     audit: viewAudit
   })[t]?.();
 }
@@ -4488,6 +4490,232 @@ async function viewAudit() {
   h += `<div style="font-size:11px;color:#9aa0a6;margin-top:14px;line-height:1.6">
     ※ 紀錄只增不改，供勞資爭議時佐證。<b>員工選「不加班」</b>代表他當下確認該時段非工作時間。</div></div>`;
   setView(h);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  回覆 KPI（管理者）──「誰回了群組訊息、多久回、上班內回還是下班後回」
+//  資料源：LINE bot /api/calc/msg-kpi（Postgres 結算）。上班/下班的分界＝
+//  當事人「當天真實打卡區間」，不是寫死 08:30–18:00，所以請假/加班/假日自動落在下班後。
+//  ⚠️ LINE 沒有已讀 API、也沒有按讚(reaction)事件 → 這裡的「已回」只有三種來源：
+//     按「收到」鈕(button)、引用回覆(quote)＝明確；時間窗內在群裡發言(window)＝推定。
+//     考核請看「明確」那欄，推定只當參考。
+// ═══════════════════════════════════════════════════════════════════════
+let _MK_DAYS = 30, _MK_EMAIL = '', _MK_DATA = null;
+const MK_ON = '#1a73e8';    // 上班時段回覆
+const MK_OFF = '#b45309';   // 下班後回覆（深琥珀：與藍在色覺缺陷下可分辨，對白底對比 ≥3:1）
+const MK_MISS = '#e8eaed';  // 未回（純底色，不是第三個語意色）
+
+async function viewMsgKpi() {
+  setView('<div class="loading">載入中…</div>');
+  const ds = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const to = new Date(), from = new Date(Date.now() - (_MK_DAYS - 1) * 86400000);
+  try {
+    const q = new URLSearchParams({ from: ds(from), to: ds(to) });
+    if (_MK_EMAIL) q.set('email', _MK_EMAIL);
+    const r = await authedFetch(`${CONFIG.WORKER_URL}/calc/msg-kpi?${q}`);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.reason || `HTTP ${r.status}`);
+    _MK_DATA = j;
+  } catch (e) {
+    setView(`<div class="view"><div class="rpt-warn">讀取失敗：${e.message}</div>
+      <p style="font-size:12px;color:#5f6368;margin-top:12px;line-height:1.8">
+      這頁需要 LINE bot 端啟用回覆 KPI 模組（<code>lib/msgkpi.js</code>），
+      並讓 Worker 放行 <code>/calc/msg-kpi</code> 這條路由。兩邊都上線後這裡就會有數字。</p></div>`);
+    return;
+  }
+  if (!WORKERS.length) WORKERS = await getAllWorkers();
+  setView(buildMsgKpiHTML(_MK_DATA));
+}
+
+function buildMsgKpiHTML(j) {
+  const P = j.people || [], A = j.anchors || [], D = j.days || [];
+  const opts = WORKERS.filter(w => w.active !== '0' && w.emp_type !== '測試號')
+    .map(w => `<option value="${w.email}" ${_MK_EMAIL === w.email ? 'selected' : ''}>${w.name}</option>`).join('');
+
+  const totReq = P.reduce((s, p) => s + p.required, 0);
+  const totAck = P.reduce((s, p) => s + p.acked, 0);
+  const totHard = P.reduce((s, p) => s + p.acked_hard, 0);
+  const teamRate = totReq ? Math.round(totAck / totReq * 100) : null;
+
+  let h = `<div class="view">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <select onchange="_MK_EMAIL=this.value;viewMsgKpi()" style="flex:1;min-width:120px;padding:8px;border:1px solid #dadce0;border-radius:8px">
+        <option value="">全部員工</option>${opts}</select>
+      <select onchange="_MK_DAYS=Number(this.value);viewMsgKpi()" style="padding:8px;border:1px solid #dadce0;border-radius:8px">
+        ${[[7, '近7天'], [30, '近30天'], [90, '近90天']].map(([v, t]) => `<option value="${v}" ${_MK_DAYS === v ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <button onclick="mkAnnounceDialog()" style="padding:8px 12px;border:0;border-radius:8px;background:${MK_ON};color:#fff;font-weight:600;cursor:pointer">📢 發公告</button>
+    </div>`;
+
+  if (!totReq) {
+    h += `<div style="background:#fff;border-radius:12px;padding:22px 16px;text-align:center;color:#5f6368;line-height:1.9">
+      這段期間沒有「需要回覆」的訊息。<br>
+      <span style="font-size:13px;color:#9aa0a6">在群組裡用上面的「📢 發公告」發出去、或在訊息裡 @ 某人、
+      或講「收到請回／請回覆」，系統才會開始計算回覆率。</span></div></div>`;
+    return h;
+  }
+
+  // ── 頭條數字（不是圖表：單一數字用大字比畫成圖好讀）──
+  h += `<div style="display:flex;gap:8px;margin-bottom:14px">
+    ${mkTile('團隊回覆率', teamRate == null ? '—' : teamRate + '%', `${totAck} / ${totReq} 則`)}
+    ${mkTile('其中明確回應', totReq ? Math.round(totHard / totReq * 100) + '%' : '—', `按鈕或引用 ${totHard} 則`)}
+    ${mkTile('需回覆訊息', String(A.length), `近 ${_MK_DAYS} 天`)}
+  </div>`;
+
+  // ── 每日趨勢 ──
+  if (D.filter(d => d.rate != null).length >= 2) {
+    h += `<div style="background:#fff;border-radius:12px;padding:14px 12px 8px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+      <div style="font-size:13px;font-weight:700;color:#3c4043;margin:0 4px 8px">每日團隊回覆率</div>
+      ${mkTrendSvg(D)}
+    </div>`;
+  }
+
+  // ── 個人排行（堆疊長條：上班內 / 下班後 / 未回）──
+  h += `<div style="display:flex;align-items:center;gap:14px;margin:0 2px 8px;font-size:12px;color:#5f6368">
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_ON};margin-right:5px;vertical-align:-1px"></i>上班時段回覆</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_OFF};margin-right:5px;vertical-align:-1px"></i>下班後回覆</span>
+      <span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${MK_MISS};margin-right:5px;vertical-align:-1px"></i>未回</span>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:6px 12px 12px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,.06)">`;
+
+  P.slice().sort((a, b) => (b.rate ?? -1) - (a.rate ?? -1)).forEach(p => {
+    const on = p.required ? p.acked_on / p.required * 100 : 0;
+    const off = p.required ? p.acked_off / p.required * 100 : 0;
+    const miss = Math.max(0, 100 - on - off);
+    const lag = p.median_lag_min == null ? '—' : (p.median_lag_min >= 60 ? (p.median_lag_min / 60).toFixed(1) + ' 小時' : p.median_lag_min + ' 分');
+    h += `<div style="padding:10px 0;border-bottom:1px solid #f1f3f4">
+      <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+        <span style="font-weight:600;font-size:14px;color:#202124">${p.name || p.email}</span>
+        <span style="margin-left:auto;font-weight:700;font-size:15px;color:#202124">${p.rate}%</span>
+      </div>
+      <div style="display:flex;gap:2px;height:12px;border-radius:6px;overflow:hidden;background:#fff">
+        ${on > 0 ? `<div style="width:${on}%;background:${MK_ON}"></div>` : ''}
+        ${off > 0 ? `<div style="width:${off}%;background:${MK_OFF}"></div>` : ''}
+        ${miss > 0 ? `<div style="flex:1 1 ${miss}%;background:${MK_MISS}"></div>` : ''}
+      </div>
+      <div style="font-size:12px;color:#5f6368;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">
+        <span>需回 ${p.required}・已回 ${p.acked}</span>
+        <span>明確 ${p.acked_hard}（${p.rate_hard}%）</span>
+        <span>上班內 ${p.acked_on}・下班後 ${p.acked_off}</span>
+        <span>中位回覆 ${lag}</span>
+        <span style="color:#9aa0a6">群裡發言 ${p.spoke}</span>
+      </div></div>`;
+  });
+  h += `</div>`;
+
+  // ── 逐則追蹤：哪一則誰沒回 ──
+  h += `<div style="font-size:13px;font-weight:700;color:#3c4043;margin:0 2px 8px">需回覆的訊息（新到舊）</div>`;
+  const KIND = { announce: ['📢', '公告'], mention: ['🏷️', '點名'], keyword: ['❗', '要求回覆'], manual: ['📌', '手動'] };
+  A.forEach(a => {
+    const [ic, kn] = KIND[a.kind] || ['•', a.kind];
+    const d = new Date(a.created_at);
+    const miss = a.missing || [];
+    const done = a.required ? Math.round(a.acked / a.required * 100) : 0;
+    h += `<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:6px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+      <div style="display:flex;gap:8px;align-items:baseline;font-size:13px">
+        <span>${ic}</span>
+        <span style="color:#5f6368">${kn}</span>
+        <span style="flex:1;min-width:0;color:#202124;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(a.txt || '').replace(/\n/g, ' ') || '（無內容）'}</span>
+        <span style="flex:0 0 auto;font-weight:700;color:${done === 100 ? '#137333' : done >= 50 ? '#b45309' : '#c62828'}">${a.acked}/${a.required}</span>
+      </div>
+      <div style="font-size:12px;color:#9aa0a6;margin-top:4px">
+        ${d.getMonth() + 1}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}　${a.asker_name || ''}
+        ${miss.length ? `　<span style="color:#c62828">未回：${miss.join('、')}</span>` : '　<span style="color:#137333">全員已回 ✓</span>'}
+      </div></div>`;
+  });
+
+  h += `<div style="font-size:11px;color:#9aa0a6;margin-top:14px;line-height:1.8">
+    ※「已回」只認三件事：按「收到」鈕、引用回覆該則、或在該則之後的時間窗內於群裡發言。
+    前兩種是<b>明確回應</b>，第三種是推定，考核建議看「明確」。<br>
+    ※ LINE 官方沒有開放「已讀」和「按讚(表情回應)」的資料，任何系統都抓不到，本頁不含這兩項。<br>
+    ※ 上班／下班以當事人當天實際打卡區間判定；未打卡、請假、假日一律算下班後。</div></div>`;
+  return h;
+}
+
+function mkTile(label, big, sub) {
+  return `<div style="flex:1;background:#fff;border-radius:12px;padding:12px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    <div style="font-size:12px;color:#5f6368">${label}</div>
+    <div style="font-size:24px;font-weight:700;color:#202124;line-height:1.3">${big}</div>
+    <div style="font-size:11px;color:#9aa0a6">${sub}</div></div>`;
+}
+
+// 單一序列折線圖：2px 線、淡格線、hover 十字線＋提示（單序列不需圖例，標題已說明是什麼）
+function mkTrendSvg(days) {
+  const pts = days.filter(d => d.rate != null);
+  if (pts.length < 2) return '';
+  const W = 320, H = 96, L = 26, R = 6, T = 8, B = 18;
+  const iw = W - L - R, ih = H - T - B;
+  const x = i => L + (pts.length === 1 ? iw / 2 : i * iw / (pts.length - 1));
+  const y = v => T + ih - (v / 100) * ih;
+  const line = pts.map((p, i) => `${x(i).toFixed(1)},${y(p.rate).toFixed(1)}`).join(' ');
+  const grid = [0, 50, 100].map(v =>
+    `<line x1="${L}" y1="${y(v)}" x2="${W - R}" y2="${y(v)}" stroke="#f1f3f4" stroke-width="1"/>
+     <text x="${L - 5}" y="${y(v) + 3.5}" text-anchor="end" font-size="9" fill="#9aa0a6">${v}</text>`).join('');
+  const lbl = i => { const d = new Date(pts[i].day + 'T00:00:00'); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const ticks = [0, pts.length - 1].map(i =>
+    `<text x="${x(i)}" y="${H - 5}" text-anchor="${i === 0 ? 'start' : 'end'}" font-size="9" fill="#9aa0a6">${lbl(i)}</text>`).join('');
+  // 命中區塊比點大，手指也點得到
+  const hits = pts.map((p, i) => {
+    const half = iw / Math.max(1, pts.length - 1) / 2;
+    return `<rect x="${Math.max(L, x(i) - half)}" y="${T}" width="${Math.min(half * 2, iw)}" height="${ih}" fill="transparent"
+      onmouseenter="mkTip(event,'${lbl(i)}　${p.rate}%（${p.acked}/${p.required}）',${x(i)},${y(p.rate)})" onmouseleave="mkTip(null)"></rect>`;
+  }).join('');
+  return `<div style="position:relative">
+    <div id="mk-tip" style="display:none;position:absolute;transform:translate(-50%,-140%);background:#202124;color:#fff;font-size:12px;padding:5px 8px;border-radius:6px;pointer-events:none;white-space:nowrap;z-index:9"></div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    ${grid}
+    <polyline points="${line}" fill="none" stroke="${MK_ON}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    <circle id="mk-dot" r="4" fill="${MK_ON}" stroke="#fff" stroke-width="2" style="display:none"/>
+    ${ticks}${hits}
+  </svg></div>`;
+}
+
+function mkTip(ev, text, cx, cy) {
+  const tip = document.getElementById('mk-tip'), dot = document.getElementById('mk-dot');
+  if (!tip) return;
+  if (!ev) { tip.style.display = 'none'; if (dot) dot.style.display = 'none'; return; }
+  const svg = ev.target.ownerSVGElement, box = svg.getBoundingClientRect();
+  tip.textContent = text;
+  tip.style.display = 'block';
+  tip.style.left = (cx / 320) * box.width + 'px';
+  tip.style.top = (cy / 96) * box.height + 'px';
+  if (dot) { dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.style.display = 'block'; }
+}
+
+// 用 bot 發公告卡到群組（卡片附「✅ 收到」鈕 → 誰按了、幾點按，一清二楚）
+function mkAnnounceDialog() {
+  openModal(`<h3 style="margin:0 0 4px">📢 發公告到 LINE 群組</h3>
+    <p style="font-size:12px;color:#5f6368;margin:0 0 12px;line-height:1.7">
+      卡片會附一顆「✅ 收到」按鈕。誰按了、幾點按的，都會進回覆 KPI。<br>
+      群組推播不論幾人只算 1 則訊息額度。</p>
+    <input id="mk-t" placeholder="標題（例如：週會改期）" maxlength="60"
+      style="width:100%;padding:9px;border:1px solid #dadce0;border-radius:8px;margin-bottom:8px;box-sizing:border-box">
+    <textarea id="mk-b" placeholder="內容" rows="5" maxlength="900"
+      style="width:100%;padding:9px;border:1px solid #dadce0;border-radius:8px;box-sizing:border-box;resize:vertical"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="closeModal()" style="flex:1;padding:10px;border:1px solid #dadce0;border-radius:8px;background:#fff;cursor:pointer">取消</button>
+      <button id="mk-send" onclick="mkSendAnnounce()" style="flex:1;padding:10px;border:0;border-radius:8px;background:${MK_ON};color:#fff;font-weight:600;cursor:pointer">發送</button>
+    </div>`, true);
+}
+
+async function mkSendAnnounce() {
+  const title = document.getElementById('mk-t').value.trim();
+  const body = document.getElementById('mk-b').value.trim();
+  if (!title || !body) { toast('標題和內容都要填', 'red'); return; }
+  const btn = document.getElementById('mk-send');
+  btn.disabled = true; btn.textContent = '發送中…';
+  try {
+    const r = await authedFetch(`${CONFIG.WORKER_URL}/calc/msg-announce`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, body })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.reason || `HTTP ${r.status}`);
+    closeModal();
+    toast(`公告 #${j.code} 已發出，應回覆 ${j.targets} 人 ✓`, 'green');
+    viewMsgKpi();
+  } catch (e) {
+    toast('發送失敗：' + e.message, 'red');
+    btn.disabled = false; btn.textContent = '發送';
+  }
 }
 
 async function viewAdminAnnounce() {
