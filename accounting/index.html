@@ -2,6 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0a0e17">
 <link rel="manifest" href="manifest.json">
@@ -272,7 +273,7 @@ input.dcin.wide{width:100%;text-align:left}
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 'use strict';
-const APP_VERSION = '0.7.1';
+const APP_VERSION = '0.7.4';
 // PWA：註冊 SW（僅供安裝，不做快取——帳務要即時、避免卡舊版）
 if ('serviceWorker' in navigator) { try { navigator.serviceWorker.register('sw.js'); } catch (_) {} }
 document.getElementById('verTag').textContent = 'v' + APP_VERSION;
@@ -318,7 +319,7 @@ const TAXO = {
   'B-營業費用': {
     '人事費用': ['正職員工薪資', '勞健保/勞退提撥', '獎金/津貼', '員工福利', '教育訓練', '團體保險'],
     '租金辦公支出': ['門市租金', '水電費', '網路/電話費', '文具/辦公用品', '印刷品', '一般維修保養', '保險費用'],
-    '交通與車輛': ['車輛加油費', '車輛充電費', '車輛租賃費', '車輛維修保養', '車輛保險/稅金', '停車費/過路費', '差旅費'],   // 車輛充電費 2026-08-12 新增(電車比照油資；在公司充勿重複記，已含水電費)。車輛租賃費 2026-08-13 新增(格上電車月租27000含稅；⚠️自用乘人小客車進項稅額不得扣抵，入帳稅額欄填 0)
+    '交通與車輛': ['車輛加油費', '車輛充電費', '車輛租賃費', '車輛維修保養', '車輛保險/稅金', '停車費/過路費', '差旅費'],   // 車輛充電費 2026-08-12 新增(電車比照油資；在公司充勿重複記，已含水電費)。車輛租賃費 2026-08-13 新增(長租電車月租含稅；⚠️自用乘人小客車進項稅額不得扣抵，入帳稅額欄填 0)
     '運費支出': ['宅配運費', '回頭車專車', '郵資'],   // 2026-08-12 新增：出貨給客人的運費=銷售行為，屬營業費用(原誤入 A-直接人工-車油資運費)
     '財務費用': ['銀行手續費', '銀行貸款利息', '融資租賃利息', '租賃利息支出'],   // 2026-08-12：移除「營業稅所得稅」(代收代付/非營業費用，改列 E-稅費繳納)；新增利息類=真正的借錢成本。租賃利息支出 2026-08-13(IFRS16 資本化後月租拆出的利息，與銀行貸款利息分開揭露)
     '耗材工具': ['小型工具', '施工耗材', '倉儲耗材'],
@@ -344,7 +345,7 @@ const TAXO = {
   },
   // ⚠️ F 大類=可退回的錢(資產,不是費用)。月報計算獲利時必須整塊排除,否則押金會被當成本吃掉獲利
   'F-往來與保證金': {
-    '存出保證金': ['車輛租賃押金', '房屋租賃押金', '其他押金保證金'],   // 2026-08-13 新增：格上電車押金 30 萬=資產不是費用
+    '存出保證金': ['車輛租賃押金', '房屋租賃押金', '其他押金保證金'],   // 2026-08-13 新增：車輛租賃押金=可退回的資產，不是費用
   },
   'Z-待分類': {
     '待主管裁示': [],   // 2026-08-12 新增：不確定就選這裡，不要猜。亂猜看不見，待分類看得見。每週一裁示清空
@@ -360,7 +361,7 @@ const SUGGEST_RULES = [
   [/燈條|燈珠|燈飾|光源|燈管/, ['A-營業成本', '材料成本', '燈飾燈源']],
   [/線材|電線|五金|螺絲|接頭|端子/, ['A-營業成本', '材料成本', '線材五金配件']],
   [/包裝|紙箱|氣泡|棧板/, ['A-營業成本', '材料成本', '包裝資材']],
-  // ── 租賃與押金（2026-08-13）：押金規則必須排在「格上/租車」之前，否則 30 萬押金會被判成費用 ──
+  // ── 租賃與押金（2026-08-13）：押金規則必須排在「格上/租車」之前，否則大額押金會被判成費用 ──
   [/(格上|和運|裕隆|中租|艾維士|租車|車輛租賃).{0,8}(押金|保證金)|(押金|保證金).{0,8}(格上|和運|租車|車輛)/, ['F-往來與保證金', '存出保證金', '車輛租賃押金']],
   [/押金|保證金|履約保證|擔保金|保固金/, ['F-往來與保證金', '存出保證金', '其他押金保證金']],
   [/格上|和運租車|裕隆租車|艾維士|租車|車輛租賃|月租車|長租車/, ['B-營業費用', '交通與車輛', '車輛租賃費']],   // ⚠️自用乘人小客車進項稅額不得扣抵(營業稅法§19-1-5+財政部111.1.7台財稅字第11004648950號令)，入帳稅額欄填 0
@@ -1449,8 +1450,9 @@ async function loadDashboard(){
           <b><span class="dot" style="background:var(--out)"></span>出項</b></div></div>
       <div class="sec">最近 10 筆</div>
       <div class="card" style="padding:4px 14px">${rows}</div>
-      <div style="text-align:center;margin-top:12px">
-        <a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener" style="color:var(--brand);font-size:12.5px">在 Ragic 開啟完整表格 →</a>
+      <div style="text-align:center;margin-top:14px;line-height:2.1">
+        <a href="../report/" style="color:var(--brand);font-size:12.5px;font-weight:700">📊 營運報表中心（專案損益 · 月度收支 · 預算達成）</a><br>
+        <a href="${RAGIC_SHEET_URL}" target="_blank" rel="noopener" style="color:var(--tx2);font-size:12px">在 Ragic 開啟完整表格 →</a>
       </div>`;
   } catch (e) {
     body.innerHTML = '<div style="padding:10px;color:var(--danger)">讀取失敗：' + esc(e.message) + '</div>';
