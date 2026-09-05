@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.6</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.7</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -693,6 +693,25 @@ async function loadApiAnnual() {
 }
 // ══ 治本：月報薪資改吃 bot 集中計算（單一來源）。本地整套薪資公式保留當 Railway 掛掉時的 fallback ══
 let _API_SALARY = null;  // { emailLower: attCalcReport 整包 }；null＝未載/失敗→各員工自動回退本地算
+let _PAYC = null;   // 薪資單確認狀態 {email:{s:'ok'|'dsp',ts}}（v11.7 每月確認，與 LINE 薪資單按鈕同源 att_audit）
+async function loadPayConfirm(year, month) {
+  try {
+    const res = await authedFetch(CONFIG.WORKER_URL + '/calc/pay-confirm?all=1&ym=' + encodeURIComponent(year + '/' + String(month).padStart(2, '0')));
+    const j = await res.json();
+    return (j && j.ok) ? (j.map || {}) : null;   // null=API 掛掉 → 不顯示徽章（不誤導）
+  } catch (e) { return null; }
+}
+// 月報卡片徽章：✅已確認(日期)/❌異議/未確認；_PAYC 未載入時整顆不顯示
+function payConfirmBadge(w) {
+  if (!_PAYC) return '';
+  const pc = _PAYC[String(w.email || '').toLowerCase()];
+  if (!pc) return '<span class="rpt-type" style="background:#f1f3f4;color:#888" title="員工尚未在 LINE 薪資單按「核對無誤」">薪資未確認</span>';
+  const d = pc.ts ? new Date(pc.ts) : null;
+  const ds = d && !isNaN(d) ? (d.getMonth() + 1) + '/' + d.getDate() : '';
+  return pc.s === 'ok'
+    ? '<span class="rpt-type" style="background:#e6f4ea;color:#188038" title="員工已在 LINE 確認本月薪資單無誤（含當下明細快照）">✅薪資已確認' + (ds ? ' ' + ds : '') + '</span>'
+    : '<span class="rpt-type" style="background:#fdeaea;color:#c5221f" title="員工對本月薪資單有異議，請儘速核對">❌薪資異議' + (ds ? ' ' + ds : '') + '</span>';
+}
 async function loadApiSalary(year, month) {
   try {
     const res = await authedFetch(`${CONFIG.WORKER_URL}/calc/salary?all=1&y=${year}&m=${month}`);
@@ -2598,9 +2617,10 @@ async function viewReport() {
     }
 
     // 兩支 bot API 並行（原本串著等＝時間相加；改並行後月報載入約快一半）；失敗各自回退本地算
-    [_API_ANNUAL, _API_SALARY] = await Promise.all([
+    [_API_ANNUAL, _API_SALARY, _PAYC] = await Promise.all([
       cached('api-annual', 45000, loadApiAnnual),
-      cached(`api-salary|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadApiSalary(CUR_YEAR, CUR_MONTH + 1))
+      cached(`api-salary|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadApiSalary(CUR_YEAR, CUR_MONTH + 1)),
+      cached(`api-payc|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadPayConfirm(CUR_YEAR, CUR_MONTH + 1))
     ]);
     if (!_API_SALARY && showPay) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪（deptmgr 不顯示薪資,免驚擾）
     actives.forEach(w => {
@@ -2711,6 +2731,7 @@ async function viewReport() {
             <div style="display:flex;align-items:center;gap:6px">
               <span class="rpt-name">${w.name}</span>
               <span class="rpt-type" style="background:${isFull?'#e8f0fe':'#e6f4ea'};color:${isFull?'#1a73e8':'#34a853'}">${isFull?'正式':(w.emp_type==='承攬'?'承攬':'工讀')}</span>
+              ${payConfirmBadge(w)}
               ${shiftTag}
             </div>
             <div class="rpt-email">${w.email}</div>
