@@ -474,8 +474,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.22';
+const APP_VERSION='1.23';
 const CHANGELOG=[
+  'v1.23　2026/09/05',
+  '· 登入一次管 7 天：換發 7 天通行證，期間開啟、送出都不用再碰 Google 登入',
+  '',
   'v1.22　2026/08/26',
   '· 任務卡與已選卡顯示「工務代號」（派件時定的，例 工A40+25）',
   '',
@@ -683,6 +686,7 @@ function onSignIn(resp){
     const inApp = S.user && S.user.email===email && !$('appView').classList.contains('hidden');
     S.user = { email, name:p.name||'', picture:p.picture||'' };
     saveSession(S.user);
+    getPass();   // 換 7 天通行證(偉智反映每天要登入→之後 7 天內 API 全走通行證)
     if(inApp){ loadRecent(); loadCases(); resendPending(); return; }   // ★背景補到 token 後,任務清單也要重抓(否則記住登入開啟永遠 401 空清單)
     enterApp();
   }catch(e){ toast('登入失敗：'+e.message,'bad'); }
@@ -696,7 +700,7 @@ function showDeny(){
 function denySwitch(){ try{ google.accounts.id.disableAutoSelect(); }catch(e){} clearSession(); location.reload(); }
 function logout(){
   try{ google.accounts.id.disableAutoSelect(); }catch(e){}
-  clearSession();
+  clearSession(); wsessClear();
   S.token=null; S.user=null;
   $('appView').classList.add('hidden'); $('doneView').classList.add('hidden'); $('loginView').classList.remove('hidden');
 }
@@ -799,12 +803,12 @@ function pushRecentCase(v){
 }
 async function loadCases(all){
   if(!all){ const c=readCaseCache(); if(c&&c.length){ S.cases=c; renderCaseList(); } }
-  if(!S.token){ S.waitToken=true; renderCaseList(); return; }   // 記住登入剛開啟:token 還在背景補,先顯示快取,onSignIn 會再呼叫
+  if(!S.token && !wsessGet()){ S.waitToken=true; renderCaseList(); return; }   // 無 token 也無通行證:等 GSI 背景補,onSignIn 會再呼叫
   S.waitToken=false;
   S.loadingCases=true; if(all) renderCaseList();
   try{
-    const r=await fetch(CFG.WORKER+'/worklog-cases'+(all?'?all=1':''),{headers:{'X-Google-Token':S.token||''}});
-    if(r.status===401){ S.waitToken=true; S.loadingCases=false; renderCaseList(); return; }   // 憑證過期:等 GSI 靜默補新的再來
+    const r=await fetch(CFG.WORKER+'/worklog-cases'+(all?'?all=1':''),{headers:authHdr()});
+    if(r.status===401){ wsessClear(); S.waitToken=true; S.loadingCases=false; renderCaseList(); return; }   // 通行證/憑證過期:清證,等 GSI 補新的再換證
     const d=await r.json();
     const list=(d&&d.cases)||[];   // [{log,no,desc,cust,addr,date}] 金額已在伺服器端剝除;log=null 代表點選時自動建日誌
     S.allLoaded=!!all;
@@ -844,7 +848,7 @@ async function pickCase(v){
     S.ensuring=v; renderCaseList();
     try{
       const r=await fetch(CFG.WORKER+'/worklog-ensure-log',{method:'POST',
-        headers:{'X-Google-Token':S.token||'','Content-Type':'application/json'},
+        headers:Object.assign(authHdr(),{'Content-Type':'application/json'}),
         body:JSON.stringify({caseNo:v})});
       const d=await r.json();
       if(d&&d.ok&&d.log){ c.log=d.log; toast(d.created?'已自動建立工作日誌 '+d.log:'已連上日誌 '+d.log,'ok'); }
@@ -1035,8 +1039,20 @@ function renderPhotos(){
 function rmPhoto(i){ S.photos.splice(i,1); renderPhotos(); }
 
 /* ---------- 呼叫 Worker ---------- */
+/* 7 天通行證(照打卡系統 pc_wsess 同款):登入一次→POST /session 換證→7天內所有 API 帶 X-Session-Token,Google 完全不用出面 */
+function wsessGet(){ try{ const s=JSON.parse(localStorage.getItem('wl_wsess')||'null'); if(s&&s.token&&s.exp&&Date.now()<s.exp-60000) return s; }catch(e){} return null; }
+function wsessClear(){ try{ localStorage.removeItem('wl_wsess'); }catch(e){} }
+function authHdr(){ const s=wsessGet(); return s? {'X-Session-Token':s.token} : {'X-Google-Token':S.token||''}; }
+async function getPass(){   // 用 Google token 換 7 天通行證
+  if(!S.token || wsessGet()) return;
+  try{
+    const r=await fetch(CFG.WORKER+'/session',{method:'POST',headers:{'X-Google-Token':S.token}});
+    const d=await r.json();
+    if(d&&d.ok&&d.token){ localStorage.setItem('wl_wsess', JSON.stringify({token:d.token, exp:d.exp||Date.now()+6.5*86400000, email:d.email||''})); }
+  }catch(e){}
+}
 async function callRagic(suffix, opts){
-  const headers = Object.assign({ 'X-Google-Token': S.token||'' }, (opts&&opts.headers)||{});
+  const headers = Object.assign(authHdr(), (opts&&opts.headers)||{});
   return fetch(CFG.WORKER + CFG.PATH + suffix, Object.assign({}, opts, { headers }));
 }
 
@@ -1076,7 +1092,7 @@ function dataURLtoBlob(u){ const a=u.split(','),mime=(a[0].match(/:(.*?);/)||[])
 function payloadToFD(p){ const fd=new FormData(); p.fields.forEach(kv=>fd.append(kv[0],kv[1])); (p.photos||[]).forEach((du,i)=>{ try{ fd.append(CFG.F.photo, dataURLtoBlob(du), 'wl_'+i+'.jpg'); }catch(e){} }); return fd; }
 async function sendPayload(p){
   const r=await callRagic('?api&doFormula=true', { method:'POST', body:payloadToFD(p) });
-  if(r.status===401) return { auth:false };
+  if(r.status===401){ wsessClear(); return { auth:false }; }   // 通行證過期:清證→重登入會自動換新證
   let data=null; try{ data=await r.json(); }catch(e){}
   const ok=!!(data&&data.status==='SUCCESS');
   return { ok:ok, sn: ok? ((data.data&&(data.data['1002584']||data.data['序列號']))||('#'+data.ragicId)) : '', msg:(data&&data.msg)||('HTTP '+r.status) };
