@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.5</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.6</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -635,6 +635,14 @@ function hourlyOf(w) {
   if (w.emp_type !== '正式員工') return Number(w.weekday_rate) || 0;
   const sh = CONFIG.SHIFTS[w.shift];
   return (Number(w.monthly_salary) || 0) / (30 * (sh ? sh.hours : 8));
+}
+// 給付端時薪（加班費/假日加給）＝(月薪＋全勤獎金基數)÷30÷每日工時（Jason 2026/08/28 核准；與 bot attCalc hourlyPay 同步）
+// 全勤獎金屬工資依法計入平日每小時工資額——僅給付端；扣薪端（遲到早退/請假/曠職/天災）仍用 hourlyOf＝從優不雙罰。
+// 生效月（ATTEND_BONUS_FROM=2026/07）前的歷史月不回溯。fallback 一律用制度基數（員工表覆蓋欄讀不到；正常吃 API）。
+function hourlyPayOf(w, ym) {
+  if (!w || w.emp_type !== '正式員工' || !ym || ym < ATTEND_BONUS_FROM) return hourlyOf(w);
+  const sh = CONFIG.SHIFTS[w.shift];
+  return ((Number(w.monthly_salary) || 0) + ATTEND_BONUS_BASE) / (30 * (sh ? sh.hours : 8));
 }
 // refDate＝基準日（月報封存用「查詢月末」，省略＝今天）。⚠️ 沒有它的話，查歷史月會隨「今天」漂移
 // ——員工跨到職週年後回看上月，應有天數會突然變多（2026/08/01 抓到的大 bug，bot 已用 refTw 封存）
@@ -2647,7 +2655,7 @@ async function viewReport() {
       const _apiS = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
       const hourly = hourlyOf(w);
       const shHours = sh ? sh.hours : 8;   // ⚠️ 必須早於 leaveDeduct/attendBonus（兩者都用到，晚宣告會 TDZ 讓整頁月報崩潰）
-      const ot = calcMonthOvertimePay(w.email, otAll, ym, hourly);  // ot.hours 顯示用；金額改吃 API
+      const ot = calcMonthOvertimePay(w.email, otAll, ym, hourlyPayOf(w, ym));  // ot.hours 顯示用；金額改吃 API（fallback 時薪含全勤基數）
       // 遲到/早退：**遲到＋早退「合計」**月累計 ≤15 分免責，>15 分扣全部（bot lib/attCalc.js:126-127 同一門檻）
       // ⚠️ 舊版寫成「各自 >15」→ 遲到10+早退10（合計20應扣20分）會扣 0，且與下方明細彈窗的合計制分岔
       const teTotM = lateMin + earlyMin;                      // 補時券生效日已於上方逐日順延（與 attCalc 同步）
@@ -2660,7 +2668,7 @@ async function viewReport() {
       const laborIns  = _apiS ? _apiS.laborIns  : (isFull ? laborInsuranceEE(w.monthly_salary) : 0);
       const healthIns = _apiS ? _apiS.healthIns : (isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0);
       // 國定假日 + 週日例假 出勤加倍：僅正職加發一日工資（時數×時薪）。工讀生已分平日/假日時薪不重複加
-      const hrly = isFull ? hourlyOf(w) : 0;
+      const hrly = isFull ? hourlyPayOf(w, ym) : 0;   // 給付端基準含全勤基數（2026/08/28）
       const isDoublePay = ds => holidaySet.has(ds) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
       const holidayBonus = _apiS ? _apiS.holidayBonus : (isFull
         ? wr.filter(r => isDoublePay(r.date)).reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0)
@@ -2791,9 +2799,9 @@ function exportMonthDetail() {
       // 應加發＝當日加班費＋假日加給(正職假日出勤)；應扣除＝當日請假扣＋遲退扣(逐日估算)
       const isWknd = [0, 6].includes(dow) || (holidaySet && holidaySet.has(ds));
       let addPay = 0;
-      if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourly, isWknd));
+      if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourlyPayOf(w, ym), isWknd));   // 給付端含全勤基數
       const dayRawH = dayRecs.reduce((s, r) => s + (parseFloat(r.hours) || 0), 0);
-      if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * hourlyOf(w));
+      if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * hourlyPayOf(w, ym));   // 給付端含全勤基數
       let dedPay = 0;
       dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
       if (isDisasterAbsent) dedPay += Math.round(w.monthly_salary / 30);  // 天災假不支薪扣一日
@@ -2893,7 +2901,7 @@ function showReportDetail(email) {
   const lateDeduct = _apiS ? _apiS.lateDeduct : Math.round((teTotP > 15 ? teTotP : 0) / 60 * hourly);
 
   // 加班費明細
-  const od = overtimeDetail(email, otAll, ym, hourly);
+  const od = overtimeDetail(email, otAll, ym, hourlyPayOf(w, ym));
   const otRows = od.rows.map(r =>
     r.paid <= 0
       ? `${addDay(r.date)}　加班 ${r.orig}h → 補休全抵 ${r.used}h（不計薪）`
@@ -2932,7 +2940,7 @@ function showReportDetail(email) {
   const base = _apiS ? _apiS.base : (isFull ? w.monthly_salary : totP);
   const laborIns  = _apiS ? _apiS.laborIns : (isFull ? laborInsuranceEE(w.monthly_salary) : 0);
   const healthIns = _apiS ? _apiS.healthIns : (isFull ? healthInsuranceEE(w.monthly_salary, w.dependents) : 0);
-  const hrly = isFull ? hourlyOf(w) : 0;
+  const hrly = isFull ? hourlyPayOf(w, ym) : 0;   // 給付端基準含全勤基數（2026/08/28）
   const isDoublePay = ds => (holidaySet && holidaySet.has(ds)) || new Date(ds.replace(/\//g, '-')).getDay() === 0;
   const holidayRows = isFull ? wr.filter(r => isDoublePay(r.date)) : [];
   const holidayBonus = _apiS ? _apiS.holidayBonus : holidayRows.reduce((s, r) => s + Math.round((parseFloat(r.hours) || 0) * hrly), 0);
