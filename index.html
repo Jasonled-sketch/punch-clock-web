@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.7</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.8</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -700,6 +700,21 @@ async function loadPayConfirm(year, month) {
     const j = await res.json();
     return (j && j.ok) ? (j.map || {}) : null;   // null=API 掛掉 → 不顯示徽章（不誤導）
   } catch (e) { return null; }
+}
+// 📨 發薪資單（會計用網頁版；與 LINE 指令「發薪資單」同一份後端核心）：先 dry 拿人數確認、再真發（v11.8）
+async function sendPayslips() {
+  const ym = CUR_YEAR + '/' + String(CUR_MONTH + 1).padStart(2, '0');
+  try {
+    toast('查詢中…', 'green');
+    const q = 'y=' + CUR_YEAR + '&m=' + (CUR_MONTH + 1) + '&email=' + encodeURIComponent(ME.email);
+    const d = await (await authedFetch(CONFIG.WORKER_URL + '/calc/payslip-send?' + q + '&dry=1', { method: 'POST' })).json();
+    if (!d.ok) { toast('無法發送：' + (d.reason || '請稍後再試'), 'red'); return; }
+    if (!confirm('📨 將發送 ' + ym + ' 薪資單到 ' + d.bound + ' 位員工的 LINE' + (d.unbound ? '（另 ' + d.unbound + ' 位未綁定 LINE 收不到）' : '') + '。\n\n卡片底部有「✅核對無誤／❌我有異議」按鈕，發完請提醒員工點選。\n\n確定發送？')) return;
+    toast('發送中…請稍候', 'green');
+    const r = await (await authedFetch(CONFIG.WORKER_URL + '/calc/payslip-send?' + q, { method: 'POST' })).json();
+    if (r.ok) toast('✅ 薪資單已發送 ' + r.sent + ' 位' + (r.fail ? '、失敗 ' + r.fail + ' 位' : '') + (r.unbound ? '、未綁定 ' + r.unbound + ' 位' : ''), 'green');
+    else toast('發送失敗：' + (r.reason || '僅限管理者'), 'red');
+  } catch (e) { toast('發送失敗：' + e.message, 'red'); }
 }
 // 月報卡片徽章：✅已確認(日期)/❌異議/未確認；_PAYC 未載入時整顆不顯示
 function payConfirmBadge(w) {
@@ -2612,6 +2627,7 @@ async function viewReport() {
         <button class="btn" style="background:${isLocked ? '#b45309' : '#1a73e8'}" onclick="lockPayroll(${isLocked ? 'true' : ''})">${isLocked ? '🔄 重新鎖定' : '🔒 鎖定薪資'}</button>
         <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
         <button class="btn" style="background:#6b21a8" onclick="exportPayrollRegister()">📑 工資清冊</button>
+        <button class="btn" style="background:#c2410c" onclick="sendPayslips()">📨 發薪資單</button>
       </div></div>`;
     // 對照鈕已下架(2026/07/19 Jason:正式啟用,階段性任務完成)——annualParityCheck/salaryParityCheck 函式保留,需要診斷時 console 手動呼叫
     }
