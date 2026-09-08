@@ -256,14 +256,17 @@
   .dc-steps span{flex:1;text-align:center;font-size:10.5px;font-weight:800;color:#94a3b8;padding:7px 0;background:#fff;border:1.5px solid var(--line);border-radius:9px;line-height:1.3}
   .dc-steps span.on{background:var(--sky);border-color:var(--sky);color:#fff}
   .dc-steps span.done{background:#dcfce7;border-color:#86efac;color:var(--ok)}
-  /* 施工步驟 */
-  .sp-row{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #f1f5f9}
+  /* 施工步驟（長按拖曳排序）*/
+  .sp-row{display:flex;align-items:center;gap:11px;padding:13px 4px;border-bottom:1px solid #f1f5f9;user-select:none;-webkit-user-select:none;touch-action:pan-y}
   .sp-row:last-child{border-bottom:none}
-  .sp-row .cb{width:30px;height:30px;border-radius:9px;border:2px solid var(--line);background:#fff;flex:none;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff}
+  .sp-row .num{width:26px;height:26px;border-radius:50%;background:#e0f2fe;color:var(--sky-d);font-size:13.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none}
+  .sp-row .cb{width:32px;height:32px;border-radius:10px;border:2px solid var(--line);background:#fff;flex:none;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff}
   .sp-row.on .cb{background:var(--sky);border-color:var(--sky)}
-  .sp-row .t{flex:1;font-size:14.5px;font-weight:600;color:#334155}
-  .sp-row.on .t{}
-  .sp-row .mv{border:none;background:#f1f5f9;color:#64748b;width:32px;height:32px;border-radius:8px;font-size:14px;font-family:inherit;flex:none}
+  .sp-row .t{flex:1;font-size:15.5px;font-weight:700;color:#334155;line-height:1.4}
+  .sp-row:not(.on) .t{color:#94a3b8;text-decoration:line-through}
+  .sp-row .grip{color:#cbd5e1;font-size:17px;flex:none;padding:0 4px;letter-spacing:1px}
+  .sp-row.ghost{border:none;opacity:.96}
+  .sp-row.lift{opacity:.25}
   .sp-addrow{display:flex;gap:8px;margin-top:10px}
   .sp-addrow input{flex:1}
   .sp-addrow button{border:none;background:var(--sky);color:#fff;border-radius:11px;padding:0 16px;font-weight:800;font-family:inherit;font-size:15px}
@@ -574,7 +577,7 @@
   <div class="dc-head"><b id="dcTitle">派工卡</b><button onclick="closeDispCard()">✕ 關閉</button></div>
   <div class="dc-body" id="dcBody"></div>
 </div>
-<input type="file" id="dcPhotoInput" accept="image/*" capture="environment" class="hidden">
+<input type="file" id="dcPhotoInput" accept="image/*" class="hidden"><!-- 無capture:手機原生跳「拍照/相簿」選單,拍好的也能傳 -->
 
 <div id="toast"></div>
 <div id="loading" class="hidden"><div class="spin"></div><div class="lt" id="loadingTxt">處理中…</div></div>
@@ -591,8 +594,13 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.24';
+const APP_VERSION='1.25';
 const CHANGELOG=[
+  'v1.25　2026/09/08　🧪一條龍微調',
+  '· 照片格：點了可選「拍照」或「從相簿選」（拍好的也能傳）',
+  '· 施工步驟：預設只給基本 5 節點，多的自己加；加上序號 1.2.3.',
+  '· 排序改「長按整列拖曳」，拿掉 ↑↓ 按鈕，畫面清爽',
+  '',
   'v1.24　2026/09/08　🧪一條龍測試版（設計預覽）',
   '· 老闆端新增「📨 派工」：選案件→日期→工程師，30 秒建立派工卡',
   '· 「📋 我的派工卡」：規劃→覆核→出發→抵達→照片→完工 六關進度',
@@ -1301,8 +1309,8 @@ async function loadRecent(){
 /* ==================== 一條龍派工（P1 設計測試版）====================
    ⚠️ 測試版資料暫存本機 localStorage（跨手機不同步）：先給 Jason 點整體設計,
    微調定稿後正式版改存 Ragic(pm/2 派工骨架+狀態欄)+照片直傳 pm/8。 */
-const DC_STEPS = {
-  '工': ['斷電確認','定位放樣','鑽孔上架','掛屏固定','走線佈線','接電設定','亮屏測試','客戶教學','清潔撤場'],
+const DC_STEPS = {   // 基本 5 節點就好,多的工程師自己加(2026-09-08 Jason 微調)
+  '工': ['定位放樣','鑽孔上架','掛屏固定','走線接電','亮屏測試'],
   '修': ['問診複現','斷電拆檢','更換零件','測試驗證','覆機教學']
 };
 const DC_TOOLS = [
@@ -1414,14 +1422,17 @@ function renderDispCard(){
   const c1=document.createElement('div'); c1.className='card';
   c1.innerHTML='<div class="sec-t"><span class="n">1</span>施工步驟（'+(T==='修'?'維修範本':'安裝範本')+'）'+
     (d.st.planAt?'<span class="dc-badge" style="background:#dcfce7;color:#15803d">已規劃'+(d.st.planLate?'⚠️補':'')+'</span>':'')+'</div>';
+  const hintDrag=document.createElement('div'); hintDrag.className='hint'; hintDrag.style.marginBottom='4px'; hintDrag.textContent='點圓圈＝要做/不做；長按整列可上下拖曳排序';
+  c1.appendChild(hintDrag);
   const list=document.createElement('div');
   d.steps.forEach((s,i)=>{
-    const row=document.createElement('div'); row.className='sp-row'+(s.on?' on':'');
+    const row=document.createElement('div'); row.className='sp-row'+(s.on?' on':''); row.dataset.i=i;
+    const num=document.createElement('span'); num.className='num'; num.textContent=(i+1);
     const cb=document.createElement('button'); cb.type='button'; cb.className='cb'; cb.textContent=s.on?'✓':''; cb.onclick=()=>{ dcPatch(d.id,x=>x.steps[i].on=!x.steps[i].on); renderDispCard(); };
     const t=document.createElement('div'); t.className='t'; t.textContent=s.t;
-    const up=document.createElement('button'); up.type='button'; up.className='mv'; up.textContent='↑'; up.onclick=()=>{ if(i===0)return; dcPatch(d.id,x=>{ const tmp=x.steps[i-1]; x.steps[i-1]=x.steps[i]; x.steps[i]=tmp; }); renderDispCard(); };
-    const dn=document.createElement('button'); dn.type='button'; dn.className='mv'; dn.textContent='↓'; dn.onclick=()=>{ dcPatch(d.id,x=>{ if(i>=x.steps.length-1)return; const tmp=x.steps[i+1]; x.steps[i+1]=x.steps[i]; x.steps[i]=tmp; }); renderDispCard(); };
-    row.appendChild(cb); row.appendChild(t); row.appendChild(up); row.appendChild(dn);
+    const grip=document.createElement('span'); grip.className='grip'; grip.textContent='≡';
+    row.appendChild(num); row.appendChild(cb); row.appendChild(t); row.appendChild(grip);
+    dcAttachDrag(row, list, d.id);
     list.appendChild(row);
   });
   c1.appendChild(list);
@@ -1525,6 +1536,57 @@ function renderDispCard(){
   const del=document.createElement('button'); del.className='dc-act dis'; del.textContent='🗑 刪除這張派工卡（測試用）';
   del.onclick=()=>{ if(!confirm('刪除這張測試派工卡？'))return; dcSaveAll(dcAll().filter(x=>x.id!==d.id)); closeDispCard(); };
   B.appendChild(del);
+}
+/* 長按拖曳排序（手機 touch + 桌機滑鼠都通）*/
+function dcAttachDrag(row, list, id){
+  let timer=null, ghost=null, startY=0, dragging=false;
+  function start(y){
+    dragging=true;
+    try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
+    const r=row.getBoundingClientRect();
+    ghost=row.cloneNode(true); ghost.classList.add('ghost');
+    ghost.style.cssText='position:fixed;left:'+r.left+'px;width:'+r.width+'px;top:'+(y-r.height/2)+'px;z-index:99;pointer-events:none;background:#fff;border-radius:13px;box-shadow:0 10px 28px rgba(0,0,0,.28);padding:13px 10px';
+    document.body.appendChild(ghost);
+    row.classList.add('lift');
+  }
+  function move(y){
+    if(!ghost) return;
+    ghost.style.top=(y-ghost.offsetHeight/2)+'px';
+    const rows=[...list.children], cur=rows.indexOf(row);
+    for(let j=0;j<rows.length;j++){
+      if(rows[j]===row) continue;
+      const rc=rows[j].getBoundingClientRect();
+      if(y>rc.top && y<rc.bottom){
+        if(j<cur) list.insertBefore(row, rows[j]);
+        else list.insertBefore(row, rows[j].nextSibling);
+        break;
+      }
+    }
+  }
+  function end(){
+    clearTimeout(timer); timer=null;
+    if(!dragging) return;
+    dragging=false;
+    if(ghost){ ghost.remove(); ghost=null; }
+    row.classList.remove('lift');
+    const order=[...list.children].map(el=>parseInt(el.dataset.i,10));
+    dcPatch(id, x=>{ x.steps=order.map(i=>x.steps[i]); });
+    renderDispCard();
+  }
+  row.addEventListener('touchstart', e=>{ startY=e.touches[0].clientY; timer=setTimeout(()=>start(startY), 350); }, {passive:true});
+  row.addEventListener('touchmove', e=>{
+    const y=e.touches[0].clientY;
+    if(!dragging){ if(Math.abs(y-startY)>12) clearTimeout(timer); return; }
+    e.preventDefault(); move(y);
+  }, {passive:false});
+  row.addEventListener('touchend', end);
+  row.addEventListener('touchcancel', end);
+  row.addEventListener('mousedown', e=>{
+    startY=e.clientY; timer=setTimeout(()=>start(e.clientY), 350);
+    const mm=ev=>{ if(dragging) move(ev.clientY); else if(Math.abs(ev.clientY-startY)>12) clearTimeout(timer); };
+    const mu=()=>{ end(); document.removeEventListener('mousemove',mm); document.removeEventListener('mouseup',mu); };
+    document.addEventListener('mousemove',mm); document.addEventListener('mouseup',mu);
+  });
 }
 function dcAddStep(){
   const el=$('dcNewStep'); const v=(el&&el.value||'').trim(); if(!v) return;
