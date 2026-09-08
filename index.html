@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.10</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.11</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2639,6 +2639,7 @@ async function viewReport() {
         <button class="btn" style="background:${isLocked ? '#b45309' : '#1a73e8'}" onclick="lockPayroll(${isLocked ? 'true' : ''})">${isLocked ? '🔄 重新鎖定' : '🔒 鎖定薪資'}</button>
         <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
         <button class="btn" style="background:#6b21a8" onclick="exportPayrollRegister()">📑 工資清冊</button>
+        <button class="btn" style="background:#0b7285" onclick="printSignSheets()">🖨 個人明細（簽名用）</button>
         <button class="btn" style="background:#c2410c" onclick="sendPayslips()">📨 發薪資單</button>
       </div></div>`;
     // 對照鈕已下架(2026/07/19 Jason:正式啟用,階段性任務完成)——annualParityCheck/salaryParityCheck 函式保留,需要診斷時 console 手動呼叫
@@ -2822,60 +2823,96 @@ async function viewReport() {
 }
 
 // 匯出本月每日出勤明細 CSV（每員工每日一筆，供月結/薪資查核）
+// ── 每日出勤明細：單一資料來源（CSV 匯出／個人簽名明細共用，杜絕兩份算法分岔）──
+// 回傳該員本月每日一列：[姓名,Email,日期,星期,預定上班,預定下班,預定休息,實際上班,實際下班,
+//                       請假開始,請假結束,假別,加班開始,加班結束,實際工時,遲到分,早退分,應加發,應扣除]
+function buildEmpDetailRows(w) {
+  const { recs, leaves, otAll, holidaySet, specialByDate, ym, year, month } = _RPT;
+  const wkd = ['日', '一', '二', '三', '四', '五', '六'];
+  const out = [];
+  const sh = CONFIG.SHIFTS[w.shift];
+  const isFull = w.emp_type === '正式員工';
+  const hourly = hourlyOf(w);
+  const dim = new Date(year, month, 0).getDate();
+  for (let d = 1; d <= dim; d++) {
+    const ds = `${year}/${pad(month)}/${pad(d)}`;
+    const dow = new Date(year, month - 1, d).getDay();
+    const dayRecs = recs.filter(r => r.email === w.email && r.date === ds).sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
+    const rec = dayRecs[0] || null;                          // 第一段（供存在/請假/加班判斷）
+    const dayLv = leaves.filter(l => l.email === w.email && l.status === 'approved' && l.start_date === ds);
+    const dayOt = otAll.filter(o => o.email === w.email && o.ot_type === '加班' && o.status === 'approved' && o.date === ds);
+    const spc = specialByDate && specialByDate[ds];
+    const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && !dayLv.length && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來(且未請假) → 不支薪扣一日
+    if (!rec && !dayLv.length && !dayOt.length && !isDisasterAbsent) continue;  // 該日無任何資料 → 不列
+    const lv = dayLv[0] || {}, ot = dayOt[0] || {};
+    // 遲到/早退：⭐ 取自薪資核心 teByDate（與月報、LINE 薪資單同一份數字）；API 掛掉才本地估算
+    let late = 0, early = 0;
+    const _apiC = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
+    if (_apiC && _apiC.teByDate) { const t = _apiC.teByDate[ds] || {}; late = t.l || 0; early = t.e || 0; }
+    else if (sh && rec && isFull) {                          // 工讀生時薪制不計遲到/早退
+      const eff = effShiftBounds(sh, dayLv);
+      if (!eff.fullDay) {
+        const closedR = dayRecs.filter(r => r.end_time);
+        const firstIn = dayRecs[0] && dayRecs[0].start_time ? toMin(dayRecs[0].start_time) : null;
+        const lastOut = closedR.length ? toMin(closedR[closedR.length - 1].end_time) : null;
+        if (firstIn != null) { const x = firstIn - eff.amStart; if (x > 0) late = x; }
+        if (lastOut != null) { const x = eff.pmEnd - lastOut; if (x > 0) early = x; }
+      }
+    }
+    // 應加發＝當日加班費＋假日加給(正職假日出勤)；應扣除＝當日請假扣＋天災假扣(逐日估算)
+    const isWknd = [0, 6].includes(dow) || (holidaySet && holidaySet.has(ds));
+    let addPay = 0;
+    if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourlyPayOf(w, ym), isWknd));   // 給付端含全勤基數
+    const dayRawH = dayRecs.reduce((s, r) => s + (parseFloat(r.hours) || 0), 0);
+    if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * hourlyPayOf(w, ym));   // 給付端含全勤基數
+    let dedPay = 0;
+    dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
+    if (isDisasterAbsent) dedPay += Math.round(w.monthly_salary / 30);  // 天災假不支薪扣一日
+    const closedRecs = dayRecs.filter(r => r.end_time);      // 一天多段：第一段上班～最後一段下班、工時加總
+    const dispIn = dayRecs.length ? (dayRecs[0].start_time || '') : '';
+    const dispOut = closedRecs.length ? (closedRecs[closedRecs.length - 1].end_time || '') : '';
+    const sumWH = dayRecs.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOffOf(w.email, ds, leaves, otAll)), 0);
+    out.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
+      dispIn, dispOut, lv.start_time || '', lv.end_time || '', lv.leave_type || (isDisasterAbsent ? `${spc.type}(不支薪)` : ''),
+      ot.start_time || '', ot.end_time || '', dayRecs.length ? sumWH : '', late || '', early || '', addPay || '', dedPay || '']);
+  }
+  return out;
+}
+
+// ── 薪資彙總單列：工資清冊與個人簽名明細共用（已鎖薪＝快照定版值；未鎖＝即時 API）──
+function paySummaryOf(w) {
+  const key = String(w.email || '').toLowerCase();
+  const a2 = _API_SALARY && _API_SALARY[key];
+  if (!a2) return null;
+  const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
+  const sp = isLocked ? lockMap[key] : null;
+  return {
+    attendDays: a2.attendDays, totH: a2.totH, otH: a2.otMonthH,
+    base: sp ? sp.base : a2.base,
+    otPay: sp ? sp.ot : a2.otPay,
+    // 快照無「全勤/假日加給/天災」獨立欄；v11.10 起以 API 比對後拆解，拆不開才退回合併值
+    attendBonus: sp ? (sp.attendPart !== undefined ? sp.attendPart : snapExtra(sp) - a2.holidayBonus) : a2.attendBonus,
+    holidayBonus: sp ? (sp.holidayPart !== undefined ? sp.holidayPart : a2.holidayBonus) : a2.holidayBonus,
+    absentDeduct: sp ? (sp.absentPart !== undefined ? sp.absentPart : sp.absentd) : a2.absentDeduct,
+    disasterDeduct: sp ? (sp.disasterPart !== undefined ? sp.disasterPart : '') : a2.disasterDeduct,
+    lateDeduct: sp ? sp.lated : a2.lateDeduct,
+    leaveDeduct: sp ? sp.leaved : a2.leaveDeduct,
+    laborIns: sp ? sp.labor : a2.laborIns,
+    healthIns: sp ? sp.health : a2.healthIns,
+    net: sp ? sp.net : a2.net,
+    annualRemain: sp ? sp.annualRemain : a2.annualRemainYr,
+    compRemain: sp ? sp.compRemain : a2.compBal,
+    locked: !!sp, liveNet: a2.net
+  };
+}
+
 function exportMonthDetail() {
   if (!_RPT) { alert('請先載入薪資月報'); return; }
-  const { recs, leaves, otAll, holidaySet, specialByDate, ym, year, month } = _RPT;
-  const wkd = ['日','一','二','三','四','五','六'];
-  const headers = ['姓名','Email','日期','星期','預定上班','預定下班','預定休息','實際上班','實際下班','請假開始','請假結束','假別','加班開始','加班結束','實際工時','遲到分','早退分','應加發','應扣除'];
+  const ym = _RPT.ym;
+  const headers = ['姓名', 'Email', '日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除'];
   const rows = [headers];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
-    const sh = CONFIG.SHIFTS[w.shift];
-    const isFull = w.emp_type === '正式員工';
-    const hourly = hourlyOf(w);
-    const dim = new Date(year, month, 0).getDate();
-    for (let d = 1; d <= dim; d++) {
-      const ds = `${year}/${pad(month)}/${pad(d)}`;
-      const dow = new Date(year, month - 1, d).getDay();
-      const dayRecs = recs.filter(r => r.email === w.email && r.date === ds).sort((a, b) => String(a.start_time || '').localeCompare(String(b.start_time || '')));
-      const rec = dayRecs[0] || null;                          // 第一段（供存在/請假/加班判斷）
-      const dayLv = leaves.filter(l => l.email === w.email && l.status === 'approved' && l.start_date === ds);
-      const dayOt = otAll.filter(o => o.email === w.email && o.ot_type === '加班' && o.status === 'approved' && o.date === ds);
-      const spc = specialByDate && specialByDate[ds];
-      const isDisasterAbsent = isFull && spc && spc.paid === '否' && !rec && !dayLv.length && ![0, 6].includes(dow) && new Date(year, month - 1, d) <= new Date();  // 天災假沒來(且未請假) → 不支薪扣一日
-      if (!rec && !dayLv.length && !dayOt.length && !isDisasterAbsent) continue;  // 該日無任何資料 → 不列
-      const lv = dayLv[0] || {}, ot = dayOt[0] || {};
-      // 遲到/早退：⭐ 取自薪資核心 teByDate（2026/08/14 起與月報、LINE 薪資單同一份數字；
-      //   舊版 CSV 自算會漏掉午休排除與補時券順延，月結對帳時與月報對不起來）
-      let late = 0, early = 0;
-      const _apiC = _API_SALARY && _API_SALARY[String(w.email || '').toLowerCase()];
-      if (_apiC && _apiC.teByDate) { const t = _apiC.teByDate[ds] || {}; late = t.l || 0; early = t.e || 0; }
-      else if (sh && rec && isFull) {                          // API 掛掉才本地估算（工讀生時薪制不計遲到/早退）
-        const eff = effShiftBounds(sh, dayLv);
-        if (!eff.fullDay) {
-          const closedR = dayRecs.filter(r => r.end_time);
-          const firstIn = dayRecs[0] && dayRecs[0].start_time ? toMin(dayRecs[0].start_time) : null;
-          const lastOut = closedR.length ? toMin(closedR[closedR.length - 1].end_time) : null;
-          if (firstIn != null) { const x = firstIn - eff.amStart; if (x > 0) late = x; }
-          if (lastOut != null) { const x = eff.pmEnd - lastOut; if (x > 0) early = x; }
-        }
-      }
-      // 應加發＝當日加班費＋假日加給(正職假日出勤)；應扣除＝當日請假扣＋遲退扣(逐日估算)
-      const isWknd = [0, 6].includes(dow) || (holidaySet && holidaySet.has(ds));
-      let addPay = 0;
-      if (ot.hours) addPay += Math.round(calcOtPayByHours(parseFloat(ot.hours) || 0, hourlyPayOf(w, ym), isWknd));   // 給付端含全勤基數
-      const dayRawH = dayRecs.reduce((s, r) => s + (parseFloat(r.hours) || 0), 0);
-      if (isFull && dayRecs.length && (holidaySet.has(ds) || dow === 0)) addPay += Math.round(dayRawH * hourlyPayOf(w, ym));   // 給付端含全勤基數
-      let dedPay = 0;
-      dayLv.forEach(l => dedPay += oneLeaveDeduct(l, hourly));  // 遲退扣不逐日(月累計>15分才扣)，僅列分鐘欄供查核
-      if (isDisasterAbsent) dedPay += Math.round(w.monthly_salary / 30);  // 天災假不支薪扣一日
-      const closedRecs = dayRecs.filter(r => r.end_time);      // 一天多段：第一段上班～最後一段下班、工時加總
-      const dispIn = dayRecs.length ? (dayRecs[0].start_time || '') : '';
-      const dispOut = closedRecs.length ? (closedRecs[closedRecs.length - 1].end_time || '') : '';
-      const sumWH = dayRecs.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOffOf(w.email, ds, leaves, otAll)), 0);
-      rows.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
-        dispIn, dispOut, lv.start_time || '', lv.end_time || '', lv.leave_type || (isDisasterAbsent ? `${spc.type}(不支薪)` : ''),
-        ot.start_time || '', ot.end_time || '', dayRecs.length ? sumWH : '', late || '', early || '', addPay || '', dedPay || '']);
-    }
+    buildEmpDetailRows(w).forEach(r => rows.push(r));
   });
   if (rows.length <= 1) { alert('本月無出勤資料可匯出'); return; }
   const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
@@ -2884,6 +2921,80 @@ function exportMonthDetail() {
   a.href = URL.createObjectURL(blob);
   a.download = `出勤明細_${ym.replace('/', '-')}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
+}
+
+// 🖨 個人出勤暨薪資明細（簽名用）：每位員工一頁 A4 橫式，列印時選「另存為 PDF」即可存檔
+//    版面與人事現行紙本一致（欄位名詞逐字對齊），底部含勞基法留痕用的員工簽名欄
+function printSignSheets() {
+  if (!_RPT) { alert('請先載入薪資月報'); return; }
+  if (!_API_SALARY) { toast('薪資 API 未連線（離線估算中），為避免印出備用數字，請稍後重新整理再列印', 'red'); return; }
+  const ym = _RPT.ym;
+  const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const dash = v => (v === '' || v == null || v === 0) ? '-' : (typeof v === 'number' ? v.toLocaleString() : esc(v));
+  const D_HEAD = ['日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除'];
+  const S_HEAD = ['年月', '姓名', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)'];
+
+  let sheets = '';
+  (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
+    const rows = buildEmpDetailRows(w);
+    const s = paySummaryOf(w);
+    if (!rows.length && !s) return;
+    const num = i => rows.reduce((a, r) => a + (parseFloat(r[i]) || 0), 0);
+    const tWH = Math.round(num(14) * 100) / 100, tLate = num(15), tEarly = num(16), tAdd = num(17), tDed = num(18);
+    const body = rows.map(r => `<tr>${r.slice(2).map((c, i) => `<td${i === 13 || i === 14 ? ' class="red"' : ''}>${esc(c === 0 ? '' : c)}</td>`).join('')}</tr>`).join('');
+    const totRow = `<tr class="tot"><td colspan="12">合　計</td><td>${tWH}</td><td class="red">${tLate || ''}</td><td class="red">${tEarly || ''}</td><td>${tAdd || ''}</td><td>${tDed || ''}</td></tr>`;
+    const sum = s ? `<tr>
+        <td>${esc(ym)}</td><td>${esc(w.name)}</td><td>${s.attendDays}</td><td>${s.totH}</td><td>${dash(s.base)}</td>
+        <td>${dash(s.otH)}</td><td>${dash(s.otPay)}</td><td>${dash(s.attendBonus)}</td><td>${dash(s.holidayBonus)}</td>
+        <td>${dash(s.absentDeduct)}</td><td>${dash(s.disasterDeduct)}</td><td>${dash(s.lateDeduct)}</td><td>${dash(s.leaveDeduct)}</td>
+        <td>${dash(s.laborIns)}</td><td>${dash(s.healthIns)}</td><td class="big">${dash(s.net)}</td>
+        <td>${dash(s.annualRemain)}</td><td>${dash(s.compRemain)}</td></tr>` : '';
+    const drift = s && s.locked && Math.round(s.liveNet - s.net);
+    sheets += `<div class="sheet">
+      <h1>譽昇科技有限公司　出勤暨薪資明細</h1>
+      <div class="sub">${esc(ym)}　${esc(w.name)}　${esc(w.emp_type || '')}${w.shift ? '　' + esc(w.shift) + ' 班' : ''}${s && s.locked ? '　（薪資已鎖定定版值）' : ''}</div>
+      <table><thead><tr>${D_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="17">本月無出勤資料</td></tr>`}${rows.length ? totRow : ''}</tbody></table>
+      ${sum ? `<table class="sum"><thead><tr>${S_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${sum}</tbody></table>` : ''}
+      ${drift ? `<div class="drift">⚠️ 鎖定後有補核准單據，現行重算為 $${s.liveNet.toLocaleString()}（差 ${drift > 0 ? '+' : ''}${drift.toLocaleString()}）</div>` : ''}
+      <div class="sig">
+        <div class="txt">本人已確認本期出勤紀錄、薪資明細及應發（扣）款項無誤，並已領取本期薪資。</div>
+        <div class="line">員工簽名：<span class="u"></span>　　日期：中華民國<span class="u s"></span>年<span class="u s"></span>月<span class="u s"></span>日</div>
+      </div>
+    </div>`;
+  });
+  if (!sheets) { alert('本月無資料可列印'); return; }
+
+  const html = `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><title>出勤暨薪資明細_${esc(ym.replace('/', '-'))}</title><style>
+    @page { size: A4 landscape; margin: 8mm; }
+    * { box-sizing: border-box; }
+    body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; font-size: 10px; margin: 0; color: #000; background: #fff; }
+    .bar { padding: 10px 14px; background: #1a73e8; color: #fff; font-size: 14px; display: flex; gap: 12px; align-items: center; }
+    .bar button { font: inherit; font-size: 14px; font-weight: 700; padding: 6px 18px; border: 0; border-radius: 6px; background: #fff; color: #1a73e8; cursor: pointer; }
+    .sheet { page-break-after: always; padding: 2mm 0 6mm; }
+    .sheet:last-child { page-break-after: auto; }
+    h1 { font-size: 15px; text-align: center; margin: 0 0 1mm; letter-spacing: 1px; }
+    .sub { text-align: center; font-size: 11px; color: #333; margin: 0 0 3mm; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; }
+    th, td { border: 1px solid #000; padding: 1.5px 3px; text-align: center; white-space: nowrap; }
+    th { background: #eee; font-weight: 700; }
+    tr.tot td { font-weight: 700; background: #fafafa; }
+    td.red { color: #c00; }
+    td.big { font-weight: 700; }
+    table.sum { margin-top: 4mm; }
+    .drift { margin-top: 2mm; font-size: 10px; color: #b45309; }
+    .sig { margin-top: 6mm; margin-left: auto; width: 62%; border: 1.5px solid #c00; padding: 3mm 4mm; }
+    .sig .txt { font-size: 11px; font-weight: 700; margin-bottom: 5mm; }
+    .sig .line { font-size: 11px; }
+    .u { display: inline-block; border-bottom: 1px solid #000; min-width: 130px; height: 14px; }
+    .u.s { min-width: 42px; }
+    @media print { .bar { display: none; } }
+  </style></head><body>
+  <div class="bar"><b>${esc(ym)} 出勤暨薪資明細（每人一頁）</b><button onclick="window.print()">🖨 列印 / 另存 PDF</button><span style="font-size:12px">列印對話框選「另存為 PDF」即可存檔；版面已設定 A4 橫式</span></div>
+  ${sheets}</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('瀏覽器擋掉了新視窗，請允許本站彈出視窗後再試一次。'); return; }
+  win.document.open(); win.document.write(html); win.document.close();
 }
 
 // 工資清冊（勞基法§23 II：雇主應置備工資清冊，保存5年）——從薪資 API 取數，離線估算不給匯出
@@ -2896,17 +3007,16 @@ function exportPayrollRegister() {
   const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
   const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
-    const a2 = _API_SALARY[String(w.email || '').toLowerCase()]; if (!a2) return;
-    const sp = isLocked ? lockMap[String(w.email || '').toLowerCase()] : null;
-    const paid = sp ? sp.net : a2.net;                                   // 實發＝已鎖用快照
-    const status = sp ? (Math.round(a2.net - sp.net) ? `已鎖定(鎖後有異動,差${Math.round(a2.net - sp.net)})` : '已鎖定') : '未鎖定';
-    rows.push([ym, w.name, w.email, a2.attendDays, a2.totH,
-      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, (sp ? (sp.attendPart !== undefined ? sp.attendPart : snapExtra(sp) - a2.holidayBonus) : a2.attendBonus), a2.holidayBonus,
-      sp ? sp.absentd : a2.absentDeduct, sp ? '' : a2.disasterDeduct,   // 快照的曠職扣已含天災假(無獨立欄)
-      sp ? sp.lated : a2.lateDeduct, sp ? sp.leaved : a2.leaveDeduct,
-      sp ? sp.labor : a2.laborIns, sp ? sp.health : a2.healthIns,
-      paid, sp ? sp.annualRemain : a2.annualRemainYr, sp ? sp.compRemain : a2.compBal,
-      status, sp ? a2.net : '']);
+    const s = paySummaryOf(w); if (!s) return;                           // 共用彙總：與個人簽名明細同一份數字
+    const drift = s.locked ? Math.round(s.liveNet - s.net) : 0;
+    const status = s.locked ? (drift ? `已鎖定(鎖後有異動,差${drift})` : '已鎖定') : '未鎖定';
+    rows.push([ym, w.name, w.email, s.attendDays, s.totH,
+      s.base, s.otH, s.otPay, s.attendBonus, s.holidayBonus,
+      s.absentDeduct, s.disasterDeduct,
+      s.lateDeduct, s.leaveDeduct,
+      s.laborIns, s.healthIns,
+      s.net, s.annualRemain, s.compRemain,
+      status, s.locked ? s.liveNet : '']);
   });
   if (rows.length <= 1) { alert('本月無薪資資料可匯出'); return; }
   const csv = rows.map(r => r.map(c => `"${String(c == null ? '' : c).replace(/"/g, '""')}"`).join(',')).join('\r\n');
