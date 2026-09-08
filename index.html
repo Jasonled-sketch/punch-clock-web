@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.8</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.9</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2638,6 +2638,15 @@ async function viewReport() {
       cached(`api-salary|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadApiSalary(CUR_YEAR, CUR_MONTH + 1)),
       cached(`api-payc|${CUR_YEAR}|${CUR_MONTH + 1}`, 45000, () => loadPayConfirm(CUR_YEAR, CUR_MONTH + 1))
     ]);
+    // 🩹 快照的勞保/健保若為 0（鎖薪當時未寫入或該欄唯讀）→ 用 API 值補。保費由投保級距決定、不隨出勤變動，
+    //    不補的話 snapExtra 會把這筆錢倒進「假日加給/全勤」變成負數（黃偉智 2026/08 顯示 -1,653＝勞738+健915）。
+    //    補在這裡＝卡片分解式、明細 modal、工資清冊 CSV 三處一次修好。
+    if (_API_SALARY) Object.values(lockMap).forEach(s => {
+      const a = _API_SALARY[s.email];
+      if (!a) return;
+      if (!s.labor) s.labor = a.laborIns || 0;
+      if (!s.health) s.health = a.healthIns || 0;
+    });
     if (!_API_SALARY && showPay) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪（deptmgr 不顯示薪資,免驚擾）
     actives.forEach(w => {
       const isFull = w.emp_type === '正式員工';
