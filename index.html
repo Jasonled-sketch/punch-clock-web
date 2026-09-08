@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.9</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.10</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2553,8 +2553,20 @@ async function getPayrollLocks(ym) {
   }));
 }
 // 快照沒有「假日加給/全勤獎金」獨立欄（當初併入 net）→ 由 net 反推合計，確保分解式加總 = 應發
+// 快照的缺勤扣：拆得開就顯示「曠職」「天災（不支薪）」兩筆，拆不開維持合併標示
+function snapAbsentTxt(s) {
+  if (s.absentPart === undefined) return s.absentd ? `　－曠職/天災 $${s.absentd.toLocaleString()}` : '';
+  return (s.absentPart ? `　－曠職 $${s.absentPart.toLocaleString()}` : '')
+       + (s.disasterPart ? `　－天災（不支薪） $${s.disasterPart.toLocaleString()}` : '');
+}
 function snapExtra(s) {
   return Math.round(s.net - s.base - s.ot + s.absentd + s.lated + s.leaved + s.labor + s.health);
+}
+// 快照的加項：拆得開就顯示「全勤獎金」「假日加給」兩筆，拆不開維持合併標示
+function snapExtraTxt(s) {
+  if (s.attendPart === undefined) { const ex = snapExtra(s); return ex ? `　＋假日加給/全勤 $${ex.toLocaleString()}` : ''; }
+  return (s.attendPart ? `　＋全勤獎金 $${s.attendPart.toLocaleString()}` : '')
+       + (s.holidayPart ? `　＋假日加給 $${s.holidayPart.toLocaleString()}` : '');
 }
 
 async function lockPayroll(relock) {
@@ -2646,6 +2658,11 @@ async function viewReport() {
       if (!a) return;
       if (!s.labor) s.labor = a.laborIns || 0;
       if (!s.health) s.health = a.healthIns || 0;
+      // 快照「缺勤扣」欄合併了曠職與天災（Ragic 無獨立欄）；與 API 對得上就拆開顯示，對不上維持合併不亂猜
+      if ((a.absentDeduct || 0) + (a.disasterDeduct || 0) === s.absentd) { s.absentPart = a.absentDeduct || 0; s.disasterPart = a.disasterDeduct || 0; }
+      // 快照沒有「全勤獎金/假日加給」獨立欄（由 net 反推合計）；與 API 對得上就拆開顯示，對不上維持合併
+      const _ex = Math.round(s.net - s.base - s.ot + s.absentd + s.lated + s.leaved + s.labor + s.health);
+      if ((a.attendBonus || 0) + (a.holidayBonus || 0) === _ex) { s.attendPart = a.attendBonus || 0; s.holidayPart = a.holidayBonus || 0; }
     });
     if (!_API_SALARY && showPay) h += `<div style="background:#fdeaea;color:#c00;padding:10px 14px;border-radius:10px;margin:6px 0 10px;font-weight:700">⚠️ 薪資 API 未連線——以下薪資為「離線估算」僅供參考，已禁止鎖薪。請稍後重新整理。</div>`;  // 防呆：fallback 數字不可鎖薪（deptmgr 不顯示薪資,免驚擾）
     actives.forEach(w => {
@@ -2794,8 +2811,8 @@ async function viewReport() {
           ${netDrift ? `<div style="font-size:11px;color:#b45309;margin-bottom:4px">⚠️ 鎖定後資料有異動，現在重算為 $${net.toLocaleString()}（差 ${netDrift > 0 ? '+' : ''}${netDrift.toLocaleString()}）——實發仍以鎖定值為準，如需更正請補發或調整次月</div>` : ''}
           <div class="pay-detail">
             ${snap
-              ? `${isFull?'月薪':'本薪'} $${dBase.toLocaleString()}${dOtPay?`　＋加班 $${dOtPay.toLocaleString()}`:''}${dExtra?`　＋假日加給/全勤 $${dExtra.toLocaleString()}`:''}${dAbsent?`　－曠職/天災 $${dAbsent.toLocaleString()}`:''}${dLate?`　－遲退 $${dLate.toLocaleString()}`:''}${dLeave?`　－請假 $${dLeave.toLocaleString()}`:''}${dLabor?`　－勞保 $${dLabor.toLocaleString()}`:''}${dHealth?`　－健保 $${dHealth.toLocaleString()}`:''}`
-              : `${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${attendBonus?`　＋全勤獎金 $${attendBonus.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保 $${healthIns.toLocaleString()}`:''}`}
+              ? `${isFull?'月薪':'本薪'} $${dBase.toLocaleString()}${dOtPay?`　＋加班 $${dOtPay.toLocaleString()}`:''}${snapExtraTxt(snap)}${snapAbsentTxt(snap)}${dLate?`　－遲退 $${dLate.toLocaleString()}`:''}${dLeave?`　－請假 $${dLeave.toLocaleString()}`:''}${dLabor?`　－勞保自付 $${dLabor.toLocaleString()}`:''}${dHealth?`　－健保自付 $${dHealth.toLocaleString()}`:''}`
+              : `${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${attendBonus?`　＋全勤獎金 $${attendBonus.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災（不支薪） $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保自付 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保自付 $${healthIns.toLocaleString()}`:''}`}
           </div>
         </div>` : ''}
       </div>`;
@@ -2884,7 +2901,7 @@ function exportPayrollRegister() {
     const paid = sp ? sp.net : a2.net;                                   // 實發＝已鎖用快照
     const status = sp ? (Math.round(a2.net - sp.net) ? `已鎖定(鎖後有異動,差${Math.round(a2.net - sp.net)})` : '已鎖定') : '未鎖定';
     rows.push([ym, w.name, w.email, a2.attendDays, a2.totH,
-      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, (sp ? snapExtra(sp) - a2.holidayBonus : a2.attendBonus), a2.holidayBonus,
+      sp ? sp.base : a2.base, a2.otMonthH, sp ? sp.ot : a2.otPay, (sp ? (sp.attendPart !== undefined ? sp.attendPart : snapExtra(sp) - a2.holidayBonus) : a2.attendBonus), a2.holidayBonus,
       sp ? sp.absentd : a2.absentDeduct, sp ? '' : a2.disasterDeduct,   // 快照的曠職扣已含天災假(無獨立欄)
       sp ? sp.lated : a2.lateDeduct, sp ? sp.leaved : a2.leaveDeduct,
       sp ? sp.labor : a2.laborIns, sp ? sp.health : a2.healthIns,
@@ -3186,13 +3203,13 @@ function showReportDetail(email) {
       const sp = (_RPT && _RPT.isLocked) ? (_RPT.lockMap || {})[String(email || '').toLowerCase()] : null;
       if (!sp) return `<div class="pay-box" style="margin-top:14px">
         <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保 $${healthIns.toLocaleString()}` : ''}</div>
+        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災（不支薪） $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保自付 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保自付 $${healthIns.toLocaleString()}` : ''}</div>
       </div>`;
       const ex = snapExtra(sp), drift = Math.round(net - sp.net);
       return `<div class="pay-box" style="margin-top:14px">
         <div class="pay-net">應發薪資　$${sp.net.toLocaleString()}　<span style="font-size:11px;color:#6b7280;font-weight:500">🔒 鎖定值（${(sp.locked_at||'').slice(0,16)}）</span></div>
         ${drift ? `<div style="font-size:11px;color:#b45309;margin-bottom:4px">⚠️ 鎖定後資料有異動，現在重算為 $${net.toLocaleString()}（差 ${drift > 0 ? '+' : ''}${drift.toLocaleString()}）——實發以鎖定值為準</div>` : ''}
-        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${sp.base.toLocaleString()}${sp.ot ? `　＋加班 $${sp.ot.toLocaleString()}` : ''}${ex ? `　＋假日加給/全勤 $${ex.toLocaleString()}` : ''}${sp.absentd ? `　－曠職/天災 $${sp.absentd.toLocaleString()}` : ''}${sp.lated ? `　－遲退 $${sp.lated.toLocaleString()}` : ''}${sp.leaved ? `　－請假 $${sp.leaved.toLocaleString()}` : ''}${sp.labor ? `　－勞保 $${sp.labor.toLocaleString()}` : ''}${sp.health ? `　－健保 $${sp.health.toLocaleString()}` : ''}</div>
+        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${sp.base.toLocaleString()}${sp.ot ? `　＋加班 $${sp.ot.toLocaleString()}` : ''}${snapExtraTxt(sp)}${snapAbsentTxt(sp)}${sp.lated ? `　－遲退 $${sp.lated.toLocaleString()}` : ''}${sp.leaved ? `　－請假 $${sp.leaved.toLocaleString()}` : ''}${sp.labor ? `　－勞保自付 $${sp.labor.toLocaleString()}` : ''}${sp.health ? `　－健保自付 $${sp.health.toLocaleString()}` : ''}</div>
       </div>`;
     })() : ''}
     ${ROLE !== 'employee' && _apiS && _apiS.mgrNotes && _apiS.mgrNotes.length ? `<div class="rd-sec" style="background:#fefce8;border:1px dashed #ca8a04;border-radius:8px;padding:10px;margin-top:10px"><div class="rd-title">🔒 管理者備註（員工端不顯示）</div>${_apiS.mgrNotes.map(t => `<div class="rd-row" style="font-size:12px;color:#854d0e;line-height:1.7">${escHtml(t)}</div>`).join('')}<div class="rd-row" style="font-size:11px;color:#a16207">※ 法定紅線假別不對外公告，但系統依法自動豁免全勤、薪資已照規則計算——此區僅供管理者對帳與備查。</div></div>` : ''}
