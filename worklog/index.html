@@ -276,24 +276,22 @@
   .tl-bar button{border:1.5px solid var(--line);background:#fff;color:#64748b;border-radius:10px;padding:9px 12px;
     font-size:12.5px;font-weight:700;font-family:inherit;white-space:nowrap}
   .tl-cat{border:1.5px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden;background:#fff}
-  .tl-cat.sel{border-color:#c4b5fd;box-shadow:0 0 0 2px #f3e8ff inset}
   .tl-cat .hd{display:flex;align-items:center;gap:10px;padding:12px 13px;font-weight:800;font-size:15px;color:#334155}
-  .tl-cat .hd .cir{width:28px;height:28px;border-radius:50%;border:2.5px solid #cbd5e1;flex:none;
-    display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;background:#fff}
-  .tl-cat.all .hd .cir{background:#7c3aed;border-color:#7c3aed}
-  .tl-cat.part .hd .cir{border-color:#7c3aed;color:#7c3aed;background:#ede9fe;font-size:19px;line-height:1}
+  /* 圈圈＝該類已帶幾項（純顯示，不是全選鈕）*/
+  .tl-cat .hd .cir{width:30px;height:30px;border-radius:50%;border:2px solid #e2e8f0;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#cbd5e1;background:#fff}
+  .tl-cat.sel .hd .cir{border-color:#7c3aed;color:#7c3aed;background:#f5f3ff}
   .tl-cat .hd .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .tl-cat .hd .cnt{font-size:11.5px;font-weight:800;color:#6d28d9;background:#ede9fe;padding:3px 9px;border-radius:9px;flex:none}
   .tl-cat .hd .ar{color:#94a3b8;font-size:12px;flex:none;width:16px;text-align:center}
   /* 等大方格：固定 2 欄、每格同高，字長自動縮到 2 行，永遠不交錯 */
   .tl-items{display:none;padding:11px 13px 13px;border-top:1px dashed #e2e8f0;background:#fbfaff}
   .tl-cat.open .tl-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  /* 選中只變勾勾:框線/底色/字色一律不變,畫面才乾淨(2026-09-09 Jason) */
   .tl-items .ti{display:flex;align-items:center;gap:8px;min-height:54px;padding:8px 10px;text-align:left;
     border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:12px;
     font-size:13px;font-weight:700;font-family:inherit;line-height:1.25}
   .tl-items .ti .bx{width:21px;height:21px;border-radius:6px;border:2px solid #cbd5e1;background:#fff;flex:none;
     display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
-  .tl-items .ti.on{border-color:#7c3aed;background:#f5f3ff;color:#5b21b6}
   .tl-items .ti.on .bx{background:#7c3aed;border-color:#7c3aed}
   .tl-items .ti .lb{flex:1;min-width:0;overflow:hidden}
   .tl-items .ti .lb .nmx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -611,12 +609,16 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.26';
+const APP_VERSION='1.27';
 const CHANGELOG=[
-  'v1.26　2026/09/09　🧰工具預勾大改版',
-  '· 圈類別＝整包帶走：點類別左邊的 ○ 一次全選／再點取消，不用一個一個點',
+  'v1.27　2026/09/09　🧰工具預勾再優化',
+  '· 勾選只變「✓」：框線、底色、字體都不再變色，畫面乾淨不亂',
+  '· 拿掉整類全選（實務上不會整包帶走）',
+  '· 類別左邊圓圈改「顯示這類帶了幾項」，一眼看出數量',
+  '',
+  'v1.26　2026/09/09　🧰工具預勾改版',
   '· 細項改「等大方格、兩欄整齊排列」，框框大小一律相同，不再交錯',
-  '· 每類顯示「已選/總數」，組合包標示件數（電工十寶10件組…）',
+  '· 組合包標示件數（電工十寶10件組…）',
   '· 新增「↺ 沿用上次」：直接複製上一張同類型派工的工具清單',
   '',
   'v1.25　2026/09/08　🧪一條龍微調',
@@ -1488,17 +1490,14 @@ function renderDispCard(){
     c2.appendChild(bar);
     DC_TOOLS.forEach(cat=>{
       const sel=(d.tools[cat.k]||[]);
-      const isAll = sel.length===cat.it.length, isPart = sel.length>0 && !isAll;
       const el=document.createElement('div');
-      el.className='tl-cat'+(sel.length?' sel':'')+(isAll?' all':'')+(isPart?' part':'')+(S.dcOpenCat===cat.k?' open':'');
+      el.className='tl-cat'+(sel.length?' sel':'')+(S.dcOpenCat===cat.k?' open':'');
       const hd=document.createElement('div'); hd.className='hd';
-      /* ○ 圈類別：一下整包全帶、再一下整包取消（不用一個一個點）*/
-      const cir=document.createElement('button'); cir.type='button'; cir.className='cir'; cir.textContent=isAll?'✓':(isPart?'•':'');
-      cir.onclick=e=>{ e.stopPropagation(); dcPatch(d.id,x=>{ if(!x.tools)x.tools={}; x.tools[cat.k]= isAll? [] : cat.it.slice(); }); renderDispCard(); };
+      /* 圈圈＝這類帶了幾項（純顯示，不是全選鈕：實務上不會整包帶走）*/
+      const cir=document.createElement('div'); cir.className='cir'; cir.textContent=sel.length||'';
       const nm=document.createElement('div'); nm.className='nm'; nm.textContent=cat.n;
-      const cnt=document.createElement('span'); cnt.className='cnt'; cnt.textContent=sel.length+' / '+cat.it.length;
       const ar=document.createElement('span'); ar.className='ar'; ar.textContent=S.dcOpenCat===cat.k?'▲':'▼';
-      hd.appendChild(cir); hd.appendChild(nm); hd.appendChild(cnt); hd.appendChild(ar);
+      hd.appendChild(cir); hd.appendChild(nm); hd.appendChild(ar);
       hd.onclick=()=>{ S.dcOpenCat = S.dcOpenCat===cat.k? '':cat.k; renderDispCard(); };
       el.appendChild(hd);
       const its=document.createElement('div'); its.className='tl-items';
