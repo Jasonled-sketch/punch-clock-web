@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.12</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.13</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2879,9 +2879,15 @@ function buildEmpDetailRows(w) {
     const dispIn = dayRecs.length ? (dayRecs[0].start_time || '') : '';
     const dispOut = closedRecs.length ? (closedRecs[closedRecs.length - 1].end_time || '') : '';
     const sumWH = dayRecs.reduce((s, r) => s + realWorkHours(r, sh, isFull, dayOffOf(w.email, ds, leaves, otAll)), 0);
+    // 備註：把「有加班單卻沒加班費」的原因寫清楚，免得員工看到 0 元跑來問（Jason 2026/09/09）
+    let memo = '';
+    if (_pbd && (_pbd.cpH || 0) > 0) memo = `加班 ${_pbd.otH}h 已換補休 ${_pbd.cpH}h（不另計加班費）`;
+    else if (dayOt.length && _pbd && !(_pbd.ot > 0) && !(_pbd.otH > 0)) memo = '加班時段與實際打卡無交集，未計加班費';
+    else if (dayOt.length && _pbd && (_pbd.otH || 0) > 0 && (_pbd.otH || 0) < dayOt.reduce((a, o) => a + (parseFloat(o.hours) || 0), 0)) memo = `加班依實際在場計 ${_pbd.otH}h（申請時數未做滿）`;
+    if (isDisasterAbsent) memo = (memo ? memo + '；' : '') + '天災停班未出勤，不支薪';
     out.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
       dispIn, dispOut, lv.start_time || '', lv.end_time || '', lv.leave_type || (isDisasterAbsent ? `${spc.type}(不支薪)` : ''),
-      ot.start_time || '', ot.end_time || '', dayRecs.length ? sumWH : '', late || '', early || '', addPay || '', dedPay || '']);
+      ot.start_time || '', ot.end_time || '', dayRecs.length ? sumWH : '', late || '', early || '', addPay || '', dedPay || '', memo]);
   }
   return out;
 }
@@ -2916,7 +2922,7 @@ function paySummaryOf(w) {
 function exportMonthDetail() {
   if (!_RPT) { alert('請先載入薪資月報'); return; }
   const ym = _RPT.ym;
-  const headers = ['姓名', 'Email', '日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除'];
+  const headers = ['姓名', 'Email', '日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除', '備註'];
   const rows = [headers];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
     buildEmpDetailRows(w).forEach(r => rows.push(r));
@@ -2938,7 +2944,7 @@ function printSignSheets() {
   const ym = _RPT.ym;
   const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const dash = v => (v === '' || v == null || v === 0) ? '-' : (typeof v === 'number' ? v.toLocaleString() : esc(v));
-  const D_HEAD = ['日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除'];
+  const D_HEAD = ['日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除', '備註'];
   const S_HEAD = ['年月', '姓名', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)'];
 
   let sheets = '';
@@ -2948,8 +2954,8 @@ function printSignSheets() {
     if (!rows.length && !s) return;
     const num = i => rows.reduce((a, r) => a + (parseFloat(r[i]) || 0), 0);
     const tWH = Math.round(num(14) * 100) / 100, tLate = num(15), tEarly = num(16), tAdd = num(17), tDed = num(18);
-    const body = rows.map(r => `<tr>${r.slice(2).map((c, i) => `<td${i === 13 || i === 14 ? ' class="red"' : ''}>${esc(c === 0 ? '' : c)}</td>`).join('')}</tr>`).join('');
-    const totRow = `<tr class="tot"><td colspan="12">合　計</td><td>${tWH}</td><td class="red">${tLate || ''}</td><td class="red">${tEarly || ''}</td><td>${tAdd || ''}</td><td>${tDed || ''}</td></tr>`;
+    const body = rows.map(r => `<tr>${r.slice(2).map((c, i) => `<td${i === 13 || i === 14 ? ' class="red"' : (i === 17 ? ' class="memo"' : '')}>${esc(c === 0 ? '' : c)}</td>`).join('')}</tr>`).join('');
+    const totRow = `<tr class="tot"><td colspan="12">合　計</td><td>${tWH}</td><td class="red">${tLate || ''}</td><td class="red">${tEarly || ''}</td><td>${tAdd || ''}</td><td>${tDed || ''}</td><td></td></tr>`;
     // 自我核對：逐日合計必須等於彙總（加班費＋假日加給／請假扣＋天災扣），不等就印警語而不是默默錯
     const tieAdd = s ? Math.round((s.otPay || 0) + (s.holidayBonus || 0)) : 0;
     const tieDed = s ? Math.round((s.leaveDeduct || 0) + (Number(s.disasterDeduct) || 0)) : 0;
@@ -2965,7 +2971,7 @@ function printSignSheets() {
     sheets += `<div class="sheet">
       <h1>譽昇科技有限公司　出勤暨薪資明細</h1>
       <div class="sub">${esc(ym)}　${esc(w.name)}　${esc(w.emp_type || '')}${w.shift ? '　' + esc(w.shift) + ' 班' : ''}${s && s.locked ? '　（薪資已鎖定定版值）' : ''}</div>
-      <table><thead><tr>${D_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="17">本月無出勤資料</td></tr>`}${rows.length ? totRow : ''}</tbody></table>
+      <table><thead><tr>${D_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body || `<tr><td colspan="18">本月無出勤資料</td></tr>`}${rows.length ? totRow : ''}</tbody></table>
       ${sum ? `<table class="sum"><thead><tr>${S_HEAD.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${sum}</tbody></table>` : ''}
       ${tieWarn}${drift ? `<div class="drift">⚠️ 鎖定後有補核准單據，現行重算為 $${s.liveNet.toLocaleString()}（差 ${drift > 0 ? '+' : ''}${drift.toLocaleString()}）</div>` : ''}
       <div class="sig">
@@ -2991,6 +2997,7 @@ function printSignSheets() {
     th { background: #eee; font-weight: 700; }
     tr.tot td { font-weight: 700; background: #fafafa; }
     td.red { color: #c00; }
+    td.memo { text-align: left; white-space: normal; font-size: 9px; color: #444; max-width: 34mm; }
     td.big { font-weight: 700; }
     table.sum { margin-top: 4mm; }
     .drift { margin-top: 2mm; font-size: 10px; color: #b45309; }
