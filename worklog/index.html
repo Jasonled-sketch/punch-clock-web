@@ -270,18 +270,35 @@
   .sp-addrow{display:flex;gap:8px;margin-top:10px}
   .sp-addrow input{flex:1}
   .sp-addrow button{border:none;background:var(--sky);color:#fff;border-radius:11px;padding:0 16px;font-weight:800;font-family:inherit;font-size:15px}
-  /* 工具檢點 */
-  .tl-cat{border:1.5px solid var(--line);border-radius:13px;margin-bottom:9px;overflow:hidden;background:#fff}
-  .tl-cat .hd{display:flex;align-items:center;gap:9px;padding:11px 12px;font-weight:800;font-size:14.5px;color:#334155}
-  .tl-cat .hd .cir{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
-  .tl-cat.sel .hd .cir{background:#7c3aed;border-color:#7c3aed}
-  .tl-cat.sel{border-color:#c4b5fd;background:#faf5ff}
-  .tl-cat .hd .cnt{margin-left:auto;font-size:11.5px;font-weight:800;color:#7c3aed;background:#ede9fe;padding:3px 8px;border-radius:8px}
-  .tl-cat .hd .ar{color:#94a3b8;font-size:12px;margin-left:6px}
-  .tl-items{display:none;padding:4px 12px 11px;border-top:1px dashed #e9d5ff}
-  .tl-cat.open .tl-items{display:flex;flex-wrap:wrap;gap:7px}
-  .tl-items .ti{border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:18px;padding:8px 12px;font-size:13px;font-weight:600;font-family:inherit}
-  .tl-items .ti.on{background:#7c3aed;border-color:#7c3aed;color:#fff}
+  /* 工具檢點（照護貝卡：類別圈一下整包帶走／細項等大方格整齊排列）*/
+  .tl-bar{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .tl-bar .sum{flex:1;font-size:13px;font-weight:800;color:#6d28d9;background:#ede9fe;border-radius:10px;padding:9px 12px}
+  .tl-bar button{border:1.5px solid var(--line);background:#fff;color:#64748b;border-radius:10px;padding:9px 12px;
+    font-size:12.5px;font-weight:700;font-family:inherit;white-space:nowrap}
+  .tl-cat{border:1.5px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden;background:#fff}
+  .tl-cat.sel{border-color:#c4b5fd;box-shadow:0 0 0 2px #f3e8ff inset}
+  .tl-cat .hd{display:flex;align-items:center;gap:10px;padding:12px 13px;font-weight:800;font-size:15px;color:#334155}
+  .tl-cat .hd .cir{width:28px;height:28px;border-radius:50%;border:2.5px solid #cbd5e1;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;background:#fff}
+  .tl-cat.all .hd .cir{background:#7c3aed;border-color:#7c3aed}
+  .tl-cat.part .hd .cir{border-color:#7c3aed;color:#7c3aed;background:#ede9fe;font-size:19px;line-height:1}
+  .tl-cat .hd .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tl-cat .hd .cnt{font-size:11.5px;font-weight:800;color:#6d28d9;background:#ede9fe;padding:3px 9px;border-radius:9px;flex:none}
+  .tl-cat .hd .ar{color:#94a3b8;font-size:12px;flex:none;width:16px;text-align:center}
+  /* 等大方格：固定 2 欄、每格同高，字長自動縮到 2 行，永遠不交錯 */
+  .tl-items{display:none;padding:11px 13px 13px;border-top:1px dashed #e2e8f0;background:#fbfaff}
+  .tl-cat.open .tl-items{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tl-items .ti{display:flex;align-items:center;gap:8px;min-height:54px;padding:8px 10px;text-align:left;
+    border:1.5px solid var(--line);background:#fff;color:#475569;border-radius:12px;
+    font-size:13px;font-weight:700;font-family:inherit;line-height:1.25}
+  .tl-items .ti .bx{width:21px;height:21px;border-radius:6px;border:2px solid #cbd5e1;background:#fff;flex:none;
+    display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff}
+  .tl-items .ti.on{border-color:#7c3aed;background:#f5f3ff;color:#5b21b6}
+  .tl-items .ti.on .bx{background:#7c3aed;border-color:#7c3aed}
+  .tl-items .ti .lb{flex:1;min-width:0;overflow:hidden}
+  .tl-items .ti .lb .nmx{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .tl-items .ti .pk{font-size:9.5px;font-weight:800;color:#b45309;background:#fef3c7;border-radius:6px;
+    padding:1px 5px;margin-top:3px;display:block;width:fit-content}   /* 固定另起一行,兩格才會長得一樣 */
   /* 覆核 */
   .rc-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9}
   .rc-row .t{flex:1;font-size:14.5px;font-weight:700;color:#334155}
@@ -594,8 +611,14 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.25';
+const APP_VERSION='1.26';
 const CHANGELOG=[
+  'v1.26　2026/09/09　🧰工具預勾大改版',
+  '· 圈類別＝整包帶走：點類別左邊的 ○ 一次全選／再點取消，不用一個一個點',
+  '· 細項改「等大方格、兩欄整齊排列」，框框大小一律相同，不再交錯',
+  '· 每類顯示「已選/總數」，組合包標示件數（電工十寶10件組…）',
+  '· 新增「↺ 沿用上次」：直接複製上一張同類型派工的工具清單',
+  '',
   'v1.25　2026/09/08　🧪一條龍微調',
   '· 照片格：點了可選「拍照」或「從相簿選」（拍好的也能傳）',
   '· 施工步驟：預設只給基本 5 節點，多的自己加；加上序號 1.2.3.',
@@ -1325,6 +1348,7 @@ const DC_TOOLS = [
   {k:'large',n:'大型工具',it:['蜘蛛升降機','箱式吸塵器','拉梯(8米)','拉梯(6米)','A梯12尺','A梯10尺(大A)','A梯8尺(小8)','A梯5尺(小梯)','摺疊梯7尺','小金剛(吊掛)']},
   {k:'rig',n:'吊拆組',it:['童軍繩勾(小)','童軍繩勾(大)','白鐵滑軌環','吊掛包(紅)']}
 ];
+const DC_BUNDLE = { '電工十寶':10, '字幕七寶':7, '電錶包':3, '噴漆組':8, '清潔包':5 };   // 組合包件數(格子右下小標)
 const DC_PRESEL = {   // 依案型自動預圈(草案,可再調)
   '修': {basic:['電工十寶','字幕七寶'], mat:['A維修箱','清潔包'], aux:['工作腰包','延長線(小/大)','頭燈']},
   '工': {power:['18v起子機M款','18v鎚壁鑽'], basic:['電工十寶','字幕七寶'], aux:['工作腰包','延長線(小/大)','水平尺','矽利康槍+膠'], mat:['綜合料箱','六角螺絲箱','清潔包']}
@@ -1445,19 +1469,45 @@ function renderDispCard(){
   /* 2 工具（前置預勾 → 出發前覆核）*/
   const c2=document.createElement('div'); c2.className='card';
   if(!d.st.preDoneAt){
-    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具預勾（照護貝卡：圈類別→勾細項）</div>';
+    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具預勾（圈類別＝整包帶走）</div>';
     if(!d.tools){ d.tools={}; const pre=DC_PRESEL[T]||{}; Object.keys(pre).forEach(k=>d.tools[k]=pre[k].slice()); dcPatch(d.id,x=>x.tools=d.tools); }
+    /* 總覽列：已選數＋沿用上次＋清除 */
+    const tot=Object.values(d.tools||{}).reduce((s,a)=>s+a.length,0);
+    const bar=document.createElement('div'); bar.className='tl-bar';
+    const sum=document.createElement('div'); sum.className='sum'; sum.textContent='已選 '+tot+' 項';
+    const bLast=document.createElement('button'); bLast.type='button'; bLast.textContent='↺ 沿用上次';
+    bLast.onclick=()=>{
+      const prev=dcAll().filter(x=>x.id!==d.id && dcType(x)===T && x.tools && Object.values(x.tools).some(a=>a.length))
+        .sort((a,b)=>b.createdAt-a.createdAt)[0];
+      if(!prev){ toast('還沒有上一張同類型派工可沿用','bad'); return; }
+      dcPatch(d.id,x=>{ x.tools=JSON.parse(JSON.stringify(prev.tools)); }); renderDispCard(); toast('已沿用上次（'+prev.date+'）','ok');
+    };
+    const bClr=document.createElement('button'); bClr.type='button'; bClr.textContent='清除';
+    bClr.onclick=()=>{ if(!confirm('清除所有已勾工具？'))return; dcPatch(d.id,x=>x.tools={}); renderDispCard(); };
+    bar.appendChild(sum); bar.appendChild(bLast); bar.appendChild(bClr);
+    c2.appendChild(bar);
     DC_TOOLS.forEach(cat=>{
       const sel=(d.tools[cat.k]||[]);
-      const el=document.createElement('div'); el.className='tl-cat'+(sel.length?' sel':'')+(S.dcOpenCat===cat.k?' open':'');
+      const isAll = sel.length===cat.it.length, isPart = sel.length>0 && !isAll;
+      const el=document.createElement('div');
+      el.className='tl-cat'+(sel.length?' sel':'')+(isAll?' all':'')+(isPart?' part':'')+(S.dcOpenCat===cat.k?' open':'');
       const hd=document.createElement('div'); hd.className='hd';
-      hd.innerHTML='<div class="cir">'+(sel.length?'✓':'')+'</div>'+esc(cat.n)+(sel.length?'<span class="cnt">'+sel.length+'</span>':'')+'<span class="ar">'+(S.dcOpenCat===cat.k?'▲':'▼')+'</span>';
+      /* ○ 圈類別：一下整包全帶、再一下整包取消（不用一個一個點）*/
+      const cir=document.createElement('button'); cir.type='button'; cir.className='cir'; cir.textContent=isAll?'✓':(isPart?'•':'');
+      cir.onclick=e=>{ e.stopPropagation(); dcPatch(d.id,x=>{ if(!x.tools)x.tools={}; x.tools[cat.k]= isAll? [] : cat.it.slice(); }); renderDispCard(); };
+      const nm=document.createElement('div'); nm.className='nm'; nm.textContent=cat.n;
+      const cnt=document.createElement('span'); cnt.className='cnt'; cnt.textContent=sel.length+' / '+cat.it.length;
+      const ar=document.createElement('span'); ar.className='ar'; ar.textContent=S.dcOpenCat===cat.k?'▲':'▼';
+      hd.appendChild(cir); hd.appendChild(nm); hd.appendChild(cnt); hd.appendChild(ar);
       hd.onclick=()=>{ S.dcOpenCat = S.dcOpenCat===cat.k? '':cat.k; renderDispCard(); };
       el.appendChild(hd);
       const its=document.createElement('div'); its.className='tl-items';
-      cat.it.forEach(nm=>{
-        const b=document.createElement('button'); b.type='button'; b.className='ti'+(sel.indexOf(nm)>=0?' on':''); b.textContent=nm;
-        b.onclick=()=>{ dcPatch(d.id,x=>{ if(!x.tools)x.tools={}; const arr=x.tools[cat.k]||(x.tools[cat.k]=[]); const i=arr.indexOf(nm); if(i>=0)arr.splice(i,1); else arr.push(nm); }); renderDispCard(); };
+      cat.it.forEach(nmv=>{
+        const on=sel.indexOf(nmv)>=0;
+        const b=document.createElement('button'); b.type='button'; b.className='ti'+(on?' on':'');
+        const pk=DC_BUNDLE[nmv]? '<span class="pk">'+DC_BUNDLE[nmv]+'件組</span>':'';
+        b.innerHTML='<span class="bx">'+(on?'✓':'')+'</span><span class="lb"><span class="nmx">'+esc(nmv)+'</span>'+pk+'</span>';
+        b.onclick=()=>{ dcPatch(d.id,x=>{ if(!x.tools)x.tools={}; const arr=x.tools[cat.k]||(x.tools[cat.k]=[]); const i=arr.indexOf(nmv); if(i>=0)arr.splice(i,1); else arr.push(nmv); }); renderDispCard(); };
         its.appendChild(b);
       });
       el.appendChild(its);
