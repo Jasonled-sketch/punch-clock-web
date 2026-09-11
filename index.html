@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.14</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.15</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3760,6 +3760,9 @@ async function doSaveWrkr() {
 // ═══════════════════════════════════════════════════════════════════════
 
 let LEAVE_TYPES = ['特休','病假','事假','其他'];  // 臨時假非假別，改由 isUrgentLeave(72hr) 自動標記。開頁後從 bot /calc/config 動態載入（公司設定層：含 ATT_EXTRA_LEAVES 開啟的法定假別）
+let LEAVE_SUB = {}, PROOF_REQ = [];   // 假別子選單／證明必附清單：開頁後從 bot /calc/config 載入（與 LINE 申請中心同一份，v11.15）
+const PROOF_LBL = { '病假': '就診證明', '公傷病假': '職災就醫證明', '公假': '公文／通知書' };
+function lfEffType() { const t = document.getElementById('lf-type')?.value; const box = document.getElementById('lf-subbox'); return (LEAVE_SUB[t] && box && box.style.display !== 'none') ? document.getElementById('lf-sub').value : t; }
 let REMOTE_CFG = null;
 async function loadRemoteCfg() {
   try {
@@ -3768,6 +3771,8 @@ async function loadRemoteCfg() {
     if (res.ok && d.ok) {
       REMOTE_CFG = d;
       if (Array.isArray(d.leaveTypes) && d.leaveTypes.length) LEAVE_TYPES = d.leaveTypes;
+      if (d.leaveSub && typeof d.leaveSub === 'object') LEAVE_SUB = d.leaveSub;
+      if (Array.isArray(d.proofRequired)) PROOF_REQ = d.proofRequired;
       if (d.role) {                                    // 權限四層:以 Worker 注入的 role 為準
         const prev = ROLE;
         ROLE = d.role;
@@ -4021,13 +4026,14 @@ function showLeaveForm(lv) {
   const shiftNote = shift
     ? `你的班別：${shift} 班（上午 ${sh.am[0]}–${sh.am[1]}、下午 ${sh.pm[0]}–${sh.pm[1]}）`
     : '尚未設定班別，預設以 A 班時段計（請管理者於員工資料設定班別）';
-  const photoNote = editing && lv.photo ? '（已有照片，重新選擇可覆蓋）' : '（選填，病假等可附）';
+  const photoNote = editing && lv.photo ? '（已有照片，重新選擇可覆蓋）' : '';   // 必附與否由 applyLeaveTypeRule 依細項動態標示
   openModal(`
     <div class="modal-title">${editing ? '編輯請假申請' : '申請請假'}</div>
     <div class="ff"><label>請假類型</label>
       <select id="lf-type" onchange="applyLeaveTypeRule()">
         ${LEAVE_TYPES.map(t => `<option ${editing && lv.leave_type===t ? 'selected':''}>${t}</option>`).join('')}
       </select></div>
+    <div class="ff" id="lf-subbox" style="display:none"><label>細項</label><select id="lf-sub" onchange="applyLeaveTypeRule()"></select></div>
     <div class="ff"><label>請假日期</label>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="date" id="lf-date" value="${today}" onchange="updateLeaveDay()" style="width:auto">
@@ -4050,7 +4056,7 @@ function showLeaveForm(lv) {
         <input type="text" id="lf-end" inputmode="numeric" maxlength="5" placeholder="18:00" oninput="fmtTimeInput(this);markLeaveCustom();updateLeaveCalc()"></div>
     </div>
     <div id="lf-calc" style="background:#f1f3f4;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px">請選擇預計請假時段</div>
-    <div class="ff"><label>申請原因</label>
+    <div class="ff"><label id="lf-photo-lbl">申請原因</label>
       <textarea id="lf-reason" rows="3" placeholder="請填寫請假原因">${editing ? escHtml(lv.reason) : ''}</textarea></div>
     <div class="ff"><label>證明照片${photoNote}</label>
       <input type="file" id="lf-photo" accept="image/*" style="font-size:13px"></div>
@@ -4073,6 +4079,10 @@ function showLeaveForm(lv) {
 
 // 特休限半日：選特休時只開 上午/下午/整天，關掉「零計」與自訂時間輸入（與 LINE 申請中心同規則）
 function applyLeaveTypeRule() {
+  { const t0 = document.getElementById('lf-type')?.value, box = document.getElementById('lf-subbox'), sel = document.getElementById('lf-sub');
+    if (box && sel) { if (LEAVE_SUB[t0]) { if (sel.dataset.for !== t0) { sel.innerHTML = LEAVE_SUB[t0].map(x => `<option value="${x.type}">${x.label}</option>`).join(''); sel.dataset.for = t0; } box.style.display = ''; } else box.style.display = 'none'; }
+    const et = lfEffType(), lbl = document.querySelector('label[for="lf-photo"], #lf-photo-lbl');
+    if (lbl) lbl.textContent = PROOF_REQ.includes(et) ? `${PROOF_LBL[et] || '證明文件'}（必附）` : '證明文件（選填）'; }
   const type = document.getElementById('lf-type')?.value;
   const isAnnual = type === '特休';
   const cust = document.getElementById('lq-custom');
@@ -4137,7 +4147,7 @@ function updateLeaveCalc() {
 }
 
 async function saveLeave() {
-  const type   = document.getElementById('lf-type').value;
+  const type   = lfEffType();   // 子選單細項（生理假／家庭照顧假）優先
   const date   = document.getElementById('lf-date').value;
   const start  = document.getElementById('lf-start').value;
   const end    = document.getElementById('lf-end').value;
@@ -4172,6 +4182,7 @@ async function saveLeave() {
   }
   const F = CONFIG.FID.L;
   const photoFile = document.getElementById('lf-photo')?.files?.[0];
+  if (PROOF_REQ.includes(type) && !photoFile && !(editing && lv && lv.photo)) { toast(`${type}須附${PROOF_LBL[type] || '證明文件'}，請先選擇照片`, 'red'); return; }   // 證明必附（與 LIFF 同規則）
   const fields = {
     [F.email]:      ME.email,
     [F.name]:       MY_WORKER?.name || ME.name,
