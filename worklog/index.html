@@ -183,14 +183,6 @@
   .submitbar button:active{transform:scale(.99)}
   .submitbar button:disabled{background:#94a3b8;box-shadow:none}
 
-  /* 近期 */
-  .recent .it{display:flex;gap:11px;padding:12px 0;border-bottom:1px solid #f1f5f9;align-items:flex-start}
-  .recent .it:last-child{border-bottom:none}
-  .recent .dt{font-size:12px;color:var(--muted);font-weight:700;min-width:46px;line-height:1.3}
-  .recent .ti{flex:1;font-size:14.5px;font-weight:600}
-  .recent .ti small{display:block;color:var(--muted);font-weight:500;margin-top:2px}
-  .recent .tag{font-size:11px;background:#0ea5e91a;color:var(--sky-d);padding:3px 8px;border-radius:7px;font-weight:700;white-space:nowrap}
-
   /* toast / loading */
   #toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%) translateY(20px);z-index:60;opacity:0;
     background:#0f172a;color:#fff;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;
@@ -521,11 +513,6 @@
       <div class="hint">梯具分數自動取自「使用梯子」、工時取自抵達／返程時間；面積僅屏幕安裝／招牌計入。</div>
     </div>
 
-    <!-- 近期 -->
-    <div class="card recent">
-      <div class="sec-t"><span class="n">★</span>我的近期日誌</div>
-      <div id="recentList"><div class="hint">載入中…</div></div>
-    </div>
   </main>
 
   <div class="submitbar">
@@ -609,8 +596,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.27';
+const APP_VERSION='1.28';
 const CHANGELOG=[
+  'v1.28　2026/09/11',
+  '· 移除首頁底部「我的近期日誌」卡片（協做員名單自動學習照常運作）',
+  '',
   'v1.27　2026/09/09　🧰工具預勾再優化',
   '· 勾選只變「✓」：框線、底色、字體都不再變色，畫面乾淨不亂',
   '· 拿掉整類全選（實務上不會整包帶走）',
@@ -1297,38 +1287,20 @@ function showDone(sn){ $('doneSn').textContent=sn; $('appView').classList.add('h
 function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); $('f_subject').focus(); }
 function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); }
 
-/* ---------- 近期日誌（限 200 筆 + 本地快取秒開）---------- */
+/* ---------- 協做員名單自動長（讀最近 200 筆日誌學新同事名字）----------
+   「我的近期日誌」卡片已移除（2026-09-11 Jason：沒有意義），只保留這個名單同步 */
 function readRecentCache(){ try{ const a=JSON.parse(localStorage.getItem('wl_recent_v1')||'null'); return (a&&a.length)?a:null; }catch(e){ return null; } }
 function writeRecentCache(recs){ try{ if(recs&&recs.length) localStorage.setItem('wl_recent_v1', JSON.stringify(recs)); }catch(e){} }
-function renderRecent(all){
-  const box=$('recentList');
-  const me=((S.pick.lead||S.myName)||'').trim();
-  let recs=all.filter(x=> !me || (x['負責主任']||'')===me );
-  recs.sort((a,b)=> String(b['登打日期']||'').localeCompare(String(a['登打日期']||'')) );
-  recs=recs.slice(0,8);
-  if(!recs.length){ box.innerHTML='<div class="hint">'+(me?('「'+esc(me)+'」'):'')+'目前沒有日誌紀錄</div>'; return; }
-  box.innerHTML=recs.map(x=>{
-    const d=(x['執行日期']||'').slice(5)||'—';
-    const subj=x['施工主題']||'(未填主題)';
-    const main=x['工務主類別']||''; const item=x['施作項目名稱']||'';
-    const sn=x['序列號']||'';
-    return '<div class="it"><div class="dt">'+esc(d)+'<br><span style="color:#94a3b8;font-size:11px">'+esc(sn)+'</span></div>'+
-      '<div class="ti">'+esc(subj)+'<small>'+esc([main,item].filter(Boolean).join(' · '))+'</small></div>'+
-      (main?'<div class="tag">'+esc(main)+'</div>':'')+'</div>';
-  }).join('');
-}
 async function loadRecent(){
-  const box=$('recentList');
   const cached=readRecentCache();
-  if(cached){ renderRecent(cached); } else { box.innerHTML='<div class="hint">載入中…</div>'; }
+  if(cached) syncStaff(cached);
   try{
     const r=await callRagic('?api&limit=200', { method:'GET' });
     const json=await r.json();
-    let all=[];
+    const all=[];
     Object.keys(json).forEach(k=>{ const rec=json[k]; if(rec&&typeof rec==='object'&&rec._ragicId) all.push(rec); });
-    if(all.length){ writeRecentCache(all); syncStaff(all); renderRecent(all); }
-    else if(!cached){ renderRecent([]); }
-  }catch(e){ if(!cached) box.innerHTML='<div class="hint">近期紀錄載入失敗(可能訊號不穩)</div>'; }
+    if(all.length){ writeRecentCache(all); syncStaff(all); }
+  }catch(e){}
 }
 
 /* ==================== 一條龍派工（P1 設計測試版）====================
