@@ -2,7 +2,6 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#dcecf9">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -609,6 +608,11 @@ mark{background:#fde68a;color:inherit;border-radius:3px;padding:0 1px}
    CONFIG —— 要改的設定都在這
    =================================================================== */
 const CONFIG = {
+  /* 🎮 遊戲層總開關（Jason 2026-09-12 定：先只讓同事用「任務」與「人格特質」，遊戲整組收起來）
+     false ＝ 工作模式：隱藏 副本/裝備/寵物/商店/鑽石/開門紅/幸運任務/商人/願望單/新星之路
+             保留 任務全流程、成長頁KPI、團隊頁、人情、感謝卡、戰績庫、**動物人格測驗**
+     ⚠️ 只是隱藏 UI，GS 存檔完全不動 —— 哪天要開遊戲，把這行改回 true 就全部回來，進度不會掉 */
+  GAME_ON: false,
   MODE: 'CLOUD',          // 'LOCAL'=資料存本機瀏覽器（測 UX 用）/ 'CLOUD'=存 Ragic（正式上線）
   GCAL_ID: 'primary',     // 行事曆來源：'primary'=登入者自己；公司共用日曆填其 ID（xxx@group.calendar.google.com）
   STORAGE_KEY: 'usled_tasks_v1',
@@ -747,6 +751,7 @@ async function setWish(id){
 }
 function renderWishChip(){
   const el=document.getElementById('wishChip'); if(!el) return;
+  if(!CONFIG.GAME_ON){ el.style.display='none'; return; }   // 工作模式：不顯示鑽石目標
   const id=GS&&GS.wish, it=id?rewardDef(id):null;
   if(!it){ el.style.display='none'; return; }
   const bal=coinBalance(), pct=Math.min(100, Math.round(bal/it.price*100));
@@ -1015,6 +1020,7 @@ function bootFlush(){
    =================================================================== */
 const OPENQ_RIGHT=3, OPENQ_WRONG=1;
 function openqPending(){
+  if(!CONFIG.GAME_ON) return null;   // 工作模式：不出每日題
   if(!GS || STATE.gsLoadFailed || !STATE.user) return null;
   if(GS.daily && GS.daily.day===dungeonDay()) return null;        // 今天答過了
   const pool=quizPool(); if(!pool.length) return null;
@@ -1684,6 +1690,7 @@ async function submitTask(id){
    ③**提交時結算**（不是核准時）——寫自己的存檔就好，不用跨員工寫入；被退回也不收回（金額小，不值得為它做收回邏輯）===== */
 const LUCKY_PCT=0.10, LUCKY_CAP=5;
 function luckyTaskId(){
+  if(!CONFIG.GAME_ON) return null;   // 工作模式：不標星光框
   const pool=STATE.tasks.filter(t=>t.status==='open').map(t=>t.id).sort();   // 排序後才有穩定索引
   if(!pool.length) return null;
   return pool[dayHash(dungeonDay()+'|lucky')%pool.length];
@@ -1997,6 +2004,20 @@ function avatarSvg(level,size,cos){
 /* 個人中心的即時等級卡（取代原「即將開放」） */
 function gameCardHtml(sumPts,sumCon,sumFav,done){
   const g=gameStats(sumPts,sumCon,sumFav);
+  if(!CONFIG.GAME_ON){   // 工作模式：這張卡只講「你是誰」，不講戰力裝備
+    const r=hasRole()?GS.role:null, rc=r?r.familyColor:'#94a3b8';
+    return `<div class="gp-card" style="border-color:${rc}55" onclick="viewMyRole()">
+      <div class="gp-glow" style="background:${rc}"></div>
+      <div class="gp-top">
+        <div class="gp-ava" style="border-color:${rc};box-shadow:0 0 14px ${rc}55">${r?`<span style="font-size:30px">${r.emoji}</span>`:'<span style="font-size:26px">🐾</span>'}</div>
+        <div class="gp-meta">
+          <div class="gp-rank">${r?esc(r.animalName):'做一次動物測驗'}${r?`<span class="gp-lvl" style="background:${rc}">${codeFmt(r.code)}</span>`:''}</div>
+          <div class="gp-power" style="color:var(--muted)">${r?esc(r.title):'30 題三選一，約 3 分鐘，看看你是哪種工作性格'}</div>
+        </div>
+        <div class="gp-arrow">›</div>
+      </div>
+    </div>`;
+  }
   const pct=Math.min(100,Math.round(g.into/g.span*100));
   const c=g.rank.color;
   return `<div class="gp-card" style="border-color:${c}55" onclick="showGameCenter()">
@@ -2013,9 +2034,10 @@ function gameCardHtml(sumPts,sumCon,sumFav,done){
     <div class="gp-xptxt"><span>經驗值 ${g.total}</span><span>距下一級 ${g.span-g.into} XP</span></div>
   </div>`;
 }
-/* 角色養成中心 */
+/* 角色養成中心（工作模式下＝「我的角色」，只有人格特質） */
 function showGameCenter(){
   if(!STATE.user) return;
+  if(!CONFIG.GAME_ON){ showRoleHome(); return; }
   const mine=STATE.tasks.filter(t=>t.assigneeId===STATE.user.id && t.status==='done');
   const sumPts=mine.reduce((s,t)=>s+(t.earnedPoints!=null?t.earnedPoints:(t.points||0)),0);
   const sumCon=mine.reduce((s,t)=>s+(t.contribution||0),0);
@@ -2054,6 +2076,41 @@ function showGameCenter(){
     <div class="detail-label">🐾 我的夥伴</div>
     ${petCardHtml()}
     <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">買裝備提升戰力、養角色寵物、打副本闖關 ⚔️<br>想看成長曲線／成就 → 點任務牆上方「📈 成長」</div>
+  </div>`;
+  mask.onclick=closeGameCenter; document.body.appendChild(mask);
+}
+/* 🐾 我的角色（工作模式）：只講人格特質，不含任何遊戲元素。
+   遊戲層要開的那天，把 CONFIG.GAME_ON 改回 true，這頁自動讓位給完整的養成中心。 */
+function showRoleHome(){
+  const r=hasRole()?GS.role:null, c=r?r.familyColor:'#94a3b8';
+  const sup=isSupervisor(STATE.user);
+  const mask=document.createElement('div'); mask.className='modal-mask'; mask.id='gameModal';
+  mask.innerHTML=`<div class="modal" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 style="margin:0">🐾 我的角色</h3>
+      <button class="t-expand" onclick="closeGameCenter()" style="font-size:18px">✕</button>
+    </div>
+    <div class="gc-hero" style="background:${c}1a;padding:18px 14px">
+      <div class="gc-glow" style="background:radial-gradient(circle at 50% 30%,${c},transparent 70%)"></div>
+      <div style="font-size:62px;line-height:1.1">${r?r.emoji:'🐾'}</div>
+      <div class="gc-rank" style="color:${c};margin-top:4px">${r?esc(r.animalName):'還沒有角色'}</div>
+      <div class="gc-sub">${STATE.user.name}${r?` · ${codeFmt(r.code)} · ${esc(r.title)}`:''}</div>
+      ${r?`<div style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6">${esc(r.familyName||'')}　${r.lb==='L'?'領航者':'定錨者'}</div>`:
+         '<div style="font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.7">30 題三選一，大約 3 分鐘。<br>測完你會知道自己屬於哪種工作性格，<br>以及跟誰合作最順。</div>'}
+    </div>
+    <button class="btn-primary" style="width:100%;padding:13px;margin-top:12px;border-radius:11px;font-size:15px;font-weight:700" onclick="closeGameCenter();viewMyRole()">
+      ${r?'📋 看我的完整分析':'🐾 開始測驗（約 3 分鐘）'}
+    </button>
+    ${r&&roleDaysSince()>=180?`<button class="equip-btn" style="width:100%;padding:11px;margin-top:8px" onclick="closeGameCenter();showAnimalTest()">🔄 重新測驗（已滿 180 天）</button>`:''}
+    ${sup?`<div class="detail-label" style="margin-top:16px">👥 團隊人格地圖</div>${teamRoleMapHtml()}`:''}
+    ${isAdmin()?`<div class="detail-label" style="margin-top:16px">🧰 管理員工具</div>
+      <div class="gc-actionrow">
+        <button class="shop-open-btn" style="flex:0 0 auto;background:${STATE.sandbox?'#f59e0b':'#64748b'};color:#fff" onclick="toggleSandbox()">${STATE.sandbox?'🧪測試模式:開':'🧪測試模式'}</button>
+        <button class="shop-open-btn" style="flex:0 0 auto;background:#0e7490;color:#fff" onclick="showGovDash()">📊治理儀表</button>
+        <button class="shop-open-btn" style="flex:0 0 auto;background:#7c3aed;color:#fff" onclick="seasonReset()">🏁賽季歸零</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">🎮 遊戲層目前是關閉的（CONFIG.GAME_ON=false）。同事看到的只有任務與人格特質；大家的遊戲進度都還在，開回來就恢復。</div>`:''}
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:16px">想看自己的產值與成就 → 任務牆上方「📈 成長」</div>
   </div>`;
   mask.onclick=closeGameCenter; document.body.appendChild(mask);
 }
@@ -2234,9 +2291,9 @@ function kpiPoolHtml(){
   <div class="kpi-box">
     <div class="kpi-row"><span>我的產值 <b style="color:var(--accent)">${my.toLocaleString()}</b> 點</span><span>達成 ${myPct}%${my>=myKpi?' 🏆':''}</span></div>
     <div class="kpi-bar"><i style="width:${myPct}%"></i></div>
-    <div class="kpi-row" style="margin-top:12px"><span>🔥 團隊績效池</span><span>達成 ${tPctShow}%</span></div>
+    <div class="kpi-row" style="margin-top:12px"><span>🔥 團隊${CONFIG.GAME_ON?'績效池':'整體產值'}</span><span>達成 ${tPctShow}%</span></div>
     <div class="kpi-bar team${lit?' lit':''}"><i style="width:${tPctShow}%"></i>${TEAM_POOL.map(t=>`<em style="left:${t.pct*100}%" title="${Math.round(t.pct*100)}%→${t.coins}幣"></em>`).join('')}</div>
-    <div class="kpi-hint">${lit?('🎉 績效池已點亮！'+(pool?('目前檔位 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+pool.toLocaleString()+'，月底按貢獻比例自動入帳'):'達 60% 開始發幣')+(nextTier?('；下一檔 '+Math.round(nextTier.pct*100)+'% → <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+nextTier.coins.toLocaleString()):'')):'團隊達 50% 績效池點亮、60% 起送全隊鑽石（1000→8000），按各自貢獻比例分 💪'}</div>
+    <div class="kpi-hint">${!CONFIG.GAME_ON?(lit?'🎉 團隊整體已過半，繼續保持 💪':'全隊一起把這條拉起來 💪'):(lit?('🎉 績效池已點亮！'+(pool?('目前檔位 <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+pool.toLocaleString()+'，月底按貢獻比例自動入帳'):'達 60% 開始發幣')+(nextTier?('；下一檔 '+Math.round(nextTier.pct*100)+'% → <img src="assets/game/ui/diamond.png" class="coin-ic" alt="鑽石">'+nextTier.coins.toLocaleString()):'')):'團隊達 50% 績效池點亮、60% 起送全隊鑽石（1000→8000），按各自貢獻比例分 💪')}</div>
   </div>`;
 }
 
@@ -2319,11 +2376,11 @@ function showTeam(){
           <div style="font-weight:800">${u.name}<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:5px">${u.title}</span>${isNewbie(u.id)?'<span style="font-size:10px;color:var(--ok);margin-left:4px">🌱新人</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${role?`${role.emoji}${role.animalName} ${codeFmt(role.code)} · ${role.title}`:'<span style="color:var(--q1)">尚未做角色測驗</span>'}</div>
           <div style="font-size:12px;color:${c};font-weight:700">${g.rank.name} Lv.${g.level}${title?`<span class="gc-title-tag">「${title.name}」</span>`:''}</div>
-          <div style="font-size:12px;color:var(--muted)">⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`　<span style="color:#f472b6">🙏 ${kc}</span>`:'';})()}</div>
+          <div style="font-size:12px;color:var(--muted)">${CONFIG.GAME_ON?`⚔️ 戰力 ${g.power+gp}　${pets?('🐾 '+pets):''}`:''}${(()=>{const kc=kudosMonthCount(u.id);return kc?`<span style="color:#f472b6">🙏 本月收到 ${kc} 張感謝卡</span>`:'';})()}</div>
         </div>
         <div style="text-align:right;font-size:11px;color:var(--muted)">本月<br><b style="font-size:16px;color:var(--accent)">${Math.min(100,Math.round(mp/userKpi(u.id)*100))}%</b><br>達成</div>
       </div>
-      <div class="team-gear">${gearIcons}</div>
+      ${CONFIG.GAME_ON?`<div class="team-gear">${gearIcons}</div>`:''}
     </div>`;
   }).join('');
   const old=document.getElementById('teamModal'); if(old) old.remove();
@@ -2437,6 +2494,7 @@ async function buyDeal(){
   toast('🧙‍♂️ 成交！「'+dealName(d)+'」入手'); refreshGameUI();
 }
 function merchantBannerHtml(){
+  if(!CONFIG.GAME_ON) return '';   // 工作模式：商人不出攤
   const m=merchantState(), sp=contribSpendable(STATE.user.id);
   const d=mchDeal(), tm=mchDealTomorrow();
   const dealRow=(()=>{
@@ -2778,6 +2836,7 @@ function onboardSteps(){
 }
 function onboardDone(){ return onboardSteps().every(s=>s.ok); }
 function checkStarter(){
+  if(!CONFIG.GAME_ON) return;   // 工作模式：新星之路含副本/寵物里程碑，先不跑
   if(STATE.gsLoadFailed) return;   // A3：載入失敗時 GS 是空檔，勿誤判發起步禮 300 鑽並建新檔
   if(!GS || GS.starterClaimed) return;
   if(userGameLevel(STATE.user.id)>=5 || (GS.owned||[]).length || (GS.clears||0)>0 || Object.keys(GS.pets||{}).length){ GS.starterClaimed=true; saveGameState(); return; }   // 老手/已有進度→只標記不發
@@ -2787,6 +2846,7 @@ function checkStarter(){
   if(!bootCollect({pri:10, icon:'🎁', color:'#22c55e', title:'歡迎加入譽昇！', sub:'起步禮包：+'+STARTER.coins+' 鑽 ＆ 一隻小狗蛋 🐶<br>打開「新星之路」一步步認識任務牆'})) starterCeremony();
 }
 function checkNewbieGrad(){
+  if(!CONFIG.GAME_ON) return;
   if(!GS || GS.newbieGradClaimed || !onboardDone()) return;
   if(userGameLevel(STATE.user.id)>=5){ GS.newbieGradClaimed=true; saveGameState(); return; }   // 老手不觸發畢業
   GS.newbieGradClaimed=true; GS.won=(GS.won||0)+200; GS.title='ti_newstar';
@@ -4435,7 +4495,7 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.16.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.17.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
