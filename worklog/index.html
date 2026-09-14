@@ -345,7 +345,7 @@
       <button id="btnDispatch" onclick="openDispatchCreate()">📨 派工<span class="dc-badge">測試</span></button>
     </div>
     <div class="card" id="dcHomeCard" style="display:none">
-      <div class="sec-t"><span class="n">📋</span>我的派工卡<span class="dc-badge">測試版·資料暫存本機</span></div>
+      <div class="sec-t"><span class="n">📋</span>我的派工卡<span class="dc-badge">測試期·完工卡只發陳譽昇</span></div>
       <div id="dcList"></div>
     </div>
 
@@ -596,8 +596,15 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.28';
+const APP_VERSION='1.29';
 const CHANGELOG=[
+  'v1.29　2026/09/14　🚀一條龍派工正式版',
+  '· 派工卡存伺服器：老闆派工、工程師手機立刻看得到（換手機也在）',
+  '· 規劃/出發/抵達/完工時間由伺服器記錄（前一天 20:00 準時線）',
+  '· 照片拍了馬上存；按完工一次傳進報價單（內部圖片＝過程照、給客圖片＝完工照）',
+  '· 完工自動寫一筆工務行程日誌，並發 LINE 完工卡（測試期只發陳譽昇）',
+  '· 送出沒全部成功會顯示「⚠️補送」，再按一次只補沒成功的部分',
+  '',
   'v1.28　2026/09/11',
   '· 移除首頁底部「我的近期日誌」卡片（協做員名單自動學習照常運作）',
   '',
@@ -835,7 +842,7 @@ function onSignIn(resp){
     S.user = { email, name:p.name||'', picture:p.picture||'' };
     saveSession(S.user);
     getPass();   // 換 7 天通行證(偉智反映每天要登入→之後 7 天內 API 全走通行證)
-    if(inApp){ loadRecent(); loadCases(); resendPending(); return; }   // ★背景補到 token 後,任務清單也要重抓(否則記住登入開啟永遠 401 空清單)
+    if(inApp){ loadRecent(); loadCases(); resendPending(); renderDispatchHome(); return; }   // ★背景補到 token 後,任務清單也要重抓(否則記住登入開啟永遠 401 空清單)
     enterApp();
   }catch(e){ toast('登入失敗：'+e.message,'bad'); }
 }
@@ -1303,9 +1310,10 @@ async function loadRecent(){
   }catch(e){}
 }
 
-/* ==================== 一條龍派工（P1 設計測試版）====================
-   ⚠️ 測試版資料暫存本機 localStorage（跨手機不同步）：先給 Jason 點整體設計,
-   微調定稿後正式版改存 Ragic(pm/2 派工骨架+狀態欄)+照片直傳 pm/8。 */
+/* ==================== 一條龍派工（2026-09-14 正式版）====================
+   派工卡存伺服器（換手機也看得到），規劃/出發/抵達/完工時間一律由伺服器記。
+   完工一次寫進 Ragic：照片→報價單（內部圖片＝過程照、給客圖片＝完工照；實測是追加，不會洗掉原本的照片）、
+   工務行程日誌自動一筆、LINE 完工卡（測試期只發陳譽昇）。 */
 const DC_STEPS = {   // 基本 5 節點就好,多的工程師自己加(2026-09-08 Jason 微調)
   '工': ['定位放樣','鑽孔上架','掛屏固定','走線接電','亮屏測試'],
   '修': ['問診複現','斷電拆檢','更換零件','測試驗證','覆機教學']
@@ -1322,8 +1330,8 @@ const DC_TOOLS = [
   {k:'large',n:'大型工具',it:['蜘蛛升降機','箱式吸塵器','拉梯(8米)','拉梯(6米)','A梯12尺','A梯10尺(大A)','A梯8尺(小8)','A梯5尺(小梯)','摺疊梯7尺','小金剛(吊掛)']},
   {k:'rig',n:'吊拆組',it:['童軍繩勾(小)','童軍繩勾(大)','白鐵滑軌環','吊掛包(紅)']}
 ];
-const DC_BUNDLE = { '電工十寶':10, '字幕七寶':7, '電錶包':3, '噴漆組':8, '清潔包':5 };   // 組合包件數(格子右下小標)
-const DC_PRESEL = {   // 依案型自動預圈(草案,可再調)
+const DC_BUNDLE = { '電工十寶':10, '字幕七寶':7, '電錶包':3, '噴漆組':8, '清潔包':5 };   // 組合包件數(格子小標)
+const DC_PRESEL = {   // 依案型自動預圈
   '修': {basic:['電工十寶','字幕七寶'], mat:['A維修箱','清潔包'], aux:['工作腰包','延長線(小/大)','頭燈']},
   '工': {power:['18v起子機M款','18v鎚壁鑽'], basic:['電工十寶','字幕七寶'], aux:['工作腰包','延長線(小/大)','水平尺','矽利康槍+膠'], mat:['綜合料箱','六角螺絲箱','清潔包']}
 };
@@ -1332,44 +1340,101 @@ const DC_SLOTS = [
   {k:'wire',em:'🔌',nm:'走線路徑',req:'install'},{k:'work',em:'🛠',nm:'施工中',req:0},
   {k:'near',em:'✅',nm:'完工近照',req:1},{k:'far',em:'🏞',nm:'完工遠照',req:1}
 ];
+const DC_STAGE_NM=['📝規劃','🧰覆核','🚗出發','📍抵達','📷照片','✅完工'];
 function isJason(){ return S.user && S.user.email==='covernself@gmail.com'; }
-function dcAll(){ try{ return JSON.parse(localStorage.getItem('wl_dispatch_v1')||'[]'); }catch(e){ return []; } }
-function dcSaveAll(a){ try{ localStorage.setItem('wl_dispatch_v1', JSON.stringify(a)); }catch(e){ toast('本機空間不足（測試版照片存本機）','bad'); } }
-function dcGet(id){ return dcAll().find(d=>d.id===id)||null; }
-function dcPatch(id,fn){ const a=dcAll(); const d=a.find(x=>x.id===id); if(!d) return; fn(d); dcSaveAll(a); }
-function dcType(d){ return (d.code||'').charAt(0)==='修' ? '修':'工'; }
-function dcStage(d){   // 0規劃 1覆核 2出發 3抵達 4照片 5完工
-  const s=d.st||{};
-  if(s.doneAt) return 5;
+function dcType(d){ const c=String((d&&d.code)||''); if(c) return c.charAt(0)==='修'?'修':'工'; return /維修/.test(String((d&&d.desc)||''))?'修':'工'; }
+function dcFinished(d){ return !!(d&&d.done&&d.done.finishedAt); }
+function dcStage(d){
+  const s=(d&&d.st)||{};
+  if(dcFinished(d)) return 5;
   if(s.arriveAt) return 4;
   if(s.departAt) return 3;
   if(s.preDoneAt) return 2;
   if(s.planAt) return 1;
   return 0;
 }
-const DC_STAGE_NM=['📝規劃','🧰覆核','🚗出發','📍抵達','📷照片','✅完工'];
+function dcHM(ms){ const d=new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes()); }
+function dcNeed(sl,T){ return sl.req===1 || (sl.req==='install' && T==='工'); }
+
+/* ---- 伺服器呼叫：所有會改卡片的動作排隊一個一個送，避免兩個請求同時寫把對方蓋掉 ---- */
+async function dcApi(path, json){
+  const opt={ method: json? 'POST':'GET', headers: Object.assign(authHdr(), json? {'Content-Type':'application/json'}:{}) };
+  if(json) opt.body=JSON.stringify(json);
+  const r=await fetch(CFG.WORKER+path, opt);
+  if(r.status===401){ wsessClear(); throw new Error('登入逾時，請關掉 App 重新開啟'); }
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok || d.ok===false) throw new Error(d.reason||('連線失敗（'+r.status+'）'));
+  return d;
+}
+let _dcChain=Promise.resolve(), _dcSaveT=null, _dcPend={};
+function dcEnqueue(fn){ const p=_dcChain.then(fn); _dcChain=p.catch(()=>null); return p; }
+function dcMerge(nd){ const a=S.dcList||[]; const i=a.findIndex(x=>x.id===nd.id); if(i>=0) a[i]=nd; else a.unshift(nd); S.dcList=a; }
+function dcAdopt(nd){   // 伺服器回來的卡片蓋回畫面；還沒送出的步驟/工具勾選保留本機版本
+  if(S.dcCur && S.dcCur.id===nd.id){
+    if(_dcPend.steps) nd.steps=S.dcCur.steps;
+    if(_dcPend.tools) nd.tools=S.dcCur.tools;
+    S.dcCur=nd;
+  }
+  dcMerge(nd);
+}
+function dcRepaint(id){ if(S.dcCur && S.dcCur.id===id) renderDispCard(); else paintDispatchHome(); }
+function dcDo(op, extra){
+  const cur=S.dcCur; if(!cur) return Promise.resolve(null);
+  const id=cur.id;
+  return dcEnqueue(async()=>{
+    try{
+      const body=Object.assign({id, op}, typeof extra==='function'? extra() : (extra||{}));
+      const r=await dcApi('/dispatch/update', body);
+      dcAdopt(r.d); dcRepaint(id); return r.d;
+    }catch(e){ toast(e.message,'bad'); return null; }
+  });
+}
+function dcQueue(op){   // 勾步驟/拖曳/勾工具：畫面立刻變，停手 0.6 秒才存
+  _dcPend[op]=1; clearTimeout(_dcSaveT); _dcSaveT=setTimeout(dcFlush, 600);
+}
+function dcFlush(){
+  clearTimeout(_dcSaveT);
+  const cur=S.dcCur, ops=Object.keys(_dcPend); _dcPend={};
+  if(!cur||!ops.length) return Promise.resolve();
+  return Promise.all(ops.map(op=>dcDo(op, ()=> op==='steps'? {steps:cur.steps} : {tools:cur.tools})));
+}
+function dcRefresh(){
+  const cur=S.dcCur; if(!cur) return Promise.resolve();
+  const id=cur.id;
+  return dcEnqueue(async()=>{
+    try{ const r=await dcApi('/dispatch/get?id='+encodeURIComponent(id)); dcAdopt(r.d); dcRepaint(id); }catch(e){}
+  });
+}
+
 /* ---- 首頁清單 ---- */
-function renderDispatchHome(){
+async function renderDispatchHome(){
   if($('dcTop')) $('dcTop').style.display = isJason()? 'flex':'none';
   const card=$('dcHomeCard'); if(!card) return;
   card.style.display='';
-  const box=$('dcList');
-  const mine=dcAll().filter(d=> isJason() || d.eng===S.myName ).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  if(!mine.length){ box.innerHTML='<div class="hint">目前沒有派工卡。'+(isJason()?'點上面「📨 派工」建立第一張試試。':'等待派工中。')+'</div>'; return; }
+  if(S.dcList) paintDispatchHome(); else $('dcList').innerHTML='<div class="hint">派工卡載入中…</div>';
+  if(!S.token && !wsessGet()) return;          // 憑證還沒到：onSignIn 補到後會再叫一次
+  try{ const r=await dcApi('/dispatch/list'); S.dcList=r.list||[]; paintDispatchHome(); }
+  catch(e){ if(!S.dcList) $('dcList').innerHTML='<div class="hint">派工卡載入失敗：'+esc(e.message)+'</div>'; }
+}
+function paintDispatchHome(){
+  const box=$('dcList'); if(!box) return;
+  const list=(S.dcList||[]).slice().sort((a,b)=> String(b.date).localeCompare(String(a.date)) || ((b.createdAt||0)-(a.createdAt||0)));
+  if(!list.length){ box.innerHTML='<div class="hint">目前沒有派工卡。'+(isJason()?'點上面「📨 派工」建立第一張。':'等待派工中。')+'</div>'; return; }
   box.innerHTML='';
-  mine.slice(0,8).forEach(d=>{
-    const stg=dcStage(d);
+  list.slice(0,12).forEach(d=>{
+    const stg=dcStage(d), part=!!(d.st&&d.st.doneAt)&&!dcFinished(d);
     const b=document.createElement('button'); b.type='button'; b.className='dc-item';
-    const pgCls = stg===5?'pg done':(stg===0?'pg warn':'pg');
+    const pgCls = stg===5?'pg done':((stg===0||part)?'pg warn':'pg');
     b.innerHTML='<div class="st">'+(stg===5?'✅':(dcType(d)==='修'?'🔧':'🔨'))+'</div>'+
       '<div class="tx"><b>'+esc(d.date)+'｜'+esc(d.cust||d.no)+(d.code?'　'+esc(d.code):'')+'</b>'+
-      '<small>'+esc(d.desc||'')+'</small></div>'+
-      '<span class="'+pgCls+'">'+DC_STAGE_NM[stg]+'</span>';
+      '<small>'+esc((isJason()?'👷'+d.eng+'｜':'')+(d.desc||''))+'</small></div>'+
+      '<span class="'+pgCls+'">'+(part?'⚠️補送':DC_STAGE_NM[stg])+'</span>';
     b.onclick=()=>openDispCard(d.id);
     box.appendChild(b);
   });
 }
-/* ---- 建立派工 ---- */
+
+/* ---- 建立派工（限老闆）---- */
 function openDispatchCreate(){
   S.dispatchMode=true;
   openCaseModal();
@@ -1384,80 +1449,118 @@ function openDispatchSheet(){
   $('dcSheet').classList.remove('hidden');
 }
 function closeDispatchSheet(){ $('dcSheet').classList.add('hidden'); }
-function createDispatch(){
+async function createDispatch(){
   const c=S.dcCase; if(!c) return;
-  const id='d'+Date.now();
-  const rec={ id, no:c.no, log:c.log||'', desc:c.desc||'', cust:c.cust||'', code:c.code||'', addr:c.addr||'', km:c.km||'',
-    date:($('dc_date').value||'').replace(/-/g,'/'), eng:S.seg.dcEng||'偉智', createdAt:Date.now(),
-    steps:DC_STEPS[(c.code||'').charAt(0)==='修'?'修':'工'].map(t=>({t,on:true})), st:{}, tools:null, recheck:{}, photos:{} };
-  const a=dcAll(); a.unshift(rec); dcSaveAll(a);
-  closeDispatchSheet(); S.dcCase=null;
-  renderDispatchHome();
-  toast('派工卡已建立 ✓','ok');
-  openDispCard(id);
+  const date=($('dc_date').value||'').replace(/-/g,'/');
+  if(!date){ toast('請選執行日期','bad'); return; }
+  const T=dcType(c);
+  const tools={}; const pre=DC_PRESEL[T]||{}; Object.keys(pre).forEach(k=>tools[k]=pre[k].slice());
+  showLoad('建立派工卡（確認工作日誌）…');
+  try{
+    const r=await dcApi('/dispatch/create',{caseNo:c.no, date, eng:S.seg.dcEng||'偉智', steps:DC_STEPS[T].map(t=>({t,on:true})), tools});
+    hideLoad(); closeDispatchSheet(); S.dcCase=null;
+    dcMerge(r.d); paintDispatchHome();
+    toast('派工卡已建立 ✓'+(r.logCreated?'（已自動建工作日誌 '+r.d.log+'）':''),'ok');
+    openDispCard(r.d.id);
+  }catch(e){ hideLoad(); toast(e.message,'bad'); }
 }
+
 /* ---- 派工卡 ---- */
-function openDispCard(id){ S.dcId=id; $('dcModal').classList.remove('hidden'); window.scrollTo(0,0); renderDispCard(); }
-function closeDispCard(){ $('dcModal').classList.add('hidden'); S.dcId=null; renderDispatchHome(); }
+function openDispCard(id){
+  const d=(S.dcList||[]).find(x=>x.id===id); if(!d) return;
+  S.dcCur=d; S.dcPhotoUrls={}; S.dcUploading={};
+  $('dcModal').classList.remove('hidden'); $('dcModal').scrollTop=0;
+  renderDispCard();
+  dcRefresh().then(dcLoadPhotos);
+}
+function closeDispCard(){
+  dcFlush();
+  Object.values(S.dcPhotoUrls||{}).forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} });
+  S.dcPhotoUrls={}; S.dcUploading={};
+  $('dcModal').classList.add('hidden'); S.dcCur=null;
+  paintDispatchHome();
+}
+async function dcLoadPhotos(){
+  const d=S.dcCur; if(!d) return;
+  for(const sl of DC_SLOTS){
+    if(!d.photos || !d.photos[sl.k] || (S.dcPhotoUrls||{})[sl.k]) continue;
+    try{
+      const r=await fetch(CFG.WORKER+'/dispatch/photo?id='+encodeURIComponent(d.id)+'&slot='+sl.k,{headers:authHdr()});
+      if(!r.ok) continue;
+      const u=URL.createObjectURL(await r.blob());
+      if(S.dcCur && S.dcCur.id===d.id){ S.dcPhotoUrls[sl.k]=u; renderDispCard(); } else URL.revokeObjectURL(u);
+    }catch(e){}
+  }
+}
 function dcMapLink(d){ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(d.addr||d.cust||''); }
 function renderDispCard(){
-  const d=dcGet(S.dcId); if(!d){ closeDispCard(); return; }
-  const stg=dcStage(d), T=dcType(d);
+  const d=S.dcCur; if(!d) return;
+  const stg=dcStage(d), T=dcType(d), fin=dcFinished(d), st=d.st||{};
+  d.steps=d.steps||[]; d.tools=d.tools||{}; d.recheck=d.recheck||{}; d.photos=d.photos||{};
   $('dcTitle').textContent='派工卡｜'+(d.cust||d.no);
   const B=$('dcBody'); B.innerHTML='';
   /* 資訊 */
   const info=document.createElement('div'); info.className='dc-info';
   info.innerHTML='<div class="no">'+esc(d.no)+(d.code?'<span class="code">'+esc(d.code)+'</span>':'')+(d.km?'<span>🚗 來回 '+esc(d.km)+' km</span>':'')+'</div>'+
     '<h3>'+esc(d.desc||d.cust)+'</h3>'+
-    '<div class="meta">📅 '+esc(d.date)+'｜👷 '+esc(d.eng)+
+    '<div class="meta">📅 '+esc(d.date)+'｜👷 '+esc(d.eng)+(d.log?'｜🗂 '+esc(d.log):'')+
     (d.addr?'<br>📍 <a href="'+dcMapLink(d)+'" target="_blank" rel="noopener">'+esc(d.addr)+'</a>':'')+'</div>';
   B.appendChild(info);
   /* 進度列 */
   const sb=document.createElement('div'); sb.className='dc-steps';
   DC_STAGE_NM.forEach((nm,i)=>{ const s=document.createElement('span'); s.textContent=nm; if(i<stg)s.className='done'; else if(i===stg)s.className='on'; sb.appendChild(s); });
   B.appendChild(sb);
+
   /* 1 施工步驟 */
   const c1=document.createElement('div'); c1.className='card';
   c1.innerHTML='<div class="sec-t"><span class="n">1</span>施工步驟（'+(T==='修'?'維修範本':'安裝範本')+'）'+
-    (d.st.planAt?'<span class="dc-badge" style="background:#dcfce7;color:#15803d">已規劃'+(d.st.planLate?'⚠️補':'')+'</span>':'')+'</div>';
-  const hintDrag=document.createElement('div'); hintDrag.className='hint'; hintDrag.style.marginBottom='4px'; hintDrag.textContent='點圓圈＝要做/不做；長按整列可上下拖曳排序';
-  c1.appendChild(hintDrag);
+    (st.planAt?'<span class="dc-badge" style="background:#dcfce7;color:#15803d">已規劃 '+dcHM(st.planAt)+(st.planLate?' ⚠️補':'')+'</span>':'')+'</div>';
   const list=document.createElement('div');
-  d.steps.forEach((s,i)=>{
-    const row=document.createElement('div'); row.className='sp-row'+(s.on?' on':''); row.dataset.i=i;
-    const num=document.createElement('span'); num.className='num'; num.textContent=(i+1);
-    const cb=document.createElement('button'); cb.type='button'; cb.className='cb'; cb.textContent=s.on?'✓':''; cb.onclick=()=>{ dcPatch(d.id,x=>x.steps[i].on=!x.steps[i].on); renderDispCard(); };
-    const t=document.createElement('div'); t.className='t'; t.textContent=s.t;
-    const grip=document.createElement('span'); grip.className='grip'; grip.textContent='≡';
-    row.appendChild(num); row.appendChild(cb); row.appendChild(t); row.appendChild(grip);
-    dcAttachDrag(row, list, d.id);
-    list.appendChild(row);
-  });
-  c1.appendChild(list);
-  const addr=document.createElement('div'); addr.className='sp-addrow';
-  addr.innerHTML='<input type="text" id="dcNewStep" placeholder="補充步驟（鍵盤麥克風🎤可語音）"><button type="button" onclick="dcAddStep()">＋</button>';
-  c1.appendChild(addr);
-  const saveP=document.createElement('button'); saveP.className='dc-act '+(d.st.planAt?'dis':'pri'); saveP.textContent=d.st.planAt?'✓ 規劃已儲存（可再改，改完再按一次）':'💾 儲存施工規劃'; saveP.onclick=()=>dcSavePlan();
-  c1.appendChild(saveP);
+  if(fin){
+    d.steps.forEach((s,i)=>{ const row=document.createElement('div'); row.className='sp-row'+(s.on?' on':'');
+      row.innerHTML='<span class="num">'+(i+1)+'</span><div class="t">'+esc(s.t)+'</div>'; list.appendChild(row); });
+    c1.appendChild(list);
+  } else {
+    const hintDrag=document.createElement('div'); hintDrag.className='hint'; hintDrag.style.marginBottom='4px'; hintDrag.textContent='點圓圈＝要做/不做；長按整列可上下拖曳排序';
+    c1.appendChild(hintDrag);
+    d.steps.forEach((s,i)=>{
+      const row=document.createElement('div'); row.className='sp-row'+(s.on?' on':''); row.dataset.i=i;
+      const num=document.createElement('span'); num.className='num'; num.textContent=(i+1);
+      const cb=document.createElement('button'); cb.type='button'; cb.className='cb'; cb.textContent=s.on?'✓':'';
+      cb.onclick=()=>{ s.on=!s.on; renderDispCard(); dcQueue('steps'); };
+      const t=document.createElement('div'); t.className='t'; t.textContent=s.t;
+      const grip=document.createElement('span'); grip.className='grip'; grip.textContent='≡';
+      row.appendChild(num); row.appendChild(cb); row.appendChild(t); row.appendChild(grip);
+      dcAttachDrag(row, list);
+      list.appendChild(row);
+    });
+    c1.appendChild(list);
+    const addr=document.createElement('div'); addr.className='sp-addrow';
+    addr.innerHTML='<input type="text" id="dcNewStep" placeholder="補充步驟（鍵盤麥克風🎤可語音）"><button type="button" onclick="dcAddStep()">＋</button>';
+    c1.appendChild(addr);
+    const saveP=document.createElement('button'); saveP.className='dc-act '+(st.planAt?'dis':'pri');
+    saveP.textContent=st.planAt?'✓ 規劃已儲存（改了再按一次更新）':'💾 儲存施工規劃';
+    saveP.onclick=()=>dcSavePlan();
+    c1.appendChild(saveP);
+  }
   B.appendChild(c1);
+
   /* 2 工具（前置預勾 → 出發前覆核）*/
   const c2=document.createElement('div'); c2.className='card';
-  if(!d.st.preDoneAt){
-    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具預勾（圈類別＝整包帶走）</div>';
-    if(!d.tools){ d.tools={}; const pre=DC_PRESEL[T]||{}; Object.keys(pre).forEach(k=>d.tools[k]=pre[k].slice()); dcPatch(d.id,x=>x.tools=d.tools); }
-    /* 總覽列：已選數＋沿用上次＋清除 */
-    const tot=Object.values(d.tools||{}).reduce((s,a)=>s+a.length,0);
+  if(!st.preDoneAt && !fin){
+    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具預勾</div>';
+    const tot=Object.values(d.tools).reduce((s,a)=>s+a.length,0);
     const bar=document.createElement('div'); bar.className='tl-bar';
     const sum=document.createElement('div'); sum.className='sum'; sum.textContent='已選 '+tot+' 項';
     const bLast=document.createElement('button'); bLast.type='button'; bLast.textContent='↺ 沿用上次';
     bLast.onclick=()=>{
-      const prev=dcAll().filter(x=>x.id!==d.id && dcType(x)===T && x.tools && Object.values(x.tools).some(a=>a.length))
-        .sort((a,b)=>b.createdAt-a.createdAt)[0];
+      const prev=(S.dcList||[]).filter(x=>x.id!==d.id && dcType(x)===T && x.tools && Object.values(x.tools).some(a=>a.length))
+        .sort((a,b)=>(b.createdAt||0)-(a.createdAt||0))[0];
       if(!prev){ toast('還沒有上一張同類型派工可沿用','bad'); return; }
-      dcPatch(d.id,x=>{ x.tools=JSON.parse(JSON.stringify(prev.tools)); }); renderDispCard(); toast('已沿用上次（'+prev.date+'）','ok');
+      d.tools=JSON.parse(JSON.stringify(prev.tools)); renderDispCard(); dcQueue('tools'); toast('已沿用上次（'+prev.date+'）','ok');
     };
     const bClr=document.createElement('button'); bClr.type='button'; bClr.textContent='清除';
-    bClr.onclick=()=>{ if(!confirm('清除所有已勾工具？'))return; dcPatch(d.id,x=>x.tools={}); renderDispCard(); };
+    bClr.onclick=()=>{ if(!confirm('清除所有已勾工具？'))return; d.tools={}; renderDispCard(); dcQueue('tools'); };
     bar.appendChild(sum); bar.appendChild(bLast); bar.appendChild(bClr);
     c2.appendChild(bar);
     DC_TOOLS.forEach(cat=>{
@@ -1465,8 +1568,7 @@ function renderDispCard(){
       const el=document.createElement('div');
       el.className='tl-cat'+(sel.length?' sel':'')+(S.dcOpenCat===cat.k?' open':'');
       const hd=document.createElement('div'); hd.className='hd';
-      /* 圈圈＝這類帶了幾項（純顯示，不是全選鈕：實務上不會整包帶走）*/
-      const cir=document.createElement('div'); cir.className='cir'; cir.textContent=sel.length||'';
+      const cir=document.createElement('div'); cir.className='cir'; cir.textContent=sel.length||'';   // 圈圈＝這類帶了幾項(純顯示)
       const nm=document.createElement('div'); nm.className='nm'; nm.textContent=cat.n;
       const ar=document.createElement('span'); ar.className='ar'; ar.textContent=S.dcOpenCat===cat.k?'▲':'▼';
       hd.appendChild(cir); hd.appendChild(nm); hd.appendChild(ar);
@@ -1478,88 +1580,111 @@ function renderDispCard(){
         const b=document.createElement('button'); b.type='button'; b.className='ti'+(on?' on':'');
         const pk=DC_BUNDLE[nmv]? '<span class="pk">'+DC_BUNDLE[nmv]+'件組</span>':'';
         b.innerHTML='<span class="bx">'+(on?'✓':'')+'</span><span class="lb"><span class="nmx">'+esc(nmv)+'</span>'+pk+'</span>';
-        b.onclick=()=>{ dcPatch(d.id,x=>{ if(!x.tools)x.tools={}; const arr=x.tools[cat.k]||(x.tools[cat.k]=[]); const i=arr.indexOf(nmv); if(i>=0)arr.splice(i,1); else arr.push(nmv); }); renderDispCard(); };
+        b.onclick=()=>{ const arr=d.tools[cat.k]||(d.tools[cat.k]=[]); const i=arr.indexOf(nmv); if(i>=0)arr.splice(i,1); else arr.push(nmv); renderDispCard(); dcQueue('tools'); };
         its.appendChild(b);
       });
       el.appendChild(its);
       c2.appendChild(el);
     });
-    const fin=document.createElement('button'); fin.className='dc-act vio'; fin.textContent='✅ 完成預勾（執行當天再逐項覆核上車）';
-    fin.onclick=()=>{ const n=Object.values(d.tools||{}).reduce((s,a)=>s+a.length,0); if(!n){ toast('至少勾一項工具','bad'); return; } dcPatch(d.id,x=>x.st.preDoneAt=Date.now()); renderDispCard(); };
-    c2.appendChild(fin);
-  } else if(!d.st.departAt){
+    const finB=document.createElement('button'); finB.className='dc-act vio'; finB.textContent='✅ 完成預勾（執行當天再逐項覆核上車）';
+    finB.onclick=async()=>{
+      const n=Object.values(d.tools).reduce((s,a)=>s+a.length,0); if(!n){ toast('至少勾一項工具','bad'); return; }
+      await dcFlush(); dcDo('predone', ()=>({tools:S.dcCur? S.dcCur.tools : d.tools}));
+    };
+    c2.appendChild(finB);
+  } else if(!st.departAt && !fin){
     c2.innerHTML='<div class="sec-t"><span class="n">2</span>出發前覆核（真的上車了才按）</div>';
-    let allOk=true, total=0;
+    let allOk=true;
     DC_TOOLS.forEach(cat=>{ (d.tools[cat.k]||[]).forEach(nm=>{
-      total++;
       const key=cat.k+'|'+nm, ok=!!d.recheck[key]; if(!ok) allOk=false;
       const row=document.createElement('div'); row.className='rc-row'+(ok?' ok':'');
       const t=document.createElement('div'); t.className='t'; t.textContent=nm;
       const b=document.createElement('button'); b.type='button'; b.textContent=ok?'✓ 已上車':'上車了';
-      b.onclick=()=>{ dcPatch(d.id,x=>{ x.recheck[key]=!x.recheck[key]; }); renderDispCard(); };
+      b.onclick=()=>{ if(d.recheck[key]) delete d.recheck[key]; else d.recheck[key]=Date.now(); renderDispCard(); dcDo('recheck',{key}); };
       row.appendChild(t); row.appendChild(b); c2.appendChild(row);
     }); });
     const go=document.createElement('button'); go.className='dc-act '+(allOk?'go':'dis'); go.textContent=allOk?'🚗 出發':'🚗 出發（還有工具未覆核）';
-    go.onclick=()=>{ if(!allOk && !confirm('測試期不強制：還有工具未覆核，仍要出發嗎？')) return; dcPatch(d.id,x=>x.st.departAt=Date.now()); renderDispCard(); toast('出發！到案場按「抵達」','ok'); };
+    go.onclick=()=>{ if(!allOk && !confirm('測試期不強制：還有工具未覆核，仍要出發嗎？')) return;
+      dcDo('depart').then(nd=>{ if(nd) toast('出發！到案場按「抵達」','ok'); }); };
     c2.appendChild(go);
-    const back=document.createElement('button'); back.className='dc-act dis'; back.style.marginTop='8px'; back.textContent='↺ 回去改預勾'; back.onclick=()=>{ dcPatch(d.id,x=>{ x.st.preDoneAt=0; x.recheck={}; }); renderDispCard(); };
+    const back=document.createElement('button'); back.className='dc-act dis'; back.style.marginTop='8px'; back.textContent='↺ 回去改預勾';
+    back.onclick=()=>dcDo('unpredone');
     c2.appendChild(back);
   } else {
-    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具檢點 <span class="dc-badge" style="background:#dcfce7;color:#15803d">已完成</span></div><div class="hint">出發時間 '+new Date(d.st.departAt).toTimeString().slice(0,5)+'</div>';
+    const nTools=Object.values(d.tools).reduce((s,a)=>s+a.length,0);
+    c2.innerHTML='<div class="sec-t"><span class="n">2</span>工具檢點 <span class="dc-badge" style="background:#dcfce7;color:#15803d">已完成</span></div>'+
+      '<div class="hint">共 '+nTools+' 項'+(st.departAt?'｜出發 '+dcHM(st.departAt)+(st.departUnchecked?'（'+st.departUnchecked+' 項未覆核）':'（全數覆核）'):'')+'</div>';
   }
   B.appendChild(c2);
+
   /* 3 抵達 */
-  if(d.st.departAt && !d.st.arriveAt){
+  if(st.departAt && !st.arriveAt){
     const c3=document.createElement('div'); c3.className='card';
-    c3.innerHTML='<div class="sec-t"><span class="n">3</span>到案場了嗎</div><div class="hint">正式版由工務手機自動偵測，這顆按鈕是備援。</div>';
+    c3.innerHTML='<div class="sec-t"><span class="n">3</span>到案場了嗎</div><div class="hint">之後由工務手機自動偵測，這顆按鈕是備援。</div>';
     const b=document.createElement('button'); b.className='dc-act pri'; b.textContent='📍 我到案場了';
     b.onclick=()=>{ b.disabled=true; b.textContent='📡 取得定位中…';
-      const done=geo=>{ dcPatch(d.id,x=>{ x.st.arriveAt=Date.now(); if(geo)x.st.geo=geo; }); renderDispCard(); toast('已記錄抵達 '+(geo?'（含GPS）':'（無GPS）'),'ok'); };
+      const done=geo=>{ dcDo('arrive', geo||{}).then(nd=>{ if(nd) toast('已記錄抵達'+(nd.st.geo?'（含GPS）':'（無GPS）'),'ok'); else { b.disabled=false; b.textContent='📍 我到案場了'; } }); };
       if(navigator.geolocation) navigator.geolocation.getCurrentPosition(p=>done({lat:p.coords.latitude,lon:p.coords.longitude}), ()=>done(null), {timeout:8000});
       else done(null);
     };
     c3.appendChild(b); B.appendChild(c3);
   }
+
   /* 4 照片格 */
-  if(d.st.arriveAt){
+  if(st.arriveAt){
+    const locked = fin || !!(d.done && d.done.photosOk);
     const c4=document.createElement('div'); c4.className='card';
-    c4.innerHTML='<div class="sec-t"><span class="n">4</span>照片檢點格 <span class="dc-badge">測試期不強制</span></div>';
+    c4.innerHTML='<div class="sec-t"><span class="n">4</span>照片檢點格 <span class="dc-badge">'+(locked?'已傳報價單':'測試期不強制')+'</span></div>';
     const g=document.createElement('div'); g.className='pg-grid';
     DC_SLOTS.forEach(sl=>{
-      const need = sl.req===1 || (sl.req==='install' && T==='工');
+      const need=dcNeed(sl,T);
       const b=document.createElement('button'); b.type='button'; b.className='pg-slot';
-      const ph=d.photos[sl.k];
-      if(ph){ b.innerHTML='<img src="'+ph+'"><span class="ok-t">✓</span>'; }
+      const url=(S.dcPhotoUrls||{})[sl.k], up=(S.dcUploading||{})[sl.k];
+      if(up){ b.innerHTML='<span class="em">⏳</span><span class="nm">上傳中…</span>'; }
+      else if(url){ b.innerHTML='<img src="'+url+'"><span class="ok-t">✓</span>'; }
+      else if(d.photos[sl.k]){ b.innerHTML='<span class="em">🖼</span><span class="nm">'+esc(sl.nm)+'</span><span class="rq op">已存</span>'; }
       else { b.innerHTML='<span class="em">'+sl.em+'</span><span class="nm">'+esc(sl.nm)+'</span><span class="rq'+(need?'':' op')+'">'+(need?'必拍':'選拍')+'</span>'; }
-      b.onclick=()=>{ S.dcSlot=sl.k; $('dcPhotoInput').click(); };
+      b.onclick=()=>{ if(locked||up) return; S.dcSlot=sl.k; $('dcPhotoInput').click(); };
       g.appendChild(b);
     });
     c4.appendChild(g); B.appendChild(c4);
+
     /* 5 完工 */
     const c5=document.createElement('div'); c5.className='card';
-    if(d.st.doneAt){
-      c5.innerHTML='<div class="sec-t"><span class="n">✓</span>已完工</div><div class="hint">完工時間 '+new Date(d.st.doneAt).toTimeString().slice(0,5)+'。正式版此刻會：照片傳報價單＋寫工務日誌＋LINE 完工卡（測試期只發陳譽昇）。</div>';
+    const dn=d.done||{};
+    if(fin){
+      c5.innerHTML='<div class="sec-t"><span class="n">✓</span>已完工 '+dcHM(st.doneAt)+'</div>'+
+        '<div class="hint">📷 照片已傳報價單：內部 '+(dn.nIn||0)+' 張、給客 '+(dn.nOut||0)+' 張<br>🗂 工務行程日誌 '+esc(dn.logSn||'')+'<br>💬 LINE 完工卡已送出</div>';
     } else {
       c5.innerHTML='<div class="sec-t"><span class="n">5</span>完工送出</div>';
-      const miss=DC_SLOTS.filter(sl=>{ const need=sl.req===1||(sl.req==='install'&&T==='工'); return need && !d.photos[sl.k]; }).map(sl=>sl.nm);
-      const b=document.createElement('button'); b.className='dc-act go'; b.textContent='✅ 完工送出';
-      b.onclick=()=>{
-        if(miss.length && !confirm('測試期不強制：還缺「'+miss.join('、')+'」，仍要完工送出嗎？')) return;
-        dcPatch(d.id,x=>x.st.doneAt=Date.now()); renderDispCard();
-        toast('完工！（正式版此刻自動傳照片＋發完工卡）','ok');
-      };
-      if(miss.length){ const h=document.createElement('div'); h.className='hint'; h.textContent='還缺：'+miss.join('、')+'（測試期仍可送出）'; c5.appendChild(h); }
+      const miss=DC_SLOTS.filter(sl=>dcNeed(sl,T) && !d.photos[sl.k]).map(sl=>sl.nm);
+      if(st.doneAt){
+        const h=document.createElement('div'); h.className='hint'; h.style.color='#b45309';
+        h.textContent='⚠️ 上次送出沒有全部完成：'+((dn.warn||[]).join('；')||'請再送一次');
+        c5.appendChild(h);
+      } else if(miss.length){
+        const h=document.createElement('div'); h.className='hint'; h.textContent='還缺：'+miss.join('、')+'（測試期仍可送出）'; c5.appendChild(h);
+      }
+      const b=document.createElement('button'); b.className='dc-act go'; b.textContent=st.doneAt?'↻ 重送未完成的部分':'✅ 完工送出';
+      b.onclick=()=>{ if(!st.doneAt && miss.length && !confirm('測試期不強制：還缺「'+miss.join('、')+'」，仍要完工送出嗎？')) return; dcComplete(); };
       c5.appendChild(b);
     }
     B.appendChild(c5);
   }
-  /* 刪除(測試) */
-  const del=document.createElement('button'); del.className='dc-act dis'; del.textContent='🗑 刪除這張派工卡（測試用）';
-  del.onclick=()=>{ if(!confirm('刪除這張測試派工卡？'))return; dcSaveAll(dcAll().filter(x=>x.id!==d.id)); closeDispCard(); };
-  B.appendChild(del);
+
+  /* 刪除（限老闆）*/
+  if(isJason()){
+    const del=document.createElement('button'); del.className='dc-act dis'; del.textContent='🗑 刪除這張派工卡';
+    del.onclick=async()=>{
+      if(!confirm(fin?'這張已完工（Ragic 裡的照片與日誌不會被刪），只從派工清單移除？':'刪除這張派工卡？')) return;
+      try{ await dcApi('/dispatch/delete',{id:d.id}); S.dcList=(S.dcList||[]).filter(x=>x.id!==d.id); closeDispCard(); toast('已刪除','ok'); }
+      catch(e){ toast(e.message,'bad'); }
+    };
+    B.appendChild(del);
+  }
 }
 /* 長按拖曳排序（手機 touch + 桌機滑鼠都通）*/
-function dcAttachDrag(row, list, id){
+function dcAttachDrag(row, list){
   let timer=null, ghost=null, startY=0, dragging=false;
   function start(y){
     dragging=true;
@@ -1590,9 +1715,10 @@ function dcAttachDrag(row, list, id){
     dragging=false;
     if(ghost){ ghost.remove(); ghost=null; }
     row.classList.remove('lift');
+    const d=S.dcCur; if(!d) return;
     const order=[...list.children].map(el=>parseInt(el.dataset.i,10));
-    dcPatch(id, x=>{ x.steps=order.map(i=>x.steps[i]); });
-    renderDispCard();
+    d.steps=order.map(i=>d.steps[i]);
+    renderDispCard(); dcQueue('steps');
   }
   row.addEventListener('touchstart', e=>{ startY=e.touches[0].clientY; timer=setTimeout(()=>start(startY), 350); }, {passive:true});
   row.addEventListener('touchmove', e=>{
@@ -1610,22 +1736,56 @@ function dcAttachDrag(row, list, id){
   });
 }
 function dcAddStep(){
-  const el=$('dcNewStep'); const v=(el&&el.value||'').trim(); if(!v) return;
-  dcPatch(S.dcId,x=>x.steps.push({t:v,on:true})); renderDispCard();
+  const el=$('dcNewStep'); const v=(el&&el.value||'').trim(); const d=S.dcCur; if(!v||!d) return;
+  d.steps.push({t:v.slice(0,40),on:true}); renderDispCard(); dcQueue('steps');
 }
-function dcSavePlan(){
-  const d=dcGet(S.dcId); if(!d) return;
-  const deadline=new Date((d.date||'').replace(/\//g,'-')+'T20:00:00'); deadline.setDate(deadline.getDate()-1);
-  const late = Date.now()>deadline.getTime();
-  dcPatch(S.dcId,x=>{ x.st.planAt=Date.now(); x.st.planLate=late; });
-  renderDispCard();
-  toast(late?'規劃已存（超過前一天20:00，記⚠️補規劃）':'規劃已存 ✓ 準時','ok');
+async function dcSavePlan(){
+  const d=S.dcCur; if(!d) return;
+  if(!d.steps.some(s=>s.on)){ toast('至少要有一個步驟','bad'); return; }
+  const first=!(d.st&&d.st.planAt);
+  await dcFlush();
+  const nd=await dcDo('plan', ()=>({steps:S.dcCur? S.dcCur.steps : d.steps}));
+  if(nd) toast(first?(nd.st.planLate?'規劃已存（超過前一天 20:00，記⚠️補規劃）':'規劃已存 ✓ 準時'):'規劃已更新 ✓','ok');
+}
+async function dcComplete(){
+  const d=S.dcCur; if(!d) return;
+  const id=d.id;
+  await dcFlush();
+  showLoad('上傳照片、寫入工務日誌、發完工卡…');
+  await dcEnqueue(async()=>{
+    try{
+      const r=await fetch(CFG.WORKER+'/dispatch/complete',{method:'POST',headers:Object.assign(authHdr(),{'Content-Type':'application/json'}),body:JSON.stringify({id})});
+      if(r.status===401){ wsessClear(); throw new Error('登入逾時，請關掉 App 重新開啟'); }
+      const j=await r.json().catch(()=>({}));
+      hideLoad();
+      if(j.d){ dcAdopt(j.d); dcRepaint(id); }
+      if(j.ok) toast('完工送出 ✓ 照片已進報價單、LINE 完工卡已發','ok');
+      else toast(((j.warn&&j.warn.length)? j.warn.join('；') : (j.reason||'部分未完成'))+'（可按「重送」）','bad');
+    }catch(e){ hideLoad(); toast(e.message||'訊號不穩，完工未送出，請稍後再按一次','bad'); }
+  });
 }
 $('dcPhotoInput') && ($('dcPhotoInput').onchange = async e=>{
   const f=e.target.files[0]; e.target.value='';
-  if(!f||!f.type.startsWith('image/')) return;
-  try{ const p=await compress(f); dcPatch(S.dcId,x=>{ x.photos[S.dcSlot]=p.url; }); renderDispCard(); }
-  catch(err){ toast('照片處理失敗','bad'); }
+  const d=S.dcCur, slot=S.dcSlot;
+  if(!f||!d||!slot||!f.type.startsWith('image/')) return;
+  const id=d.id;
+  S.dcUploading[slot]=1; renderDispCard();
+  let p;
+  try{ p=await compress(f); }catch(err){ delete S.dcUploading[slot]; renderDispCard(); toast('照片處理失敗','bad'); return; }
+  await dcEnqueue(async()=>{
+    try{
+      const r=await fetch(CFG.WORKER+'/dispatch/photo?id='+encodeURIComponent(id)+'&slot='+slot,{method:'POST',headers:Object.assign(authHdr(),{'Content-Type':'image/jpeg'}),body:p.blob});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok||!j.ok) throw new Error(j.reason||('上傳失敗（'+r.status+'）'));
+      if(S.dcCur && S.dcCur.id===id){
+        if(S.dcPhotoUrls[slot]) URL.revokeObjectURL(S.dcPhotoUrls[slot]);
+        S.dcPhotoUrls[slot]=URL.createObjectURL(p.blob);
+        delete S.dcUploading[slot];
+      }
+      dcAdopt(j.d); dcRepaint(id);
+      toast('照片已存 ✓','ok');
+    }catch(err){ if(S.dcUploading) delete S.dcUploading[slot]; dcRepaint(id); toast('照片上傳失敗：'+err.message,'bad'); }
+  });
 });
 
 /* ---------- 啟動 ---------- */
