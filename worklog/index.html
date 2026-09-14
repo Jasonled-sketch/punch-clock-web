@@ -484,7 +484,7 @@
     </div>
 
     <!-- 7 工務評級（外務時顯示）-->
-    <div class="card" id="card_grade">
+    <div class="card" id="card_grade" style="display:none">
       <div class="sec-t"><span class="n">7</span>工務評級<span class="opt" style="margin-left:auto;font-weight:500">選填·難度評分</span></div>
       <div class="grade-result">
         <div class="gr-lv" id="g_lv">Lv.0</div>
@@ -596,8 +596,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.29';
+const APP_VERSION='1.30';
 const CHANGELOG=[
+  'v1.30　2026/09/14',
+  '· 隱藏「工務評級」卡片（改用工務代號制，不再顯示）',
+  '',
   'v1.29　2026/09/14　🚀一條龍派工正式版',
   '· 派工卡存伺服器：老闆派工、工程師手機立刻看得到（換手機也在）',
   '· 規劃/出發/抵達/完工時間由伺服器記錄（前一天 20:00 準時線）',
@@ -1094,7 +1097,7 @@ function renderItem(){
 function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item=''; renderMain(); }
 function applyModeVis(){
   const show = siteShown();
-  ['field_item','card_site','card_grade'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
+  ['field_item','card_site'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
 }
 
 /* ---------- 工務評級 ---------- */
