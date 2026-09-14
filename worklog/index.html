@@ -315,6 +315,14 @@
   #dcSheet .panel{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);max-width:560px;margin:0 auto}
   #dcSheet h3{font-size:16px;margin-bottom:4px}
   #dcSheet .cs{font-size:13px;color:var(--muted);margin-bottom:14px}
+  /* v1.31：現場備註快捷鈕三欄等大／是否收款一排小鈕／照片格刪除鈕 */
+  #siteChips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  #siteChips .chip{border-radius:12px;padding:9px 4px;font-size:12.5px;min-height:46px;text-align:center;line-height:1.25}
+  .pay-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .pay-row label.lb{margin:0}
+  .seg.pay-seg{flex-wrap:nowrap;gap:8px}
+  .seg.pay-seg button{flex:none;width:76px;min-height:38px;padding:7px 0;font-size:14.5px;border-radius:10px}
+  .pg-slot .rm{position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:15px;line-height:24px;text-align:center}
 </style>
 </head>
 <body>
@@ -445,8 +453,8 @@
         </div>
       </div>
       <div class="field">
-        <label class="lb">現場備註<span class="opt">選填</span></label>
-        <textarea id="f_siteNote" placeholder="現場環境、配線、特殊狀況…"></textarea>
+        <label class="lb">現場備註<span class="opt">點選·可複選</span></label>
+        <div class="chips" id="siteChips"></div>
       </div>
     </div>
 
@@ -457,19 +465,21 @@
         <label class="lb">過程紀錄<span class="opt">建議詳填</span></label>
         <textarea id="f_process" class="big" placeholder="施工步驟、用料、工法、配置…（可分行）"></textarea>
       </div>
-      <div class="field">
+      <div class="field pay-row">
         <label class="lb">是否收款</label>
-        <div class="seg" id="seg_pay"></div>
+        <div class="seg pay-seg" id="seg_pay"></div>
       </div>
       <div class="field" id="payNoteWrap" style="display:none">
         <label class="lb">收款金額 $<span class="opt">選填</span></label>
         <input type="number" id="f_payNote" inputmode="decimal" placeholder="例：1600" autocomplete="off">
       </div>
       <div class="field">
-        <label class="lb">現場照片<span class="opt">可多張</span></label>
+        <label class="lb">現場照片<span class="opt">點格子拍照或選相簿</span></label>
+        <div class="pg-grid" id="slotGrid"></div>
         <div class="photos" id="photoGrid"></div>
-        <input type="file" id="photoInput" accept="image/*" multiple capture="environment" class="hidden">
-        <div class="hint">拍照或從相簿選取，系統會自動壓縮後上傳</div>
+        <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
+        <input type="file" id="slotInput" accept="image/*" class="hidden">
+        <div class="hint" id="photoHint">有選任務的案件，送出後照片會同步到報價單（過程照→內部圖片、完工照→給客圖片）</div>
       </div>
     </div>
 
@@ -579,7 +589,6 @@
   <div class="dc-head"><b id="dcTitle">派工卡</b><button onclick="closeDispCard()">✕ 關閉</button></div>
   <div class="dc-body" id="dcBody"></div>
 </div>
-<input type="file" id="dcPhotoInput" accept="image/*" class="hidden"><!-- 無capture:手機原生跳「拍照/相簿」選單,拍好的也能傳 -->
 
 <div id="toast"></div>
 <div id="loading" class="hidden"><div class="spin"></div><div class="lt" id="loadingTxt">處理中…</div></div>
@@ -596,8 +605,15 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.30';
+const APP_VERSION='1.31';
 const CHANGELOG=[
+  'v1.31　2026/09/14',
+  '· 選擇任務：最新日期排最上面',
+  '· 現場備註改快捷按鈕（拆舊機、電工串接、結構鐵架、下雨施作…可複選，可加其他）',
+  '· 是否收款：標題和按鈕縮成一排',
+  '· 現場照片改六格：電源位置／高度梯具／走線路徑／施工中／完工近照／完工遠照；送出後同步到報價單',
+  '· 派工卡只管事前規劃，拿掉照片；到場後按「開始登打今日日誌」自動帶入，日誌送出＝完工並發 LINE 完工卡',
+  '',
   'v1.30　2026/09/14',
   '· 隱藏「工務評級」卡片（改用工務代號制，不再顯示）',
   '',
@@ -1002,6 +1018,7 @@ async function pickCase(v){
     const c=findCase(v); if(!c) return;
     S.dcCase=c; closeCaseModal(); openDispatchSheet(); return;
   }
+  if(S.dcLinkId) S.dcLinkId='';                // 手動換任務＝跟派工卡脫鉤
   if(S.ensuring) return;                       // 建立日誌中,避免連點
   if(S.caseNo===v){ S.caseNo=''; S.logNo=''; S.confirmNo=''; renderCaseSel(); renderCaseList(); return; }   // 再點=取消
   const c=findCase(v); if(!c) return;
@@ -1035,6 +1052,8 @@ function renderCaseSel(){
     '<button type="button" class="x" onclick="pickCase(\''+esc(S.caseNo)+'\')">×</button></div>'+
     (c&&c.desc?'<div class="cs-desc">'+esc(c.desc)+'</div>':'')+'</div>';
 }
+function caseDateKey(c){ const m=String(c.desc||'').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/); if(m) return m[1]+'/'+pad(m[2])+'/'+pad(m[3]); return String(c.date||''); }
+function caseNewestFirst(a,b){ return caseDateKey(b).localeCompare(caseDateKey(a)) || String(b.log||'').localeCompare(String(a.log||'')); }
 function renderCaseList(){
   const box=$('caseList'); if(!box) return;
   const q=(($('caseSearch')||{}).value||'').trim().toUpperCase();
@@ -1043,12 +1062,9 @@ function renderCaseList(){
   const moreBtn=S.allLoaded?'':'<button type="button" onclick="loadCases(1)" style="border:1.5px dashed var(--sky);background:#f8fafc;color:var(--sky-d);border-radius:11px;padding:10px;font-weight:700;font-size:13px;font-family:inherit;width:100%">'+(S.loadingCases?'搜尋中…':'🔍 搜尋更早的任務（較慢）')+'</button>';
   let show;
   if(q){
-    show=all.filter(c=>((c.no||'')+' '+(c.log||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.addr||'')).toUpperCase().includes(q)).slice(0,40);
+    show=all.filter(c=>((c.no||'')+' '+(c.log||'')+' '+(c.desc||'')+' '+(c.cust||'')+' '+(c.addr||'')).toUpperCase().includes(q)).sort(caseNewestFirst).slice(0,40);
   } else {
-    const rec=recentCases().map(n=>findCase(n)).filter(Boolean);
-    const seen={}; show=[];
-    [...rec, ...all.slice(0,12)].forEach(c=>{ if(c&&!seen[c.no]){ seen[c.no]=1; show.push(c); } });
-    show=show.slice(0,12);                                  // 預設列前12筆(10~15清楚為主),搜尋為輔
+    show=all.slice().sort(caseNewestFirst).slice(0,12);   // 最新日期在最上面(2026-09-14 Jason)，搜尋為輔
   }
   if(!show.length){
     box.innerHTML='<div class="none">近兩個月任務查無「'+esc(q)+'」</div>'+moreBtn;
@@ -1098,6 +1114,11 @@ function onModeChange(v){ S.mode=v; S.pick.main=''; S.pick.sub=''; S.pick.item='
 function applyModeVis(){
   const show = siteShown();
   ['field_item','card_site'].forEach(id=>{ const e=$(id); if(e) e.style.display = show? '':'none'; });
+  const sg=$('slotGrid'), fg=$('photoGrid'), ph=$('photoHint');   // 外務＝六格照片；內部/送貨＝自由加照片
+  if(sg) sg.style.display = show? '':'none';
+  if(fg) fg.style.display = show? 'none':'';
+  if(ph) ph.style.display = show? '':'none';
+  if(show) renderSlotPhotos();
 }
 
 /* ---------- 工務評級 ---------- */
@@ -1151,10 +1172,73 @@ function calcGrade(){
   if($('g_breakdown')) $('g_breakdown').textContent='類型'+base+(showArea?(' 面積'+sA):'')+' 梯具'+sH+' 距離'+sKm+' 工時'+sT+' 加項'+sC;
 }
 
+/* ---------- 現場備註快捷鈕（原工務評級「額外狀況」，不帶分數）---------- */
+const SITE_TAGS=['拆舊機-中型','拆舊機-大型','電工-複雜串接','電工-長距配接','額外開關配置','結構鐵架','訊號網路','下雨施作'];
+function buildSiteChips(){
+  const w=$('siteChips'); if(!w) return; w.innerHTML='';
+  S.siteTags=S.siteTags||[];
+  const names=SITE_TAGS.slice(); S.siteTags.forEach(n=>{ if(names.indexOf(n)<0) names.push(n); });
+  names.forEach(n=>{
+    const c=document.createElement('button'); c.type='button'; c.className='chip'+(S.siteTags.indexOf(n)>=0?' on':''); c.textContent=n;
+    c.onclick=()=>{ const i=S.siteTags.indexOf(n); if(i>=0) S.siteTags.splice(i,1); else S.siteTags.push(n); c.classList.toggle('on', i<0); };
+    w.appendChild(c);
+  });
+  const add=document.createElement('button'); add.type='button'; add.className='chip add'; add.textContent='＋ 其他';
+  add.onclick=()=>{ const n=(prompt('輸入現場狀況')||'').trim().slice(0,20); if(!n) return; if(S.siteTags.indexOf(n)<0) S.siteTags.push(n); buildSiteChips(); };
+  w.appendChild(add);
+}
+/* ---------- 現場照片六格（外務）---------- */
+const SLOT_DEF=[
+  {k:'power',em:'⚡',nm:'電源位置',req:1},{k:'high',em:'📏',nm:'高度梯具',req:1},
+  {k:'wire',em:'🔌',nm:'走線路徑',req:'install'},{k:'work',em:'🛠',nm:'施工中',req:0},
+  {k:'near',em:'✅',nm:'完工近照',req:1},{k:'far',em:'🏞',nm:'完工遠照',req:1}
+];
+function renderSlotPhotos(){
+  const g=$('slotGrid'); if(!g) return; g.innerHTML='';
+  S.slotPhotos=S.slotPhotos||{};
+  const inst=S.pick.main==='安裝';
+  SLOT_DEF.forEach(sl=>{
+    const need=sl.req===1||(sl.req==='install'&&inst);
+    const ph=S.slotPhotos[sl.k];
+    const b=document.createElement('button'); b.type='button'; b.className='pg-slot';
+    if(ph) b.innerHTML='<img src="'+ph.url+'"><span class="ok-t">✓</span><span class="rm">×</span>';
+    else b.innerHTML='<span class="em">'+sl.em+'</span><span class="nm">'+sl.nm+'</span><span class="rq'+(need?'':' op')+'">'+(need?'必拍':'選拍')+'</span>';
+    b.onclick=e=>{ if(ph && e.target.classList.contains('rm')){ delete S.slotPhotos[sl.k]; renderSlotPhotos(); return; } S.curSlot=sl.k; $('slotInput').click(); };
+    g.appendChild(b);
+  });
+}
+$('slotInput') && ($('slotInput').onchange = async e=>{
+  const f=e.target.files[0]; e.target.value='';
+  if(!f||!f.type.startsWith('image/')||!S.curSlot) return;
+  try{ S.slotPhotos[S.curSlot]=await compress(f); renderSlotPhotos(); }catch(err){ toast('照片處理失敗','bad'); }
+});
+/* 日誌送出成功後：六格照片同步到該案報價單；若是從派工卡帶入的，記完工並發 LINE 完工卡 */
+async function afterLogSaved(sn, p){
+  const caseNo=S.caseNo, linkId=S.dcLinkId;
+  let nIn=0, nOut=0, qErr='';
+  const slots=(p.photos||[]).filter(ph=>ph && ph.k && (S.slotPhotos||{})[ph.k]);
+  if(caseNo && slots.length){
+    showLoad('照片同步到報價單…');
+    try{
+      const fd=new FormData(); fd.append('caseNo', caseNo);
+      slots.forEach(ph=>fd.append(ph.k, S.slotPhotos[ph.k].blob, ph.n+'.jpg'));
+      const r=await fetch(CFG.WORKER+'/worklog-quote-photos',{method:'POST',headers:authHdr(),body:fd});
+      const j=await r.json().catch(()=>({}));
+      if(j.ok){ nIn=j.nIn||0; nOut=j.nOut||0; } else qErr=j.reason||('HTTP '+r.status);
+    }catch(e){ qErr='訊號不穩'; }
+  }
+  if(linkId){
+    showLoad('發送完工卡…');
+    try{ await dcApi('/dispatch/complete',{id:linkId, logSn:sn, nIn, nOut, warn:qErr}); }catch(e){}
+    S.dcLinkId=''; S.dcList=null;
+  }
+  if(qErr) toast('日誌已送出，但照片同步報價單失敗：'+qErr,'bad');
+}
+
 /* ---------- 建立／重置表單 ---------- */
 function buildForm(){
   $('f_date').value = todayStr();
-  S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務';
+  S.pick={}; S.seg={}; S.coworkers=[]; S.checks={}; S.photos=[]; S.mode='🌄外務'; S.siteTags=[]; S.slotPhotos={}; S.dcLinkId='';
   S.caseNo=''; S.logNo=''; S.ensuring=''; S.confirmNo=''; if($('caseSearch')) $('caseSearch').value=''; renderCaseSel(); renderCaseList();
   buildPick('pick_lead','lead', CFG.LEADS.slice(), {def:S.myName, clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
   if(S.pick.lead && S.coworkers.indexOf(S.pick.lead)<0) S.coworkers.push(S.pick.lead);   // 預設主任自動帶入協作員
@@ -1169,8 +1253,9 @@ function buildForm(){
   buildChecks();
   buildGrade();
   renderPhotos();
+  buildSiteChips();
   applyModeVis();
-  ['f_subject','f_arrive','f_leave','f_height','f_ladder','f_payNote','f_siteNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
+  ['f_subject','f_arrive','f_leave','f_height','f_ladder','f_payNote','f_process','f_aar'].forEach(id=>{ const el=$(id); if(el) el.value=''; });
 }
 
 /* ---------- 照片 ---------- */
@@ -1242,7 +1327,7 @@ function buildPayload(){
     f.push([F.volt,S.seg.volt]);
     if($('f_height').value) f.push([F.height,$('f_height').value]);
     if($('f_ladder').value) f.push([F.ladder,$('f_ladder').value]);
-    if($('f_siteNote').value.trim()) f.push([F.siteNote,$('f_siteNote').value.trim()]);
+    if((S.siteTags||[]).length) f.push([F.siteNote, S.siteTags.join('、')]);
     if(F.workLevel){   // 外務一律寫入分數(提成依據,不可漏)。涼水費=依工程等級(Lv)另給,等級定義未定案前不顯示不寫入
       const q=S.grade.quick?(S.grade.quick+'｜'):'';
       f.push([F.workLevel, q+S.grade.score+'分（Lv.'+S.grade.lv+'）']);
@@ -1251,10 +1336,13 @@ function buildPayload(){
   if($('f_process').value.trim()) f.push([F.process,$('f_process').value.trim()]);
   if($('f_aar').value.trim())     f.push([F.aar,$('f_aar').value.trim()]);
   CFG.CHECKS.forEach(c=>f.push([F[c.k],S.checks[c.k]]));
-  return { fields:f, photos:S.photos.map(p=>p.url), lead:(S.pick.lead||'').trim() };
+  const photos = need
+    ? SLOT_DEF.filter(sl=>(S.slotPhotos||{})[sl.k]).map(sl=>({k:sl.k, n:sl.nm, u:S.slotPhotos[sl.k].url}))
+    : S.photos.map((p,i)=>({n:'照片'+(i+1), u:p.url}));
+  return { fields:f, photos, lead:(S.pick.lead||'').trim() };
 }
 function dataURLtoBlob(u){ const a=u.split(','),mime=(a[0].match(/:(.*?);/)||[])[1]||'image/jpeg',bin=atob(a[1]),n=bin.length,arr=new Uint8Array(n); for(let i=0;i<n;i++)arr[i]=bin.charCodeAt(i); return new Blob([arr],{type:mime}); }
-function payloadToFD(p){ const fd=new FormData(); p.fields.forEach(kv=>fd.append(kv[0],kv[1])); (p.photos||[]).forEach((du,i)=>{ try{ fd.append(CFG.F.photo, dataURLtoBlob(du), 'wl_'+i+'.jpg'); }catch(e){} }); return fd; }
+function payloadToFD(p){ const fd=new FormData(); p.fields.forEach(kv=>fd.append(kv[0],kv[1])); (p.photos||[]).forEach((ph,i)=>{ try{ const u=typeof ph==='string'?ph:ph.u, n=typeof ph==='string'?('wl_'+i):ph.n; fd.append(CFG.F.photo, dataURLtoBlob(u), n+'.jpg'); }catch(e){} }); return fd; }
 async function sendPayload(p){
   const r=await callRagic('?api&doFormula=true', { method:'POST', body:payloadToFD(p) });
   if(r.status===401){ wsessClear(); return { auth:false }; }   // 通行證過期:清證→重登入會自動換新證
@@ -1276,7 +1364,7 @@ async function submitLog(){
   try{
     const res=await sendPayload(p);
     if(res.auth===false){ hideLoad(); $('submitBtn').disabled=false; toast('登入逾時，請重新登入','bad'); google.accounts.id.prompt(); return; }
-    if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); hideLoad(); showDone(res.sn); }
+    if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); await afterLogSaved(res.sn, p); hideLoad(); showDone(res.sn); }
     else { hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+res.msg,'bad'); }
   }catch(e){
     savePending(p);
@@ -1294,8 +1382,8 @@ async function resendPending(){
 }
 
 function showDone(sn){ $('doneSn').textContent=sn; $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden'); $('submitBtn').disabled=false; }
-function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); $('f_subject').focus(); }
-function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); }
+function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); renderDispatchHome(); $('f_subject').focus(); }
+function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); renderDispatchHome(); }
 
 /* ---------- 協做員名單自動長（讀最近 200 筆日誌學新同事名字）----------
    「我的近期日誌」卡片已移除（2026-09-11 Jason：沒有意義），只保留這個名單同步 */
@@ -1314,9 +1402,8 @@ async function loadRecent(){
 }
 
 /* ==================== 一條龍派工（2026-09-14 正式版）====================
-   派工卡存伺服器（換手機也看得到），規劃/出發/抵達/完工時間一律由伺服器記。
-   完工一次寫進 Ragic：照片→報價單（內部圖片＝過程照、給客圖片＝完工照；實測是追加，不會洗掉原本的照片）、
-   工務行程日誌自動一筆、LINE 完工卡（測試期只發陳譽昇）。 */
+   派工卡＝事前規劃：施工步驟、工具預勾＋出發前覆核、出發/抵達（時間一律由伺服器記）。
+   到場後的照片與過程在工務日誌登打：按「開始登打今日日誌」自動帶入；日誌送出＝完工，發 LINE 完工卡（測試期只發陳譽昇）。 */
 const DC_STEPS = {   // 基本 5 節點就好,多的工程師自己加(2026-09-08 Jason 微調)
   '工': ['定位放樣','鑽孔上架','掛屏固定','走線接電','亮屏測試'],
   '修': ['問診複現','斷電拆檢','更換零件','測試驗證','覆機教學']
@@ -1338,16 +1425,11 @@ const DC_PRESEL = {   // 依案型自動預圈
   '修': {basic:['電工十寶','字幕七寶'], mat:['A維修箱','清潔包'], aux:['工作腰包','延長線(小/大)','頭燈']},
   '工': {power:['18v起子機M款','18v鎚壁鑽'], basic:['電工十寶','字幕七寶'], aux:['工作腰包','延長線(小/大)','水平尺','矽利康槍+膠'], mat:['綜合料箱','六角螺絲箱','清潔包']}
 };
-const DC_SLOTS = [
-  {k:'power',em:'⚡',nm:'電源位置',req:1},{k:'high',em:'📏',nm:'高度梯具',req:1},
-  {k:'wire',em:'🔌',nm:'走線路徑',req:'install'},{k:'work',em:'🛠',nm:'施工中',req:0},
-  {k:'near',em:'✅',nm:'完工近照',req:1},{k:'far',em:'🏞',nm:'完工遠照',req:1}
-];
-const DC_STAGE_NM=['📝規劃','🧰覆核','🚗出發','📍抵達','📷照片','✅完工'];
+const DC_STAGE_NM=['📝規劃','🧰覆核','🚗出發','📍抵達','📝登打日誌'];
 function isJason(){ return S.user && S.user.email==='covernself@gmail.com'; }
 function dcType(d){ const c=String((d&&d.code)||''); if(c) return c.charAt(0)==='修'?'修':'工'; return /維修/.test(String((d&&d.desc)||''))?'修':'工'; }
 function dcFinished(d){ return !!(d&&d.done&&d.done.finishedAt); }
-function dcStage(d){
+function dcStage(d){   // 0規劃 1覆核 2出發 3抵達 4登打日誌 5全部完成
   const s=(d&&d.st)||{};
   if(dcFinished(d)) return 5;
   if(s.arriveAt) return 4;
@@ -1357,7 +1439,6 @@ function dcStage(d){
   return 0;
 }
 function dcHM(ms){ const d=new Date(ms); return pad(d.getHours())+':'+pad(d.getMinutes()); }
-function dcNeed(sl,T){ return sl.req===1 || (sl.req==='install' && T==='工'); }
 
 /* ---- 伺服器呼叫：所有會改卡片的動作排隊一個一個送，避免兩個請求同時寫把對方蓋掉 ---- */
 async function dcApi(path, json){
@@ -1431,7 +1512,7 @@ function paintDispatchHome(){
     b.innerHTML='<div class="st">'+(stg===5?'✅':(dcType(d)==='修'?'🔧':'🔨'))+'</div>'+
       '<div class="tx"><b>'+esc(d.date)+'｜'+esc(d.cust||d.no)+(d.code?'　'+esc(d.code):'')+'</b>'+
       '<small>'+esc((isJason()?'👷'+d.eng+'｜':'')+(d.desc||''))+'</small></div>'+
-      '<span class="'+pgCls+'">'+(part?'⚠️補送':DC_STAGE_NM[stg])+'</span>';
+      '<span class="'+pgCls+'">'+(part?'⚠️補發完工卡':(stg===5?'✅完工':DC_STAGE_NM[stg]))+'</span>';
     b.onclick=()=>openDispCard(d.id);
     box.appendChild(b);
   });
@@ -1471,35 +1552,21 @@ async function createDispatch(){
 /* ---- 派工卡 ---- */
 function openDispCard(id){
   const d=(S.dcList||[]).find(x=>x.id===id); if(!d) return;
-  S.dcCur=d; S.dcPhotoUrls={}; S.dcUploading={};
+  S.dcCur=d;
   $('dcModal').classList.remove('hidden'); $('dcModal').scrollTop=0;
   renderDispCard();
-  dcRefresh().then(dcLoadPhotos);
+  dcRefresh();
 }
 function closeDispCard(){
   dcFlush();
-  Object.values(S.dcPhotoUrls||{}).forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} });
-  S.dcPhotoUrls={}; S.dcUploading={};
   $('dcModal').classList.add('hidden'); S.dcCur=null;
   paintDispatchHome();
-}
-async function dcLoadPhotos(){
-  const d=S.dcCur; if(!d) return;
-  for(const sl of DC_SLOTS){
-    if(!d.photos || !d.photos[sl.k] || (S.dcPhotoUrls||{})[sl.k]) continue;
-    try{
-      const r=await fetch(CFG.WORKER+'/dispatch/photo?id='+encodeURIComponent(d.id)+'&slot='+sl.k,{headers:authHdr()});
-      if(!r.ok) continue;
-      const u=URL.createObjectURL(await r.blob());
-      if(S.dcCur && S.dcCur.id===d.id){ S.dcPhotoUrls[sl.k]=u; renderDispCard(); } else URL.revokeObjectURL(u);
-    }catch(e){}
-  }
 }
 function dcMapLink(d){ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(d.addr||d.cust||''); }
 function renderDispCard(){
   const d=S.dcCur; if(!d) return;
   const stg=dcStage(d), T=dcType(d), fin=dcFinished(d), st=d.st||{};
-  d.steps=d.steps||[]; d.tools=d.tools||{}; d.recheck=d.recheck||{}; d.photos=d.photos||{};
+  d.steps=d.steps||[]; d.tools=d.tools||{}; d.recheck=d.recheck||{};
   $('dcTitle').textContent='派工卡｜'+(d.cust||d.no);
   const B=$('dcBody'); B.innerHTML='';
   /* 資訊 */
@@ -1633,53 +1700,31 @@ function renderDispCard(){
     c3.appendChild(b); B.appendChild(c3);
   }
 
-  /* 4 照片格 */
+  /* 4 完工＝登打工務日誌（照片、過程都在日誌拍/寫）*/
   if(st.arriveAt){
-    const locked = fin || !!(d.done && d.done.photosOk);
     const c4=document.createElement('div'); c4.className='card';
-    c4.innerHTML='<div class="sec-t"><span class="n">4</span>照片檢點格 <span class="dc-badge">'+(locked?'已傳報價單':'測試期不強制')+'</span></div>';
-    const g=document.createElement('div'); g.className='pg-grid';
-    DC_SLOTS.forEach(sl=>{
-      const need=dcNeed(sl,T);
-      const b=document.createElement('button'); b.type='button'; b.className='pg-slot';
-      const url=(S.dcPhotoUrls||{})[sl.k], up=(S.dcUploading||{})[sl.k];
-      if(up){ b.innerHTML='<span class="em">⏳</span><span class="nm">上傳中…</span>'; }
-      else if(url){ b.innerHTML='<img src="'+url+'"><span class="ok-t">✓</span>'; }
-      else if(d.photos[sl.k]){ b.innerHTML='<span class="em">🖼</span><span class="nm">'+esc(sl.nm)+'</span><span class="rq op">已存</span>'; }
-      else { b.innerHTML='<span class="em">'+sl.em+'</span><span class="nm">'+esc(sl.nm)+'</span><span class="rq'+(need?'':' op')+'">'+(need?'必拍':'選拍')+'</span>'; }
-      b.onclick=()=>{ if(locked||up) return; S.dcSlot=sl.k; $('dcPhotoInput').click(); };
-      g.appendChild(b);
-    });
-    c4.appendChild(g); B.appendChild(c4);
-
-    /* 5 完工 */
-    const c5=document.createElement('div'); c5.className='card';
     const dn=d.done||{};
     if(fin){
-      c5.innerHTML='<div class="sec-t"><span class="n">✓</span>已完工 '+dcHM(st.doneAt)+'</div>'+
-        '<div class="hint">📷 照片已傳報價單：內部 '+(dn.nIn||0)+' 張、給客 '+(dn.nOut||0)+' 張<br>🗂 工務行程日誌 '+esc(dn.logSn||'')+'<br>💬 LINE 完工卡已送出</div>';
+      c4.innerHTML='<div class="sec-t"><span class="n">✓</span>已完工 '+dcHM(st.doneAt)+'</div>'+
+        '<div class="hint">🗂 工務日誌 '+esc(dn.logSn||'')+'<br>📷 報價單照片：內部 '+(dn.nIn||0)+' 張、給客 '+(dn.nOut||0)+' 張<br>💬 LINE 完工卡已送出</div>';
+    } else if(st.doneAt){
+      c4.innerHTML='<div class="sec-t"><span class="n">4</span>完工</div><div class="hint" style="color:#b45309">⚠️ 工務日誌已送出（'+esc(dn.logSn||'')+'），但 LINE 完工卡還沒發成功</div>';
+      const b=document.createElement('button'); b.className='dc-act go'; b.textContent='↻ 重發完工卡'; b.onclick=()=>dcResendDone();
+      c4.appendChild(b);
     } else {
-      c5.innerHTML='<div class="sec-t"><span class="n">5</span>完工送出</div>';
-      const miss=DC_SLOTS.filter(sl=>dcNeed(sl,T) && !d.photos[sl.k]).map(sl=>sl.nm);
-      if(st.doneAt){
-        const h=document.createElement('div'); h.className='hint'; h.style.color='#b45309';
-        h.textContent='⚠️ 上次送出沒有全部完成：'+((dn.warn||[]).join('；')||'請再送一次');
-        c5.appendChild(h);
-      } else if(miss.length){
-        const h=document.createElement('div'); h.className='hint'; h.textContent='還缺：'+miss.join('、')+'（測試期仍可送出）'; c5.appendChild(h);
-      }
-      const b=document.createElement('button'); b.className='dc-act go'; b.textContent=st.doneAt?'↻ 重送未完成的部分':'✅ 完工送出';
-      b.onclick=()=>{ if(!st.doneAt && miss.length && !confirm('測試期不強制：還缺「'+miss.join('、')+'」，仍要完工送出嗎？')) return; dcComplete(); };
-      c5.appendChild(b);
+      c4.innerHTML='<div class="sec-t"><span class="n">4</span>完工：登打工務日誌</div>'+
+        '<div class="hint">照片與過程在工務日誌登打。按下面會自動帶入案件、日期、主任、抵達時間和施工步驟，拍完照送出就算完工。</div>';
+      const b=document.createElement('button'); b.className='dc-act go'; b.textContent='📝 開始登打今日日誌'; b.onclick=()=>dcGoLog(d);
+      c4.appendChild(b);
     }
-    B.appendChild(c5);
+    B.appendChild(c4);
   }
 
   /* 刪除（限老闆）*/
   if(isJason()){
     const del=document.createElement('button'); del.className='dc-act dis'; del.textContent='🗑 刪除這張派工卡';
     del.onclick=async()=>{
-      if(!confirm(fin?'這張已完工（Ragic 裡的照片與日誌不會被刪），只從派工清單移除？':'刪除這張派工卡？')) return;
+      if(!confirm(fin?'這張已完工（Ragic 裡的日誌與照片不會被刪），只從派工清單移除？':'刪除這張派工卡？')) return;
       try{ await dcApi('/dispatch/delete',{id:d.id}); S.dcList=(S.dcList||[]).filter(x=>x.id!==d.id); closeDispCard(); toast('已刪除','ok'); }
       catch(e){ toast(e.message,'bad'); }
     };
@@ -1750,46 +1795,40 @@ async function dcSavePlan(){
   const nd=await dcDo('plan', ()=>({steps:S.dcCur? S.dcCur.steps : d.steps}));
   if(nd) toast(first?(nd.st.planLate?'規劃已存（超過前一天 20:00，記⚠️補規劃）':'規劃已存 ✓ 準時'):'規劃已更新 ✓','ok');
 }
-async function dcComplete(){
+/* 派工卡 → 工務日誌表單：帶入案件/日期/主任/抵達時間/主類別/施工步驟，送出日誌＝完工 */
+function dcGoLog(d){
+  closeDispCard();
+  const st=d.st||{}, T=dcType(d);
+  if(d.date){ $('f_date').value=d.date.replace(/\//g,'-'); updateWeekday(); }
+  if(d.eng && CFG.LEADS.indexOf(d.eng)>=0){
+    S.pick.lead=d.eng;
+    buildPick('pick_lead','lead', CFG.LEADS.slice(), {clearable:false, custom:false, prompt:'主任', onpick:onLeadPick});
+    onLeadPick(d.eng);
+  }
+  if(!findCase(d.no)) (S.cases=S.cases||[]).unshift({log:d.log||null, no:d.no, desc:d.desc, cust:d.cust, code:d.code, used:0});
+  S.caseNo=d.no; S.logNo=d.log||''; renderCaseSel();
+  if(!$('f_subject').value.trim()) $('f_subject').value=String(d.desc||d.cust||'').replace(/^\d{4}\/\d{1,2}\/\d{1,2}-/,'');
+  if(st.arriveAt && !$('f_arrive').value) $('f_arrive').value=dcHM(st.arriveAt);
+  if(S.mode!=='🌄外務'){ buildSeg('seg_io','io', CFG.IO, '🌄外務', onModeChange); S.mode='🌄外務'; }
+  S.pick.main = T==='修'?'維修':'安裝'; S.pick.sub=''; S.pick.item=ITEM_DEFAULT[S.pick.main]||'';
+  renderMain();
+  if(!$('f_process').value.trim()) $('f_process').value=(d.steps||[]).filter(s=>s.on).map((s,i)=>(i+1)+'. '+s.t).join(String.fromCharCode(10));
+  S.dcLinkId=d.id;
+  window.scrollTo(0,0);
+  toast('已帶入派工卡：拍照、補過程後送出即完工','ok');
+}
+async function dcResendDone(){
   const d=S.dcCur; if(!d) return;
   const id=d.id;
-  await dcFlush();
-  showLoad('上傳照片、寫入工務日誌、發完工卡…');
   await dcEnqueue(async()=>{
     try{
       const r=await fetch(CFG.WORKER+'/dispatch/complete',{method:'POST',headers:Object.assign(authHdr(),{'Content-Type':'application/json'}),body:JSON.stringify({id})});
-      if(r.status===401){ wsessClear(); throw new Error('登入逾時，請關掉 App 重新開啟'); }
       const j=await r.json().catch(()=>({}));
-      hideLoad();
       if(j.d){ dcAdopt(j.d); dcRepaint(id); }
-      if(j.ok) toast('完工送出 ✓ 照片已進報價單、LINE 完工卡已發','ok');
-      else toast(((j.warn&&j.warn.length)? j.warn.join('；') : (j.reason||'部分未完成'))+'（可按「重送」）','bad');
-    }catch(e){ hideLoad(); toast(e.message||'訊號不穩，完工未送出，請稍後再按一次','bad'); }
+      toast(j.ok?'完工卡已發 ✓':'還是沒發成功，請稍後再試', j.ok?'ok':'bad');
+    }catch(e){ toast('訊號不穩，請稍後再試','bad'); }
   });
 }
-$('dcPhotoInput') && ($('dcPhotoInput').onchange = async e=>{
-  const f=e.target.files[0]; e.target.value='';
-  const d=S.dcCur, slot=S.dcSlot;
-  if(!f||!d||!slot||!f.type.startsWith('image/')) return;
-  const id=d.id;
-  S.dcUploading[slot]=1; renderDispCard();
-  let p;
-  try{ p=await compress(f); }catch(err){ delete S.dcUploading[slot]; renderDispCard(); toast('照片處理失敗','bad'); return; }
-  await dcEnqueue(async()=>{
-    try{
-      const r=await fetch(CFG.WORKER+'/dispatch/photo?id='+encodeURIComponent(id)+'&slot='+slot,{method:'POST',headers:Object.assign(authHdr(),{'Content-Type':'image/jpeg'}),body:p.blob});
-      const j=await r.json().catch(()=>({}));
-      if(!r.ok||!j.ok) throw new Error(j.reason||('上傳失敗（'+r.status+'）'));
-      if(S.dcCur && S.dcCur.id===id){
-        if(S.dcPhotoUrls[slot]) URL.revokeObjectURL(S.dcPhotoUrls[slot]);
-        S.dcPhotoUrls[slot]=URL.createObjectURL(p.blob);
-        delete S.dcUploading[slot];
-      }
-      dcAdopt(j.d); dcRepaint(id);
-      toast('照片已存 ✓','ok');
-    }catch(err){ if(S.dcUploading) delete S.dcUploading[slot]; dcRepaint(id); toast('照片上傳失敗：'+err.message,'bad'); }
-  });
-});
 
 /* ---------- 啟動 ---------- */
 function boot(){
