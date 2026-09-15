@@ -203,6 +203,12 @@
   #doneView h2{font-size:23px;font-weight:800}
   #doneView .sn{font-size:15px;color:var(--muted);margin:8px 0 30px}
   #doneView .sn b{color:var(--sky-d);font-size:18px}
+  #doneStats{width:100%;max-width:340px;margin:-16px 0 26px;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px 16px;text-align:left;font-size:14.5px;line-height:1.9}
+  #doneStats .row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid #f1f5f9;padding:4px 0}
+  #doneStats .row:last-child{border-bottom:none}
+  #doneStats .k{color:var(--muted);font-weight:600;flex:none}
+  #doneStats .v{font-weight:800;color:var(--ink);text-align:right}
+  #doneStats .v.ok{color:var(--ok)}#doneStats .v.warn{color:#b45309}#doneStats .v.bad{color:var(--bad)}
   #doneView .acts{display:flex;flex-direction:column;gap:11px;width:100%;max-width:300px}
   #doneView button{border:none;padding:16px;border-radius:13px;font-size:16px;font-weight:700;font-family:inherit}
   #doneView .pri{background:var(--sky);color:#fff}
@@ -535,6 +541,7 @@
   <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div>
   <h2>日誌已送出！</h2>
   <div class="sn">流水序號 <b id="doneSn">—</b></div>
+  <div id="doneStats" class="hidden"></div>
   <div class="acts">
     <button class="pri" onclick="newLog()">再登打一筆</button>
     <button class="sec" onclick="backToForm()">返回查看</button>
@@ -605,8 +612,11 @@ function showFatal(msg){
 }
 window.addEventListener('error', function(ev){ if(ev&&ev.target&&ev.target!==window) return; showFatal((ev&&ev.message)||'未知錯誤'); });
 
-const APP_VERSION='1.31';
+const APP_VERSION='1.32';
 const CHANGELOG=[
+  'v1.32　2026/09/15',
+  '· 日誌送出後顯示：本案第 N 趟、本月已登打 N 趟、事前規劃／出發覆核／必拍照片、增益獎金條件是否成立',
+  '',
   'v1.31　2026/09/14',
   '· 選擇任務：最新日期排最上面',
   '· 現場備註改快捷按鈕（拆舊機、電工串接、結構鐵架、下雨施作…可複選，可加其他）',
@@ -1364,7 +1374,7 @@ async function submitLog(){
   try{
     const res=await sendPayload(p);
     if(res.auth===false){ hideLoad(); $('submitBtn').disabled=false; toast('登入逾時，請重新登入','bad'); google.accounts.id.prompt(); return; }
-    if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); await afterLogSaved(res.sn, p); hideLoad(); showDone(res.sn); }
+    if(res.ok){ localStorage.setItem('wl_myname', p.lead); localStorage.removeItem('wl_pending'); const stats=buildDoneStats(p); await afterLogSaved(res.sn, p); hideLoad(); showDone(res.sn, stats); }
     else { hideLoad(); $('submitBtn').disabled=false; toast('送出失敗：'+res.msg,'bad'); }
   }catch(e){
     savePending(p);
@@ -1381,7 +1391,38 @@ async function resendPending(){
   }catch(e){}
 }
 
-function showDone(sn){ $('doneSn').textContent=sn; $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden'); $('submitBtn').disabled=false; }
+function showDone(sn, stats){
+  $('doneSn').textContent=sn;
+  const box=$('doneStats');
+  if(box){ if(stats&&stats.length){ box.innerHTML=stats.map(r=>'<div class="row"><span class="k">'+esc(r.k)+'</span><span class="v '+(r.c||'')+'">'+esc(r.v)+'</span></div>').join(''); box.classList.remove('hidden'); } else box.classList.add('hidden'); }
+  $('appView').classList.add('hidden'); $('doneView').classList.remove('hidden'); $('submitBtn').disabled=false;
+}
+/* 送出回饋：本案第 N 趟／本月已登打 N 趟／增益獎金條件（讓工程師看得到自己的錢；2026-09-15 Jason 定案）
+   ⚠ 涼水金一案一次只看程度不看趟數，這裡的「獎金條件」指效率增益獎金。派工卡狀態在 afterLogSaved 清掉前先算。 */
+function buildDoneStats(p){
+  const out=[];
+  const c=S.caseNo? findCase(S.caseNo):null;
+  if(c){ const n=(c.used||0)+1; out.push({k:'本案登打', v:'第 '+n+' 趟'+(n>1?'（同案累計）':''), c:''}); }
+  const lead=(p&&p.lead)||S.myName||'';
+  const ym=($('f_date').value||todayStr()).slice(0,7).replace('-','/');
+  const cached=readRecentCache()||[];
+  const mine=cached.filter(x=>(x['負責主任']||'')===lead && String(x['執行日期']||'').startsWith(ym));
+  out.push({k:ym.slice(5)+' 月已登打', v:(mine.length+1)+' 趟（含本筆）', c:''});
+  const d=S.dcLinkId? (S.dcList||[]).find(x=>x.id===S.dcLinkId):null;
+  if(d){
+    const st=d.st||{};
+    out.push({k:'事前規劃', v: st.planAt? (st.planLate?'⚠️ 補規劃':'✅ 準時') : '❌ 未規劃', c: st.planAt?(st.planLate?'warn':'ok'):'bad'});
+    out.push({k:'出發覆核', v: st.preDoneAt? (st.departUnchecked?'⚠️ '+st.departUnchecked+' 項未覆核':'✅ 全數覆核') : '❌ 未覆核', c: st.preDoneAt?(st.departUnchecked?'warn':'ok'):'bad'});
+    const inst=S.pick.main==='安裝';
+    const miss=SLOT_DEF.filter(sl=>(sl.req===1||(sl.req==='install'&&inst)) && !(S.slotPhotos||{})[sl.k]).map(sl=>sl.nm);
+    out.push({k:'必拍照片', v: miss.length? '⚠️ 缺 '+miss.join('、') : '✅ 齊全', c: miss.length?'warn':'ok'});
+    const allOk = st.planAt && !st.planLate && st.preDoneAt && !st.departUnchecked && !miss.length;
+    out.push({k:'增益獎金條件', v: allOk? '✅ 本趟成立' : '⚠️ 本趟未全部達標', c: allOk?'ok':'warn'});
+  } else if(c){
+    out.push({k:'增益獎金條件', v:'未經派工卡，以派工紀錄為準', c:''});
+  }
+  return out;
+}
 function newLog(){ buildForm(); $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); window.scrollTo(0,0); loadRecent(); renderDispatchHome(); $('f_subject').focus(); }
 function backToForm(){ $('doneView').classList.add('hidden'); $('appView').classList.remove('hidden'); loadRecent(); renderDispatchHome(); }
 
