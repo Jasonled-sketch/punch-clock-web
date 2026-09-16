@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>保固 QR 標籤產生器｜內部使用</title>
+<style>
+:root{--bg:#eef5fb;--surface:#fff;--surface2:#f6fafd;--border:#cfe0ee;--text:#14304a;
+  --muted:#617f9b;--sky:#0b72c4;--sky-d:#065a9e;--sh:0 1px 3px rgba(11,114,196,.09)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.7;
+  font-family:-apple-system,"Noto Sans TC","Microsoft JhengHei",sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:18px 15px 60px}
+h1{font-size:20px;margin:0 0 3px;font-weight:900}
+.sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:17px;
+  margin-bottom:15px;box-shadow:var(--sh)}
+.panel h2{font-size:15px;margin:0 0 12px;font-weight:900;color:var(--sky-d)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:11px}
+label.f{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bottom:4px}
+input,select{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;
+  font-size:14.5px;font-family:inherit;background:var(--surface2);color:var(--text)}
+input:focus,select:focus{outline:none;border-color:var(--sky);background:#fff;box-shadow:0 0 0 3px rgba(11,114,196,.13)}
+.btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}
+button{font-family:inherit;font-size:14px;font-weight:800;border:none;border-radius:9px;
+  padding:10px 17px;cursor:pointer}
+.b1{background:var(--sky);color:#fff}.b1:hover{background:var(--sky-d)}
+.b2{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+.hint{font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.7}
+.hint code{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 5px;
+  font-size:11.5px;word-break:break-all}
+
+/* ── 標籤本體（列印用） ── */
+#sheet{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.label{background:#fff;border:1.5px solid #14304a;border-radius:7px;padding:9px 11px;
+  display:flex;gap:11px;align-items:center;break-inside:avoid;page-break-inside:avoid}
+.label .qr{flex:0 0 auto;width:96px;height:96px}
+.label .qr svg{width:100%;height:100%;display:block}
+.label .tx{flex:1;min-width:0}
+.label .bnd{font-size:12px;font-weight:900;color:#0b72c4;letter-spacing:.6px;line-height:1.25}
+.label .bnd small{display:block;font-size:9px;color:#617f9b;font-weight:700;letter-spacing:0}
+.label .ttl{font-size:13.5px;font-weight:900;margin:5px 0 3px;line-height:1.3}
+.label .sn{font-size:10.5px;color:#334d66;font-family:ui-monospace,Consolas,monospace;
+  word-break:break-all;line-height:1.45}
+.label .cta{font-size:9.5px;color:#617f9b;margin-top:4px;line-height:1.4}
+.empty{color:var(--muted);font-size:13px;text-align:center;padding:26px 0}
+
+@media print{
+  body{background:#fff}
+  .panel,.sub,h1,.noprint{display:none!important}
+  .wrap{max-width:none;padding:0}
+  #sheet{grid-template-columns:repeat(2,1fr);gap:6mm}
+  .label{border-color:#000}
+  @page{margin:10mm}
+}
+@media(max-width:560px){#sheet{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🏷️ 保固 QR 標籤產生器</h1>
+  <p class="sub">內部使用。產生貼在機身背面的保固 QR 標籤，客戶掃描後直接開啟保固條款頁。QR 於瀏覽器本機產生，不經任何外部服務。</p>
+
+  <div class="panel noprint">
+    <h2>1. 設定</h2>
+    <div class="grid">
+      <div style="grid-column:1/-1">
+        <label class="f" for="base">保固條款網址</label>
+        <input type="text" id="base" value="https://jasonled-sketch.github.io/punch-clock-web/warranty/">
+      </div>
+      <div><label class="f" for="model">型號（選填，會帶入表單）</label><input type="text" id="model" placeholder="例：UM4C-3216"></div>
+      <div><label class="f" for="ecl">錯誤更正等級</label>
+        <select id="ecl"><option value="L">L（7%）</option><option value="M" selected>M（15%，建議）</option>
+        <option value="Q">Q（25%，機身易髒污時用）</option><option value="H">H（30%）</option></select></div>
+      <div><label class="f" for="count">要印幾張</label><input type="number" id="count" value="8" min="1" max="60" step="1"></div>
+      <div style="grid-column:1/-1">
+        <label class="f" for="sns">機身序號清單（每行一組，留空則印通用標籤）</label>
+        <input type="text" id="sns" placeholder="例：A2609001　（多組請用下方文字框）">
+      </div>
+      <div style="grid-column:1/-1">
+        <textarea id="snList" rows="4" placeholder="一行一個序號，例：&#10;A2609001&#10;A2609002&#10;A2609003"
+          style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:14px;
+          font-family:ui-monospace,Consolas,monospace;background:var(--surface2);color:var(--text);resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="btns">
+      <button type="button" class="b1" id="gen">產生標籤</button>
+      <button type="button" class="b2" id="print">列印</button>
+      <button type="button" class="b2" id="dlsvg">下載單張 SVG</button>
+    </div>
+    <div class="hint" id="urlHint"></div>
+  </div>
+
+  <div class="panel noprint">
+    <h2>2. 貼標建議</h2>
+    <div class="hint" style="font-size:13px;color:var(--text)">
+      ・尺寸建議 <b>5×3 公分以上</b>，QR 邊長不小於 2 公分，貼太小手機對不到焦。<br>
+      ・材質建議 <b>合成紙／PET 亮面防水標籤</b>；車用機體長期日曬雨淋，一般銅版紙半年就糊掉。<br>
+      ・位置建議貼在<b>機身背面靠近電源線出口處</b>，避開會被支架遮住、被水柱直沖的面。<br>
+      ・貼上後<b>拿手機實掃一次</b>確認能開啟頁面再出貨。<br>
+      ・序號欄若留空會印成通用標籤（不帶序號），任何一台都能用。
+    </div>
+  </div>
+
+  <div id="sheet"><div class="empty">尚未產生標籤 — 按上方「產生標籤」</div></div>
+</div>
+
+<script src="./qr.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){ return document.getElementById(id); };
+
+function buildURL(base, sn, model){
+  var u=base.trim();
+  if(!u) u='https://jasonled-sketch.github.io/punch-clock-web/warranty/';
+  var params=[];
+  if(sn) params.push('sn='+encodeURIComponent(sn));
+  if(model) params.push('mo='+encodeURIComponent(model));
+  if(!params.length) return u;
+  return u + (u.indexOf('?')>=0 ? '&' : '?') + params.join('&');
+}
+
+function labelHTML(url, sn, ecl){
+  var qr=QRLite.make(url, ecl);
+  var svg=QRLite.toSVG(qr,{quiet:2});
+  return '<div class="label">'+
+    '<div class="qr">'+svg+'</div>'+
+    '<div class="tx">'+
+      '<div class="bnd">USLED 譽昇光電<small>譽昇光電科技有限公司</small></div>'+
+      '<div class="ttl">保固條款 · 報修說明</div>'+
+      '<div class="sn">'+(sn?('S/N '+esc(sn)):'掃描查看保固範圍與送修流程')+'</div>'+
+      '<div class="cta">掃描 QR 查看保固範圍、費用說明與送修流程</div>'+
+    '</div></div>';
+}
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function collectSNs(){
+  var list=($('snList').value||'').split(/[\n,]/).map(function(s){return s.trim();}).filter(Boolean);
+  var one=($('sns').value||'').trim();
+  if(one) list.unshift(one);
+  return list;
+}
+
+function generate(){
+  var base=$('base').value, model=$('model').value.trim(), ecl=$('ecl').value;
+  var sns=collectSNs(), count=Math.max(1, Math.min(60, parseInt($('count').value,10)||1));
+  var html='', i;
+  try{
+    if(sns.length){
+      for(i=0;i<sns.length;i++) html+=labelHTML(buildURL(base, sns[i], model), sns[i], ecl);
+    }else{
+      var url=buildURL(base, '', model);
+      var one=labelHTML(url, '', ecl);
+      for(i=0;i<count;i++) html+=one;
+    }
+  }catch(e){
+    alert('產生失敗：'+e.message+'\n（網址過長時請改用較短網址或降低錯誤更正等級）');
+    return;
+  }
+  $('sheet').innerHTML=html;
+  var sample=buildURL(base, sns[0]||'', model);
+  $('urlHint').innerHTML='已產生 <b>'+(sns.length||count)+'</b> 張。QR 內容範例：<br><code>'+esc(sample)+'</code>'+
+    '<br>QR 版本 v'+QRLite.make(sample,ecl).version+'，錯誤更正 '+ecl+'。<b>請務必拿手機實掃驗證後再大量印製。</b>';
+}
+
+$('gen').addEventListener('click',generate);
+$('print').addEventListener('click',function(){ window.print(); });
+$('dlsvg').addEventListener('click',function(){
+  var sns=collectSNs();
+  var url=buildURL($('base').value, sns[0]||'', $('model').value.trim());
+  var svg=QRLite.toSVG(QRLite.make(url,$('ecl').value),{quiet:4});
+  var blob=new Blob([svg],{type:'image/svg+xml'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='usled-warranty-qr'+(sns[0]?('-'+sns[0]):'')+'.svg';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+});
+
+generate();
+})();
+</script>
+</body>
+</html>
