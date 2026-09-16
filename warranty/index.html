@@ -145,6 +145,7 @@ button:active{transform:scale(.98)}
 code.hash{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;
   background:#fff;border:1px solid var(--ok-bd);border-radius:6px;padding:2px 6px;letter-spacing:.3px}
 
+.printonly{display:none}
 footer{text-align:center;color:var(--muted);font-size:12.5px;padding:8px 0 0;line-height:1.9}
 footer b{color:var(--text)}
 .toTop{position:fixed;right:14px;bottom:14px;width:44px;height:44px;border-radius:50%;background:var(--sky);
@@ -181,6 +182,16 @@ footer b{color:var(--text)}
   a{color:#000;text-decoration:none}
   .wrap{max-width:none;padding:0}
   #result{break-inside:avoid}
+  .printonly{display:block!important}
+  #paperSign{display:grid!important;grid-template-columns:1fr 1fr;gap:16mm;margin-top:10mm;
+    break-inside:avoid;page-break-inside:avoid}
+  #paperSign .pcol b{display:block;font-size:10pt;margin-bottom:2mm}
+  #paperSign .pline{border-bottom:1px solid #000;height:16mm;margin-bottom:2mm}
+  #paperSign .pdate{font-size:9.5pt;color:#333}
+  #paperNote{border:1px solid #999;background:#fafcfe;padding:3mm 4mm;border-radius:2mm;
+    font-size:9.5pt;margin-bottom:4mm;line-height:1.6}
+  #sigWrap{height:auto}
+  #sig{height:28mm}
 }
 </style>
 </head>
@@ -476,6 +487,12 @@ footer b{color:var(--text)}
   <h2><span class="n">6</span>保固登錄與線上簽署</h2>
   <p class="lead">填寫下列欄位並簽名後，系統會產生一份含<b>內容驗證碼</b>的同意確認書，可直接下載或列印留存。本欄位同時作為消費者保護法第二十五條之保證書應記載事項。</p>
 
+  <div class="printonly" id="paperNote">
+    <b>紙本簽署方式：</b>請填寫下列欄位，並於本頁末之簽署欄簽名或用印，一式二份，雙方各執一份。<br>
+    <b>線上簽署方式：</b>掃描產品機身之 QR Code，或至
+    https://jasonled-sketch.github.io/punch-clock-web/warranty/ 填寫後簽名，系統將產生含內容驗證碼之同意確認書。
+  </div>
+
   <form id="signForm" autocomplete="off">
     <div class="grid">
       <div><label class="f" for="fName">客戶名稱／公司行號 <span>*</span></label><input type="text" id="fName" placeholder="例：一友車業有限公司" required></div>
@@ -513,6 +530,19 @@ footer b{color:var(--text)}
       <button type="button" class="b2" id="btnPrint">列印整份條款</button>
     </div>
   </form>
+
+  <div class="printonly" id="paperSign">
+    <div class="pcol">
+      <b>客戶簽名／用印</b>
+      <div class="pline"></div>
+      <div class="pdate">日期：＿＿＿＿ 年 ＿＿ 月 ＿＿ 日</div>
+    </div>
+    <div class="pcol">
+      <b>譽昇光電科技有限公司（代表人簽章）</b>
+      <div class="pline"></div>
+      <div class="pdate">日期：＿＿＿＿ 年 ＿＿ 月 ＿＿ 日</div>
+    </div>
+  </div>
 
   <div id="result">
     <h3>✅ 已完成簽署</h3>
@@ -792,8 +822,24 @@ document.getElementById('btnReset').addEventListener('click',function(){
   document.getElementById('sign').scrollIntoView({behavior:'smooth'});
 });
 
-document.getElementById('btnPrint').addEventListener('click',function(){
+/* 列印前：空白日期欄改為文字欄，避免紙本印出 mm/dd/yyyy */
+function prepPrint(){
   document.querySelectorAll('details').forEach(function(d){ d.open=true; });
+  document.querySelectorAll('input[type=date]').forEach(function(el){
+    if(!el.value){ el.setAttribute('data-was-date','1'); el.type='text'; }
+  });
+}
+function unprepPrint(){
+  document.querySelectorAll('input[data-was-date]').forEach(function(el){
+    el.type='date'; el.removeAttribute('data-was-date');
+  });
+}
+window.addEventListener('beforeprint', prepPrint);
+window.addEventListener('afterprint', unprepPrint);
+window.__prepPrint = prepPrint;   // 供產生 PDF 時呼叫
+
+document.getElementById('btnPrint').addEventListener('click',function(){
+  prepPrint();
   setTimeout(function(){ window.print(); }, 100);
 });
 })();
