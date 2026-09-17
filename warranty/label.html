@@ -70,6 +70,10 @@ button{font-family:inherit;font-size:14px;font-weight:800;border:none;border-rad
         <input type="text" id="base" value="https://jasonled-sketch.github.io/punch-clock-web/warranty/">
       </div>
       <div><label class="f" for="model">型號（選填，會帶入表單）</label><input type="text" id="model" placeholder="例：UM4C-3216"></div>
+      <div><label class="f" for="brand">品牌</label>
+        <select id="brand"><option value="">不指定</option><option value="US" selected>US（主機板 5 年）</option>
+        <option value="DART">DART（全機 1 年）</option></select></div>
+      <div><label class="f" for="made">出廠日（掃 QR 即可查到）</label><input type="date" id="made"></div>
       <div><label class="f" for="ecl">錯誤更正等級</label>
         <select id="ecl"><option value="L">L（7%）</option><option value="M" selected>M（15%，建議）</option>
         <option value="Q">Q（25%，機身易髒污時用）</option><option value="H">H（30%）</option></select></div>
@@ -99,7 +103,8 @@ button{font-family:inherit;font-size:14px;font-weight:800;border:none;border-rad
       ・材質建議 <b>合成紙／PET 亮面防水標籤</b>；車用機體長期日曬雨淋，一般銅版紙半年就糊掉。<br>
       ・位置建議貼在<b>機身背面靠近電源線出口處</b>，避開會被支架遮住、被水柱直沖的面。<br>
       ・貼上後<b>拿手機實掃一次</b>確認能開啟頁面再出貨。<br>
-      ・序號欄若留空會印成通用標籤（不帶序號），任何一台都能用。
+      ・序號欄若留空會印成通用標籤（不帶序號），任何一台都能用。<br>
+      ・<b>填出廠日</b>後，客戶掃 QR 就能看到這台的出廠日與推定保固到期日，單據遺失也查得到。
     </div>
   </div>
 
@@ -112,26 +117,32 @@ button{font-family:inherit;font-size:14px;font-weight:800;border:none;border-rad
 'use strict';
 var $=function(id){ return document.getElementById(id); };
 
-function buildURL(base, sn, model){
+function buildURL(base, sn, model, brand, made){
   var u=base.trim();
   if(!u) u='https://jasonled-sketch.github.io/punch-clock-web/warranty/';
   var params=[];
-  if(sn) params.push('sn='+encodeURIComponent(sn));
+  if(sn)    params.push('sn='+encodeURIComponent(sn));
   if(model) params.push('mo='+encodeURIComponent(model));
+  if(brand) params.push('b='+encodeURIComponent(brand));
+  if(made)  params.push('d='+encodeURIComponent(made));
   if(!params.length) return u;
   return u + (u.indexOf('?')>=0 ? '&' : '?') + params.join('&');
 }
 
-function labelHTML(url, sn, ecl){
+function labelHTML(url, sn, ecl, brand, made){
   var qr=QRLite.make(url, ecl);
   var svg=QRLite.toSVG(qr,{quiet:2});
+  var line2=[];
+  if(sn)   line2.push('S/N '+esc(sn));
+  if(made) line2.push('出廠 '+esc(made));
+  var warr = brand==='US' ? '主機板 5 年 · 其他零件 1 年' : '全機零件 1 年';
   return '<div class="label">'+
     '<div class="qr">'+svg+'</div>'+
     '<div class="tx">'+
-      '<div class="bnd">USLED 譽昇光電<small>譽昇光電科技有限公司</small></div>'+
+      '<div class="bnd">USLED 譽昇科技<small>譽昇科技有限公司</small></div>'+
       '<div class="ttl">保固條款 · 報修說明</div>'+
-      '<div class="sn">'+(sn?('S/N '+esc(sn)):'掃描查看保固範圍與送修流程')+'</div>'+
-      '<div class="cta">掃描 QR 查看保固範圍、費用說明與送修流程</div>'+
+      '<div class="sn">'+(line2.length?line2.join('　'):'掃描查看保固範圍與送修流程')+'</div>'+
+      '<div class="cta">'+warr+'　│　掃描 QR 查看保固與送修流程</div>'+
     '</div></div>';
 }
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
@@ -146,14 +157,16 @@ function collectSNs(){
 
 function generate(){
   var base=$('base').value, model=$('model').value.trim(), ecl=$('ecl').value;
+  var brand=$('brand').value, made=$('made').value;
   var sns=collectSNs(), count=Math.max(1, Math.min(60, parseInt($('count').value,10)||1));
   var html='', i;
   try{
     if(sns.length){
-      for(i=0;i<sns.length;i++) html+=labelHTML(buildURL(base, sns[i], model), sns[i], ecl);
+      for(i=0;i<sns.length;i++)
+        html+=labelHTML(buildURL(base, sns[i], model, brand, made), sns[i], ecl, brand, made);
     }else{
-      var url=buildURL(base, '', model);
-      var one=labelHTML(url, '', ecl);
+      var url=buildURL(base, '', model, brand, made);
+      var one=labelHTML(url, '', ecl, brand, made);
       for(i=0;i<count;i++) html+=one;
     }
   }catch(e){
@@ -161,7 +174,7 @@ function generate(){
     return;
   }
   $('sheet').innerHTML=html;
-  var sample=buildURL(base, sns[0]||'', model);
+  var sample=buildURL(base, sns[0]||'', model, brand, made);
   $('urlHint').innerHTML='已產生 <b>'+(sns.length||count)+'</b> 張。QR 內容範例：<br><code>'+esc(sample)+'</code>'+
     '<br>QR 版本 v'+QRLite.make(sample,ecl).version+'，錯誤更正 '+ecl+'。<b>請務必拿手機實掃驗證後再大量印製。</b>';
 }
@@ -170,7 +183,7 @@ $('gen').addEventListener('click',generate);
 $('print').addEventListener('click',function(){ window.print(); });
 $('dlsvg').addEventListener('click',function(){
   var sns=collectSNs();
-  var url=buildURL($('base').value, sns[0]||'', $('model').value.trim());
+  var url=buildURL($('base').value, sns[0]||'', $('model').value.trim(), $('brand').value, $('made').value);
   var svg=QRLite.toSVG(QRLite.make(url,$('ecl').value),{quiet:4});
   var blob=new Blob([svg],{type:'image/svg+xml'});
   var a=document.createElement('a');
