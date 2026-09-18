@@ -205,23 +205,91 @@ footer a{color:var(--sky);text-decoration:none}
   details.qa .body{padding-left:15px}
 }
 @media print{
+  @page{size:A4;margin:13mm 12mm}
   .top,.toTop,#unit{display:none!important}
-  body{background:#fff;font-size:10.5pt;line-height:1.6}
-  header.hero{background:#fff!important;color:#14304a!important;padding:0 0 9px;border-bottom:2.5px solid #0b72c4}
-  header.hero h1{font-size:19pt;color:#065a9e}
-  .eyebrow{color:#5d7b97}
-  .claim b{color:#065a9e}
-  .num{background:#f3f7fb!important;border-color:#bbb!important}
-  section{box-shadow:none;border:1px solid #aaa;break-inside:avoid;page-break-inside:avoid;margin:9px 0;padding:12px 14px}
-  section#law{break-inside:auto;page-break-inside:auto}
-  .tier,.fs,.y3,.zero,.extra,details{break-inside:avoid;page-break-inside:avoid}
-  .zero{background:#f0fdf4!important;color:#14532d!important;box-shadow:none;border:1px solid #16a34a}
-  .zero .zi{background:#fff!important;border-color:#bbf7d0!important}
-  details{border-color:#aaa;background:#fff!important;box-shadow:none}
-  summary{cursor:default}summary::after{display:none}
-  .body{display:block!important}
-  a{color:#000;text-decoration:none}
+  body{background:#fff;font-size:9pt;line-height:1.5;color:#1a2f42}
   .wrap{max-width:none;padding:0}
+  a{color:#000;text-decoration:none}
+
+  /* 頁首壓成一條橫幅，不獨佔一頁 */
+  header.hero{background:#fff!important;color:#14304a!important;padding:0 0 2.5mm;margin:0 0 3.5mm;
+    border-bottom:1.6pt solid #0b72c4;break-after:avoid;break-inside:avoid}
+  header.hero .eyebrow{display:none}
+  header.hero h1{font-size:15pt;color:#065a9e;margin:0 0 1.5mm;line-height:1.3}
+  .claim{font-size:9pt;line-height:1.5}
+  .claim br{display:none}
+  .claim b{color:#065a9e}
+  .nums{display:none}
+
+  section{box-shadow:none;border:.5pt solid #b6c8d9;border-radius:2.5mm;margin:0 0 4mm;padding:3.5mm 4.5mm;
+    break-inside:avoid;page-break-inside:avoid}
+  h2.sh{font-size:12.5pt;margin:0 0 1mm}
+  .sub{font-size:8.5pt;margin:0 0 3mm;line-height:1.5}
+
+  /* 保固範圍 */
+  .y3{gap:2mm;margin-bottom:3mm}
+  .y3i{padding:2mm 1mm;border-radius:2mm}
+  .y3i i{font-size:15pt}.y3i i small{font-size:8.5pt}
+  .y3i span{font-size:8pt;margin-top:.5mm}
+  .tier{padding:3mm 3.5mm;margin-bottom:2.5mm;border-radius:2mm}
+  .th{margin-bottom:2mm;gap:2.5mm}
+  .th .ic{width:6mm;height:6mm;font-size:10pt;border-radius:1.5mm}
+  .th .tt>b{font-size:11pt}
+  .hero-ok .th .tt>b{font-size:11.5pt}
+  .th .tt span{font-size:8pt;line-height:1.45}
+  ul.chk{gap:1.3mm}
+  ul.chk li{font-size:9pt;line-height:1.45;padding-left:5.6mm}
+  ul.chk li::before{width:4mm;height:4mm;font-size:7pt;top:.5mm}
+  ul.chk li em{font-size:8pt}
+  ul.ask{gap:1.5mm}
+  ul.ask li{padding:2mm 3mm;font-size:8.5pt;line-height:1.45;border-radius:1.5mm}
+  ul.ask li b{font-size:9pt}
+  ul.ask li span{font-size:8pt}
+  .tier.dg p.no{font-size:8.5pt;line-height:1.6}
+  .tier.dg p.no .sm{font-size:7.5pt}
+  .tip{font-size:8.5pt;padding:2.5mm 3mm;margin:2.5mm 0 0;line-height:1.5;border-left-width:2.5pt}
+
+  /* 費用與送修 */
+  .zero{padding:3mm;border-radius:2mm;background:#f0fdf4!important;color:#14532d!important;
+    box-shadow:none;border:.7pt solid #16a34a}
+  .zero .z1{font-size:9pt;margin-bottom:2mm}
+  .zero .z2{gap:2.5mm}
+  .zero .zi{padding:1.8mm;background:#fff!important;border:.5pt solid #bbf7d0!important;border-radius:1.5mm}
+  .zero .zi span{font-size:8.5pt;opacity:1;color:#3f7d5c}
+  .zero .zi b{font-size:17pt}
+  .extra{margin-top:3mm;padding:3mm 3.5mm;border-radius:2mm}
+  .extra>b{font-size:10pt}
+  .extra>.eh{font-size:8pt;margin-bottom:2.5mm;line-height:1.45}
+  ul.ex{gap:1.3mm 5mm}
+  ul.ex li{font-size:8.5pt;line-height:1.45;padding-left:3.4mm}
+  ul.ex li::before{top:1.4mm;width:1.2mm;height:1.2mm}
+  ul.ex li span{font-size:8pt}
+  .fhd{font-size:11.5pt;margin:4mm 0 2.5mm;padding-top:3mm}
+  .fhd span{font-size:8.5pt}
+  .flow{gap:1.8mm}
+  .fs{padding:2.5mm 3mm;gap:2.5mm;border-radius:2mm}
+  .fs .n{width:5.5mm;height:5.5mm;font-size:8.5pt}
+  .fs .t{font-size:9.5pt;margin-bottom:.3mm}
+  .fs p{font-size:8.5pt;line-height:1.5}
+
+  /* 條款與 FAQ：允許跨頁，但單條不切斷 */
+  section#law,section#qa{break-inside:auto;page-break-inside:auto}
+  details{border:.5pt solid #c3d2df;background:#fff!important;box-shadow:none;margin-bottom:2mm;
+    border-radius:2mm;break-inside:avoid;page-break-inside:avoid}
+  summary{padding:2mm 3mm;min-height:0;font-size:10pt;cursor:default;align-items:baseline}
+  summary::after{display:none}
+  details.qa summary::before{width:4.5mm;height:4.5mm;font-size:7.5pt;border-radius:1.2mm}
+  .body{padding:0 3mm 2.5mm;font-size:8.5pt;line-height:1.6;display:block!important}
+  details.qa .body{padding-left:3mm}
+  .body p{margin:0 0 1.5mm}
+  .body ol,.body ul{margin:1mm 0 1.5mm;padding-left:4mm}
+  .body li{margin-bottom:.8mm}
+  .body ol.k>li{padding-left:5.4mm}
+  .body ol.k>li::before{width:4mm;height:4mm;font-size:7pt;top:.5mm}
+  .plain{font-size:8pt;padding:2mm 2.5mm;margin-top:2mm;line-height:1.5;border-radius:1.5mm}
+  .hl{background:#fff2c9!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+
+  footer{font-size:8pt;padding-top:3mm;line-height:1.7}
 }
 </style>
 </head>
