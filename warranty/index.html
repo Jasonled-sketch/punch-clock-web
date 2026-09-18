@@ -79,28 +79,58 @@ h2.sh{font-size:19px;margin:0 0 3px;font-weight:900;letter-spacing:.3px}
 .yr .d b{display:block;font-size:15px}
 .yr .d span{color:var(--mu);font-size:12.5px}
 
-/* 判定卡 */
-.judge{display:grid;gap:10px}
-.jc{border:1px solid var(--bd);border-left-width:5px;border-radius:11px;padding:12px 15px;background:var(--surface)}
-.jc.ok{border-left-color:#22c55e;background:var(--ok-bg);border-color:var(--ok-bd)}
-.jc.wn{border-left-color:#f59e0b;background:var(--wn-bg);border-color:var(--wn-bd)}
-.jc.dg{border-left-color:#ef4444;background:var(--dg-bg);border-color:var(--dg-bd)}
-.jc .q{font-size:15px;font-weight:800;line-height:1.6;margin:0 0 5px}
-.jc .a{font-size:13.5px;line-height:1.72;margin:0;color:#3c5a76}
-.jc .tag{display:inline-block;font-size:11.5px;font-weight:900;padding:2px 9px;border-radius:999px;
-  margin-bottom:6px;letter-spacing:.3px}
-.jc.ok .tag{background:#dcfce7;color:var(--ok)}
-.jc.wn .tag{background:#fef3c7;color:var(--wn)}
-.jc.dg .tag{background:#fee2e2;color:var(--dg)}
+/* 保固範圍分層 */
+.tier{border-radius:12px;border:1px solid var(--bd2);background:var(--s2);padding:14px 16px;margin-bottom:11px}
+.tier:last-child{margin-bottom:0}
+.tier.hero-ok{background:linear-gradient(160deg,#f2fdf6,#e9f9f0);border:2px solid var(--ok-bd);padding:16px 18px 18px}
+.tier.wn{background:var(--wn-bg);border-color:var(--wn-bd)}
+.tier.dg{background:var(--dg-bg);border-color:var(--dg-bd)}
+.th{display:flex;gap:11px;align-items:flex-start;margin-bottom:11px}
+.th .ic{flex:0 0 auto;width:30px;height:30px;border-radius:9px;display:flex;align-items:center;
+  justify-content:center;font-size:16px;font-weight:900;color:#fff;line-height:1}
+.hero-ok .ic{background:#16a34a}.wn .ic{background:#f59e0b}.dg .ic{background:#ef4444}
+.th .tt{flex:1;min-width:0}
+.th .tt>b{display:block;font-size:16px;font-weight:900;line-height:1.45}
+.hero-ok .th .tt>b{font-size:17px;color:#14532d}
+.wn .th .tt>b{color:#7c4a09}.dg .th .tt>b{color:#8c1c1c}
+.th .tt span{display:block;font-size:12.5px;color:var(--mu);margin-top:2px;line-height:1.65}
+.th .tt span b{display:inline;font-weight:800;color:var(--tx)}
+.hero-ok .th .tt span{color:#3f7d5c;font-weight:700}
 
-/* 誰付錢 */
-.pay{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.pc{border-radius:12px;padding:14px 15px;border:1px solid}
-.pc h3{margin:0 0 9px;font-size:15px;font-weight:900;display:flex;align-items:center;gap:6px}
-.pc ul{margin:0;padding-left:18px;font-size:13.5px;line-height:1.75}
-.pc li{margin-bottom:3px}
-.pc.us{background:var(--ok-bg);border-color:var(--ok-bd)}.pc.us h3{color:var(--ok)}
-.pc.you{background:var(--wn-bg);border-color:var(--wn-bd)}.pc.you h3{color:var(--wn)}
+/* 免費修清單 */
+ul.chk{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+ul.chk li{position:relative;padding-left:28px;font-size:14.5px;line-height:1.68}
+ul.chk li::before{content:"✓";position:absolute;left:0;top:4px;width:19px;height:19px;border-radius:50%;
+  background:#16a34a;color:#fff;font-size:11.5px;font-weight:900;
+  display:flex;align-items:center;justify-content:center}
+ul.chk li b{font-weight:800}
+ul.chk li em{font-style:normal;color:var(--mu);font-size:12.5px}
+
+/* 先問 / 不保 清單 */
+ul.ask{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+ul.ask li{background:rgba(255,255,255,.62);border-radius:9px;padding:9px 12px;font-size:14px;line-height:1.65}
+ul.ask li b{display:block;font-size:14.5px;margin-bottom:1px}
+ul.ask li span{color:#6b5327;font-size:13px}
+.dg ul.ask li span{color:#8a3a38}
+.tier.dg p.no{margin:0;font-size:14px;line-height:1.72;color:#7a2b29}
+
+/* 費用 */
+.zero{background:linear-gradient(160deg,#0e8a4a,#0b7040);color:#fff;border-radius:13px;
+  padding:17px 18px;text-align:center;box-shadow:0 4px 16px rgba(14,138,74,.22)}
+.zero .z1{font-size:14px;font-weight:700;opacity:.92;margin-bottom:9px}
+.zero .z2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.zero .zi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:10px;padding:9px 6px}
+.zero .zi span{display:block;font-size:12.5px;opacity:.9}
+.zero .zi b{display:block;font-size:26px;font-weight:900;line-height:1.25;letter-spacing:.5px}
+.extra{margin-top:13px;border:1px solid var(--bd);border-radius:12px;padding:14px 16px;background:var(--s2)}
+.extra>b{display:block;font-size:14.5px;margin-bottom:2px}
+.extra>.eh{font-size:12.5px;color:var(--mu);margin-bottom:11px;line-height:1.6}
+ul.ex{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 16px}
+ul.ex li{font-size:13.5px;line-height:1.6;padding-left:14px;position:relative}
+ul.ex li::before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:#f59e0b}
+ul.ex li b{font-weight:800}
+ul.ex li span{color:var(--mu);font-size:12.5px}
+ul.ex li span::before{content:"　"}
 
 /* 流程 */
 .flow{display:grid;gap:9px;counter-reset:f}
@@ -163,7 +193,8 @@ footer a{color:var(--sky);text-decoration:none}
   .claim{font-size:14.5px}
   section{padding:17px 15px;border-radius:12px}
   h2.sh{font-size:17.5px}
-  .pay{grid-template-columns:1fr}
+  ul.ex{grid-template-columns:1fr}
+  .zero .z2{grid-template-columns:1fr 1fr}
   .num i{font-size:18px}
   .yr .v{width:56px;font-size:18px}
   details.qa .body{padding-left:15px}
@@ -178,7 +209,9 @@ footer a{color:var(--sky);text-decoration:none}
   .num{background:#f3f7fb!important;border-color:#bbb!important}
   section{box-shadow:none;border:1px solid #aaa;break-inside:avoid;page-break-inside:avoid;margin:9px 0;padding:12px 14px}
   section#law{break-inside:auto;page-break-inside:auto}
-  .jc,.fs,.yr,.pc,details{break-inside:avoid;page-break-inside:avoid}
+  .tier,.fs,.yr,.zero,.extra,details{break-inside:avoid;page-break-inside:avoid}
+  .zero{background:#f0fdf4!important;color:#14532d!important;box-shadow:none;border:1px solid #16a34a}
+  .zero .zi{background:#fff!important;border-color:#bbf7d0!important}
   details{border-color:#aaa;background:#fff!important;box-shadow:none}
   summary{cursor:default}summary::after{display:none}
   .body{display:block!important}
@@ -192,7 +225,7 @@ footer a{color:var(--sky);text-decoration:none}
 <div class="top"><div class="in">
   <div class="logo">USLED 譽昇科技</div>
   <nav>
-    <a href="#judge">算不算保固</a><a href="#pay">費用</a><a href="#flow">送修</a>
+    <a href="#scope">保固範圍</a><a href="#pay">費用</a><a href="#flow">送修</a>
     <a href="#law">條款全文</a><a href="#qa">常見問題</a>
   </nav>
 </div></div>
@@ -217,89 +250,103 @@ footer a{color:var(--sky);text-decoration:none}
   <div class="un" id="unitNote"></div>
 </div>
 
-<!-- ① 保固年限 -->
-<section id="years">
-  <h2 class="sh">保固年限</h2>
-  <p class="sub">自<b>出貨日</b>起算，不因維修而延長或暫停。無單據時以機身序號出廠年月加 30 日推定。</p>
-  <div class="yrs">
-    <div class="yr star"><div class="v">5<small>年</small></div>
-      <div class="d"><b>US 品牌　控制主機板</b><span>US 獨有的長期保固</span></div></div>
-    <div class="yr"><div class="v">1<small>年</small></div>
-      <div class="d"><b>其他所有零件，不分品牌</b><span>LED 模組與燈珠、電源供應器、排線、外框、機殼</span></div></div>
-    <div class="yr"><div class="v">1<small>年</small></div>
-      <div class="d"><b>DART 等其他品牌　全機</b><span>含控制主機板在內</span></div></div>
+<!-- ① 保固範圍（年限＋判定合一） -->
+<section id="scope">
+  <h2 class="sh">保固範圍</h2>
+  <p class="sub">保多久、保什麼、哪些要先問、哪些不保——一次看完。</p>
+
+  <!-- 保多久 -->
+  <div class="tier">
+    <div class="th"><span class="ic" style="background:var(--sky)">年</span><div class="tt">
+      <b>保多久</b>
+      <span>自<b style="color:var(--tx)">出貨日</b>起算，不因維修而延長或暫停。無單據時以機身序號出廠年月加 30 日推定。</span>
+    </div></div>
+    <div class="yrs">
+      <div class="yr star"><div class="v">5<small>年</small></div>
+        <div class="d"><b>US 品牌　控制主機板</b><span>US 獨有的長期保固</span></div></div>
+      <div class="yr"><div class="v">1<small>年</small></div>
+        <div class="d"><b>其他所有零件，不分品牌</b><span>LED 模組與燈珠、電源供應器、排線、面板、外框、機殼</span></div></div>
+      <div class="yr"><div class="v">7<small>日</small></div>
+        <div class="d"><b>新品故障，直接換新</b><span>受領後 7 日內，不必送修</span></div></div>
+    </div>
   </div>
+
+  <!-- 保什麼（主角） -->
+  <div class="tier hero-ok">
+    <div class="th"><span class="ic">✓</span><div class="tt">
+      <b>這些我們免費修</b>
+      <span>零件費 $0　·　維修工資 $0　·　不分零件貴賤</span>
+    </div></div>
+    <ul class="chk">
+      <li><b>整片不亮</b>、<b>行列條波異常</b>、<b>區塊顯示異常</b>、<b>明顯色偏</b></li>
+      <li><b>死燈（壞蕊）超過總燈珠數千分之三</b>，或雖未超過但已明顯影響畫面辨識</li>
+      <li><b>控制主機板</b>無法開機、無法接收訊號、程式異常、通訊埠失效</li>
+      <li><b>電源供應器</b>無輸出、電壓不穩、過熱保護異常</li>
+      <li><b>排線、連接器</b>接觸不良（非外力造成）</li>
+      <li><b>面板、外框、機殼</b>材質或焊接瑕疵造成的斷裂、變形　<em>（非人為損壞）</em></li>
+      <li><b>防水結構</b>因製造瑕疵而滲水　<em>（非外力破壞、未經改裝）</em></li>
+    </ul>
+  </div>
+
+  <!-- 先問 -->
+  <div class="tier wn">
+    <div class="th"><span class="ic">!</span><div class="tt">
+      <b>這三種先打電話，別急著寄</b>
+      <span>多半不是故障，講一下就好——寄回來反而要付運費與檢測費</span>
+    </div></div>
+    <ul class="ask">
+      <li><b>整台完全不亮</b>
+        <span>十有八九是軟體關屏設定、自動開關機時段、節目內容空白。一通電話幾分鐘就排除，不用拆機也不花錢。</span></li>
+      <li><b>三色檢測正常，但畫面文字不完整、排版錯位、跑動不順</b>
+        <span>屬字型、字寬、排版或顯示參數設定，改設定就好，不是硬體壞掉。</span></li>
+      <li><b>死燈未超過千分之三，且未明顯影響畫面辨識</b>
+        <span>LED 在製程上允許極少數燈珠失效，這是正常範圍。</span></li>
+    </ul>
+  </div>
+
+  <!-- 不保 -->
+  <div class="tier dg">
+    <div class="th"><span class="ic">✕</span><div class="tt">
+      <b>這些不在保固</b>
+      <span>可報價後有償維修，維修前一定先報價</span>
+    </div></div>
+    <p class="no"><b>人為與外力</b>：碰撞、車禍、擠壓、掉落、刮傷、自行拆改、非本公司人員施工或配線。<br>
+    <b>電力異常</b>：電壓輸入異常、雷擊、電瓶虧電或搭電、供電不穩、未依規定接地。<span style="font-size:13px">（此類電路板通常留有明顯燒灼、碳化或元件焦黑痕跡）</span><br>
+    <b>環境與其他</b>：泡水、高壓水柱直沖、鹽害、鼠蟲咬蝕、天災，以及保固標籤或機身序號無法辨識者。</p>
+  </div>
+
+  <div class="tip"><b>我們怎麼判定：</b>LED 模組以<b>紅、綠、藍三色全亮</b>逐片點測，<b>全程錄影</b>。三色都能正常點亮，就表示燈珠與驅動 IC 沒壞——畫面看起來怪，是設定的問題。完整不保固事由見條款第六條。</div>
 </section>
 
-<!-- ② 算不算保固 -->
-<section id="judge">
-  <h2 class="sh">我的狀況算不算保固？</h2>
-  <p class="sub">機器有狀況時先看這裡，一眼判斷要不要付錢。</p>
-  <div class="judge">
-
-    <div class="jc ok"><span class="tag">保固內全免</span>
-      <p class="q">整片不亮、行列條波異常、區塊顯示異常、明顯色偏</p>
-      <p class="a">屬硬體故障，零件費與維修工資全免。</p></div>
-
-    <div class="jc ok"><span class="tag">保固內全免</span>
-      <p class="q">死燈（壞蕊）<b>超過</b>總燈珠數千分之三，或雖未超過但已明顯影響畫面辨識</p>
-      <p class="a">屬硬體故障，零件費與維修工資全免。</p></div>
-
-    <div class="jc dg"><span class="tag">不在保固</span>
-      <p class="q">死燈<b>未超過</b>千分之三，且未明顯影響畫面辨識</p>
-      <p class="a">LED 在製程上允許極少數燈珠失效，此為正常範圍。</p></div>
-
-    <div class="jc ok"><span class="tag">保固內全免</span>
-      <p class="q">電源供應器無輸出、電壓不穩、過熱保護異常</p>
-      <p class="a">屬硬體故障，零件費與維修工資全免。</p></div>
-
-    <div class="jc wn"><span class="tag">先打電話</span>
-      <p class="q">整台完全不亮</p>
-      <p class="a">十有八九是<b>軟體關屏設定、自動開關機時段、節目內容空白</b>，一通電話幾分鐘就排除，不用拆機也不花錢。
-      <span class="hl">未先聯繫就寄回、到廠驗出是設定問題者，來回運費與檢測費仍須負擔。</span></p></div>
-
-    <div class="jc wn"><span class="tag">收檢測費</span>
-      <p class="q">三色檢測正常，但畫面文字不完整、排版錯位、跑動不順</p>
-      <p class="a">屬字型、字寬、排版或顯示參數設定之非硬體事項。</p></div>
-
-    <div class="jc dg"><span class="tag">不在保固</span>
-      <p class="q">電路板有明顯燒灼、碳化、爆裂或元件焦黑</p>
-      <p class="a">屬電壓輸入異常等外部電力因素，報價後有償維修。</p></div>
-
-  </div>
-  <div class="tip"><b>我們怎麼判定：</b>LED 模組以<b>紅、綠、藍三色全亮</b>逐片點測。三色都能正常點亮，就表示燈珠與驅動 IC 沒壞——畫面看起來怪，是設定的問題。<br>
-  其他不保固的情形（碰撞、泡水、自行拆改、序號不清等）詳見條款第六條。</div>
-</section>
-
-<!-- ③ 費用 -->
+<!-- ② 費用 -->
 <section id="pay">
-  <h2 class="sh">費用誰付</h2>
+  <h2 class="sh">費用怎麼算</h2>
   <p class="sub">保固是對「產品品質」的承諾，不是對「運送與施工成本」的承諾。</p>
-  <div class="pay">
-    <div class="pc us">
-      <h3>✅ 本公司負擔</h3>
-      <ul>
-        <li><b>所有零件費</b>（不分零件單價）</li>
-        <li><b>維修工資</b>（送回本公司者）</li>
-      </ul>
-      <p style="margin:9px 0 0;font-size:12.5px;color:var(--mu);line-height:1.65">
-        限保固期內且判定為硬體故障。</p>
-    </div>
-    <div class="pc you">
-      <h3>💰 客戶負擔</h3>
-      <ul>
-        <li><b>來回運費</b>　單程 NT$150 起</li>
-        <li><b>檢測費</b>　硬體正常或屬設定問題時</li>
-        <li><b>到府／到車行</b>　車馬費＋工時</li>
-        <li>吊車、高空車、鷹架、交管</li>
-        <li><b>急件費</b>　要求 3 個工作天內完工</li>
-        <li>包裝材料費／換箱費</li>
-        <li><b>保管費</b>　逾 30 日未領回，NT$50–450／日</li>
-        <li>耗材（面板、貼膜、五金）</li>
-      </ul>
+
+  <div class="zero">
+    <div class="z1">保固期內判定為硬體故障，送回本公司維修</div>
+    <div class="z2">
+      <div class="zi"><span>零件費</span><b>$0</b></div>
+      <div class="zi"><span>維修工資</span><b>$0</b></div>
     </div>
   </div>
-  <div class="tip">保固期外或非保固事由，零件費與維修工資改由客戶負擔。<b>維修前必定先報價並取得同意</b>，不會事後追加。</div>
+
+  <div class="extra">
+    <b>另計費用</b>
+    <div class="eh">以下項目<b>不論保固期內外</b>均由客戶負擔，因為它們是把機器送到修理台前後所發生的成本，與產品好壞無關。</div>
+    <ul class="ex">
+      <li><b>來回運費</b><span>單程 NT$150 起</span></li>
+      <li><b>檢測費</b><span>硬體正常或屬設定問題時</span></li>
+      <li><b>到府／到車行</b><span>車馬費＋現場工時</span></li>
+      <li><b>機具</b><span>吊車、高空車、鷹架、交管</span></li>
+      <li><b>急件費</b><span>要求 3 個工作天內完工</span></li>
+      <li><b>包裝材料費</b><span>原箱不堪運送、代為換箱</span></li>
+      <li><b>保管費</b><span>逾 30 日未領回，NT$50–450／日</span></li>
+      <li><b>人為損壞之零件</b><span>依報價有償更換</span></li>
+    </ul>
+  </div>
+
+  <div class="tip"><b>維修前一定先報價並取得您同意</b>，不會事後追加未經同意的費用。保固期外或非保固事由，零件費與維修工資改由客戶負擔。</div>
 </section>
 
 <!-- ④ 送修 -->
@@ -376,7 +423,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li>控制主機板無法開機、無法接收訊號、程式異常、通訊埠失效。</li>
       <li>電源供應器無輸出、輸出電壓不穩、過熱保護異常。</li>
       <li>排線、連接器接觸不良（非外力造成者）。</li>
-      <li>外框、機殼因材質或焊接瑕疵所生之斷裂、變形。</li>
+      <li><b>面板、外框、機殼</b>因材質或焊接瑕疵所生之斷裂、變形（非人為損壞者）。</li>
       <li>防水結構因製造瑕疵而滲水（非外力破壞、未經改裝者）。</li>
     </ol>
     <p><b>不屬保固範圍之顯示狀況：</b></p>
@@ -399,6 +446,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li><b>急件處理費</b>：要求於三個工作天內完工出貨者加收。正常排修 3–5 個工作天不加收費用。</li>
       <li><b>包裝材料費／換箱費</b>：由本公司代為更換紙箱或補強包材者，材料費實收。</li>
       <li><b>保管費</b>：依第九條規定收取。</li>
+      <li><b>人為損壞之零件</b>：因第六條各款事由而需更換之零組件（含面板、外框），依報價有償更換。<b>非人為損壞者仍屬保固範圍。</b></li>
       <li><b>第三方費用</b>：供電線路、專用電源、網路或通訊費用、招牌與結構體、廣告設計與內容製作，及其他非本公司供應之設備或工程費用。</li>
     </ol>
   </div></details>
@@ -413,7 +461,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li><b>施工與改裝</b>：非本公司人員之拆卸、安裝、改裝、加工、變更線路、變更固定方式，或自行更換零件、韌體、控制軟體所致之損壞或功能異常。</li>
       <li><b>混接他廠設備</b>：使用非本公司提供之控制主機板、電源供應器、模組或第三方軟體所致者。</li>
       <li><b>標示不明</b>：保固標籤、機身序號、防拆封條遭撕除、塗改、汙損或無法辨識。</li>
-      <li><b>自然耗損</b>：LED 亮度之正常衰減（規格容許範圍內）、外觀之刮痕、褪色、氧化、鏽蝕、膠條老化等不影響功能之情形。</li>
+      <li><b>自然耗損</b>：LED 亮度之正常衰減（規格容許範圍內）、外觀之刮痕、褪色、氧化、鏽蝕、膠條老化等<b>不影響功能</b>之情形。<br><span style="font-size:13px;color:var(--mu)">※ 面板、外框屬機體結構件，非屬耗材；其材質或製造瑕疵仍在保固範圍。</span></li>
       <li><b>不可抗力</b>：地震、颱風、洪水、火災、雷擊、戰爭、暴動及其他不可抗力事由。</li>
       <li><b>使用方式</b>：未依產品使用說明、超出規格之連續使用或超載使用所致之損壞。</li>
     </ol>
@@ -460,7 +508,7 @@ footer a{color:var(--sky);text-decoration:none}
     <div class="plain"><b>白話：</b>我們負責把機器修好或換好。真的要賠錢，最多賠到這台機器當初的價金，不會再賠你因為機器壞掉少做的生意。<b>但如果是我們自己搞砸的</b>——故意的，或很明顯的疏忽，比如維修時把你的機器摔了——那上面這個上限就不算數，該賠多少賠多少。</div>
   </div></details>
 
-  <details class="law"><summary>第十一條　消費者權益（客戶為自然人消費者時適用）</summary><div class="body">
+  <details class="law"><summary>第十一條　消費者權益</summary><div class="body">
     <ol class="k">
       <li>客戶為消費者保護法所稱之消費者者，本公司應給予<b>不少於五日之契約審閱期間</b>，並不得以此為由拒絕交易。</li>
       <li>本公司依消費者保護法第二十五條出具之保證書，應載明商品名稱與型號、保固內容、保固期間及其起算方法、製造商名稱與地址、經銷商名稱與地址（由經銷商售出者）及交易日期。</li>
@@ -533,7 +581,7 @@ footer a{color:var(--sky);text-decoration:none}
 <footer>
   <b>譽昇科技有限公司</b>　USLED<br>
   <span id="ftContact">高雄市岡山區　│　服務電話：請洽您的承辦業務或官方 LINE</span><br>
-  保固條款 <span id="ftVer">v2.2</span>　生效日 <span id="ftDate">2026-09-18</span><br>
+  保固條款 <span id="ftVer">v2.3</span>　生效日 <span id="ftDate">2026-09-18</span><br>
   掃描產品機身 QR Code 可隨時取得本頁最新版本
 </footer>
 </div>
@@ -545,7 +593,7 @@ footer a{color:var(--sky);text-decoration:none}
 'use strict';
 
 /* ── 條款設定（改版改這裡） ── */
-var T = { version:'v2.2', effective:'2026-09-18', months:12, boardMonths:60, presumeDays:30 };
+var T = { version:'v2.3', effective:'2026-09-18', months:12, boardMonths:60, presumeDays:30 };
 var $=function(id){ return document.getElementById(id); };
 if($('ftVer'))  $('ftVer').textContent  = T.version;
 if($('ftDate')) $('ftDate').textContent = T.effective;
