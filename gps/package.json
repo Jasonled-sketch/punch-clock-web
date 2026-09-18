@@ -1,0 +1,19 @@
+{
+  "name": "azliot-gps-ragic",
+  "version": "1.0.0",
+  "private": true,
+  "description": "安智連 LPush 車輛定位 → Claude 判讀 → Ragic 拜訪記錄",
+  "main": "src/server.js",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node test/run.js",
+    "simulate": "node tools/simulate.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.70.0"
+  },
+  "optionalDependencies": {
+    "pg": "^8.13.0"
+  }
+}
