@@ -9,6 +9,7 @@ const { distanceMeters } = require('../src/geo');
 const { ragicDate, ragicDateTime } = require('../src/ragic');
 const { fallbackSummary, summarizeVisit } = require('../src/ai');
 const { createIngest } = require('../src/handler');
+const { receiveTraccar, normalizeTraccar, KNOTS_TO_KMH } = require('../src/traccar');
 const { MemoryStore } = require('../src/stores');
 
 let pass = 0;
@@ -163,6 +164,65 @@ group('到點 / 離開判斷');
   check('對應兩筆離開', ev.filter((e) => e.type === 'departure').length === 2);
 }
 
+
+// ─────────────────────────────────────────
+group('Traccar 轉接（蝦皮 GT06 + 自架 Traccar 路線）');
+{
+  const TOKEN = 'ingest-secret';
+  const mk = (over) => ({
+    device: { uniqueId: '868120214425578', name: 'ABC-1234', status: 'online' },
+    position: Object.assign({
+      deviceId: 1, protocol: 'gt06', valid: true, outdated: false,
+      fixTime: '2026-09-18T06:03:00.000Z', deviceTime: '2026-09-18T06:03:00.000Z',
+      latitude: 24.1478, longitude: 120.6737, altitude: 0, speed: 0, course: 90,
+      attributes: { ignition: false, motion: false, sat: 14, power: 12.6, charge: true },
+    }, over || {}),
+  });
+
+  const p = receiveTraccar(JSON.stringify(mk()), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('token 正確時收下', p.imei === '868120214425578' && p.plateNum === 'ABC-1234');
+  check('ignition false → acc 0', p.acc === 0);
+  check('valid+非過期 → trustedFix', p.trustedFix === true);
+
+  // 這是整條路最容易錯的地方：Traccar 的 speed 預設是節不是公里
+  const fast = receiveTraccar(JSON.stringify(mk({ speed: 30 })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('30 節換算成約 55.6 公里', Math.abs(fast.speed - 30 * KNOTS_TO_KMH) < 0.1, fast.speed);
+  check('換算後高於移動門檻（不會被誤判成靜止）', fast.speed > DEFAULTS.movingSpeedKmh);
+
+  const slow = receiveTraccar(JSON.stringify(mk({ speed: 3 })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('3 節 = 5.6 公里，若不換算會被當靜止', slow.speed > DEFAULTS.movingSpeedKmh && 3 <= DEFAULTS.movingSpeedKmh, slow.speed);
+
+  const kmh = receiveTraccar(JSON.stringify(mk({ speed: 30 })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN, speedUnit: 'kmh' });
+  check('Traccar 改設 kmh 時不重複換算', kmh.speed === 30);
+
+  const invalid = receiveTraccar(JSON.stringify(mk({ valid: false })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('valid=false（多為基站定位）不可信', invalid.trustedFix === false);
+
+  const old = receiveTraccar(JSON.stringify(mk({ outdated: true })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('outdated=true（補傳舊點）不可信', old.trustedFix === false);
+
+  const zero = receiveTraccar(JSON.stringify(mk({ latitude: 0, longitude: 0 })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('0,0 視為未定位', zero.lat === null && zero.trustedFix === false);
+
+  const alarm = receiveTraccar(JSON.stringify(mk({ attributes: { alarm: 'powerCut', ignition: false } })), { 'x-ingest-token': TOKEN }, { ingestToken: TOKEN });
+  check('powerCut 對應成 POWER_OFF', alarm.kind === 'alarm' && alarm.alarmType === 'POWER_OFF');
+  check('告警包不當可信定位', alarm.trustedFix === false);
+
+  let e1 = null;
+  try { receiveTraccar(JSON.stringify(mk()), { 'x-ingest-token': 'wrong' }, { ingestToken: TOKEN }); }
+  catch (e) { e1 = e.code; }
+  check('token 錯誤被擋下', e1 === 'bad_signature');
+
+  let e2 = null;
+  try { receiveTraccar(JSON.stringify(mk()), {}, {}); }
+  catch (e) { e2 = e.code; }
+  check('沒設 token 時預設拒收（不會裸奔）', e2 === 'bad_signature');
+
+  const n = normalizeTraccar(mk({ attributes: { ignition: true, sat: 12, batteryLevel: 88, power: 13.1 } }));
+  check('電量與電壓有帶出來', n.bat === 88 && n.vol === 13.1);
+  check('ignition true → acc 1', n.acc === 1);
+}
+
 // ─────────────────────────────────────────
 group('Ragic 格式');
 {
@@ -241,6 +301,42 @@ group('AI 摘要退路');
   const before = written.visits.length;
   const swept = await sw.sweepNow();
   check('sweep 收掉離線卡住的拜訪並寫入', swept.length === 1 && written.visits.length === before + 1 && written.visits[written.visits.length - 1].reason === 'offline_timeout');
+
+  group('端對端（Traccar 路線）');
+  const tWritten = [];
+  const tIngest = createIngest({ TRACCAR_INGEST_TOKEN: 'tok', GPS_AI_DISABLED: '1' }, {
+    store: new MemoryStore(),
+    ragic: {
+      async fetchCustomers() { return [{ id: 'C001', name: '台中客戶甲', lat: 24.1477, lng: 120.6736 }]; },
+      async writeVisit(v) { tWritten.push(v); return { status: 'SUCCESS' }; },
+      async writeBadgePunch() { return { status: 'SUCCESS' }; },
+    },
+    log: () => {},
+  });
+  const tPost = async (over, atMs) => {
+    const payload = {
+      device: { uniqueId: 'TRC1', name: 'TR-0001' },
+      position: Object.assign({
+        valid: true, outdated: false, fixTime: new Date(atMs).toISOString(),
+        latitude: 24.1478, longitude: 120.6737, speed: 0, course: 90,
+        attributes: { ignition: false, sat: 14, power: 12.6 },
+      }, over || {}),
+    };
+    const r = await tIngest.handleTraccar(JSON.stringify(payload), { 'x-ingest-token': 'tok' });
+    await r.work;
+    return r;
+  };
+  // 行駛接近（24 節 ≈ 44 公里）
+  for (let m = 0; m < 5; m += 1) await tPost({ speed: 24, latitude: 24.17 - 0.004 * m, longitude: 120.69, attributes: { ignition: true, sat: 14 } }, min(m));
+  for (let m = 5; m < 40; m += 1) await tPost({}, min(m));
+  check('Traccar 路線：停留期間不寫入', tWritten.length === 0);
+  await tPost({ speed: 22, latitude: 24.1600, longitude: 120.6900, attributes: { ignition: true, sat: 14 } }, min(41));
+  check('Traccar 路線：離開後寫入一筆', tWritten.length === 1, tWritten.length);
+  check('Traccar 路線：客戶與時長正確', tWritten[0] && tWritten[0].customerName === '台中客戶甲' && tWritten[0].durationMinutes >= 34 && tWritten[0].durationMinutes <= 38, tWritten[0]);
+  check('Traccar 路線：車牌取自 device.name', tWritten[0] && tWritten[0].plateNum === 'TR-0001');
+
+  const tBad = await tIngest.handleTraccar('{}', { 'x-ingest-token': 'wrong' });
+  check('Traccar 路線：token 錯誤回 errorCode 非 0 但 HTTP 200', tBad.body.errorCode !== 0 && tBad.status === 200);
 
   console.log(`\n${fail === 0 ? `全部通過 ${pass} 項` : `通過 ${pass}，失敗 ${fail}`}`);
   process.exit(fail === 0 ? 0 : 1);

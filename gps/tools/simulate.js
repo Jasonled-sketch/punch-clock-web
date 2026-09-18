@@ -11,12 +11,22 @@
 
 const { md5 } = require('../src/md5');
 
-const endpoint = process.argv[2] || 'http://localhost:3000/azliot/lpush';
+// SIM_MODE=azliot（預設）走安智連 LPush；SIM_MODE=traccar 走自架 Traccar 轉發
+const MODE = (process.env.SIM_MODE || 'azliot').toLowerCase();
+const endpoint = process.argv[2]
+  || (MODE === 'traccar' ? 'http://localhost:3000/traccar/position' : 'http://localhost:3000/azliot/lpush');
+
 const KEY = process.env.AZLIOT_TF_KEY;
-if (!KEY) {
-  console.error('請設定 AZLIOT_TF_KEY（就是個人中心拿到的 tfKey）');
+const TRACCAR_TOKEN = process.env.TRACCAR_INGEST_TOKEN;
+if (MODE === 'azliot' && !KEY) {
+  console.error('請設定 AZLIOT_TF_KEY（個人中心拿到的 tfKey）');
   process.exit(1);
 }
+if (MODE === 'traccar' && !TRACCAR_TOKEN) {
+  console.error('請設定 TRACCAR_INGEST_TOKEN（跟 Traccar forward.header 同一組）');
+  process.exit(1);
+}
+const KNOTS = 1.852;
 
 const IMEI = process.env.SIM_IMEI || '868120214425578';
 const PLATE = process.env.SIM_PLATE || 'ABC-1234';
@@ -31,7 +41,39 @@ const fmt = (ms) => {
   return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 };
 
+async function sendTraccar(data) {
+  // 模擬 Traccar 的轉發格式。speed 送「節」，跟 Traccar 預設一致。
+  const payload = {
+    device: { uniqueId: IMEI, name: PLATE, status: 'online' },
+    position: {
+      deviceId: 1,
+      protocol: 'gt06',
+      valid: true,
+      outdated: false,
+      fixTime: new Date(data.__at).toISOString(),
+      deviceTime: new Date(data.__at).toISOString(),
+      latitude: data.lat,
+      longitude: data.lng,
+      altitude: 0,
+      speed: data.speed / KNOTS,
+      course: data.dir,
+      attributes: { ignition: data.acc === 1, motion: data.speed > 0, sat: data.gNum, power: data.vol, charge: true },
+    },
+  };
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Ingest-Token': TRACCAR_TOKEN },
+    body: JSON.stringify(payload),
+  });
+  return { status: res.status, text: (await res.text()).slice(0, 120) };
+}
+
 async function send(lpushType, data) {
+  if (MODE === 'traccar') {
+    // 心跳包在 Traccar 那邊沒有對應，直接跳過
+    if (lpushType !== 2) return { status: 200, text: '(traccar 模式略過非定位包)' };
+    return sendTraccar(data);
+  }
   const ds = JSON.stringify(data);
   const time = String(Math.floor(Date.now() / 1000));
   const body = new URLSearchParams({
@@ -53,12 +95,13 @@ async function send(lpushType, data) {
 const location = (atMs, lat, lng, speed, acc) => ({
   gType: 1, imei: IMEI, plateNum: PLATE, lat, lng, speed, dir: 90,
   vol: 12.6, gtm: fmt(atMs), ctm: fmt(atMs), acc, ups: 1, bat: 95, gsm: 26, gNum: 14,
+  __at: atMs, // 只給 traccar 模式用
 });
 
 const sleep = (realMs) => new Promise((r) => setTimeout(r, Math.max(30, realMs / SPEEDUP)));
 
 async function main() {
-  console.log(`模擬送往 ${endpoint}`);
+  console.log(`模擬送往 ${endpoint}（模式：${MODE}）`);
   console.log(`車輛 ${PLATE}（${IMEI}）目的地 ${DEST_LAT},${DEST_LNG}\n`);
 
   let t = start;

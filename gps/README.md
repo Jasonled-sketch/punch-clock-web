@@ -1,18 +1,32 @@
 # 車輛 GPS → AI → Ragic 拜訪記錄
 
-安智連（azliot）定位器把位置推到這個服務，服務判斷「車子到了哪個客戶、停多久」，
-交給 Claude 寫成一句話，再寫進 Ragic。
+定位器把位置推進來，服務判斷「車子到了哪個客戶、停多久」，交給 Claude 寫成一句話，再寫進 Ragic。
 
 ```
-定位器 → 安智連平台 → LPush HTTP 推送 → 本服務 → Claude 摘要 → Ragic
+定位器 → （安智連平台 或 自架 Traccar）→ 本服務 → Claude 摘要 → Ragic
 ```
 
-跟自己解 GT06 相比，這條路不用開 TCP 埠、不用自架 Traccar，只要一個 HTTPS 網址。
-代價是資料先經過安智連的伺服器，而且要付他們的對接費。
+## 兩條路，選一條
+
+判斷、Ragic 寫入、AI 摘要三層完全共用。**只有最前面「資料怎麼進來」那一層不同**，兩種都寫好了。
+
+| | A：安智連 LPush | B：Traccar 自架 |
+|---|---|---|
+| 硬體 | 淘寶安智連定位器 | 蝦皮 GT06 相容機（Seeworld 等） |
+| 前置費用 | 對接費 2000 人民幣（約 NT$9,600，一次性，超過 100 台免費） | 無 |
+| 要顧的伺服器 | 只有本服務 | 本服務 ＋ 一台 Traccar |
+| 設定方式 | 把網址給安智連管理員 | 簡訊指令把定位器指到自己的 Traccar |
+| 依賴 | 安智連平台要活著 | 沒有第三方 |
+| 程式入口 | `src/lpush.js` → `POST /azliot/lpush` | `src/traccar.js` → `POST /traccar/position` |
+
+**怎麼選**：車少（十台以內）又不想付對接費就走 B；懶得多維護一台伺服器、或車隊會超過百台就走 A。
+兩條路隨時能換，換的只是設定，記錄格式一模一樣。
 
 ---
 
-## 一、先跟安智連談的事
+---
+
+## 路線 A：先跟安智連談的事
 
 開發前先問客服這四題，答案會決定值不值得做：
 
@@ -25,7 +39,7 @@
 
 ---
 
-## 二、要準備的東西
+## 共同準備（兩條路都要）
 
 | 項目 | 說明 |
 |---|---|
@@ -62,13 +76,43 @@
 
 ---
 
-## 三、環境變數
+## 路線 B：Traccar 怎麼設
+
+1. **買機器**。蝦皮搜「4G GPS 定位器 GT06」，下單前確認兩件事：可以用簡訊改伺服器位址、支援台灣 4G 頻段（至少 B1、B3）。
+2. **架 Traccar**。官方 Docker 映像檔，跑在 Railway 或任何一台有公網 IP 的機器上。GT06 走 5023 埠。
+3. **把定位器指過來**。插自己的 SIM 卡（要能收簡訊），發簡訊給定位器的門號：
+
+   ```
+   SERVER,1,你的網域,5023,0#
+   ```
+
+   指令因廠牌而異，向賣家索取正確格式。
+4. **設定轉發**。編輯 Traccar 的 `conf/traccar.xml`：
+
+   ```xml
+   <entry key='forward.enable'>true</entry>
+   <entry key='forward.url'>https://你的網址/traccar/position</entry>
+   <entry key='forward.type'>json</entry>
+   <entry key='forward.header'>X-Ingest-Token: 你設的密碼</entry>
+   ```
+
+   同一組密碼填進本服務的 `TRACCAR_INGEST_TOKEN`。Traccar 的轉發不帶簽章，沒有這個 token 等於誰都能往你的端點灌假座標，所以**沒設 token 時本服務預設拒收**。
+5. **車牌哪裡來**。Traccar 後台把裝置名稱（Device name）設成車牌，本服務會直接拿來用。
+
+---
+
+## 環境變數
 
 ```bash
 # 安智連
 AZLIOT_TF_KEY=個人中心拿到的 key        # 必填，驗簽用
 AZLIOT_PUSH_PATH=/azliot/lpush          # 選填，推送路徑
 AZLIOT_TZ_OFFSET=8                      # 選填，平台時間的時區。中國和台灣都是 8
+
+# Traccar（路線 B 才要）
+TRACCAR_INGEST_TOKEN=自己設一組長密碼      # 必填，否則拒收
+TRACCAR_PUSH_PATH=/traccar/position
+TRACCAR_SPEED_UNIT=kn                     # Traccar 預設送「節」。改過 conf 才填 kmh
 
 # Ragic
 RAGIC_API_KEY=...                       # 必填
@@ -101,7 +145,7 @@ DATABASE_URL=postgres://...             # 有設就用 Postgres 存狀態（建�
 
 ---
 
-## 四、跑起來
+## 跑起來
 
 ```bash
 cd gps
@@ -133,12 +177,16 @@ CREATE TABLE IF NOT EXISTS gps_device_state (
 
 ---
 
-## 五、裝機前先模擬
+## 裝機前先模擬
 
 定位器還沒到就能把整條路測通：
 
 ```bash
+# 路線 A
 AZLIOT_TF_KEY=xxx node tools/simulate.js https://你的網址/azliot/lpush
+
+# 路線 B
+SIM_MODE=traccar TRACCAR_INGEST_TOKEN=xxx node tools/simulate.js https://你的網址/traccar/position
 ```
 
 會模擬出發、抵達、停 35 分鐘、離開，跑完去 Ragic 看有沒有長出一筆記錄。
@@ -146,7 +194,7 @@ AZLIOT_TF_KEY=xxx node tools/simulate.js https://你的網址/azliot/lpush
 
 ---
 
-## 六、六種封包的處理方式
+## 路線 A：六種封包的處理方式
 
 | LPushType | 內容 | 這個服務怎麼處理 |
 |---|---|---|
@@ -159,7 +207,7 @@ AZLIOT_TF_KEY=xxx node tools/simulate.js https://你的網址/azliot/lpush
 
 ---
 
-## 七、實作上踩過或避開的坑
+## 實作上踩過或避開的坑
 
 **基站定位不能用來比對客戶。**
 定位包有 `gType`：1 是衛星定位，2 是基站定位。基站定位誤差數百公尺到數公里，
@@ -189,6 +237,14 @@ AI 只在拜訪結案時呼叫一次，不是每個定位包都叫——一台�
 安智連等不到 200 會重送。驗簽和狀態更新做完就先回 200，Ragic 寫入和 AI 丟到背景跑。
 驗簽失敗也是回 HTTP 200 加 `errorCode: 1`（照文件第 7 點的格式），避免平台無限重試。
 
+**Traccar 的速度單位是「節」不是公里。**
+1 節 = 1.852 公里。不換算的話，時速 15 公里的車會被讀成 8，低於移動門檻而被當成靜止，
+於是塞車、等紅燈都會被記成拜訪客戶。`TRACCAR_SPEED_UNIT` 預設 `kn` 會自動換算，
+只有在你改過 Traccar 設定讓它送公里時才填 `kmh`。
+
+**Traccar 的 `valid` 和 `outdated` 等同 LPush 的 `gType`。**
+`valid=false` 多半是基站定位，`outdated=true` 是補傳的舊點。兩者都不拿來做地理判斷。
+
 **Ragic 的老地雷。**
 POST 一定要帶 `?api`；日期送 `YYYY/MM/DD`，ISO 8601 寫不進去；數值欄位送純數字不能帶單位；
 POST 只認欄位 ID 不認中文名；GET 上限 1000 筆要分頁；429 要退避重試。
@@ -196,7 +252,7 @@ POST 只認欄位 ID 不認中文名；GET 上限 1000 筆要分頁；429 要退
 
 ---
 
-## 八、刻意沒有做的事
+## 刻意沒有做的事
 
 **遠端斷油電。**
 安智連 API 有 `Transfer/doCmd` 可以遠端切斷車輛油電。這個服務沒有接，也不建議接。
@@ -209,7 +265,7 @@ POST 只認欄位 ID 不認中文名；GET 上限 1000 筆要分頁；429 要退
 
 ---
 
-## 九、接下來可以做
+## 接下來可以做
 
 - 到點時透過 LINE bot 通知業務主管（記得走群組推播，一則就好，見 skill `line-quota-saving`）。
 - 工牌簽到接進現有的出勤打卡比對系統，業務到客戶點位自動打卡。

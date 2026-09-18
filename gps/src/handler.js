@@ -7,6 +7,7 @@
 //   Worker  → ctx.waitUntil(work)
 
 const { receive, LPushError } = require('./lpush');
+const { receiveTraccar, TraccarError } = require('./traccar');
 const { createState, onPacket, sweep } = require('./visit-engine');
 const { RagicClient } = require('./ragic');
 const { summarizeVisit } = require('./ai');
@@ -111,28 +112,10 @@ function createIngest(env, deps) {
     }
   }
 
-  /**
-   * @returns {{status:number, body:object, work:Promise}}
-   */
-  async function handle(bodyText, contentType) {
-    let packet;
-    try {
-      packet = receive(bodyText, contentType, {
-        tfKey: env.AZLIOT_TF_KEY,
-        tzOffsetHours: tz,
-        allowUnsigned: env.AZLIOT_ALLOW_UNSIGNED === '1',
-      });
-    } catch (err) {
-      if (err instanceof LPushError) {
-        log('error', `封包被拒: ${err.message}`);
-        // 回非 0 讓安智連那邊看得到異常（文件第 7 點建議的格式）
-        return { status: 200, body: { errorCode: 1, errorStr: err.message }, work: Promise.resolve() };
-      }
-      throw err;
-    }
-
+  /** 兩種來源共用的後半段：去重 → 取狀態 → 判斷 → 存回 → 背景處理 */
+  async function ingestPacket(packet) {
     if (!packet.imei) {
-      return { status: 200, body: { errorCode: 1, errorStr: 'data 裡沒有 imei' }, work: Promise.resolve() };
+      return { status: 200, body: { errorCode: 1, errorStr: ' 封包裡沒有裝置識別碼'.trim() }, work: Promise.resolve() };
     }
 
     // 重送去重。平台沒收到 200 會重試，同一包算兩次會產生假的重複記錄。
@@ -147,19 +130,59 @@ function createIngest(env, deps) {
     try {
       customers = await ragic.fetchCustomers();
     } catch (err) {
-      // 客戶主檔讀不到還是要繼續：記錄會寫成「未建檔地點」，
-      // 總比整包丟掉好。
+      // 客戶主檔讀不到還是要繼續：記錄會寫成「未建檔地點」，總比整包丟掉好。
       log('error', `讀客戶主檔失敗，本次不做客戶比對: ${err && err.message}`);
     }
 
     const { events } = onPacket(state, packet, customers, config);
     await store.put(packet.imei, state);
 
-    return {
-      status: 200,
-      body: OK,
-      work: processEvents(events, packet),
-    };
+    return { status: 200, body: OK, work: processEvents(events, packet) };
+  }
+
+  function rejected(err) {
+    log('error', `封包被拒: ${err.message}`);
+    // 回非 0 讓來源那邊看得到異常（安智連文件第 7 點建議的格式）。
+    // HTTP 仍為 200，否則平台會無限重送同一包。
+    return { status: 200, body: { errorCode: 1, errorStr: err.message }, work: Promise.resolve() };
+  }
+
+  /**
+   * 安智連 LPush 入口。
+   * @returns {{status:number, body:object, work:Promise}}
+   */
+  async function handle(bodyText, contentType) {
+    let packet;
+    try {
+      packet = receive(bodyText, contentType, {
+        tfKey: env.AZLIOT_TF_KEY,
+        tzOffsetHours: tz,
+        allowUnsigned: env.AZLIOT_ALLOW_UNSIGNED === '1',
+      });
+    } catch (err) {
+      if (err instanceof LPushError) return rejected(err);
+      throw err;
+    }
+    return ingestPacket(packet);
+  }
+
+  /**
+   * Traccar 轉發入口。自架 Traccar + GT06 定位器走這條。
+   * @returns {{status:number, body:object, work:Promise}}
+   */
+  async function handleTraccar(bodyText, headers) {
+    let packet;
+    try {
+      packet = receiveTraccar(bodyText, headers, {
+        ingestToken: env.TRACCAR_INGEST_TOKEN,
+        allowUnsigned: env.TRACCAR_ALLOW_UNSIGNED === '1',
+        speedUnit: env.TRACCAR_SPEED_UNIT,
+      });
+    } catch (err) {
+      if (err instanceof TraccarError) return rejected(err);
+      throw err;
+    }
+    return ingestPacket(packet);
   }
 
   /** 定時呼叫，把離線卡住的拜訪收掉。建議每 10 分鐘一次。 */
@@ -175,7 +198,7 @@ function createIngest(env, deps) {
     return events;
   }
 
-  return { handle, sweepNow, store, ragic };
+  return { handle, handleTraccar, sweepNow, store, ragic };
 }
 
 module.exports = { createIngest };

@@ -35,6 +35,7 @@ function send(res, status, obj) {
 function createServer(env, deps) {
   const ingest = createIngest(env, deps);
   const path = env.AZLIOT_PUSH_PATH || '/azliot/lpush';
+  const traccarPath = env.TRACCAR_PUSH_PATH || '/traccar/position';
 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
@@ -43,7 +44,9 @@ function createServer(env, deps) {
       return send(res, 200, { ok: true, service: 'azliot-lpush', at: new Date().toISOString() });
     }
 
-    if (url.pathname !== path) return send(res, 404, { errorCode: 1, errorStr: 'not found' });
+    const isAzliot = url.pathname === path;
+    const isTraccar = url.pathname === traccarPath;
+    if (!isAzliot && !isTraccar) return send(res, 404, { errorCode: 1, errorStr: 'not found' });
     if (req.method !== 'POST') return send(res, 405, { errorCode: 1, errorStr: 'method not allowed' });
 
     let bodyText;
@@ -54,7 +57,9 @@ function createServer(env, deps) {
     }
 
     try {
-      const result = await ingest.handle(bodyText, req.headers['content-type']);
+      const result = isTraccar
+        ? await ingest.handleTraccar(bodyText, req.headers)
+        : await ingest.handle(bodyText, req.headers['content-type']);
       // 先回 200 再讓背景工作跑完。安智連只在意有沒有收到回應，
       // 不需要等 Ragic 寫完。
       send(res, result.status, result.body);
@@ -92,16 +97,20 @@ function mountExpress(app, env, deps) {
     req.on('error', next);
   };
 
-  app.post(path, raw, async (req, res) => {
+  const respond = (handler) => async (req, res) => {
     try {
-      const result = await ingest.handle(req.rawBody, req.headers['content-type']);
+      const result = await handler(req);
       res.status(result.status).json(result.body);
       result.work.catch((err) => console.error('[gps][error] 背景處理失敗', err));
     } catch (err) {
       console.error('[gps][error] handle 例外', err);
       res.status(200).json({ errorCode: 1, errorStr: '內部錯誤' });
     }
-  });
+  };
+
+  app.post(path, raw, respond((req) => ingest.handle(req.rawBody, req.headers['content-type'])));
+  app.post(env.TRACCAR_PUSH_PATH || '/traccar/position', raw,
+    respond((req) => ingest.handleTraccar(req.rawBody, req.headers)));
 
   return ingest;
 }
