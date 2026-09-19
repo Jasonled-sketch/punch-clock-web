@@ -78,26 +78,14 @@
 
 ## 路線 B：Traccar 怎麼設
 
-1. **買機器**。蝦皮搜「4G GPS 定位器 GT06」，下單前確認兩件事：可以用簡訊改伺服器位址、支援台灣 4G 頻段（至少 B1、B3）。
-2. **架 Traccar**。官方 Docker 映像檔，跑在 Railway 或任何一台有公網 IP 的機器上。GT06 走 5023 埠。
-3. **把定位器指過來**。插自己的 SIM 卡（要能收簡訊），發簡訊給定位器的門號：
+四步，設定檔都寫好了：
 
-   ```
-   SERVER,1,你的網域,5023,0#
-   ```
+1. **買機器** → 看 [`BUYING.md`](BUYING.md)，含型號推薦和貼給賣家的問答稿
+2. **架 Traccar** → 看 [`traccar/README.md`](traccar/README.md)，`docker compose up -d` 就起來
+3. **把定位器指過來** → 發簡訊改伺服器位址，指令格式向賣家索取
+4. **設定轉發** → [`traccar/traccar.xml`](traccar/traccar.xml) 已經寫好，只要改網址和密碼兩個地方
 
-   指令因廠牌而異，向賣家索取正確格式。
-4. **設定轉發**。編輯 Traccar 的 `conf/traccar.xml`：
-
-   ```xml
-   <entry key='forward.enable'>true</entry>
-   <entry key='forward.url'>https://你的網址/traccar/position</entry>
-   <entry key='forward.type'>json</entry>
-   <entry key='forward.header'>X-Ingest-Token: 你設的密碼</entry>
-   ```
-
-   同一組密碼填進本服務的 `TRACCAR_INGEST_TOKEN`。Traccar 的轉發不帶簽章，沒有這個 token 等於誰都能往你的端點灌假座標，所以**沒設 token 時本服務預設拒收**。
-5. **車牌哪裡來**。Traccar 後台把裝置名稱（Device name）設成車牌，本服務會直接拿來用。
+車牌不用另外設定：Traccar 後台把裝置名稱（Device name）填成車牌，本服務會直接拿來用。
 
 ---
 

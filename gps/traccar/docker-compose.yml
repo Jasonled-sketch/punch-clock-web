@@ -1,0 +1,30 @@
+# 自架 Traccar。適用自己的主機或任何支援 docker compose 的 VPS。
+#
+#   docker compose up -d
+#   瀏覽器開 http://你的IP:8082  預設帳密 admin / admin（第一次登入請立刻改掉）
+#
+# Railway 部署看同目錄 README.md，設定不太一樣。
+
+services:
+  traccar:
+    image: traccar/traccar:latest
+    container_name: traccar
+    restart: unless-stopped
+    ports:
+      - "8082:8082"     # 網頁管理介面
+      - "5023:5023"     # GT06 協定，定位器連這個埠
+    volumes:
+      # 設定檔唯讀掛進去
+      - ./traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      # 資料庫和 log 要落在 volume 上，否則重啟就清空
+      - traccar-data:/opt/traccar/data
+      - traccar-logs:/opt/traccar/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  traccar-data:
+  traccar-logs:
