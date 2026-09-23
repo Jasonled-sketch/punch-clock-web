@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.16</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.17</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3762,6 +3762,7 @@ async function doSaveWrkr() {
 
 let LEAVE_TYPES = ['特休','病假','事假','其他'];  // 臨時假非假別，改由 isUrgentLeave(72hr) 自動標記。開頁後從 bot /calc/config 動態載入（公司設定層：含 ATT_EXTRA_LEAVES 開啟的法定假別）
 let LEAVE_SUB = {}, PROOF_REQ = [];   // 假別子選單／證明必附清單：開頁後從 bot /calc/config 載入（與 LINE 申請中心同一份，v11.15）
+let ANNUAL_MIN_H = 2;              // 特休最小申請單位（小時）：開頁後由 bot /calc/config 的 annualMinH 覆寫（Jason 2026/09/23 由半日改 2 小時）
 const PROOF_LBL = { '病假': '就診證明', '公傷病假': '職災就醫證明', '公假': '公文／通知書' };
 function lfEffType() { const t = document.getElementById('lf-type')?.value; const box = document.getElementById('lf-subbox'); return (LEAVE_SUB[t] && box && box.style.display !== 'none') ? document.getElementById('lf-sub').value : t; }
 let REMOTE_CFG = null;
@@ -3774,6 +3775,7 @@ async function loadRemoteCfg() {
       if (Array.isArray(d.leaveTypes) && d.leaveTypes.length) LEAVE_TYPES = d.leaveTypes;
       if (d.leaveSub && typeof d.leaveSub === 'object') LEAVE_SUB = d.leaveSub;
       if (Array.isArray(d.proofRequired)) PROOF_REQ = d.proofRequired;
+      if (Number(d.annualMinH) > 0) ANNUAL_MIN_H = Number(d.annualMinH);   // 特休最小單位跟著 bot 走，兩邊不再各寫死
       if (d.role) {                                    // 權限四層:以 Worker 注入的 role 為準
         const prev = ROLE;
         ROLE = d.role;
@@ -4048,7 +4050,7 @@ function showLeaveForm(lv) {
         <button type="button" class="btn-quick" id="lq-pm"     onclick="pickLeavePreset('pm')">下午</button>
         <button type="button" class="btn-quick" id="lq-custom" onclick="pickLeavePreset('custom')">零計</button>
       </div>
-      <div id="lf-annual-note" style="display:none;font-size:12px;color:#e65100;margin-top:4px">特休以半日為單位，請選「上午／下午／整天」</div>
+      <div id="lf-annual-note" style="display:none;font-size:12px;color:#e65100;margin-top:4px">特休最少 2 小時：可按「整天／上午／下午」，或按「零計」自訂時段（例如 09:00–11:00）</div>
     </div>
     <div style="display:flex;gap:10px">
       <div class="ff" style="flex:1"><label>開始時間（24h）</label>
@@ -4078,7 +4080,7 @@ function showLeaveForm(lv) {
   applyLeaveTypeRule();
 }
 
-// 特休限半日：選特休時只開 上午/下午/整天，關掉「零計」與自訂時間輸入（與 LINE 申請中心同規則）
+// 特休最小單位＝ANNUAL_MIN_H 小時（2026/09/23 起，原「限半日」已廢）：快捷鈕與自訂時段都開放，只在送出時檢查時數
 function applyLeaveTypeRule() {
   { const t0 = document.getElementById('lf-type')?.value, box = document.getElementById('lf-subbox'), sel = document.getElementById('lf-sub');
     if (box && sel) { if (LEAVE_SUB[t0]) { if (sel.dataset.for !== t0) { sel.innerHTML = LEAVE_SUB[t0].map(x => `<option value="${x.type}">${x.label}</option>`).join(''); sel.dataset.for = t0; } box.style.display = ''; } else box.style.display = 'none'; }
@@ -4089,16 +4091,10 @@ function applyLeaveTypeRule() {
   const cust = document.getElementById('lq-custom');
   const s = document.getElementById('lf-start'), e = document.getElementById('lf-end');
   const note = document.getElementById('lf-annual-note');
-  if (cust) cust.style.display = isAnnual ? 'none' : '';
-  if (s) { s.readOnly = isAnnual; s.style.background = isAnnual ? '#eceff1' : ''; }
-  if (e) { e.readOnly = isAnnual; e.style.background = isAnnual ? '#eceff1' : ''; }
+  if (cust) cust.style.display = '';                 // 特休 2026/09/23 起可自訂時段（最少 ANNUAL_MIN_H 小時）
+  if (s) { s.readOnly = false; s.style.background = ''; }
+  if (e) { e.readOnly = false; e.style.background = ''; }
   if (note) note.style.display = isAnnual ? '' : 'none';
-  if (isAnnual) {                                   // 目前時段非 上午/下午/整天 → 預設整天
-    const sh = _LF_SHIFT || { am: ['08:30', '12:30'], pm: ['14:00', '18:00'] };
-    const cs = s?.value, ce = e?.value;
-    const ok = (cs === sh.am[0] && ce === sh.am[1]) || (cs === sh.pm[0] && ce === sh.pm[1]) || (cs === sh.am[0] && ce === sh.pm[1]);
-    if (!ok) pickLeavePreset('full');
-  }
 }
 
 function updateLeaveDay() {
@@ -4159,12 +4155,8 @@ async function saveLeave() {
   if (!date) { toast('請選擇請假日期', 'red'); return; }
   if (!start || !end) { toast('請填寫開始與結束時間', 'red'); return; }
   if (!hours || Number(hours) <= 0) { toast('時間區間無效', 'red'); return; }
-  // 特休限半日：只能是 上午/下午/整天（與 LINE 申請中心一致；後端防呆，前端已鎖）
-  if (type === '特休') {
-    const shp = _LF_SHIFT || { am: ['08:30', '12:30'], pm: ['14:00', '18:00'] };
-    const okHalf = (start === shp.am[0] && end === shp.am[1]) || (start === shp.pm[0] && end === shp.pm[1]) || (start === shp.am[0] && end === shp.pm[1]);
-    if (!okHalf) { toast('特休須以半日為單位：請選「上午／下午／整天」', 'red'); return; }
-  }
+  // 特休最少 ANNUAL_MIN_H 小時（Jason 2026/09/23 拍板；原「限半日」已廢，與 LINE 申請中心同規則）
+  if (type === '特休' && Number(hours) < ANNUAL_MIN_H - 1e-9) { toast(`特休最少須申請 ${ANNUAL_MIN_H} 小時（可按「零計」自訂時段）`, 'red'); return; }
   // 特休餘額把關：改吃 bot 單一 API（與員工 LINE / 管理者月報同一份計算），API 失敗才回退本地算；剩餘不足擋送出
   if (type === '特休' && MY_WORKER && MY_WORKER.emp_type !== '管理者') {
     const shH = _LF_SHIFT?.hours || 8;
