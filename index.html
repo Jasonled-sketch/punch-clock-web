@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.17</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.18</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -4624,6 +4624,8 @@ const AUDIT_LABEL = {
   ot_auto_approve: { icon: '💪', name: '下班加班登記', color: '#1a73e8' },
   ot_cancel:       { icon: '🗑', name: '撤銷加班', color: '#c62828' },
   ot_expire:       { icon: '⌛', name: '加班逾期關閉', color: '#9aa0a6' },
+  ot_unsent_remind:{ icon: '⚠️', name: '加班未送出·已提醒本人', color: '#e65100' },
+  ot_unsent_mgr:   { icon: '📋', name: '加班未送出·已通知主管', color: '#e65100' },
   approve:         { icon: '✅', name: '核准', color: '#0a6b0a' },
   reject:          { icon: '❌', name: '駁回', color: '#c62828' },
   punch_edit:      { icon: '🔧', name: '修正打卡', color: '#6b21a8' },
