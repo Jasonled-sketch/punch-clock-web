@@ -1,0 +1,209 @@
+<title>香火月報</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;900&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{
+  --bg:#F7F6F3; --paper:#FFFFFF; --ink:#1E1B19; --ink2:#55504B; --muted:#8A847D;
+  --rule:#E6E2DC; --grid:#EEEBE6; --accent:#8E1B16; --gold:#9A6B12;
+  --s1:#B3261E; --s2:#1F6FB8; --bar:#B3261E;
+  --good:#1E7A3C; --goodbg:#E6F4EA; --warn:#9A5B00; --warnbg:#FFF3DC;
+  --tip:#1E1B19; --tipink:#FFFFFF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#141312; --paper:#1C1A19; --ink:#F2EFEA; --ink2:#C4BEB6; --muted:#8F8880;
+    --rule:#2E2B28; --grid:#2A2725; --accent:#E5675F; --gold:#D9A441;
+    --s1:#E5675F; --s2:#3D8BD6; --bar:#E5675F;
+    --good:#6FCB8B; --goodbg:#16301F; --warn:#F0B45A; --warnbg:#35270F;
+    --tip:#F2EFEA; --tipink:#1C1A19;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#141312; --paper:#1C1A19; --ink:#F2EFEA; --ink2:#C4BEB6; --muted:#8F8880;
+  --rule:#2E2B28; --grid:#2A2725; --accent:#E5675F; --gold:#D9A441;
+  --s1:#E5675F; --s2:#3D8BD6; --bar:#E5675F;
+  --good:#6FCB8B; --goodbg:#16301F; --warn:#F0B45A; --warnbg:#35270F;
+  --tip:#F2EFEA; --tipink:#1C1A19;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.65 "Noto Sans TC",system-ui,sans-serif;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.sample{align-self:flex-start;font-size:12px;letter-spacing:.08em;color:var(--warn);background:var(--warnbg);padding:3px 10px;border-radius:4px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid var(--accent);padding-bottom:14px}
+h1{font:900 clamp(28px,6vw,40px)/1.15 "Noto Serif TC",serif;margin:0;color:var(--accent);text-wrap:balance}
+.meta{color:var(--ink2);font-size:14px;text-align:right}
+.meta b{color:var(--ink);font-weight:700}
+.lead{font-size:17px;margin:0;max-width:62ch}
+.lead strong{color:var(--accent)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+@media (max-width:720px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:2px}
+.tile .k{font-size:13px;color:var(--ink2);letter-spacing:.04em}
+.tile .v{font:700 26px/1.2 "Noto Sans TC",sans-serif;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:14px;font-weight:500;color:var(--ink2);margin-left:2px}
+.chip{align-self:flex-start;font-size:12px;font-weight:700;padding:1px 8px;border-radius:999px;font-variant-numeric:tabular-nums}
+.up{color:var(--good);background:var(--goodbg)}
+.down{color:var(--warn);background:var(--warnbg)}
+section{background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:18px 18px 14px}
+h2{font:600 19px/1.3 "Noto Serif TC",serif;margin:0 0 4px}
+.sub{color:var(--ink2);font-size:13.5px;margin:0 0 10px}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--ink2);margin-bottom:4px}
+.legend i{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{fill:var(--muted);font-size:11px;font-family:"Noto Sans TC",sans-serif}
+.chart .lbl{fill:var(--ink);font-weight:700;font-size:12px}
+.tip{position:absolute;pointer-events:none;background:var(--tip);color:var(--tipink);font-size:12.5px;padding:6px 10px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);font-variant-numeric:tabular-nums;line-height:1.5}
+.tip[hidden]{display:none!important}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+@media (max-width:720px){.two{grid-template-columns:1fr}}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:500;color:var(--ink2);font-size:12.5px;border-bottom:1px solid var(--rule);padding:6px 8px}
+td{border-bottom:1px solid var(--grid);padding:7px 8px}
+td.n,th.n{text-align:right}
+.rank{display:flex;flex-direction:column;gap:8px}
+.meter{height:10px;border-radius:5px;background:var(--grid);position:relative}
+.meter span{position:absolute;inset:0 auto 0 0;border-radius:5px;background:var(--gold)}
+.meter em{position:absolute;top:-4px;width:2px;height:18px;background:var(--ink)}
+.scale{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+ol.todo{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+footer{color:var(--muted);font-size:12.5px;text-align:center}
+</style>
+
+<div class="wrap">
+  <span class="sample">範例資料｜僅供展示格式</span>
+  <header>
+    <h1>○○宮 香火月報</h1>
+    <div class="meta">民國 <b>115 年 9 月</b>（農曆八月）<br>送達：主任委員、總幹事</div>
+  </header>
+
+  <p class="lead">本月總收入 <strong>392,600 元</strong>，比去年同月多 8.4%。普渡帶動添油香，光明燈新增 67 戶；仍有 <strong>41 戶</strong>去年有點燈、今年還沒回來。</p>
+
+  <div class="tiles">
+    <div class="tile"><span class="k">本月總收入</span><span class="v">392,600<small>元</small></span><span class="chip up">▲ 8.4% 較去年同月</span></div>
+    <div class="tile"><span class="k">本月新增點燈</span><span class="v">67<small>戶</small></span><span class="chip up">▲ 15.5%</span></div>
+    <div class="tile"><span class="k">新信眾</span><span class="v">38<small>人</small></span><span class="chip up">▲ 12 人</span></div>
+    <div class="tile"><span class="k">點燈回流率</span><span class="v">72<small>%</small></span><span class="chip down">▼ 3 個百分點</span></div>
+  </div>
+
+  <section>
+    <h2>每月點燈戶數：今年 vs 去年</h2>
+    <p class="sub">1 月安太歲高峰最明顯；8、9 月因普渡與中元，今年都比去年多。</p>
+    <div class="legend"><span><i style="background:var(--s1)"></i>115 年</span><span><i style="background:var(--s2)"></i>114 年</span></div>
+    <div class="chart" id="line"></div>
+  </section>
+
+  <div class="two">
+    <section>
+      <h2>本月收入來源</h2>
+      <p class="sub">單位：元。普渡與添油香合計占 80%。</p>
+      <div class="chart" id="bars"></div>
+    </section>
+    <section>
+      <h2>同規模宮廟比較</h2>
+      <p class="sub">與系統內 42 間中型廟（年點燈 800～2,000 戶）匿名比較。</p>
+      <div class="rank">
+        <div><b>本月收入</b>：第 12 名 / 42（前 29%）</div>
+        <div class="meter" role="img" aria-label="第 12 名，前 29%"><span style="width:71%"></span><em style="left:71%"></em></div>
+        <div class="scale"><span>第 42 名</span><span>第 1 名</span></div>
+        <div><b>回流率</b>：72%，中位數 76%</div>
+        <div class="meter" role="img" aria-label="回流率 72%，中位數 76%"><span style="width:72%"></span><em style="left:76%"></em></div>
+        <div class="scale"><span>0%</span><span>黑線＝中位數</span><span>100%</span></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="two">
+    <section>
+      <h2>待回流信眾（前 5 戶）</h2>
+      <p class="sub">去年有點燈、今年尚未登記，共 41 戶。完整名單可匯出寄簡訊。</p>
+      <div class="tbl"><table>
+        <thead><tr><th>戶長</th><th>去年項目</th><th class="n">去年金額</th><th>區域</th></tr></thead>
+        <tbody>
+          <tr><td>林○雄</td><td>光明燈×4</td><td class="n">2,400</td><td>溪湖</td></tr>
+          <tr><td>陳○美</td><td>太歲燈×2</td><td class="n">1,200</td><td>埔鹽</td></tr>
+          <tr><td>黃○德</td><td>光明燈×3</td><td class="n">1,800</td><td>溪湖</td></tr>
+          <tr><td>張○玲</td><td>文昌燈×2</td><td class="n">1,200</td><td>員林</td></tr>
+          <tr><td>吳○忠</td><td>財神燈×1</td><td class="n">1,000</td><td>埔心</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section>
+      <h2>下個月建議</h2>
+      <p class="sub">系統依本月數據自動提出。</p>
+      <ol class="todo">
+        <li>寄簡訊提醒 41 戶待回流信眾，預估可回收約 3 萬元。</li>
+        <li>農曆九月九重陽前，在字幕機加播「重陽祈福登記」。</li>
+        <li>電視牆功德榜加入普渡贊助名單，輪播到月底。</li>
+        <li>員林地區新信眾增加 9 人，可考慮進香團順路拜訪。</li>
+      </ol>
+    </section>
+  </div>
+
+  <footer>本報表由系統每月 1 日自動產生並以 LINE 送達｜信眾姓名已遮一字保護個資</footer>
+</div>
+
+<script>
+(function(){
+  const months=["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+  const y115=[680,352,131,70,55,46,49,82,67];
+  const y114=[612,338,120,64,48,40,52,70,58,44,40,96];
+  const NS="http://www.w3.org/2000/svg";
+  const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e};
+  const fmt=n=>n.toLocaleString("zh-TW");
+
+  // Line chart
+  const box=document.getElementById("line");
+  const W=820,H=280,m={l:40,r:44,t:14,b:26},iw=W-m.l-m.r,ih=H-m.t-m.b,max=700;
+  const svg=el("svg",{viewBox:`0 0 ${W} ${H}`,role:"img","aria-label":"每月點燈戶數折線圖，115 年與 114 年"},box);
+  const x=i=>m.l+iw*i/11, y=v=>m.t+ih*(1-v/max);
+  [0,100,200,300,400,500,600,700].forEach(v=>{
+    el("line",{x1:m.l,x2:W-m.r,y1:y(v),y2:y(v),stroke:"var(--grid)","stroke-width":1},svg);
+    const t=el("text",{x:m.l-8,y:y(v)+4,"text-anchor":"end"},svg);t.textContent=v;
+  });
+  months.forEach((mo,i)=>{const t=el("text",{x:x(i),y:H-6,"text-anchor":"middle"},svg);t.textContent=mo;});
+  const path=a=>a.map((v,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(v).toFixed(1)).join(" ");
+  el("path",{d:path(y114),fill:"none",stroke:"var(--s2)","stroke-width":2,"stroke-linejoin":"round"},svg);
+  el("path",{d:path(y115),fill:"none",stroke:"var(--s1)","stroke-width":2,"stroke-linejoin":"round"},svg);
+  const last=y115.length-1;
+  el("circle",{cx:x(last),cy:y(y115[last]),r:4.5,fill:"var(--s1)",stroke:"var(--paper)","stroke-width":2},svg);
+  const l1=el("text",{x:x(last)+8,y:y(y115[last])-6,class:"lbl"},svg);l1.textContent=y115[last]+" 戶";
+  const l2=el("text",{x:x(0)+8,y:y(y115[0])+4,class:"lbl"},svg);l2.textContent="680";
+  const cross=el("line",{y1:m.t,y2:m.t+ih,stroke:"var(--muted)","stroke-width":1,"stroke-dasharray":"3 3",visibility:"hidden"},svg);
+  const d1=el("circle",{r:4,fill:"var(--s1)",stroke:"var(--paper)","stroke-width":2,visibility:"hidden"},svg);
+  const d2=el("circle",{r:4,fill:"var(--s2)",stroke:"var(--paper)","stroke-width":2,visibility:"hidden"},svg);
+  const hit=el("rect",{x:m.l-10,y:m.t,width:iw+20,height:ih,fill:"transparent"},svg);
+  const tip=document.createElement("div");tip.className="tip";tip.hidden=true;box.appendChild(tip);
+  function show(evt){
+    const r=svg.getBoundingClientRect(),sx=(evt.clientX-r.left)*W/r.width;
+    const i=Math.max(0,Math.min(11,Math.round((sx-m.l)/iw*11)));
+    cross.setAttribute("x1",x(i));cross.setAttribute("x2",x(i));cross.setAttribute("visibility","visible");
+    d2.setAttribute("cx",x(i));d2.setAttribute("cy",y(y114[i]));d2.setAttribute("visibility","visible");
+    if(i<y115.length){d1.setAttribute("cx",x(i));d1.setAttribute("cy",y(y115[i]));d1.setAttribute("visibility","visible");}
+    else d1.setAttribute("visibility","hidden");
+    tip.innerHTML=`<b>${months[i]}</b><br>115 年：${i<y115.length?fmt(y115[i])+" 戶":"—"}<br>114 年：${fmt(y114[i])} 戶`;
+    tip.style.left=(x(i)/W*r.width)+"px";tip.style.top=(y(Math.max(y114[i],y115[i]||0))/H*r.height)+"px";tip.hidden=false;
+  }
+  function hide(){tip.hidden=true;[cross,d1,d2].forEach(e=>e.setAttribute("visibility","hidden"));}
+  hit.addEventListener("pointermove",show);hit.addEventListener("pointerleave",hide);
+
+  // Horizontal bars
+  const items=[["普渡",128000],["添油香",186400],["光明燈",40200],["捐贈物資（折合）",32000],["太歲燈",6000]].sort((a,b)=>b[1]-a[1]);
+  const bb=document.getElementById("bars");
+  const BW=400,rowH=40,lw=118,rw=70,BH=items.length*rowH,bmax=200000,bw=BW-lw-rw;
+  const bs=el("svg",{viewBox:`0 0 ${BW} ${BH}`,role:"img","aria-label":"本月收入來源長條圖"},bb);
+  const bt=document.createElement("div");bt.className="tip";bt.hidden=true;bb.appendChild(bt);
+  items.forEach(([k,v],i)=>{
+    const cy=i*rowH+rowH/2,w=Math.max(4,bw*v/bmax);
+    const t=el("text",{x:lw-10,y:cy+4,"text-anchor":"end"},bs);t.textContent=k;t.style.fill="var(--ink2)";t.style.fontSize="12.5px";
+    el("path",{d:`M${lw} ${cy-9}h${w-4}a4 4 0 0 1 4 4v10a4 4 0 0 1 -4 4h-${w-4}z`,fill:"var(--bar)"},bs);
+    const vt=el("text",{x:lw+w+8,y:cy+4},bs);vt.textContent=fmt(v);vt.style.fill="var(--ink)";vt.style.fontSize="12px";
+    const h=el("rect",{x:0,y:i*rowH,width:BW,height:rowH,fill:"transparent"},bs);
+    h.addEventListener("pointermove",e=>{const r=bs.getBoundingClientRect();bt.innerHTML=`<b>${k}</b><br>${fmt(v)} 元（${(v/392600*100).toFixed(1)}%）`;bt.style.left=((lw+w/2)/BW*r.width)+"px";bt.style.top=((cy-10)/BH*r.height)+"px";bt.hidden=false;});
+    h.addEventListener("pointerleave",()=>bt.hidden=true);
+  });
+})();
+</script>
