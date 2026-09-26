@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.18</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.19</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -3284,7 +3284,7 @@ function showReportDetail(email) {
     <div class="modal-title">${escHtml(w.name)} ・ ${ym} 明細</div>
     <div style="font-size:12px;color:#999;margin-bottom:6px">${isFull ? '正職' : (w.emp_type==='承攬'?'承攬':'工讀')}${w.shift ? ` ・ ${w.shift} 班` : ' ・ 未設班別'} ・ 實出勤 ${attendDays} 天${showPay ? ` ・ 時薪基準 $${Math.round(hourly*10)/10}` : ''}</div>
     <div style="font-size:13px;margin-bottom:4px"><b style="color:${missCnt >= 3 ? '#c62828' : missCnt === 2 ? '#e65100' : missCnt === 1 ? '#f9a825' : '#333'}">本月未打卡 ${missCnt} 次</b>　<b style="color:#e65100">臨時假 ${uSum ? `${uSum} 次（緊急 ${uTier.緊急}・急件 ${uTier.急件}・一般 ${uTier.一般}）` : '0 次'}</b></div>
-    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（未達 15 分不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
+    <div style="font-size:13px;margin-bottom:12px;color:${lateEarlyDeduct ? '#c62828' : '#666'}">${isFull ? `遲到早退累計 ${lateEarlyTot} 分${showPay ? (lateEarlyDeduct ? `　扣薪 $${lateEarlyDeduct.toLocaleString()}` : '（15 分以內不扣）') : ''}` : '遲到早退：時薪制不計'}</div>
     ${canEditPunch ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;font-size:13px"><span style="color:#666">補登某天打卡（這天沒打卡也能補）</span><input type="date" id="pe-add-date" value="${fmtDate(new Date()).split('/').join('-')}" style="font-size:15px;padding:8px 10px;min-height:40px"><button class="btn" style="background:#1a73e8;color:#fff;padding:10px 16px;min-height:40px" onclick="var v=document.getElementById('pe-add-date').value;if(!v){toast('請先選日期','red');return;}editPunchDay('${email}',v.replace(/-/g,'/'))">＋ 補登這天</button></div>` : ''}
     ${section('📅 每日出缺勤<span style="font-size:9px;color:#aaa;font-weight:400;margin-left:6px;white-space:nowrap">🟢正常 🔵休假 🟠待補 🔴異常 ⚡臨時</span>', dailyRows, '本月無資料')}
     ${isCheng ? section('🧾 承攬計費明細（內勤/外勤逐段・含工作內容）', wr.slice().sort((a,b)=>String(a.date+a.start_time).localeCompare(String(b.date+b.start_time))).map(r => `${addDayShort(r.date)}　${r.start_time}–${r.end_time}　<b style="color:${String(r.work_content||'').indexOf('外')>=0?'#16a34a':'#2563eb'}">${r.work_content||'（未標）'}</b>　${r.hours}h${showPay?`　$${Number(r.subtotal)||0}`:''}`), '本月無資料') : ''}
