@@ -133,6 +133,43 @@ function onPacket(state, packet, customers, config) {
       if (away > cfg.leaveRadiusMeters) {
         events.push(closeVisit(state, now, 'moved_away', cfg));
       }
+    } else if (state.stopSince && state.stopAnchor) {
+      // 稀疏資料補救。
+      //
+      // 便宜定位器熄火後的回報間隔預設可能長達一小時（G900L 的 TIMER 第二個
+      // 參數預設 3600 秒）。這種設定下，一次 40 分鐘的拜訪只會收到「停下」
+      // 和「開走」兩個封包，中間完全沒有包，停留就永遠等不到第二個靜止封包
+      // 來確認，整筆拜訪會被漏掉。
+      //
+      // 所以在「看到車子開始移動」這一刻回頭補：如果先前的靜止時間已經夠久，
+      // 就補一筆到點再立刻結案。離開時間只能用「第一次看到它在動」來估，
+      // 會略為高估，所以標記成 inferred_sparse 讓人看得出來。
+      const dwellNeeded = state.lastAcc === 0 ? cfg.dwellMinutesAccOff : cfg.dwellMinutes;
+      if (minutesBetween(state.stopSince, now) >= dwellNeeded) {
+        const near = nearestWithin(state.stopAnchor, customers, cfg.matchRadiusMeters);
+        state.visit = {
+          customerId: near ? near.match.id : null,
+          customerName: near ? near.match.name : null,
+          customerDistanceMeters: near ? near.distanceMeters : null,
+          lat: state.stopAnchor.lat,
+          lng: state.stopAnchor.lng,
+          arrivedAt: state.stopSince,
+          lastConfirmedAt: now,
+        };
+        events.push({
+          type: 'arrival',
+          imei: state.imei,
+          plateNum: state.plateNum,
+          at: state.stopSince,
+          lat: state.visit.lat,
+          lng: state.visit.lng,
+          customer: near ? near.match : null,
+          customerDistanceMeters: near ? near.distanceMeters : null,
+          accOff: state.lastAcc === 0,
+          inferred: true,
+        });
+        events.push(closeVisit(state, now, 'inferred_sparse', cfg));
+      }
     }
     state.stopAnchor = null;
     state.stopSince = null;

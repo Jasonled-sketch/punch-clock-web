@@ -159,6 +159,33 @@ group('到點 / 離開判斷');
   for (let m = 12; m < 25; m += 1) ev.push(...onPacket(s, loc(min(m), 24.12 - 0.001 * (m - 12), 120.60, 50, 1), customers).events);
   for (let m = 25; m < 45; m += 1) ev.push(...onPacket(s, loc(min(m), 24.0811, 120.5411, 0, 0), customers).events);
   for (let m = 45; m < 48; m += 1) ev.push(...onPacket(s, loc(min(m), 24.0900, 120.5600, 45, 1), customers).events);
+  s = createState('T'); ev = [];
+  ev.push(...onPacket(s, loc(min(0), 24.20, 120.72, 45, 1), customers).events);
+  ev.push(...onPacket(s, loc(min(5), 24.1478, 120.6737, 0, 0), customers).events);
+  check('稀疏資料：只有一個靜止包時還不成案', ev.filter((e) => e.type === 'arrival').length === 0);
+  ev = onPacket(s, loc(min(45), 24.1700, 120.6950, 40, 1), customers).events;
+  const sparseArr = ev.find((e) => e.type === 'arrival');
+  const sparseDep = ev.find((e) => e.type === 'departure');
+  check('稀疏資料：開走時回頭補出到點與離開', !!sparseArr && !!sparseDep);
+  check('稀疏資料：標記為推估', sparseArr && sparseArr.inferred === true && sparseDep.reason === 'inferred_sparse');
+  check('稀疏資料：時長與客戶正確', sparseDep && sparseDep.customerId === 'C001' && sparseDep.durationMinutes >= 38 && sparseDep.durationMinutes <= 42);
+
+  s = createState('T');
+  onPacket(s, loc(min(0), 24.1478, 120.6737, 0, 1), customers);
+  ev = onPacket(s, loc(min(2), 24.1700, 120.6950, 40, 1), customers).events;
+  check('稀疏資料：停 2 分鐘未達門檻不補', ev.length === 0);
+
+  s = createState('T'); ev = [];
+  for (let m = 0; m < 40; m += 1) ev.push(...onPacket(s, loc(min(m), 24.1478, 120.6737, 0, 0), customers).events);
+  check('稀疏補救不影響密集資料的行為', ev.filter((e) => e.type === 'arrival').length === 1 && ev[0].inferred === undefined);
+
+  // 一趟連續拜訪兩個客戶
+  s = createState('T'); ev = [];
+  for (let m = 0; m < 12; m += 1) ev.push(...onPacket(s, loc(min(m), 24.1477, 120.6736, 0, 0), customers).events);
+  for (let m = 12; m < 25; m += 1) ev.push(...onPacket(s, loc(min(m), 24.12 - 0.001 * (m - 12), 120.60, 50, 1), customers).events);
+  for (let m = 25; m < 45; m += 1) ev.push(...onPacket(s, loc(min(m), 24.0811, 120.5411, 0, 0), customers).events);
+  for (let m = 45; m < 48; m += 1) ev.push(...onPacket(s, loc(min(m), 24.0900, 120.5600, 45, 1), customers).events);
+
   const arrs = ev.filter((e) => e.type === 'arrival');
   check('一趟兩個客戶、順序正確', arrs.length === 2 && arrs[0].customer.id === 'C001' && arrs[1].customer.id === 'C002');
   check('對應兩筆離開', ev.filter((e) => e.type === 'departure').length === 2);

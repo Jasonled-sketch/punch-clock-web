@@ -82,7 +82,8 @@
 
 1. **買機器** → 看 [`BUYING.md`](BUYING.md)，含型號推薦和貼給賣家的問答稿
 2. **架 Traccar** → 看 [`traccar/README.md`](traccar/README.md)，`docker compose up -d` 就起來
-3. **把定位器指過來** → 發簡訊改伺服器位址，指令格式向賣家索取
+3. **把定位器指過來** → 發簡訊改伺服器位址。買 G900L 系列的話，
+   完整指令清單在 [`traccar/device-G900L.md`](traccar/device-G900L.md)
 4. **設定轉發** → [`traccar/traccar.xml`](traccar/traccar.xml) 已經寫好，只要改網址和密碼兩個地方
 
 車牌不用另外設定：Traccar 後台把裝置名稱（Device name）填成車牌，本服務會直接拿來用。
