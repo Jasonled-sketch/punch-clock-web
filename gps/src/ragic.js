@@ -39,12 +39,19 @@ function ragicDate(ms, tzOffsetHours) {
   return `${d.getUTCFullYear()}/${p(d.getUTCMonth() + 1)}/${p(d.getUTCDate())}`;
 }
 
-/** 日期＋時間，給「到達時間 / 離開時間」這種欄位用。 */
-function ragicDateTime(ms, tzOffsetHours) {
+/**
+ * 日期＋時間，給「到達時間 / 離開時間」這種欄位用。
+ *
+ * 這兩個欄位如果在 Ragic 建成「日期」型別，送進去的字串格式必須跟欄位設定
+ * 的格式一模一樣，差一個秒數就可能整格寫不進去，而且 Ragic 不會報錯。
+ * withSeconds=false 時輸出 `2026/09/28 09:12`，對應欄位格式 yyyy/MM/dd HH:mm。
+ */
+function ragicDateTime(ms, tzOffsetHours, withSeconds) {
   const off = tzOffsetHours === undefined ? 8 : tzOffsetHours;
   const d = new Date(ms + off * 3600000);
   const p = (n) => String(n).padStart(2, '0');
-  return `${ragicDate(ms, off)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+  const base = `${ragicDate(ms, off)} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+  return withSeconds === false ? base : `${base}:${p(d.getUTCSeconds())}`;
 }
 
 class RagicClient {
@@ -62,6 +69,9 @@ class RagicClient {
     this.apiKey = requireEnv(env, 'RAGIC_API_KEY');
     this.base = (env.RAGIC_BASE || DEFAULT_BASE).replace(/\/+$/, '');
     this.tz = env.AZLIOT_TZ_OFFSET === undefined ? 8 : Number(env.AZLIOT_TZ_OFFSET);
+    // Ragic 日期欄位若設成 yyyy/MM/dd HH:mm（不含秒），要把這個設成 0，
+    // 否則多出來的秒數會讓那一格寫不進去。
+    this.dtSeconds = env.RAGIC_DATETIME_SECONDS !== '0';
     this.customerCache = { at: 0, rows: [] };
     this.customerTtlMs = Number(env.RAGIC_CUSTOMER_TTL_MS || 10 * 60 * 1000);
   }
@@ -171,8 +181,8 @@ class RagicClient {
     put('driver', visit.driver);
     put('customer', visit.customerName);
     put('customerCode', visit.customerId);
-    put('arrivedAt', ragicDateTime(visit.arrivedAt, this.tz));
-    put('departedAt', visit.departedAt ? ragicDateTime(visit.departedAt, this.tz) : null);
+    put('arrivedAt', ragicDateTime(visit.arrivedAt, this.tz, this.dtSeconds));
+    put('departedAt', visit.departedAt ? ragicDateTime(visit.departedAt, this.tz, this.dtSeconds) : null);
     // 數值欄位送純數字，不能帶「分鐘」「公尺」這種單位
     put('durationMinutes', visit.durationMinutes == null ? null : String(Math.round(visit.durationMinutes)));
     put('distanceMeters', visit.customerDistanceMeters == null ? null : String(visit.customerDistanceMeters));
@@ -198,7 +208,7 @@ class RagicClient {
     put('name', punch.badgeName);
     put('imei', punch.imei);
     put('direction', punch.direction === 'in' ? '上班' : punch.direction === 'out' ? '下班' : '未知');
-    put('at', ragicDateTime(punch.at, this.tz));
+    put('at', ragicDateTime(punch.at, this.tz, this.dtSeconds));
     put('lat', punch.lat == null ? null : String(punch.lat));
     put('lng', punch.lng == null ? null : String(punch.lng));
     put('place', punch.nearCustomer ? punch.nearCustomer.name : null);

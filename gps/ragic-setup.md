@@ -114,11 +114,58 @@
 **Ragic 的 POST 只認欄位 ID，不認中文欄位名。** 送中文名會回 SUCCESS 但欄位是空的，
 這是最容易卡住又最難查的坑。
 
-表建好之後跑這個，會自動印出可以直接貼的環境變數：
+有兩種做法，**先用第一種，不用開終端機**。
+
+### 做法 A：瀏覽器直接看（最簡單）
+
+把下面網址的 `你的KEY` 換成 Ragic API Key，貼到瀏覽器網址列：
+
+```
+https://ap10.ragic.com/Fan28/你的表單路徑?api&naming=fid&APIKey=你的KEY
+```
+
+例如表單路徑是 `check-in-system/15`：
+
+```
+https://ap10.ragic.com/Fan28/check-in-system/15?api&naming=fid&APIKey=你的KEY
+```
+
+瀏覽器會直接顯示一段 JSON，長得像這樣：
+
+```json
+{"1":{"1002801":"2001/01/02","1002802":"PROBEPLATE","1002803":"PROBEIMEI", ... }}
+```
+
+左邊那串數字就是欄位 ID，右邊是我們放進去的探測標記。對照一下就知道哪個 ID 是哪個欄位：
+
+| 看到的值 | 對應的設定名稱 |
+|---|---|
+| `2001/01/02` | `date` |
+| `PROBEPLATE` | `plateNum` |
+| `PROBEIMEI` | `imei` |
+| `PROBEDRIVER` | `driver` |
+| `PROBECUSTOMER` | `customer` |
+| `PROBECUSTCODE` | `customerCode` |
+| `2001/01/02 03:04:05` | `arrivedAt` |
+| `2001/01/02 06:07:08` | `departedAt` |
+| `91001` | `durationMinutes` |
+| `91002` | `distanceMeters` |
+| `PROBELAT` | `lat` |
+| `PROBELNG` | `lng` |
+| `PROBEMAPURL` | `mapUrl` |
+| `PROBESUMMARY` | `summary` |
+| `PROBECATEGORY` | `category` |
+| `PROBESOURCE` | `source` |
+
+**API Key 出現在網址列，用完把那個分頁關掉，不要把網址貼給別人。**
+
+### 做法 B：用工具自動抓（要開終端機）
+
+在本機有這個 repo 的話：
 
 ```bash
 cd gps
-RAGIC_API_KEY=你的key node tools/probe-fields.js ragicproject-management/21 visit
+RAGIC_API_KEY=你的key node tools/probe-fields.js check-in-system/15 visit
 ```
 
 它會去讀那筆 PROBE 記錄，把每個標記對應到的欄位 ID 找出來，輸出長這樣：
