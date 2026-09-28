@@ -114,29 +114,43 @@
 **Ragic 的 POST 只認欄位 ID，不認中文欄位名。** 送中文名會回 SUCCESS 但欄位是空的，
 這是最容易卡住又最難查的坑。
 
-有兩種做法，**先用第一種，不用開終端機**。
+### 做法 A：在本機跑工具（建議）
 
-### 做法 A：瀏覽器直接看（最簡單）
+金鑰只存在你自己的環境變數裡，不會出現在網址列、瀏覽器歷史、也不會印出來。
+工具只印欄位編號。
 
-把下面網址的 `你的KEY` 換成 Ragic API Key，貼到瀏覽器網址列：
-
-```
-https://ap10.ragic.com/Fan28/你的表單路徑?api&naming=fid&APIKey=你的KEY
-```
-
-例如表單路徑是 `check-in-system/15`：
-
-```
-https://ap10.ragic.com/Fan28/check-in-system/15?api&naming=fid&APIKey=你的KEY
+```bash
+cd gps
+npm install
+RAGIC_API_KEY=你的key node tools/probe-fields.js check-in-system/15 visit
 ```
 
-瀏覽器會直接顯示一段 JSON，長得像這樣：
+輸出就是可以直接貼進環境變數的那一行：
 
-```json
-{"1":{"1002801":"2001/01/02","1002802":"PROBEPLATE","1002803":"PROBEIMEI", ... }}
+```
+RAGIC_VISIT_FIELDS={"date":"1002801","plateNum":"1002802", ...}
 ```
 
-左邊那串數字就是欄位 ID，右邊是我們放進去的探測標記。對照一下就知道哪個 ID 是哪個欄位：
+其他兩張表：
+
+```bash
+RAGIC_API_KEY=xxx node tools/probe-fields.js <打卡表路徑> punch
+RAGIC_API_KEY=xxx node tools/probe-fields.js ragicsales-order-management/20004 customer
+```
+
+### 做法 B：瀏覽器直接看（不得已才用）
+
+> ⚠ **這個做法會把 API Key 留在瀏覽器歷史紀錄裡**，而且如果瀏覽器有同步，
+> 會跟著上傳到雲端。能用做法 A 就不要用這個。真的用了，事後去清除該筆歷史紀錄，
+> 並考慮到 Ragic 後台重新產生一把 API Key。
+
+網址格式：
+
+```
+https://ap10.ragic.com/Fan28/<表單路徑>?api&naming=fid&APIKey=<你的KEY>
+```
+
+回傳的 JSON 裡，左邊數字是欄位 ID，右邊是探測標記，照下表對照：
 
 | 看到的值 | 對應的設定名稱 |
 |---|---|
@@ -157,42 +171,8 @@ https://ap10.ragic.com/Fan28/check-in-system/15?api&naming=fid&APIKey=你的KEY
 | `PROBECATEGORY` | `category` |
 | `PROBESOURCE` | `source` |
 
-**API Key 出現在網址列，用完把那個分頁關掉，不要把網址貼給別人。**
-
-### 做法 B：用工具自動抓（要開終端機）
-
-在本機有這個 repo 的話：
-
-```bash
-cd gps
-RAGIC_API_KEY=你的key node tools/probe-fields.js check-in-system/15 visit
-```
-
-它會去讀那筆 PROBE 記錄，把每個標記對應到的欄位 ID 找出來，輸出長這樣：
-
-```
-  date               1002801  ← 日期
-  plateNum           1002802  ← 車牌
-  ...
-
-RAGIC_VISIT_FIELDS={"date":"1002801","plateNum":"1002802",...}
-```
-
-把最後那行貼進環境變數就好。
-
-其他兩張表：
-
-```bash
-# 工牌打卡表
-RAGIC_API_KEY=xxx node tools/probe-fields.js 你的打卡表路徑 punch
-
-# 客戶主檔（既有的表，沒有探測記錄，靠欄位名稱猜）
-RAGIC_API_KEY=xxx node tools/probe-fields.js ragicsales-order-management/20004 customer
-```
-
-客戶主檔那個猜不到的話，工具會把整筆記錄的欄位 ID 和中文名都印出來，人工挑就好。
-
-**做完記得回 Ragic 把那筆 PROBE 記錄刪掉。**
+**JSON 內容本身沒有機密**（只有欄位編號和 PROBE 標記），但**網址有**。
+要拿給別人看就只貼 JSON，絕對不要貼網址。
 
 ---
 
