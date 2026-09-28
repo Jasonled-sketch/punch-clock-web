@@ -49,6 +49,8 @@
 | Ragic 客戶主檔加經緯度欄位 | 沒有座標就無法比對客戶 |
 | Anthropic API key | 生摘要用，不給也能跑（退回規則式句子） |
 
+> 完整建表步驟、可直接匯入的 CSV、自動抓欄位 ID 的工具：[`ragic-setup.md`](ragic-setup.md)
+
 ### Ragic 拜訪記錄表欄位
 
 | 欄位 | 型別 | 說明 |
