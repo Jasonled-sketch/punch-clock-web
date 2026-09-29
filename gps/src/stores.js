@@ -63,12 +63,25 @@ class PostgresStore {
     `);
   }
 
+  // 第一次讀寫前自動建表；失敗就清掉，下一包再試。
+  ready() {
+    if (!this.readyPromise) {
+      this.readyPromise = this.init().catch((err) => {
+        this.readyPromise = null;
+        throw err;
+      });
+    }
+    return this.readyPromise;
+  }
+
   async get(imei) {
+    await this.ready();
     const { rows } = await this.pool.query('SELECT state FROM gps_device_state WHERE imei = $1', [imei]);
     return rows.length ? rows[0].state : null;
   }
 
   async put(imei, state) {
+    await this.ready();
     await this.pool.query(
       `INSERT INTO gps_device_state (imei, state, updated_at) VALUES ($1, $2, now())
        ON CONFLICT (imei) DO UPDATE SET state = EXCLUDED.state, updated_at = now()`,
@@ -77,6 +90,7 @@ class PostgresStore {
   }
 
   async all() {
+    await this.ready();
     const { rows } = await this.pool.query('SELECT state FROM gps_device_state');
     return rows.map((r) => r.state);
   }
