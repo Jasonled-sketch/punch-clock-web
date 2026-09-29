@@ -116,6 +116,8 @@ td.act{margin:0;white-space:nowrap}
 .doc h4{margin:18px 0 6px;font-size:15px;color:var(--accent)}
 .doc p{margin:4px 0}
 .doct{text-align:center;font:700 20px "Noto Serif TC",serif;margin:8px 0 4px}
+.poster-prev{display:flex;justify-content:center;background:var(--soft)}
+.poster-prev svg{max-width:100%;box-shadow:0 2px 12px rgba(0,0,0,.18)}
 .plans th,.plans td{text-align:center}
 .plans td:first-child{text-align:left}
 .plans .cur{background:var(--soft);font-weight:700}
@@ -134,6 +136,7 @@ td.act{margin:0;white-space:nowrap}
   .rcpt .bless{text-align:center;margin-top:8mm;letter-spacing:.2em}
   .rcpt .sm{font-size:10pt;text-align:center}
   #print .doc{max-height:none;overflow:visible;border:0}
+  .poster-print svg{width:100%;height:auto;display:block}
 }
 </style>
 </head>
@@ -156,6 +159,7 @@ td.act{margin:0;white-space:nowrap}
 <div id="print"></div>
 <div id="toast" hidden></div>
 <script src="charter.js"></script>
+<script src="poster.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

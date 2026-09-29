@@ -18,8 +18,11 @@ const MODULES = [
   { id: 'auto',     name: '全自動設定',     tier: 'deluxe' },
   { id: 'finance',  name: '財務分析',       tier: 'deluxe' },
   { id: 'online',   name: 'LINE・FB・官網', tier: 'flagship' },
+  { id: 'fahui',    name: '法會',           tier: 'deluxe' },
+  { id: 'festival', name: '慶典',           tier: 'deluxe' },
   { id: 'jiao',     name: '建醮',           tier: 'flagship' },
   { id: 'troupe',   name: '陣頭',           tier: 'flagship' },
+  { id: 'poster',   name: '海報・帆布輸出', tier: 'basic' },
   { id: 'charter',  name: '章程・管理辦法', tier: 'basic' },
   { id: 'plans',    name: '方案比較',       tier: 'basic' },
   { id: 'settings', name: '宮廟設定',       tier: 'basic' },
@@ -33,6 +36,12 @@ let S;
 function load() {
   try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
   if (!S) S = seed();
+  if (!S.v2) { // 舊資料升級：活動加上類別，補法會、慶典範例
+    S.events.forEach(e => e.kind = e.kind || 'jiao');
+    const id = Math.max(0, ...S.events.map(e => e.id));
+    seedEvents().filter(e => e.kind !== 'jiao').forEach((e, i) => S.events.push(Object.assign(e, { id: id + i + 1 })));
+    S.v2 = true; save();
+  }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
 
@@ -59,17 +68,37 @@ function seed() {
   }
   return {
     temple: { name: '溪湖福安宮', type: '宮', org: 'committee', deity: '天上聖母', address: '彰化縣溪湖鎮○○路 100 號', phone: '04-8800000', head: '陳○○', charter: {} },
-    tier: 'flagship', records: recs, led: [], sms: [],
+    v2: true, tier: 'flagship', records: recs, led: [], sms: [],
     rules: { autoLed: true, autoRemind: true, autoReport: true, autoBirthday: false, autoSync: false },
     online: { line: false, fb: false, web: false },
-    events: [{ id: 1, name: '丙午年祈安建醮', date: '2026-11-20', roles: [
-      { role: '主醮首', name: '王小明', amount: 360000 }, { role: '主會首', name: '李淑芬', amount: 168000 },
-      { role: '福德正神斗首', name: '陳志豪', amount: 36000 }, { role: '平安斗首', name: '林美玲', amount: 8800 }] }],
+    events: seedEvents(),
     troupes: [
       { name: '溪湖八家將', type: '家將', contact: '黃○○', phone: '0912-000111', date: '2026-10-12' },
       { name: '埔鹽龍鳳獅', type: '舞龍舞獅', contact: '張○○', phone: '0922-000222', date: '2026-11-20' }],
   };
 }
+
+function seedEvents() {
+  return [
+    { id: 1, kind: 'jiao', name: '丙午年祈安建醮', date: '2026-11-20', roles: [
+      { role: '主醮首', name: '王小明', amount: 360000 }, { role: '主會首', name: '李淑芬', amount: 168000 },
+      { role: '福德正神斗首', name: '陳志豪', amount: 36000 }, { role: '平安斗首', name: '林美玲', amount: 8800 }] },
+    { id: 2, kind: 'fahui', name: '中元普度超度法會', date: '2026-08-27', roles: [
+      { role: '超度祖先', name: '王府歷代祖先', amount: 1200 }, { role: '超度祖先', name: '黃府歷代祖先', amount: 1200 },
+      { role: '冤親債主', name: '張雅婷', amount: 1000 }, { role: '消災祈福', name: '吳俊傑', amount: 600 },
+      { role: '超度嬰靈', name: '劉秀英', amount: 1500 }, { role: '功德主', name: '蔡宗翰', amount: 12000 }] },
+    { id: 3, kind: 'festival', name: '天上聖母聖誕千秋', date: '2027-04-29', roles: [
+      { role: '贊助金', name: '楊惠君', amount: 20000 }, { role: '贊助金', name: '許家豪', amount: 10000 },
+      { role: '物資（壽麵 50 斤）', name: '鄭麗華', amount: 3000 }, { role: '遶境餐點', name: '謝文雄', amount: 15000 },
+      { role: '贊助金', name: '洪佩珊', amount: 6000 }, { role: '贊助金', name: '郭明德', amount: 3600 }] },
+  ];
+}
+
+const EVENT_KINDS = {
+  fahui:    { name: '法會', role: '登記項目', roles: ['超度祖先', '冤親債主', '超度嬰靈', '消災祈福', '功德主', '禮斗'], sample: '例：梁皇寶懺法會' },
+  festival: { name: '慶典', role: '贊助項目', roles: ['贊助金', '物資', '遶境餐點', '陣頭', '香燭金紙'], sample: '例：玄天上帝聖誕千秋' },
+  jiao:     { name: '建醮', role: '職稱／斗首', roles: ['主醮首', '主會首', '主壇首', '斗首', '燈首'], sample: '例：丙午年祈安建醮' },
+};
 
 function mkRecord(r, seq) {
   const d = new Date(r.date);
@@ -341,11 +370,22 @@ VIEWS.online = () => {
   <p class="muted">官網預覽（同步後自動更新）</p></div></div>`;
 };
 
-VIEWS.jiao = () => `<h2>建醮</h2>${S.events.map(e => `<div class="card"><h3>${esc(e.name)}　<small class="muted">${e.date}</small></h3>
-  <div class="tbl"><table><thead><tr><th>職稱／斗首</th><th>姓名</th><th class="n">認捐（元）</th></tr></thead><tbody>
-  ${e.roles.map(r => `<tr><td>${esc(r.role)}</td><td>${esc(r.name)}</td><td class="n">${money(r.amount)}</td></tr>`).join('')}
-  <tr><td><b>合計</b></td><td></td><td class="n"><b>${money(e.roles.reduce((s, r) => s + r.amount, 0))}</b></td></tr></tbody></table></div>
-  <form class="form" data-role="${e.id}"><label>職稱<input name="role" required placeholder="例：玉皇大帝斗首"></label><label>姓名<input name="name" required></label><label>認捐<input name="amount" type="number" min="0" required></label><div class="act"><button class="btn pri">加入</button></div></form></div>`).join('')}`;
+function eventView(kind) {
+  const K = EVENT_KINDS[kind];
+  const list = S.events.filter(e => e.kind === kind);
+  return `<h2>${K.name}</h2>
+  ${list.map(e => `<div class="card"><h3>${esc(e.name)}　<small class="muted">${e.date}</small></h3>
+  <div class="tbl"><table><thead><tr><th>${K.role}</th><th>姓名</th><th class="n">金額（元）</th></tr></thead><tbody>
+  ${e.roles.slice().sort((a, b) => b.amount - a.amount).map(r => `<tr><td>${esc(r.role)}</td><td>${esc(r.name)}</td><td class="n">${money(r.amount)}</td></tr>`).join('')}
+  <tr><td><b>合計 ${e.roles.length} 筆</b></td><td></td><td class="n"><b>${money(e.roles.reduce((s, r) => s + r.amount, 0))}</b></td></tr></tbody></table></div>
+  <form class="form" data-role="${e.id}"><label>${K.role}<input name="role" required list="rl-${kind}" placeholder="${K.roles[0]}"></label><label>姓名<input name="name" required></label><label>金額<input name="amount" type="number" min="0" required></label>
+  <div class="act"><button class="btn pri">加入</button><button class="btn" type="button" data-poster="ev:${e.id}">一鍵輸出芳名錄海報</button></div></form></div>`).join('')}
+  <datalist id="rl-${kind}">${K.roles.map(r => `<option value="${r}">`).join('')}</datalist>
+  <form class="card form" data-newev="${kind}"><label class="w2">新增${K.name}<input name="name" required placeholder="${K.sample}"></label><label>日期<input name="date" type="date" required></label><div class="act"><button class="btn">建立</button></div></form>`;
+}
+VIEWS.fahui = () => eventView('fahui');
+VIEWS.festival = () => eventView('festival');
+VIEWS.jiao = () => eventView('jiao');
 
 VIEWS.troupe = () => `<h2>陣頭</h2><div class="card"><div class="tbl"><table><thead><tr><th>團名</th><th>類別</th><th>聯絡人</th><th>電話</th><th>出陣日</th></tr></thead><tbody>
   ${S.troupes.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.type)}</td><td>${esc(t.contact)}</td><td>${esc(t.phone)}</td><td>${esc(t.date)}</td></tr>`).join('')}</tbody></table></div>
@@ -386,6 +426,8 @@ VIEWS.plans = () => {
     ['字幕機・電視牆播報', '', '按鈕推送', '登記即自動上', '登記即自動上'],
     ['香火月報', '', '手動匯出', '每月自動寄', '每月自動寄'],
     ['財務分析', '', '', '✔', '✔'],
+    ['法會・慶典模組', '', '', '✔', '✔'],
+    ['芳名錄海報・帆布一鍵輸出', '油香名單', '油香名單', '＋法會・慶典', '＋建醮'],
     ['LINE・FB・官網建置與同步', '', '', '', '✔'],
     ['建醮・陣頭模組', '', '', '', '✔'],
   ];
@@ -410,6 +452,85 @@ AFTER.settings = () => {
   $('#reset').onclick = () => { if ($('#reset').dataset.ok) { S = seed(); save(); renderShell(); toast('已重設'); } else { $('#reset').dataset.ok = 1; $('#reset').textContent = '再按一次確認清除'; } };
 };
 
+
+// ---------- 海報・帆布 ----------
+let posterSrc = null;
+const PO = { size: 'b90', theme: 'red', layout: 'v', showAmount: true, item: '', dpi: 100, title: '' };
+function posterSources() {
+  const years = [...new Set(live().map(r => new Date(r.date).getFullYear()))].sort((a, b) => b - a);
+  const src = years.map(y => ({ id: 'don:' + y, name: `油香・點燈 ${y - 1911} 年`, title: '功德芳名錄' }));
+  S.events.filter(e => has(MODULES.find(m => m.id === e.kind).tier)).forEach(e => src.push({ id: 'ev:' + e.id, name: `${EVENT_KINDS[e.kind].name}：${e.name}`, title: e.kind === 'fahui' ? '法會功德芳名' : e.kind === 'jiao' ? '建醮芳名錄' : '慶典贊助芳名' }));
+  return src;
+}
+function posterEntries(id) {
+  if (id.startsWith('ev:')) {
+    const e = S.events.find(x => x.id == id.slice(3));
+    return e ? e.roles.slice().sort((a, b) => b.amount - a.amount) : [];
+  }
+  const y = Number(id.slice(4)), map = new Map();
+  live().filter(r => r.show && new Date(r.date).getFullYear() === y && (!PO.item || r.item === PO.item))
+    .forEach(r => map.set(r.name, (map.get(r.name) || 0) + r.amount));
+  return [...map].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
+}
+function posterOpt(src) {
+  const sz = POSTER_SIZES[PO.size], t = new Date();
+  const ev = src.id.startsWith('ev:') ? S.events.find(x => x.id == src.id.slice(3)) : null;
+  return { w: sz.w, h: sz.h, theme: PO.theme, layout: PO.layout, showAmount: PO.showAmount,
+    title: PO.title || src.title,
+    subtitle: ev ? `${S.temple.name}　${ev.name}` : `${S.temple.name}　${src.name.replace('油香・點燈 ', '')}${PO.item ? '　' + PO.item : ''}`,
+    footer: `中華民國 ${t.getFullYear() - 1911} 年 ${t.getMonth() + 1} 月 ${t.getDate()} 日　${S.temple.name} 敬謝` };
+}
+VIEWS.poster = () => {
+  const srcs = posterSources();
+  if (!posterSrc || !srcs.find(s => s.id === posterSrc)) posterSrc = srcs[0] && srcs[0].id;
+  const sel = (id, obj, cur) => `<select id="${id}">${Object.entries(obj).map(([k, v]) => `<option value="${k}" ${k === cur ? 'selected' : ''}>${v.name || v}</option>`).join('')}</select>`;
+  return `<h2>海報・帆布輸出</h2>
+  <p class="muted">選名單、選尺寸，一鍵產生芳名錄。SVG 是向量檔，可直接交給輸出中心印大圖帆布；PNG 給一般印表機或 LINE 分享。只列出同意公開姓名的信眾。</p>
+  <div class="card form">
+    <label class="w2">名單<select id="p-src">${srcs.map(s => `<option value="${s.id}" ${s.id === posterSrc ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
+    <label>油香項目<select id="p-item" ${posterSrc && posterSrc.startsWith('ev:') ? 'disabled' : ''}><option value="">全部項目</option>${Object.keys(ITEMS).map(k => `<option ${k === PO.item ? 'selected' : ''}>${k}</option>`).join('')}</select></label>
+    <label>尺寸${sel('p-size', POSTER_SIZES, PO.size)}</label>
+    <label>版面${sel('p-layout', { v: '直式（由右至左）', h: '橫式' }, PO.layout)}</label>
+    <label>配色${sel('p-theme', POSTER_THEMES, PO.theme)}</label>
+    <label>標題<input id="p-title" value="${esc(PO.title)}" placeholder="預設：功德芳名錄"></label>
+    <label>PNG 解析度${sel('p-dpi', { 72: '72 dpi（帆布一般）', 100: '100 dpi（帆布精細）', 150: '150 dpi（海報）', 300: '300 dpi（A4／A3 印刷）' }, String(PO.dpi))}</label>
+    <label class="chk"><input id="p-amt" type="checkbox" ${PO.showAmount ? 'checked' : ''}> 顯示金額（國字大寫）</label>
+    <div class="w2 act"><button class="btn pri" id="p-svg">下載 SVG（輸出中心）</button><button class="btn" id="p-png">下載 PNG</button><button class="btn" id="p-print">直接列印</button><span class="muted" id="p-info"></span></div>
+  </div>
+  <div class="card poster-prev" id="p-prev"></div>`;
+};
+AFTER.poster = () => {
+  const cur = () => posterSources().find(s => s.id === posterSrc);
+  const draw = () => {
+    const src = cur(); if (!src) { $('#p-prev').innerHTML = '<p class="muted">沒有可用的名單。</p>'; return; }
+    const ents = posterEntries(src.id), sz = POSTER_SIZES[PO.size];
+    const box = $('#p-prev');
+    box.innerHTML = posterSVG(posterOpt(src), ents);
+    const svg = box.querySelector('svg'), maxW = box.clientWidth - 32, maxH = window.innerHeight * 0.75;
+    const k = Math.min(maxW / sz.w, maxH / sz.h);
+    svg.setAttribute('width', Math.round(sz.w * k)); svg.setAttribute('height', Math.round(sz.h * k));
+    $('#p-info').textContent = `${ents.length} 位・合計 ${money(ents.reduce((s, e) => s + e.amount, 0))} 元・${sz.w / 10}×${sz.h / 10} cm`;
+  };
+  const bind = (id, key, fn = v => v) => $(id).onchange = e => { PO[key] = fn(e.target.type === 'checkbox' ? e.target.checked : e.target.value); draw(); };
+  $('#p-src').onchange = e => { posterSrc = e.target.value; go('poster'); };
+  bind('#p-item', 'item'); bind('#p-size', 'size'); bind('#p-layout', 'layout'); bind('#p-theme', 'theme'); bind('#p-amt', 'showAmount'); bind('#p-dpi', 'dpi', Number);
+  $('#p-title').oninput = e => { PO.title = e.target.value.trim(); draw(); };
+  const fname = ext => { const t = new Date(), sz = POSTER_SIZES[PO.size];
+    return `poster_${cur().id.replace(':', '-')}_${sz.w / 10}x${sz.h / 10}cm_${t.getFullYear() - 1911}${pad(t.getMonth() + 1)}${pad(t.getDate())}.${ext}`; };
+  const svgNow = () => posterSVG(posterOpt(cur()), posterEntries(cur().id));
+  $('#p-svg').onclick = () => { downloadBlob(new Blob([svgNow()], { type: 'image/svg+xml' }), fname('svg')); toast('已下載 SVG'); };
+  $('#p-png').onclick = () => {
+    const sz = POSTER_SIZES[PO.size]; toast('轉檔中…');
+    svgToPng(svgNow(), sz.w, sz.h, PO.dpi).then(r => { downloadBlob(r.blob, fname('png')); toast(`已下載 PNG（${r.pw}×${r.ph} 像素）`); }).catch(e => toast(e.message));
+  };
+  $('#p-print').onclick = () => {
+    const sz = POSTER_SIZES[PO.size];
+    $('#print').innerHTML = `<style>@page{size:${sz.w}mm ${sz.h}mm;margin:0}</style><div class="poster-print">${svgNow()}</div>`;
+    try { window.print(); } catch (e) {}
+  };
+  draw();
+};
+
 // ---------- printing ----------
 function printReceipt(r) {
   const t = S.temple;
@@ -425,9 +546,10 @@ function printDoc() { $('#print').innerHTML = $('#doc').outerHTML; try { window.
 
 // ---------- events ----------
 document.addEventListener('click', e => {
-  const b = e.target.closest('[data-go],[data-tier],[data-print],[data-void],[data-led],[data-printdoc]');
+  const b = e.target.closest('[data-go],[data-tier],[data-print],[data-void],[data-led],[data-printdoc],[data-poster]');
   if (!b) return;
-  if (b.dataset.go) go(b.dataset.go);
+  if (b.dataset.poster) { posterSrc = b.dataset.poster; go('poster'); }
+  else if (b.dataset.go) go(b.dataset.go);
   else if (b.dataset.tier) { S.tier = b.dataset.tier; save(); renderShell(); }
   else if (b.dataset.print) printReceipt(S.records.find(r => r.id == b.dataset.print));
   else if (b.dataset.void) { const r = S.records.find(x => x.id == b.dataset.void); r.void = true; save(); go('search'); toast('收據 ' + r.no + ' 已作廢（保留原號）'); }
@@ -444,7 +566,11 @@ document.addEventListener('submit', e => {
   if (f.dataset.role) {
     e.preventDefault(); const fd = new FormData(f);
     S.events.find(x => x.id == f.dataset.role).roles.push({ role: fd.get('role'), name: fd.get('name'), amount: Number(fd.get('amount')) });
-    save(); go('jiao');
+    save(); go(current);
+  } else if (f.dataset.newev) {
+    e.preventDefault(); const fd = new FormData(f);
+    S.events.push({ id: Math.max(0, ...S.events.map(x => x.id)) + 1, kind: f.dataset.newev, name: fd.get('name'), date: fd.get('date'), roles: [] });
+    save(); go(current);
   } else if (f.id === 'ftr') {
     e.preventDefault(); const fd = new FormData(f); S.troupes.push(Object.fromEntries(fd)); save(); go('troupe');
   }
