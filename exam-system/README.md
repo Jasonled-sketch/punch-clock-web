@@ -25,7 +25,15 @@
 | 3 | bot 加 API 端點給網頁用 | `bot/exam-routes.js` |
 | 4 | bot 加 LINE 事件處理與七點排程 | `bot/exam-line.js` |
 
-網頁在 `web/index.html`，七份現成題庫在 `banks/`。
+網頁在 `web/index.html`（實際部署時改名 `web.html` 放在 bot 的 `exam/` 裡，由 bot 在 `/exam` 同網域出，不用 GitHub Pages）。
+
+題庫**不放這個公開倉庫**（2026-09-29 移出）。正本在 Ragic 考卷表，檔案備份在 JR bot 的 `exam/banks/`。
+
+## 上線狀態（2026-09-29）
+
+全部里程碑已完成，JR bot v0.13.1 上線中，小朋友已在使用。這個資料夾是與線上同步的原始碼副本。
+
+v0.13.1 修手機卡頓：補上手機寬度設定（原本整頁被當電腦版縮小）、改用手機內建中文字型（原本從網路抓上百包字型）、點考卷／交卷立刻顯示載入中並防連點、網路逾時 20 秒提示、作答畫面改整頁捲動、獎章顏色互相干擾修正；後台考卷清單快取 60 秒，交卷時成績與複習排程同時寫入。
 
 ## 新增的環境變數
 
@@ -41,7 +49,7 @@ EXAM_PARENT_ID     ← Jason 的 userId（審核卡片推給他）
 ## 里程碑順序
 
 1. **Ragic 建表＋跑 probe** 拿到欄位 ID，填進 `bot/exam-module.js` 最上面的 `FIELDS`。沒有這步後面全部寫不進去。
-2. **匯入七份題庫** 用 `banks/*.json`，確認 Ragic 看得到題目。
+2. **匯入七份題庫** 用 JR bot 的 `exam/banks/*.json`，確認 Ragic 看得到題目。
 3. **接 API 端點** 先用瀏覽器打 `/exam/api/papers?s=...&t=...` 看得到 JSON。
 4. **上網頁** 把 `web/index.html` 放上 GitHub Pages，設好 `EXAM_WEB_BASE`，手機開得起來、考得完、分數寫得進 Ragic。
 5. **接 LINE 分類卡片第四顆按鈕** 小朋友傳照片 → 出題 → 審核卡片 → Jason 按上架。

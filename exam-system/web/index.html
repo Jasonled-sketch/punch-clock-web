@@ -1,5 +1,10 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12151c">
 <title>JR 考卷中心</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <style>
 :root{
   --bg:#12151c; --bg2:#1a1f2a; --card:#1e2430; --card2:#252c3a; --line:#323b4d;
@@ -7,7 +12,10 @@
   --ok:#5ed68a; --bad:#ff7a6b; --acc:#4ea8ff; --warn:#ffb043;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;font-size:16px;line-height:1.7;padding-block:20px 72px;padding-inline:14px;
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* 手機點擊不用等「是不是要點兩下放大」，按下去立刻反應 */
+button,label,input,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif;font-size:16px;line-height:1.7;padding-block:20px 72px;padding-inline:14px;
  background-image:radial-gradient(900px 420px at 50% -8%,#2a3446 0%,transparent 70%)}
 .wrap{max-width:760px;margin:0 auto}
 h1{font-size:23px;font-weight:900;margin:0;letter-spacing:1px}
@@ -74,8 +82,9 @@ th{color:var(--ink2);font-weight:500;font-size:12px}
 </style>
 <style>
 /* 作答畫面 */
-#exam{position:fixed;inset:0;background:var(--bg);z-index:20;overflow-y:auto;padding-block:16px 80px;padding-inline:14px;display:none}
-#exam.on{display:block}
+#exam{display:none}
+body.examing #exam{display:block}
+body.examing #home{display:none}
 .ebar{position:sticky;top:0;background:var(--bg);padding:8px 0 10px;border-bottom:1px solid var(--line);margin-bottom:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--ink2);z-index:2}
 .ebar b{color:var(--ink)}
 .ebar .x{margin-left:auto;background:none;border:1px solid var(--line);color:var(--ink2);border-radius:8px;padding:4px 11px;font:inherit;font-size:13px;cursor:pointer}
@@ -91,9 +100,9 @@ th{color:var(--ink2);font-weight:500;font-size:12px}
 .opts label{display:flex;gap:9px;align-items:flex-start;padding:8px 10px;border:1px solid transparent;border-radius:8px;cursor:pointer}
 .opts label:hover{background:var(--card2)}
 .opts input{margin-top:6px;accent-color:var(--gold)}
-.opts label:has(input:checked){background:var(--card2);border-color:var(--line)}
-.q.right .opts label:has(input:checked){background:#1d3527;border-color:var(--ok)}
-.q.wrong .opts label:has(input:checked){background:#3a2420;border-color:var(--bad)}
+.opts label.sel{background:var(--card2);border-color:var(--line)}
+.q.right .opts label.sel{background:#1d3527;border-color:var(--ok)}
+.q.wrong .opts label.sel{background:#3a2420;border-color:var(--bad)}
 .q.done .opts label.ans{background:#1d3527;border-color:var(--ok)}
 .q.done .opts label{cursor:default}
 .exp{display:none;margin-top:9px;padding:9px 12px;border-left:3px solid var(--acc);background:#1b2532;font-size:13.5px;border-radius:0 8px 8px 0}
@@ -113,9 +122,16 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .score small{font-size:15px;color:var(--ink2);font-weight:400;margin-left:5px}
 .mname{font-size:17px;font-weight:900;margin-top:4px}
 .result p{margin:8px 0 0;color:var(--ink2);font-size:13.5px}
+#busy{position:fixed;inset:0;z-index:50;display:none;place-items:center;background:rgba(10,12,18,.55)}
+#busy.on{display:grid}
+#busy div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 22px;font-weight:700;display:flex;align-items:center;gap:10px}
+#busy i{width:18px;height:18px;border:3px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
+</head>
+<body>
 
-<div class="wrap">
+<div class="wrap" id="home">
   <div class="top">
     <h1>JR 考卷中心</h1>
     <div class="who"><label for="who">作答者</label><input id="who" placeholder="名字"></div>
@@ -132,7 +148,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
   </div>
 
   <div class="cards">
-    <button class="task" id="tNew" disabled><span class="big" id="nNew">0</span><span><span class="nm">今天要考</span><br><span class="lb" id="lNew">尚未指派</span></span></button>
+    <button class="task" id="tNew" disabled><span class="big" id="nNew">0</span><span><span class="nm" id="kNew">今天要考</span><br><span class="lb" id="lNew">尚未指派</span></span></button>
     <button class="task review" id="tRev" disabled><span class="big" id="nRev">0</span><span><span class="nm">今天要複習</span><br><span class="lb" id="lRev">沒有到期的錯題</span></span></button>
   </div>
 
@@ -160,6 +176,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
     </div>
   </div>
 </div>
+<div id="busy" role="status" aria-live="polite"><div><i></i><span id="busyTx">載入中…</span></div></div>
 <script>window.EXAM_API="";</script>
 <script>
 // 獎章分級與 SVG
@@ -174,41 +191,42 @@ const TIERS=[
 ];
 const tierOf=s=>TIERS.find(t=>s>=t.min);
 
+let medalSeq=0;
 function medalSVG(key,size){
-  const s=size||64;
+  const s=size||64,u='m'+(++medalSeq);
   const head=`<svg viewBox="0 0 64 64" width="${s}" height="${s}" aria-hidden="true">`;
   const G=(id,a,b)=>`<linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
-  if(key==='trophy')return head+`<defs>${G('tg','#fff0b0','#e0a020')}<radialGradient id="tr"><stop offset="0" stop-color="#ffe9a0" stop-opacity=".95"/><stop offset="1" stop-color="#ffb020" stop-opacity="0"/></radialGradient></defs>
-<circle cx="32" cy="32" r="30" fill="url(#tr)"/>
+  if(key==='trophy')return head+`<defs>${G('tg'+u,'#fff0b0','#e0a020')}<radialGradient id="tr${u}"><stop offset="0" stop-color="#ffe9a0" stop-opacity=".95"/><stop offset="1" stop-color="#ffb020" stop-opacity="0"/></radialGradient></defs>
+<circle cx="32" cy="32" r="30" fill="url(#tr${u})"/>
 <g stroke="#ffd24a" stroke-width="2" stroke-linecap="round" opacity=".9">
 <path d="M32 2v7M32 55v7M2 32h7M55 32h7M11 11l5 5M48 48l5 5M53 11l-5 5M16 48l-5 5"/></g>
-<path d="M20 14h24v9a12 12 0 0 1-24 0z" fill="url(#tg)" stroke="#8a5a00" stroke-width="1.5"/>
+<path d="M20 14h24v9a12 12 0 0 1-24 0z" fill="url(#tg${u})" stroke="#8a5a00" stroke-width="1.5"/>
 <path d="M20 16h-5a6 6 0 0 0 6 8M44 16h5a6 6 0 0 1-6 8" fill="none" stroke="#8a5a00" stroke-width="2.4" stroke-linecap="round"/>
 <rect x="29" y="34" width="6" height="8" fill="#c98a12"/>
-<path d="M22 50h20l-2-6H24z" fill="url(#tg)" stroke="#8a5a00" stroke-width="1.5"/>
+<path d="M22 50h20l-2-6H24z" fill="url(#tg${u})" stroke="#8a5a00" stroke-width="1.5"/>
 <path d="M27 19l2.2 4.4 4.8.7-3.5 3.4.8 4.8-4.3-2.3-4.3 2.3.8-4.8-3.5-3.4 4.8-.7z" fill="#fff8d8" opacity=".95"/></svg>`;
-  if(key==='diamond')return head+`<defs>${G('dg','#d8fbff','#2aa8d8')}</defs>
+  if(key==='diamond')return head+`<defs>${G('dg'+u,'#d8fbff','#2aa8d8')}</defs>
 <g stroke="#8fe9ff" stroke-width="1.6" opacity=".55"><path d="M32 4v6M32 54v6M6 32h6M52 32h6"/></g>
-<path d="M18 18h28l10 12-24 26L8 30z" fill="url(#dg)" stroke="#1b7fa8" stroke-width="1.6" stroke-linejoin="round"/>
+<path d="M18 18h28l10 12-24 26L8 30z" fill="url(#dg${u})" stroke="#1b7fa8" stroke-width="1.6" stroke-linejoin="round"/>
 <path d="M18 18l6 12h16l6-12M8 30h48M24 30l8 26M40 30l-8 26" fill="none" stroke="#e8fdff" stroke-width="1.3" opacity=".85"/>
 <path d="M22 21l3 6h-8z" fill="#ffffff" opacity=".5"/></svg>`;
   if(key==='gold'||key==='silver'||key==='bronze'){
     const c={gold:['#fff0a8','#dda012','#8a5a00'],silver:['#ffffff','#a8b2bd','#5d6771'],bronze:['#f6c99a','#b9702f','#6d3d14']}[key];
     const rib={gold:'#d94a3d',silver:'#3d6fd9',bronze:'#3d9d5a'}[key];
-    return head+`<defs>${G('mg',c[0],c[1])}</defs>
+    return head+`<defs>${G('mg'+u,c[0],c[1])}</defs>
 <path d="M22 6l6 20h-12z" fill="${rib}"/><path d="M42 6l-6 20h12z" fill="${rib}" opacity=".8"/>
-<circle cx="32" cy="40" r="19" fill="url(#mg)" stroke="${c[2]}" stroke-width="2"/>
+<circle cx="32" cy="40" r="19" fill="url(#mg${u})" stroke="${c[2]}" stroke-width="2"/>
 <circle cx="32" cy="40" r="14" fill="none" stroke="${c[2]}" stroke-width="1.2" opacity=".6"/>
 <path d="M32 29l3.4 6.9 7.6 1.1-5.5 5.4 1.3 7.6L32 46.4l-6.8 3.6 1.3-7.6-5.5-5.4 7.6-1.1z" fill="#fffdf0" opacity=".92"/></svg>`;
   }
-  if(key==='cert')return head+`<defs>${G('cg','#fffdf2','#e2d3ae')}</defs>
-<rect x="10" y="12" width="44" height="36" rx="3" fill="url(#cg)" stroke="#a8946a" stroke-width="1.8"/>
+  if(key==='cert')return head+`<defs>${G('cg'+u,'#fffdf2','#e2d3ae')}</defs>
+<rect x="10" y="12" width="44" height="36" rx="3" fill="url(#cg${u})" stroke="#a8946a" stroke-width="1.8"/>
 <g stroke="#a8946a" stroke-width="2" stroke-linecap="round" opacity=".7"><path d="M18 22h28M18 28h28M18 34h18"/></g>
 <circle cx="45" cy="42" r="8" fill="#d94a3d" stroke="#8f2b22" stroke-width="1.4"/>
 <path d="M42 50l-2 9 5-3 5 3-2-9" fill="#d94a3d" stroke="#8f2b22" stroke-width="1.2"/>
 <path d="M45 38l1.6 3.3 3.6.5-2.6 2.5.6 3.6-3.2-1.7-3.2 1.7.6-3.6-2.6-2.5 3.6-.5z" fill="#ffe8e4"/></svg>`;
-  return head+`<defs>${G('pg','#ffc9d8','#e26f92')}</defs>
-<ellipse cx="32" cy="36" rx="22" ry="19" fill="url(#pg)" stroke="#b4436a" stroke-width="1.8"/>
+  return head+`<defs>${G('pg'+u,'#ffc9d8','#e26f92')}</defs>
+<ellipse cx="32" cy="36" rx="22" ry="19" fill="url(#pg${u})" stroke="#b4436a" stroke-width="1.8"/>
 <path d="M14 22c-3-7 1-11 6-9l4 5zM50 22c3-7-1-11-6-9l-4 5z" fill="#ffc9d8" stroke="#b4436a" stroke-width="1.8" stroke-linejoin="round"/>
 <ellipse cx="32" cy="40" rx="10" ry="8" fill="#f79ab5" stroke="#b4436a" stroke-width="1.6"/>
 <ellipse cx="28.5" cy="40" rx="2.2" ry="3" fill="#8f2b4d"/><ellipse cx="35.5" cy="40" rx="2.2" ry="3" fill="#8f2b4d"/>
@@ -225,7 +243,14 @@ const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
 const DAY=864e5;
 const ymd=d=>{const z=new Date(d);z.setHours(0,0,0,0);return z.getFullYear()+'-'+String(z.getMonth()+1).padStart(2,'0')+'-'+String(z.getDate()).padStart(2,'0');};
 const fmt=t=>{try{return new Date(t).toLocaleString('zh-TW',{hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}catch(e){return'';}};
-const api=(p,o)=>fetch(API+'/exam/api/'+p+(p.includes('?')?'&':'?')+'s='+encodeURIComponent(S)+'&t='+encodeURIComponent(T),o).then(r=>{if(!r.ok)throw new Error(r.status);return r.json();});
+/* 網路卡住時 20 秒放棄並告訴小孩，不要讓畫面永遠轉圈 */
+function api(p,o){
+  const ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),20000);
+  return fetch(API+'/exam/api/'+p+(p.includes('?')?'&':'?')+'s='+encodeURIComponent(S)+'&t='+encodeURIComponent(T),Object.assign({signal:ctl.signal},o))
+    .then(r=>{if(!r.ok)throw new Error(r.status);return r.json();}).finally(()=>clearTimeout(tm));
+}
+let busy=false;
+function setBusy(on,tx){busy=on;$('busyTx').textContent=tx||'載入中…';$('busy').classList.toggle('on',on);}
 
 let home={papers:[],attempts:[],dueCount:0,board:[]},exam=null,submitted=false,awayAt=null,resets=0;
 
@@ -255,6 +280,8 @@ function refreshTasks(){
   const todayNew=home.papers.filter(p=>p.assigned===td);
   const undone=home.papers.filter(p=>!home.attempts.some(a=>a.paperId===p.id&&a.score>=CFG.pass));
   const list=todayNew.length?todayNew:undone;
+  /* 老師沒指派就別喊「今天要考 7 張」，那是假任務。沒指派時誠實說「還沒考過」。*/
+  $('kNew').textContent=todayNew.length?'今天要考':'還沒考過';
   $('nNew').textContent=list.length;
   $('lNew').textContent=list.length?(list[0].title||list[0].id):'全部都及格了';
   $('tNew').disabled=!list.length;$('tNew').onclick=()=>list.length&&openExam('paper',list[0].id);
@@ -272,13 +299,15 @@ $('papers').addEventListener('click',e=>{const b=e.target.closest('.paper');if(b
 
 /* ---------- 作答 ---------- */
 async function openExam(kind,id){
-  $('ehint').textContent='載入中…';
+  if(busy)return;                       // 載入中再點不重複送出
+  setBusy(true,'出題中…');
   try{exam=await api('exam?kind='+kind+(id?'&id='+encodeURIComponent(id):''));}
-  catch(e){alert('載入考卷失敗，請稍後再試');return;}
+  catch(e){setBusy(false);alert('載入考卷失敗，請檢查網路後再點一次');return;}
   submitted=false;resets=0;
   $('etitle').textContent=exam.title||'';
-  $('exam').classList.add('on');document.body.style.overflow='hidden';
-  renderExam();window.scrollTo({top:0});
+  renderExam();
+  document.body.classList.add('examing');window.scrollTo(0,0);
+  setBusy(false);
 }
 function renderExam(){
   let html='',lastPart=null;
@@ -294,20 +323,23 @@ function renderExam(){
   $('eresult').classList.remove('on');$('esubmit').hidden=false;$('enotice').hidden=true;
   $('ehint').textContent='全部作答後按交卷';count();
 }
-function count(){const qs=[...$('epaper').querySelectorAll('.q')];
-  const d=qs.filter(x=>x.querySelector('input:checked')).length;
-  $('eprog').innerHTML=`已作答 <b>${d}</b> / ${qs.length}`;return d;}
-$('epaper').addEventListener('change',count);
+function count(){const d=$('epaper').querySelectorAll('input:checked').length,n=exam?exam.items.length:0;
+  $('eprog').innerHTML=`已作答 <b>${d}</b> / ${n}`;return d;}
+$('epaper').addEventListener('change',e=>{
+  const inp=e.target;if(!inp.matches('input[type=radio]'))return;
+  inp.closest('.opts').querySelectorAll('label.sel').forEach(l=>l.classList.remove('sel'));
+  inp.closest('label').classList.add('sel');count();
+});
 
 $('esubmit').addEventListener('click',async()=>{
   const answers=exam.items.map((it,n)=>{
     const sel=$('epaper').querySelector(`.q[data-i="${n}"] input:checked`);
     return{paperId:it.paperId,qid:it.qid,pick:sel?Number(sel.value):null};});
-  $('esubmit').disabled=true;$('ehint').textContent='批改中…';
+  if(busy)return;$('esubmit').disabled=true;$('ehint').textContent='批改中…';setBusy(true,'批改中…');
   let r;try{r=await api('submit',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({answers,kind:exam.kind,paperId:exam.items[0]?exam.items[0].paperId:'',resets})});}
-  catch(e){alert('交卷失敗，請檢查網路後再按一次');$('esubmit').disabled=false;return;}
-  submitted=true;
+  catch(e){setBusy(false);alert('交卷失敗，請檢查網路後再按一次');$('esubmit').disabled=false;return;}
+  setBusy(false);submitted=true;
   const byKey={};r.detail.forEach(d=>byKey[d.paperId+':'+d.qid]=d);
   $('epaper').querySelectorAll('.q').forEach(div=>{
     const it=exam.items[+div.dataset.i],d=byKey[it.paperId+':'+it.qid];
@@ -333,32 +365,39 @@ $('esubmit').addEventListener('click',async()=>{
 $('edone').addEventListener('click',close);
 $('eclose').addEventListener('click',()=>{if(!submitted&&count()>0&&!confirm('還沒交卷，確定離開？'))return;close();});
 $('eretry').addEventListener('click',()=>openExam('paper',exam.items[0].paperId));
-async function close(){$('exam').classList.remove('on');document.body.style.overflow='';await load();window.scrollTo({top:0});}
+/* 先立刻回首頁，資料在背景更新，不讓小孩對著空白等 */
+function close(){document.body.classList.remove('examing');window.scrollTo(0,0);load();}
 
 /* ---------- 防作弊 ---------- */
 const gone=()=>{if(awayAt==null)awayAt=Date.now();};
 async function back(){
   if(awayAt==null)return;const s=Math.round((Date.now()-awayAt)/1000);awayAt=null;
-  if(!$('exam').classList.contains('on')||submitted)return;
+  if(!document.body.classList.contains('examing')||submitted)return;
   if(s>=10){resets++;
     const el=$('enotice');el.textContent=`你離開了 ${s} 秒，超過 10 秒，本次已重新出題，請從第 1 題重新作答。`;el.hidden=false;
     const kind=exam.kind,pid=exam.items[0]?exam.items[0].paperId:'';
+    setBusy(true,'重新出題中…');
     try{exam=await api('exam?kind='+kind+(kind==='paper'?'&id='+encodeURIComponent(pid):''));}catch(e){}
-    renderExam();el.hidden=false;window.scrollTo({top:0});}
+    setBusy(false);renderExam();el.hidden=false;window.scrollTo(0,0);}
 }
 document.addEventListener('visibilitychange',()=>document.hidden?gone():back());
 window.addEventListener('blur',gone);window.addEventListener('focus',back);window.addEventListener('pagehide',gone);
 
 /* ---------- 啟動 ---------- */
 async function load(){
+  if(home.student)$('status').textContent='更新中…';
   try{home=await api('home');}
-  catch(e){$('status').textContent='連線失敗，請從 LINE 的連結重新開啟';return;}
+  catch(e){$('status').textContent=home.student?'更新失敗，請重新整理再試一次':'連線失敗，請從 LINE 的連結重新開啟';return;}
   $('dot').classList.add('on');
-  $('status').textContent=`${home.student} · ${home.papers.length} 張考卷`;
-  $('who').value=home.student;$('who').readOnly=true;
+  /* student 是內部代號(如 ayu)，給人看的一律用 name */
+  const who=home.name||home.student;
+  $('status').textContent=`${who} · ${home.papers.length} 張考卷`;
+  $('who').value=who;$('who').readOnly=true;
   CFG.pass=home.pass||85;CFG.revMax=home.reviewMax||20;
   drawBoard();renderPapers();renderHist();refreshTasks();
 }
 if(!S||!T){$('status').textContent='請從 LINE 傳給你的連結開啟這個頁面';}
 else{drawBoard();load();}
 </script>
+</body>
+</html>

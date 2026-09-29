@@ -7,6 +7,8 @@
  * 網頁只帶 ?s=<學生>&t=<簽章>，由 verifyStudent 驗。
  */
 const X = require('./exam-module');
+const fs = require('fs');
+const path = require('path');
 
 function auth(req, res, next) {
   const s = req.query.s || req.body?.s;
@@ -20,6 +22,20 @@ const fail = (res, e) => { console.error('[exam]', e); res.status(500).json({ er
 module.exports = function (app) {
   app.use('/exam/api', require('express').json());
 
+  /**
+   * 考卷網頁本體，跟 API 同一個網域出。
+   * 為什麼不放 GitHub Pages：這支 API 沒有設 CORS，跨網域 fetch 會被瀏覽器擋，
+   * 而且瀏覽器擋下來時畫面只是一片空白、伺服器連 log 都沒有，最難查。
+   * 同源就完全沒這個問題，也省一次部署。
+   */
+  const WEB = path.join(__dirname, 'web.html');
+  app.get('/exam', (req, res) => {
+    fs.readFile(WEB, 'utf8', (err, html) => {
+      if (err) { console.error('[exam] 網頁讀取失敗', err.message); return res.status(500).send('考卷網頁尚未安裝'); }
+      res.type('html').send(html);
+    });
+  });
+
   /** 首頁一次拿齊：考卷、紀錄、待複習數、週曆 */
   app.get('/exam/api/home', auth, async (req, res) => {
     try {
@@ -28,7 +44,7 @@ module.exports = function (app) {
       ]);
       const due = X.dueQuestions(papers, reviews);
       res.json({
-        student: req.student,
+        student: req.student, name: X.displayName(req.student),
         papers: papers.map(p => ({
           id:p.id, subject:p.subject, title:p.title, unit:p.unit,
           assigned:p.assigned, count:p.bank.length
@@ -85,17 +101,20 @@ module.exports = function (app) {
         score: g.score, right: g.right, total: g.total, medal: g.medal,
         wrong: g.wrong, resets
       };
-      await X.saveAttempt(rec);
-
-      // 一張考卷寫一筆，不要一題一筆
-      for (const pid of Object.keys(g.byPaper)) {
-        const cur = reviews[pid] || { state:{}, _rid:null };
-        for (const { qid, ok } of g.byPaper[pid]) {
-          const next = X.bumpCell(cur.state[qid], ok);
-          if (next) cur.state[qid] = next; else delete cur.state[qid];
+      // 成績與複習排程是不同張表，同時寫省一趟等待（小孩按交卷後少等約半秒）。
+      // 複習排程仍一筆接一筆寫：錯題複習可能跨很多張考卷，一次全送會撞 Ragic 每秒 5 次上限。
+      const saveReviews = async () => {
+        // 一張考卷寫一筆，不要一題一筆
+        for (const pid of Object.keys(g.byPaper)) {
+          const cur = reviews[pid] || { state:{}, _rid:null };
+          for (const { qid, ok } of g.byPaper[pid]) {
+            const next = X.bumpCell(cur.state[qid], ok);
+            if (next) cur.state[qid] = next; else delete cur.state[qid];
+          }
+          await X.saveReview(req.student, pid, cur.state, cur._rid);
         }
-        await X.saveReview(req.student, pid, cur.state, cur._rid);
-      }
+      };
+      await Promise.all([X.saveAttempt(rec), saveReviews()]);
 
       // 訂正明細
       const detail = answers.map(a => {

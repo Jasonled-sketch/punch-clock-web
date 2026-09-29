@@ -6,20 +6,30 @@
  */
 const crypto = require('crypto');
 
-/* ===== 建表後用 probe-fields.js 取得，填在這裡 ===== */
+/* ===== 2026-09-24 實測取得（Ragic 建表當下自動編號，不可沿用別張表的） ===== */
 const FIELDS = {
-  exams:    { sheet:'bookkeeping/7', 考卷編號:'TODO', 科目:'TODO', 標題:'TODO', 單元:'TODO',
-              題數:'TODO', 指派日:'TODO', 狀態:'TODO', 題庫JSON:'TODO', 建立時間:'TODO' },
-  attempts: { sheet:'bookkeeping/8', 作答時間:'TODO', 時間戳:'TODO', 學生:'TODO', 考卷編號:'TODO',
-              考卷標題:'TODO', 科目:'TODO', 分數:'TODO', 答對題數:'TODO', 總題數:'TODO',
-              獎章:'TODO', 答錯清單:'TODO', 重出次數:'TODO' },
-  reviews:  { sheet:'bookkeeping/9', 鍵值:'TODO', 學生:'TODO', 考卷編號:'TODO',
-              狀態JSON:'TODO', 最近更新:'TODO' }
+  exams:    { sheet:'bookkeeping/8', 考卷編號:'1003363', 科目:'1003364', 標題:'1003365', 單元:'1003366',
+              題數:'1003367', 指派日:'1003368', 狀態:'1003369', 題庫JSON:'1003370', 建立時間:'1003371' },
+  attempts: { sheet:'bookkeeping/9', 作答時間:'1003373', 時間戳:'1003374', 學生:'1003375', 考卷編號:'1003376',
+              考卷標題:'1003377', 科目:'1003378', 分數:'1003379', 答對題數:'1003380', 總題數:'1003381',
+              獎章:'1003382', 答錯清單:'1003383', 重出次數:'1003384' },
+  reviews:  { sheet:'bookkeeping/10', 鍵值:'1003386', 學生:'1003387', 考卷編號:'1003388',
+              狀態JSON:'1003389', 最近更新:'1003390' }
 };
 
 const RAGIC_BASE = process.env.RAGIC_BASE || 'https://ap10.ragic.com/Fan28';
 const RAGIC_KEY  = process.env.RAGIC_KEY;
-const EXAM_SECRET = process.env.EXAM_SECRET;
+/**
+ * 簽作答連結用的金鑰。
+ * 有設 EXAM_SECRET 就用它；沒設就從服務既有的 LINE_CHANNEL_SECRET 單向推導一把出來
+ * （HMAC 是單向的，推不回原本的 LINE 金鑰）。
+ * 這樣不必另外保管一把新祕密，重開機也不會變，連結不會失效。
+ * ⚠️ LINE_CHANNEL_SECRET 若輪替，舊的作答連結會失效——叫 bot 重發一條即可。
+ */
+const EXAM_SECRET = process.env.EXAM_SECRET
+  || (process.env.LINE_CHANNEL_SECRET
+      ? crypto.createHmac('sha256', process.env.LINE_CHANNEL_SECRET).update('exam-link-key-v1').digest('hex')
+      : '');
 
 /* ===== 規則 ===== */
 const PASS = 85;
@@ -34,6 +44,13 @@ const TIERS = [
 ];
 const tierOf = s => TIERS.find(t => s >= t.min);
 
+/**
+ * 學生代號 → 顯示名稱。代號刻意用英文(寫進 Railway 變數、網址、Ragic 都不怕亂碼)，
+ * 給人看的地方一律走這裡換成中文。要加小孩就在這裡加一行。
+ */
+const STUDENT_NAMES = { ayu: '阿宇' };
+const displayName = id => STUDENT_NAMES[id] || String(id || '');
+
 /* ===== 日期 ===== */
 const DAY = 864e5;
 const pad = n => String(n).padStart(2, '0');
@@ -44,6 +61,21 @@ function isoDay(t = Date.now()) {
 }
 /** 給 Ragic 寫入用：2026/09/24。用短線寫不進去。 */
 const ragicDay = t => isoDay(t).replace(/-/g, '/');
+/** 給 Ragic 日期時間欄寫入用：2026/09/24 14:35 */
+function ragicDateTime(t = Date.now()) {
+  const d = new Date(t);
+  return ragicDay(t) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+/**
+ * 讀回 Ragic 日期欄 → 毫秒。吃 2026/09/24 與 2026/09/24 14:35(:00) 兩種。
+ * ⚠️ 2026-09-24 實測：「時間戳」欄被建成日期型態，寫毫秒進去會被吞成空字串，
+ * 所以排序時間改以「作答時間」為主，時間戳只當備援。
+ */
+function parseRagicTime(s) {
+  const m = String(s || '').match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return 0;
+  return new Date(+m[1], +m[2] - 1, +m[3], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime();
+}
 const fromIso = s => new Date(s + 'T00:00:00').getTime();
 /** 本週一 00:00 */
 function weekStart(t = Date.now()) {
@@ -68,14 +100,32 @@ function examUrl(studentId) {
 }
 
 /* ===== Ragic ===== */
-async function ragicGet(sheet, params = {}) {
+/**
+ * ⚠️ 2026-09-24 實測：這幾張表即使帶 naming=fid，Ragic 還是回「中文欄名」當 key。
+ * 所以讀回來先照 FIELDS 把中文名補成欄位代號，下游一律用 r[F.欄位] 取值，
+ * 兩種命名都吃得下（Ragic 哪天改回 fid 也不會壞）。
+ * @param fmap FIELDS.exams / FIELDS.attempts / FIELDS.reviews
+ */
+function normalizeRow(row, fmap) {
+  if (!fmap) return row;
+  for (const [cname, fid] of Object.entries(fmap)) {
+    if (cname === 'sheet') continue;
+    if (row[fid] === undefined && row[cname] !== undefined) row[fid] = row[cname];
+  }
+  return row;
+}
+async function ragicGet(sheet, params = {}, fmap = null) {
+  // ⚠️ 金鑰沒設/設錯時 Ragic 不會回 401，而是回 200 + 空資料（低權限訪客）。
+  // 那會變成「網頁打得開但一張考卷都沒有」的無頭公案，所以缺金鑰直接吵。
+  if (!RAGIC_KEY) throw new Error('RAGIC_KEY 未設定，Ragic 會靜默回空資料');
   const q = new URLSearchParams(Object.assign({ api:'', naming:'fid' }, params)).toString();
   const r = await fetch(`${RAGIC_BASE}/${sheet}?${q}`, {
     headers: { Authorization: 'Basic ' + RAGIC_KEY }
   });
   if (!r.ok) throw new Error(`Ragic GET ${sheet} ${r.status}`);
   const j = await r.json();
-  return Object.values(j || {});
+  // 清單回應是「以 ragicId 為 key 的 map」，沒有 .data 包裝；仍保留雙容錯
+  return Object.values(j.data || j || {}).map(row => normalizeRow(row, fmap));
 }
 async function ragicPost(sheet, fields, recordId) {
   const body = new URLSearchParams();
@@ -91,9 +141,24 @@ async function ragicPost(sheet, fields, recordId) {
 }
 
 /* ===== 考卷 ===== */
+/**
+ * 考卷清單快取 60 秒。題庫 JSON 很大（每份幾十題、隨考卷越變越多），
+ * 原本開首頁、開考卷、交卷每一步都重撈整張表，網頁會卡。
+ * 本程式上架/下架/新增後會立刻清掉；有人直接在 Ragic 改，最慢 60 秒生效。
+ * ⚠️ 回傳的是共用物件，呼叫端只能讀不能改（buildExam/grade/dueQuestions 目前都只讀）。
+ */
+const PAPER_TTL = 60e3;
+let paperCache = null;
+const clearPaperCache = () => { paperCache = null; };
 async function listPapers() {
+  if (paperCache && Date.now() - paperCache.at < PAPER_TTL) return paperCache.list;
+  const list = await fetchPapers();
+  paperCache = { at: Date.now(), list };
+  return list;
+}
+async function fetchPapers() {
   const F = FIELDS.exams;
-  const rows = await ragicGet(F.sheet);
+  const rows = await ragicGet(F.sheet, {}, F);
   return rows
     .filter(r => r[F.狀態] === '已上架')
     .map(r => {
@@ -113,27 +178,30 @@ async function listPapers() {
 }
 async function savePaper(paper) {
   const F = FIELDS.exams;
-  return ragicPost(F.sheet, {
-    [F.考卷編號]: paper.id, [F.科目]: paper.subject, [F.標題]: paper.title,
-    [F.單元]: paper.unit || '', [F.題數]: String(paper.bank.length),
-    [F.指派日]: paper.assigned ? paper.assigned.replace(/-/g, '/') : ragicDay(),
-    [F.狀態]: paper.status || '待審核',
-    [F.題庫JSON]: JSON.stringify({ parts: paper.parts || null, bank: paper.bank }),
-    [F.建立時間]: ragicDay()
-  }, paper._rid);
+  try {
+    return await ragicPost(F.sheet, {
+      [F.考卷編號]: paper.id, [F.科目]: paper.subject, [F.標題]: paper.title,
+      [F.單元]: paper.unit || '', [F.題數]: String(paper.bank.length),
+      [F.指派日]: paper.assigned ? paper.assigned.replace(/-/g, '/') : ragicDay(),
+      [F.狀態]: paper.status || '待審核',
+      [F.題庫JSON]: JSON.stringify({ parts: paper.parts || null, bank: paper.bank }),
+      [F.建立時間]: ragicDay()
+    }, paper._rid);
+  } finally { clearPaperCache(); }
 }
 async function setPaperStatus(paper, status) {
-  return ragicPost(FIELDS.exams.sheet, { [FIELDS.exams.狀態]: status }, paper._rid);
+  try { return await ragicPost(FIELDS.exams.sheet, { [FIELDS.exams.狀態]: status }, paper._rid); }
+  finally { clearPaperCache(); }
 }
 
 /* ===== 作答紀錄 ===== */
 async function listAttempts(student, limit = 300) {
   const F = FIELDS.attempts;
-  const rows = await ragicGet(F.sheet, { limit: String(limit) });
+  const rows = await ragicGet(F.sheet, { limit: String(limit) }, F);
   return rows
     .filter(r => !student || r[F.學生] === student)
     .map(r => ({
-      at: Number(r[F.時間戳]) || 0, student: r[F.學生], paperId: r[F.考卷編號],
+      at: Number(r[F.時間戳]) || parseRagicTime(r[F.作答時間]), student: r[F.學生], paperId: r[F.考卷編號],
       title: r[F.考卷標題], subject: r[F.科目], score: Number(r[F.分數]) || 0,
       right: Number(r[F.答對題數]) || 0, total: Number(r[F.總題數]) || 0,
       medal: r[F.獎章], wrong: String(r[F.答錯清單] || '').split(',').filter(Boolean),
@@ -144,7 +212,7 @@ async function listAttempts(student, limit = 300) {
 async function saveAttempt(a) {
   const F = FIELDS.attempts;
   return ragicPost(F.sheet, {
-    [F.作答時間]: ragicDay(a.at), [F.時間戳]: String(a.at), [F.學生]: a.student,
+    [F.作答時間]: ragicDateTime(a.at), [F.時間戳]: String(a.at), [F.學生]: a.student,
     [F.考卷編號]: a.paperId, [F.考卷標題]: a.title || '', [F.科目]: a.subject || '',
     [F.分數]: String(a.score), [F.答對題數]: String(a.right), [F.總題數]: String(a.total),
     [F.獎章]: a.medal, [F.答錯清單]: (a.wrong || []).join(','), [F.重出次數]: String(a.resets || 0)
@@ -154,7 +222,7 @@ async function saveAttempt(a) {
 /* ===== 複習排程 ===== */
 async function loadReviews(student) {
   const F = FIELDS.reviews;
-  const rows = await ragicGet(F.sheet);
+  const rows = await ragicGet(F.sheet, {}, F);
   const out = {};
   for (const r of rows) {
     if (r[F.學生] !== student) continue;
@@ -263,11 +331,11 @@ function weekBoardText(board, student) {
 }
 
 module.exports = {
-  FIELDS, PASS, N_PER_EXAM, REVIEW_MAX, INTERVALS, TIERS, tierOf,
-  isoDay, ragicDay, fromIso, weekStart, DAY,
+  FIELDS, PASS, N_PER_EXAM, REVIEW_MAX, INTERVALS, TIERS, tierOf, displayName,
+  isoDay, ragicDay, ragicDateTime, parseRagicTime, fromIso, weekStart, DAY,
   signStudent, verifyStudent, examUrl,
   ragicGet, ragicPost,
-  listPapers, savePaper, setPaperStatus,
+  listPapers, clearPaperCache, savePaper, setPaperStatus,
   listAttempts, saveAttempt,
   loadReviews, saveReview, bumpCell, dueQuestions,
   buildExam, buildReviewExam, grade,

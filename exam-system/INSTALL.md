@@ -81,7 +81,7 @@ window.EXAM_API = "https://<你的 Railway 網域>";
 
 ## 第 6 步：匯入七份現成題庫
 
-`banks/` 裡有七份，寫進 Ragic 的考卷表，狀態填「已上架」：
+JR bot 的 `exam/banks/` 裡有七份（題庫不放在公開倉庫），寫進 Ragic 的考卷表，狀態填「已上架」：
 
 ```js
 const X = require('./bot/exam-module');
