@@ -26,6 +26,7 @@ const MODULES = [
   { id: 'troupe',   name: '陣頭',           tier: 'flagship' },
   { id: 'poster',   name: '海報・帆布輸出', tier: 'basic' },
   { id: 'backup',   name: '備份・還原',     tier: 'basic' },
+  { id: 'audit',    name: '操作紀錄',       tier: 'basic' },
   { id: 'charter',  name: '章程・管理辦法', tier: 'basic' },
   { id: 'plans',    name: '方案比較',       tier: 'basic' },
   { id: 'settings', name: '宮廟設定',       tier: 'basic' },
@@ -46,7 +47,19 @@ function load() {
     S.v2 = true; save();
   }
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+let saveTimer;
+function save() {
+  if (SRV.on) { clearTimeout(saveTimer); saveTimer = setTimeout(pushState, 400); return; }
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
+
+// 空白廟（本機伺服器第一次啟用）
+function blankState(name) {
+  return { v2: true, tier: 'basic', records: [], led: [], sms: [],
+    temple: { name: name || '本宮', type: '宮', org: 'committee', deity: '', address: '', phone: '', head: '', charter: {} },
+    rules: { autoLed: true, autoRemind: true, autoReport: true, autoBirthday: false, autoSync: false },
+    online: { web: false, fb: false, pay: false, ai: false }, events: [], troupes: [] };
+}
 
 function seed() {
   const names = ['王小明', '李淑芬', '陳志豪', '林美玲', '黃建國', '張雅婷', '吳俊傑', '劉秀英', '蔡宗翰', '楊惠君', '許家豪', '鄭麗華', '謝文雄', '洪佩珊', '郭明德', '邱玉梅', '曾國華', '廖美惠', '賴俊宏', '周淑貞'];
@@ -205,6 +218,8 @@ VIEWS.donate = () => `<h2>油香登記</h2>
     <label>金額（元）<input id="d-amt" type="number" min="0" required></label>
     <label class="chk"><input id="d-show" type="checkbox" checked> 同意公開姓名（字幕機・功德榜）</label>
     <label class="w2">備註<input id="d-note" placeholder="例：闔家平安"></label>
+    <details class="w2"><summary>補登手寫收據（系統故障時開的單）</summary><div class="form" style="margin-top:8px">
+      <label>手寫收據編號<input id="d-man" placeholder="H0001"></label><label>手寫日期<input id="d-mdate" type="date"></label></div></details>
     <div class="w2 act"><button class="btn pri" type="submit">確定並列印收據</button>
       <span class="muted">${has('deluxe') && S.rules.autoLed ? '全自動：確定後會自動送上字幕機。' : has('standard') ? '半自動：確定後可按按鈕推上字幕機。' : '入門：收據列印並存在本機。'}</span></div>
   </form>
@@ -218,17 +233,25 @@ AFTER.donate = () => {
     const r = [...S.records].reverse().find(x => x.phone && x.phone === $('#d-phone').value.trim());
     if (r) { if (!$('#d-name').value) $('#d-name').value = r.name; if (!$('#d-addr').value) $('#d-addr').value = r.addr; toast('已帶入舊信眾資料：' + r.name); }
   };
-  f.onsubmit = e => {
+  f.onsubmit = async e => {
     e.preventDefault();
-    const r = mkRecord({ date: new Date().toISOString(), name: $('#d-name').value.trim(), phone: $('#d-phone').value.trim(),
+    const man = $('#d-man').value.trim(), mdate = $('#d-mdate').value;
+    const input = { date: man && mdate ? new Date(mdate + 'T12:00:00').toISOString() : new Date().toISOString(), name: $('#d-name').value.trim(), phone: $('#d-phone').value.trim(),
       addr: $('#d-addr').value.trim(), item: item.value, qty: Number(qty.value) || 1, amount: Number(amt.value) || 0,
-      show: $('#d-show').checked, note: $('#d-note').value.trim() }, S.records.length + 1);
+      show: $('#d-show').checked, note: $('#d-note').value.trim(), manualNo: man || undefined };
+    let r;
+    if (SRV.on) {
+      try { r = (await api('POST', '/api/records', { record: input })).record; } catch (err) { toast(err.message); return; }
+    } else {
+      if (man && S.records.some(x => x.manualNo === man)) { toast(`手寫收據 ${man} 已補登過`); return; }
+      r = mkRecord(input, S.records.length + 1);
+    }
     S.records.push(r);
     let ledMsg = '';
     if (has('deluxe') && S.rules.autoLed && r.show) { pushLed(r); ledMsg = '已自動送上字幕機。'; }
     save();
     printReceipt(r);
-    $('#after').innerHTML = `<div class="card ok"><b>已登記 收據 ${r.no}</b>　${esc(r.name)}・${r.item}・${money(r.amount)} 元　${ledMsg}
+    $('#after').innerHTML = `<div class="card ok"><b>已登記 收據 ${r.no}</b>${r.manualNo ? `（補登手寫 ${esc(r.manualNo)}）` : ''}　${esc(r.name)}・${r.item}・${money(r.amount)} 元　${ledMsg}
       <div class="act">${has('standard') && !ledMsg && r.show ? `<button class="btn" data-led="${r.id}">推上字幕機</button>` : ''}
       <button class="btn" data-print="${r.id}">再印一次</button></div></div>`;
     f.reset(); price();
@@ -392,7 +415,8 @@ VIEWS.linebot = () => {
   </div>`;
 };
 
-VIEWS.backup = () => {
+VIEWS.backup = () => SRV.on ? serverBackupView() : demoBackupView();
+function demoBackupView() {
   let last = null; try { last = localStorage.getItem(KEY + ':lastBackup'); } catch (e) {}
   const online = navigator.onLine;
   return `<h2>備份・還原</h2>
@@ -413,6 +437,7 @@ VIEWS.backup = () => {
   </div>`;
 };
 AFTER.backup = () => {
+  if (SRV.on) return serverBackupAfter();
   $('#fbak').onsubmit = async e => {
     e.preventDefault();
     try {
@@ -533,11 +558,13 @@ VIEWS.settings = () => {
   <label class="w2">地址<input name="address" value="${esc(t.address)}"></label>
   <label>電話<input name="phone" value="${esc(t.phone)}"></label>
   <label>負責人<input name="head" value="${esc(t.head)}"></label>
-  <div class="w2 act"><button class="btn pri">儲存</button><button class="btn" type="button" id="reset">清除並重新載入範例資料</button></div></form>`;
+  <div class="w2 act"><button class="btn pri">儲存</button>${SRV.on ? '' : '<button class="btn" type="button" id="reset">清除並重新載入範例資料</button>'}</div></form>
+  ${SRV.on && SRV.rank >= 4 ? '<div class="card" id="users"></div>' : ''}`;
 };
 AFTER.settings = () => {
   $('#fset').onsubmit = e => { e.preventDefault(); const fd = new FormData(e.target); for (const [k, v] of fd) S.temple[k] = v; save(); renderShell(); toast('已儲存'); };
-  $('#reset').onclick = () => { if ($('#reset').dataset.ok) { S = seed(); save(); renderShell(); toast('已重設'); } else { $('#reset').dataset.ok = 1; $('#reset').textContent = '再按一次確認清除'; } };
+  usersPanel();
+  if ($('#reset')) $('#reset').onclick = () => { if ($('#reset').dataset.ok) { S = seed(); save(); renderShell(); toast('已重設'); } else { $('#reset').dataset.ok = 1; $('#reset').textContent = '再按一次確認清除'; } };
 };
 
 
@@ -632,6 +659,215 @@ function printReceipt(r) {
 }
 function printDoc() { $('#print').innerHTML = $('#doc').outerHTML; try { window.print(); } catch (e) {} }
 
+
+// ---------- 本機伺服器（入門正式版）----------
+const SRV = { on: false, token: null, user: null, role: null, rank: 0, status: null, users: [] };
+const RANK = { counter: 1, accountant: 2, chair: 3, admin: 4 };
+
+async function api(method, p, body) {
+  const r = await fetch(p, { method, headers: Object.assign({ 'Content-Type': 'application/json' }, SRV.token ? { Authorization: 'Bearer ' + SRV.token } : {}), body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && SRV.token && p !== '/api/login') { SRV.token = null; try { sessionStorage.removeItem('tc-token'); } catch (e) {} showLogin('閒置太久，請重新登入'); }
+  if (!r.ok) throw new Error(j.error || '連線錯誤 ' + r.status);
+  return j;
+}
+async function pushState() {
+  const st = Object.assign({}, S); delete st.records;
+  try { await api('PUT', '/api/state', { state: st }); } catch (e) { toast('存檔失敗：' + e.message); }
+}
+
+async function boot() {
+  if (location.protocol.startsWith('http')) {
+    try { const st = await (await fetch('/api/status')).json(); if (st.server) { SRV.on = true; SRV.status = st; } } catch (e) {}
+  }
+  if (!SRV.on) { load(); renderShell(); setLight(); return; }
+  if (!SRV.status.setup) return showSetup();
+  try { const saved = JSON.parse(sessionStorage.getItem('tc-token') || 'null'); if (saved) { Object.assign(SRV, saved); return await afterLogin(); } } catch (e) {}
+  showLogin();
+}
+
+function gate(html) { const g = $('#gate'); g.innerHTML = `<div class="gate-in">${html}</div>`; g.hidden = false; }
+function ungate() { $('#gate').hidden = true; $('#gate').innerHTML = ''; }
+
+function showSetup() {
+  gate(`<h2>宮廟雲 入門版：第一次啟用</h2><p class="muted">這台主機還沒有資料。新廟請選「新主機設定」；換機或主機故障請選「從備份還原」。</p>
+  <div class="row2">
+    <form class="card form" id="g-setup"><h3 class="w2">新主機設定</h3>
+      <label class="w2">宮廟名稱<input name="templeName" required></label>
+      <label>管理員姓名<input name="adminName" required></label>
+      <label>管理員 PIN（4～8 位數字）<input name="adminPin" inputmode="numeric" pattern="\\d{4,8}" required type="password" autocomplete="new-password"></label>
+      <label>備份密碼（至少 8 碼）<input name="backupPassword" type="password" minlength="8" required autocomplete="new-password"></label>
+      <label>再輸入一次<input name="backupPassword2" type="password" minlength="8" required autocomplete="new-password"></label>
+      <p class="w2 muted">備份密碼用來加密所有備份檔，請寫下來由主委與總幹事各保管一份。忘記密碼，備份就無法還原，我們也打不開。</p>
+      <div class="w2 act"><button class="btn pri">開始使用</button><span class="muted" id="g-msg1"></span></div></form>
+    <form class="card form" id="g-restore"><h3 class="w2">從備份還原（換機）</h3>
+      <label class="w2">備份檔（隨身碟 TempleBackup 資料夾裡最新的 .tbak）<input name="file" type="file" accept=".tbak" required></label>
+      <label class="w2">備份密碼<input name="password" type="password" required autocomplete="current-password"></label>
+      <p class="w2 muted">人員、PIN、所有收據與設定都會一起還原，原本的備份隨身碟可以直接繼續用。</p>
+      <div class="w2 act"><button class="btn">還原</button><span class="muted" id="g-msg2"></span></div></form>
+  </div>`);
+  $('#g-setup').onsubmit = async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+    if (f.backupPassword !== f.backupPassword2) { $('#g-msg1').textContent = '兩次備份密碼不一樣'; return; }
+    try {
+      await api('POST', '/api/setup', f);
+      SRV.status = await (await fetch('/api/status')).json();
+      await doLogin(f.adminName, f.adminPin);
+    } catch (err) { $('#g-msg1').textContent = err.message; }
+  };
+  $('#g-restore').onsubmit = async e => {
+    e.preventDefault(); const fd = new FormData(e.target), file = fd.get('file');
+    $('#g-msg2').textContent = '還原中…';
+    try {
+      const buf = new Uint8Array(await file.arrayBuffer());
+      let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+      const r = await api('POST', '/api/setup/restore', { file: btoa(bin), password: fd.get('password') });
+      SRV.status = await (await fetch('/api/status')).json();
+      toast(`還原完成：${r.records} 筆收據`); showLogin('還原完成，請用原本的帳號登入');
+    } catch (err) { $('#g-msg2').textContent = err.message; }
+  };
+}
+
+async function showLogin(msg) {
+  try { SRV.users = await api('GET', '/api/users/public'); } catch (e) { SRV.users = []; }
+  let pick = SRV.users[0] ? SRV.users[0].name : '';
+  const draw = () => {
+    gate(`<h2>${esc(SRV.status.templeName || '宮廟雲')}</h2><p class="muted">${esc(msg || '請選擇您的名字並輸入 PIN')}</p>
+    <div class="who-list">${SRV.users.map(u => `<button class="btn${u.name === pick ? ' pri' : ''}" data-who="${esc(u.name)}">${esc(u.name)}<br><small>${u.roleName}</small></button>`).join('')}</div>
+    <form id="g-login" class="pin"><input id="g-pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN" aria-label="PIN">
+      <div class="pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '清除', 0, '確定'].map(k => `<button type="${k === '確定' ? 'submit' : 'button'}" class="btn" data-k="${k}">${k}</button>`).join('')}</div>
+      <p class="muted" id="g-err"></p></form>`);
+    $('#gate').querySelectorAll('[data-who]').forEach(b => b.onclick = () => { pick = b.dataset.who; draw(); });
+    $('#gate').querySelectorAll('[data-k]').forEach(b => b.onclick = () => { const k = b.dataset.k, i = $('#g-pin'); if (k === '清除') i.value = ''; else if (k !== '確定') i.value += k; });
+    $('#g-login').onsubmit = async e => { e.preventDefault(); try { await doLogin(pick, $('#g-pin').value); } catch (err) { $('#g-err').textContent = err.message; $('#g-pin').value = ''; } };
+    $('#g-pin').focus();
+  };
+  draw();
+}
+
+async function doLogin(name, pin) {
+  const r = await api('POST', '/api/login', { name, pin });
+  Object.assign(SRV, { token: r.token, user: r.user, role: r.role, rank: RANK[r.role] });
+  try { sessionStorage.setItem('tc-token', JSON.stringify({ token: r.token, user: r.user, role: r.role, rank: RANK[r.role] })); } catch (e) {}
+  await afterLogin();
+}
+
+async function afterLogin() {
+  const d = await api('GET', '/api/state');
+  try { SRV.users = await api('GET', '/api/users/public'); } catch (e) {}
+  S = d.state || blankState(SRV.status.templeName);
+  S.records = d.records;
+  if (!d.state) await pushState();
+  ungate(); renderShell(); setLight(); idleWatch();
+  clearInterval(afterLogin.poll); afterLogin.poll = setInterval(refreshStatus, 60000);
+}
+
+async function logout(msg) {
+  try { await api('POST', '/api/logout'); } catch (e) {}
+  SRV.token = null; try { sessionStorage.removeItem('tc-token'); } catch (e) {}
+  showLogin(msg);
+}
+
+let lastAct = Date.now();
+function idleWatch() {
+  if (idleWatch.on) return; idleWatch.on = true;
+  ['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, () => { lastAct = Date.now(); }, true));
+  setInterval(() => { if (SRV.token && Date.now() - lastAct > 15 * 60000) logout('閒置 15 分鐘，畫面已自動鎖定'); }, 30000);
+}
+
+async function refreshStatus() { try { SRV.status = await (await fetch('/api/status')).json(); setLight(); } catch (e) { setLight('down'); } }
+function setLight(force) {
+  const el = $('#blight'), who = $('#who');
+  if (!el) return;
+  if (!SRV.on) { el.className = 'blight gray'; el.textContent = '展示模式：資料存在瀏覽器'; who.hidden = true; return; }
+  const b = SRV.status && SRV.status.backup, fresh = b && b.last && Date.now() - new Date(b.last) < 864e5;
+  let cls = 'red', txt = '尚未備份';
+  if (force === 'down') { txt = '伺服器沒有回應'; }
+  else if (SRV.status && SRV.status.integrity === false) txt = '資料庫檢查異常，請聯絡維修';
+  else if (b && b.ok && fresh) { cls = 'green'; txt = `已備份 ${new Date(b.last).toTimeString().slice(0, 5)}・隨身碟 ${b.plugged}`; }
+  else if (b && b.last && fresh) { cls = 'yellow'; txt = b.plugged ? '備份到隨身碟失敗' : '沒插備份隨身碟'; }
+  else if (b && b.last) txt = '超過 24 小時沒備份';
+  el.className = 'blight ' + cls; el.textContent = txt;
+  who.hidden = false; who.textContent = `${SRV.user}・登出`;
+}
+
+function showVoid(r) {
+  const approvers = SRV.on ? SRV.users.filter(u => RANK[u.role] >= 2) : [];
+  gate(`<h2>作廢收據 ${r.no}</h2><p>${esc(r.name)}・${r.item}・${money(r.amount)} 元</p>
+  <form class="card form" id="g-void"><label class="w2">作廢原因<input name="reason" required placeholder="例：金額打錯，重開 ${r.no.slice(0, 7)}-xxxx"></label>
+  ${SRV.on ? `<label>核准人（會計、主委或管理員）<select name="name">${approvers.map(u => `<option>${esc(u.name)}</option>`).join('')}</select></label>
+  <label>核准人 PIN<input name="pin" type="password" inputmode="numeric" required autocomplete="off"></label>` : '<p class="w2 muted">展示模式不需核准；正式版需要主管 PIN。</p>'}
+  <p class="w2 muted">作廢後保留原號，操作紀錄會記下原因與核准人。</p>
+  <div class="w2 act"><button class="btn pri">確定作廢</button><button class="btn" type="button" id="g-cancel">取消</button><span class="muted" id="g-verr"></span></div></form>`);
+  $('#g-cancel').onclick = ungate;
+  $('#g-void').onsubmit = async e => {
+    e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+    try {
+      if (SRV.on) Object.assign(r, (await api('POST', '/api/records/void', { id: r.id, reason: f.reason, approver: { name: f.name, pin: f.pin } })).record);
+      else { r.void = true; r.voidReason = f.reason; save(); }
+      ungate(); go('search'); toast('收據 ' + r.no + ' 已作廢（保留原號）');
+    } catch (err) { $('#g-verr').textContent = err.message; }
+  };
+}
+
+function backupTiles() {
+  const b = (SRV.status && SRV.status.backup) || {};
+  return `
+    <div class="tile"><span class="k">上次備份</span><span class="v" style="font-size:18px">${b.last ? roc(b.last) + ' ' + new Date(b.last).toTimeString().slice(0, 5) : '尚未備份'}</span><span class="chip ${b.ok ? 'up' : 'dn'}">${b.ok ? '成功' : esc(b.error || '請立即備份')}</span></div>
+    <div class="tile"><span class="k">插著的備份隨身碟</span><span class="v">${b.plugged || 0}<small>支</small></span><span class="chip ${b.plugged ? 'up' : 'dn'}">${b.plugged ? '正常' : '請插上備份碟'}</span></div>
+    <div class="tile"><span class="k">雲端備份</span><span class="v" style="font-size:18px">${esc(b.cloud || '未啟用')}</span></div>`;
+}
+function serverBackupView() {
+  return `<h2>備份・還原</h2>
+  <div class="tiles" id="bk-tiles">${backupTiles()}</div>
+  <div class="card"><h3>自動備份時機</h3><p>每次關帳、每 50 筆登記、有異動時每小時一次、關機前。每份都寫到本機快照與所有插著的備份碟，並保留 30 天每日與 12 個月每月的版本。</p>
+    <div class="act"><button class="btn pri" id="bk-now">立即備份</button>${SRV.rank >= 2 ? '<button class="btn" id="bk-close">今日關帳</button>' : ''}</div><div id="bk-out"></div></div>
+  ${SRV.rank >= 3 ? `<form class="card form" id="bk-usb"><h3 class="w2">設定新的備份隨身碟</h3><label class="w2">隨身碟位置<input name="path" required placeholder="例：E:\\"></label>
+    <p class="w2 muted">建議準備兩支：一支常插，一支每週交換帶回家。設定後會在隨身碟放一個識別檔，系統只會備份到本廟的碟。</p><div class="w2 act"><button class="btn">設定為備份碟</button></div></form>` : ''}
+  <div class="card"><h3>換機或主機故障</h3><ol class="log"><li>先改用手寫收據（H 開頭編號），之後在「油香登記」補登。</li><li>在備用主機開啟系統，選「從備份還原」。</li><li>選隨身碟 TempleBackup 資料夾裡最新的檔案，輸入備份密碼。</li></ol></div>`;
+}
+function serverBackupAfter() {
+  const out = $('#bk-out');
+  const tiles = () => refreshStatus().then(() => { if ($('#bk-tiles')) $('#bk-tiles').innerHTML = backupTiles(); });
+  tiles();
+  $('#bk-now').onclick = async () => { out.textContent = '備份中…'; try { const r = await api('POST', '/api/backup/run'); await tiles(); out.textContent = ''; toast(r.targets.length ? `已備份到 ${r.targets.length} 支隨身碟` : '已備份到本機（沒有插備份碟）'); } catch (e) { out.textContent = e.message; } };
+  if ($('#bk-close')) $('#bk-close').onclick = async () => {
+    out.textContent = '關帳中…';
+    try {
+      const r = await api('POST', '/api/close-day', {}); await tiles();
+      out.innerHTML = `<div class="card ok"><b>${r.day} 關帳完成</b>：${r.count} 筆，${money(r.total)} 元（作廢 ${r.voided} 筆）<br>${Object.entries(r.byItem).map(([k, v]) => `${k} ${money(v)} 元`).join('、') || '今日無收入'}<br><small>核對碼 ${r.chainHead}（印在日報上，日後可比對紀錄有沒有被改過）</small></div>`;
+      setLight();
+    } catch (e) { out.textContent = e.message; }
+  };
+  if ($('#bk-usb')) $('#bk-usb').onsubmit = async e => { e.preventDefault(); try { const r = await api('POST', '/api/backup/prepare-usb', { path: new FormData(e.target).get('path') }); await refreshStatus(); toast(`已設定，目前 ${r.targets.length} 支備份碟`); go('backup'); } catch (err) { toast(err.message); } };
+}
+
+const ACTIONS = { setup: '初次設定', restore: '從備份還原', login: '登入', login_fail: 'PIN 錯誤', update_state: '修改設定', record_create: '登記', record_manual: '補登手寫收據', record_void: '作廢', close_day: '關帳', prepare_usb: '設定備份碟', user_add: '新增人員', user_pin: '重設 PIN', user_active: '啟用／停用人員' };
+VIEWS.audit = () => !SRV.on ? `<h2>操作紀錄</h2><div class="card"><p>正式版（本機伺服器）會記下每一筆登記、作廢、修改、登入，並用雜湊鏈串起來，任何人事後改資料庫都會被發現。</p><p class="muted">目前是展示模式，沒有操作紀錄。</p></div>`
+  : SRV.rank < 2 ? `<h2>操作紀錄</h2><div class="card"><p>需要會計、主委或管理員權限。</p></div>`
+  : `<h2>操作紀錄</h2><div class="card"><div class="act"><button class="btn pri" id="au-verify">檢查紀錄有沒有被竄改</button><span id="au-res" class="muted"></span></div></div><div class="card" id="au-list">載入中…</div>`;
+AFTER.audit = async () => {
+  if (!SRV.on || SRV.rank < 2) return;
+  $('#au-verify').onclick = async () => { const v = await api('GET', '/api/audit/verify'); $('#au-res').innerHTML = v.ok ? `<span class="chip up">完整</span> 共 ${v.checked} 筆，沒有被修改` : `<span class="chip dn">異常</span> 第 ${v.brokenAt} 筆之後的紀錄被改過，請聯絡維修`; };
+  const list = await api('GET', '/api/audit');
+  $('#au-list').innerHTML = `<div class="tbl"><table><thead><tr><th>時間</th><th>人員</th><th>動作</th><th>內容</th></tr></thead><tbody>${list.map(a => `<tr><td>${roc(a.ts)} ${new Date(a.ts).toTimeString().slice(0, 5)}</td><td>${esc(a.user)}</td><td>${ACTIONS[a.action] || esc(a.action)}</td><td>${esc([a.detail.no, a.detail.name, a.detail.item, a.detail.amount != null ? money(a.detail.amount) + ' 元' : '', a.detail.reason ? '原因：' + a.detail.reason : '', a.detail.approvedBy ? '核准：' + a.detail.approvedBy : '', a.detail.keys ? a.detail.keys.join('、') : '', a.detail.day || ''].filter(Boolean).join('　'))}</td></tr>`).join('')}</tbody></table></div>`;
+};
+
+async function usersPanel() {
+  const el = $('#users'); if (!el) return;
+  const list = await api('GET', '/api/admin/users');
+  const roleName = { counter: '櫃台', accountant: '會計', chair: '主委／管理人', admin: '系統管理員' };
+  el.innerHTML = `<h3>人員與 PIN</h3><div class="tbl"><table><thead><tr><th>姓名</th><th>角色</th><th>狀態</th><th></th></tr></thead><tbody>${list.map(u => `<tr><td>${esc(u.name)}</td><td>${roleName[u.role]}</td><td>${u.active ? '啟用' : '停用'}</td><td class="act"><button class="btn sm" data-upin="${u.id}">重設 PIN</button><button class="btn sm" data-uact="${u.id}" data-on="${u.active ? 0 : 1}">${u.active ? '停用' : '啟用'}</button></td></tr>`).join('')}</tbody></table></div>
+  <form class="form" id="u-add"><label>姓名<input name="name" required></label><label>角色<select name="role"><option value="counter">櫃台</option><option value="accountant">會計</option><option value="chair">主委／管理人</option><option value="admin">系統管理員</option></select></label><label>PIN<input name="pin" type="password" inputmode="numeric" pattern="\\d{4,8}" required autocomplete="new-password"></label><div class="act"><button class="btn pri">新增人員</button></div></form>`;
+  $('#u-add').onsubmit = async e => { e.preventDefault(); try { await api('POST', '/api/admin/users', Object.assign({ action: 'add' }, Object.fromEntries(new FormData(e.target)))); toast('已新增'); usersPanel(); } catch (err) { toast(err.message); } };
+  el.querySelectorAll('[data-uact]').forEach(b => b.onclick = async () => { await api('POST', '/api/admin/users', { action: 'active', id: b.dataset.uact, active: b.dataset.on === '1' }); usersPanel(); });
+  el.querySelectorAll('[data-upin]').forEach(b => b.onclick = () => {
+    b.outerHTML = `<input type="password" inputmode="numeric" class="pinin" placeholder="新 PIN" data-pid="${b.dataset.upin}" autocomplete="new-password">`;
+    const i = el.querySelector(`[data-pid="${b.dataset.upin}"]`); i.focus();
+    i.onchange = async () => { try { await api('POST', '/api/admin/users', { action: 'pin', id: i.dataset.pid, pin: i.value }); toast('PIN 已更新'); usersPanel(); } catch (err) { toast(err.message); } };
+  });
+}
+
 // ---------- events ----------
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-go],[data-tier],[data-print],[data-void],[data-led],[data-printdoc],[data-poster]');
@@ -640,7 +876,7 @@ document.addEventListener('click', e => {
   else if (b.dataset.go) go(b.dataset.go);
   else if (b.dataset.tier) { S.tier = b.dataset.tier; save(); renderShell(); }
   else if (b.dataset.print) printReceipt(S.records.find(r => r.id == b.dataset.print));
-  else if (b.dataset.void) { const r = S.records.find(x => x.id == b.dataset.void); r.void = true; save(); go('search'); toast('收據 ' + r.no + ' 已作廢（保留原號）'); }
+  else if (b.dataset.void) showVoid(S.records.find(x => x.id == b.dataset.void));
   else if (b.dataset.led) { pushLed(S.records.find(r => r.id == b.dataset.led)); save(); toast('已推上字幕機'); b.remove(); }
   else if (b.dataset.printdoc) printDoc();
 });
@@ -665,4 +901,5 @@ document.addEventListener('submit', e => {
 });
 $('#tier').onchange = e => { S.tier = e.target.value; save(); renderShell(); toast('已切換到' + TIERS[S.tier].name + '方案'); };
 
-load(); renderShell();
+document.addEventListener('click', e => { if (e.target.id === 'who') logout('已登出'); });
+boot();

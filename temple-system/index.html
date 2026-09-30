@@ -125,6 +125,20 @@ td.act{margin:0;white-space:nowrap}
 .bub.sys{background:#FFF7D6}
 .hot{display:inline-block;background:var(--gold);color:var(--paper);font-size:11px;padding:0 6px;border-radius:4px}
 .plans tr.price td{font-size:16px}
+.blight{font-size:12.5px;padding:3px 10px;border-radius:999px;background:rgba(255,255,255,.18);white-space:nowrap}
+.blight::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:#bbb;vertical-align:0}
+.blight.green::before{background:#4ADE80}.blight.yellow::before{background:#FACC15}.blight.red::before{background:#F87171}
+.whob{background:none;border:1px solid rgba(255,255,255,.5);color:inherit;border-radius:6px;padding:3px 10px;cursor:pointer;font-size:13px}
+#gate{position:fixed;inset:0;z-index:20;background:var(--bg);overflow:auto;padding-inline:16px;padding-block:32px}
+.gate-in{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.who-list{display:flex;flex-wrap:wrap;gap:10px}
+.who-list .btn{min-width:120px;padding:14px;font-size:17px}
+.pin{display:flex;flex-direction:column;gap:12px;max-width:320px}
+.pin input{font-size:28px;letter-spacing:.3em;text-align:center;padding:10px;border:1px solid var(--rule);border-radius:8px;background:var(--paper)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad .btn{font-size:22px;padding:14px 0}
+.pinin{width:90px;padding:2px 6px}
+details summary{cursor:pointer;color:var(--ink2);font-size:13.5px}
 .plans th,.plans td{text-align:center}
 .plans td:first-child{text-align:left}
 .plans .cur{background:var(--soft);font-weight:700}
@@ -152,6 +166,8 @@ td.act{margin:0;white-space:nowrap}
   <div class="brand" id="tname">宮廟雲</div>
   <span id="tbadge" style="font-size:13px;opacity:.9"></span>
   <span class="sp"></span>
+  <span id="blight" class="blight gray"></span>
+  <button id="who" class="whob" hidden></button>
   <label for="tier">展示方案
     <select id="tier">
       <option value="basic">入門</option><option value="standard">標準</option>
@@ -164,6 +180,7 @@ td.act{margin:0;white-space:nowrap}
   <main id="main"></main>
 </div>
 <div id="print"></div>
+<div id="gate" hidden></div>
 <div id="toast" hidden></div>
 <script src="charter.js"></script>
 <script src="poster.js"></script>
