@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="robots" content="noindex">
+<title>USLED 保固收費流程圖</title>
+<style>
+:root{--sky:#0b72c4;--skyd:#065a9e;--ok:#15803d;--okbg:#f0fdf4;--okbd:#a7e3bf;--wn:#a85b09;--wnbg:#fffbeb;--wnbd:#f5d78a;--tx:#14304a;--mu:#5d7b97;--bd:#c9d9e7}
+*{box-sizing:border-box}
+body{margin:0;background:#fff;color:var(--tx);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;line-height:1.5}
+.sheet{width:1080px;padding:52px 60px 48px;background:#fff}
+h1{margin:0 0 4px;font-size:40px;font-weight:900;letter-spacing:1px;color:var(--skyd)}
+.sub{margin:0 0 30px;font-size:19px;color:var(--mu);font-weight:600}
+.sub b{color:var(--tx)}
+.col{display:flex;flex-direction:column;align-items:stretch}
+.node{border:2px solid var(--bd);border-radius:16px;padding:16px 22px;text-align:center;background:#f6fafd}
+.node b{display:block;font-size:24px;font-weight:900}
+.node span{display:block;font-size:16px;color:var(--mu);margin-top:3px}
+.node span b{display:inline;font-size:inherit;color:var(--tx)}
+.node.start{background:var(--sky);border-color:var(--sky);color:#fff}
+.node.start b{font-size:26px}
+.node.key{background:var(--wnbg);border:3px solid var(--wnbd)}
+.node.key b{color:#7c4a09}.node.key span b{color:var(--wn);font-size:20px}
+.arrow{width:3px;height:26px;background:var(--bd);margin:0 auto;position:relative}
+.arrow::after{content:"";position:absolute;left:-6px;bottom:-1px;border:7.5px solid transparent;border-top:9px solid var(--bd);border-bottom:0}
+.branch{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px;padding-top:16px;position:relative}
+.branch::before{content:"";position:absolute;top:0;left:25%;right:25%;height:3px;background:var(--bd)}
+.leaf{border:2px solid var(--bd);border-radius:16px;padding:16px 20px;background:#fff;position:relative}
+.leaf::before{content:"";position:absolute;top:-16px;left:50%;width:3px;height:16px;background:var(--bd);transform:translateX(-50%)}
+.leaf.ok{background:var(--okbg);border-color:var(--okbd)}
+.leaf.wn{background:var(--wnbg);border-color:var(--wnbd)}
+.leaf i{display:block;font-style:normal;font-size:16px;font-weight:800;color:var(--mu);letter-spacing:.5px}
+.leaf.ok i{color:#3f7d5c}.leaf.wn i{color:#8a5a12}
+.leaf b{display:block;font-size:26px;font-weight:900;margin:4px 0 8px;line-height:1.3}
+.leaf.ok b{color:var(--ok)}.leaf.wn b{color:var(--wn)}
+.leaf .li{font-size:16.5px;line-height:1.6;color:#2f4d68}
+.leaf .li div{display:flex;gap:8px;align-items:flex-start;margin-bottom:3px}
+.leaf .li div::before{content:"·";font-weight:900;color:var(--mu)}
+.leaf .li b{display:inline;font-size:inherit;color:var(--tx);margin:0}
+.note{margin-top:22px;background:var(--okbg);border:2px dashed var(--okbd);border-radius:14px;padding:16px 22px}
+.note>b{display:block;font-size:19px;color:var(--ok);margin-bottom:6px}
+.note .row{display:grid;grid-template-columns:220px 1fr;gap:6px 14px;font-size:16.5px;line-height:1.55}
+.note .row i{font-style:normal;font-weight:900;color:#14532d}
+.foot{margin-top:28px;padding-top:16px;border-top:2px solid var(--bd);display:flex;justify-content:space-between;align-items:flex-end;font-size:15px;color:var(--mu)}
+.foot b{color:var(--skyd);font-size:17px}
+.why{margin-top:22px;border-left:5px solid var(--sky);background:#f6fafd;border-radius:0 12px 12px 0;padding:14px 20px;font-size:16.5px;line-height:1.65;color:#2c4a66}
+.why b{color:var(--tx)}
+</style></head><body>
+<div class="sheet" id="sheet">
+  <h1>字幕機保固 · 送修收費一張圖</h1>
+  <p class="sub"><b>保固＝保零件＋更換工資</b>　｜　檢測費 $300 固定另計　｜　運費一律自付</p>
+
+  <div class="col">
+    <div class="node start"><b>機器有狀況</b></div>
+    <div class="arrow"></div>
+    <div class="node"><b>① 先聯繫我們</b><span>LINE 或電話，附<b>整片畫面</b>照片或影片</span></div>
+    <div class="branch">
+      <div class="leaf ok"><i>能遠端排除</i><b>完全免費</b>
+        <div class="li"><div>不必寄回、不花一毛錢</div><div>多數「整台不亮」在這步解決</div></div></div>
+      <div class="leaf"><i>無法遠端排除</i><b>寄回原廠</b>
+        <div class="li"><div>自送、郵寄、宅配皆可</div><div><b>來回運費自付</b>（單程 $150 起）</div></div></div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node key"><b>② 拆箱錄影 · 三色檢測</b><span>檢測費 <b>$300</b> 固定，含保固內拆裝與更換工時</span></div>
+    <div class="arrow"></div>
+    <div class="node"><b>③ 依檢測結果判定</b></div>
+    <div class="branch">
+      <div class="leaf ok"><i>保固內</i><b>零件 $0 · 工資 $0</b>
+        <div class="li">
+          <div><b>硬體故障</b>：免費換，只收 $300 檢測費</div>
+          <div><b>設定／非硬體問題</b>：只收 $300，遠端協助調整</div>
+        </div></div>
+      <div class="leaf wn"><i>保固外 ／ 人為損壞</i><b>$300 ＋ 零件 ＋ 工資</b>
+        <div class="li">
+          <div>更換工資按件計價</div>
+          <div><b>先報價，您同意才動工</b></div>
+        </div></div>
+    </div>
+    <div class="arrow"></div>
+    <div class="node"><b>④ 完工回寄</b><span>回程運費自付　·　正常 3–5 個工作天，急件 1–3 天加收急件費</span></div>
+  </div>
+
+  <div class="note"><b>新品特別保障</b>
+    <div class="row">
+      <i>受領 7 日內</i><span>檢測費、零件、工資全免，<b>來回運費我方負擔</b></span>
+      <i>受領 8–30 日</i><span>檢測費、零件、工資全免，運費自付</span>
+      <i>同一故障 30 日內再送修</i><span>檢測費、零件、工資全免，運費自付</span>
+    </div>
+  </div>
+
+  <div class="why"><b>為什麼檢測費保固內也收？</b>就像看醫生的掛號費——不管最後有沒有開藥，看診本身就有成本。車子進廠保固換引擎，檢測工資也照收。
+  我們要拆箱錄影、拍照記錄、確認外力或水損痕跡、逐片三色點亮、出檢測報告，這些工不論結果都要做。<b>保固保的是零件和工資，檢測是另一件事。</b></div>
+
+  <div class="foot">
+    <div><b>譽昇科技有限公司　USLED</b><br>保固年限：全機 1 年 · US 控制主機板 5 年 · 自出貨日起算</div>
+    <div style="text-align:right">完整條款請掃機身 QR Code<br>v2.7 · 2026-09-30</div>
+  </div>
+</div>
+</body></html>
