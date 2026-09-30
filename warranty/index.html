@@ -118,11 +118,27 @@ ul.ask li span{color:#6b5327;font-size:13px}
 .tier.dg p.no b{color:#8c1c1c;margin-right:5px}
 .tier.dg p.no .sm{font-size:12.5px;opacity:.85}
 
+/* 送回原廠收費情境 */
+.fee{display:grid;gap:7px;margin-top:12px}
+.fi{display:flex;align-items:center;gap:10px;border:1px solid var(--bd2);border-radius:10px;
+  padding:10px 13px;background:var(--s2)}
+.fi.free{background:var(--ok-bg);border-color:var(--ok-bd)}
+.fi.chg{background:var(--wn-bg);border-color:var(--wn-bd)}
+.fi .fq{flex:1;min-width:0;font-size:14px;font-weight:800;line-height:1.5}
+.fi .fq em{display:block;font-style:normal;font-size:12px;font-weight:600;color:var(--mu);margin-top:1px}
+.fi .fv{flex:0 0 auto;text-align:right;font-size:15px;font-weight:900;line-height:1.35;white-space:nowrap}
+.fi.free .fv{color:var(--ok)}
+.fi.chg .fv{color:var(--wn)}
+.fi .fv small{display:block;font-size:11px;font-weight:700;opacity:.8;white-space:normal;max-width:110px}
+
 /* 費用 */
 .zero{background:linear-gradient(160deg,#0e8a4a,#0b7040);color:#fff;border-radius:13px;
   padding:17px 18px;text-align:center;box-shadow:0 4px 16px rgba(14,138,74,.22)}
 .zero .z1{font-size:14px;font-weight:700;opacity:.92;margin-bottom:9px}
 .zero .z2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.zero .z2.z3{grid-template-columns:repeat(3,1fr);gap:7px}
+.zero .z3 .zi b{font-size:22px}
+.zero .z3 .zi span{font-size:11.5px}
 .zero .zi{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.28);border-radius:10px;padding:9px 6px}
 .zero .zi span{display:block;font-size:12.5px;opacity:.9}
 .zero .zi b{display:block;font-size:26px;font-weight:900;line-height:1.25;letter-spacing:.5px}
@@ -199,6 +215,10 @@ footer a{color:var(--sky);text-decoration:none}
   h2.sh{font-size:17.5px}
   ul.ex{grid-template-columns:1fr}
   .zero .z2{grid-template-columns:1fr 1fr}
+  .zero .z2.z3{grid-template-columns:repeat(3,1fr);gap:5px}
+  .zero .z3 .zi{padding:7px 3px}
+  .zero .z3 .zi b{font-size:19px}
+  .zero .z3 .zi span{font-size:10.5px}
   .y3{gap:7px}.y3i{padding:10px 4px}.y3i i{font-size:21px}.y3i span{font-size:11px}
   .num i{font-size:18px}
   .yr .v{width:56px;font-size:18px}
@@ -250,27 +270,36 @@ footer a{color:var(--sky);text-decoration:none}
   .tip{font-size:8.5pt;padding:2.5mm 3mm;margin:2.5mm 0 0;line-height:1.5;border-left-width:2.5pt}
 
   /* 費用與送修 */
-  .zero{padding:3mm;border-radius:2mm;background:#f0fdf4!important;color:#14532d!important;
+  .zero{padding:2.5mm;border-radius:2mm;background:#f0fdf4!important;color:#14532d!important;
     box-shadow:none;border:.7pt solid #16a34a}
-  .zero .z1{font-size:9pt;margin-bottom:2mm}
-  .zero .z2{gap:2.5mm}
-  .zero .zi{padding:1.8mm;background:#fff!important;border:.5pt solid #bbf7d0!important;border-radius:1.5mm}
-  .zero .zi span{font-size:8.5pt;opacity:1;color:#3f7d5c}
-  .zero .zi b{font-size:17pt}
-  .extra{margin-top:3mm;padding:3mm 3.5mm;border-radius:2mm}
-  .extra>b{font-size:10pt}
-  .extra>.eh{font-size:8pt;margin-bottom:2.5mm;line-height:1.45}
-  ul.ex{gap:1.3mm 5mm}
-  ul.ex li{font-size:8.5pt;line-height:1.45;padding-left:3.4mm}
-  ul.ex li::before{top:1.4mm;width:1.2mm;height:1.2mm}
-  ul.ex li span{font-size:8pt}
-  .fhd{font-size:11.5pt;margin:4mm 0 2.5mm;padding-top:3mm}
-  .fhd span{font-size:8.5pt}
-  .flow{gap:1.8mm}
-  .fs{padding:2.5mm 3mm;gap:2.5mm;border-radius:2mm}
-  .fs .n{width:5.5mm;height:5.5mm;font-size:8.5pt}
-  .fs .t{font-size:9.5pt;margin-bottom:.3mm}
-  .fs p{font-size:8.5pt;line-height:1.5}
+  .zero .z1{font-size:8.5pt;margin-bottom:1.5mm}
+  .zero .z2{gap:2mm}
+  .zero .zi{padding:1.4mm;background:#fff!important;border:.5pt solid #bbf7d0!important;border-radius:1.5mm}
+  .zero .zi span{font-size:8pt;opacity:1;color:#3f7d5c}
+  .zero .z3 .zi b{font-size:15pt}
+  /* 收費情境 */
+  .fee{gap:1.2mm;margin-top:2mm}
+  .fi{padding:1.8mm 3mm;border-radius:1.5mm;gap:3mm}
+  .fi .fq{font-size:9pt;line-height:1.35}
+  .fi .fq em{font-size:7.5pt;margin-top:0}
+  .fi .fv{font-size:10pt;line-height:1.25}
+  .fi .fv small{font-size:7pt;max-width:26mm}
+  /* 說明框在紙本與 FAQ 重複，列印時隱藏 */
+  #pay .tip.k{display:none}
+  .extra{margin-top:2.5mm;padding:2.5mm 3mm;border-radius:2mm}
+  .extra>b{font-size:9.5pt}
+  .extra>.eh{font-size:7.5pt;margin-bottom:2mm;line-height:1.4}
+  ul.ex{gap:1mm 5mm}
+  ul.ex li{font-size:8pt;line-height:1.4;padding-left:3.4mm}
+  ul.ex li::before{top:1.3mm;width:1.2mm;height:1.2mm}
+  ul.ex li span{font-size:7.5pt}
+  .fhd{font-size:10.5pt;margin:3mm 0 1.5mm;padding-top:2.5mm}
+  .fhd span{font-size:8pt}
+  .flow{gap:1.3mm}
+  .fs{padding:1.8mm 3mm;gap:2.5mm;border-radius:1.5mm}
+  .fs .n{width:5mm;height:5mm;font-size:8pt}
+  .fs .t{font-size:9pt;margin-bottom:.2mm}
+  .fs p{font-size:8pt;line-height:1.45}
 
   /* 條款與 FAQ：允許跨頁，但單條不切斷 */
   section#law,section#qa{break-inside:auto;page-break-inside:auto}
@@ -349,7 +378,7 @@ footer a{color:var(--sky);text-decoration:none}
 
   <div class="tier wn">
     <div class="th"><span class="ic">!</span><div class="tt">
-      <b>這三種先打電話，別急著寄</b><span>多半不是故障，寄回來反而要付運費與檢測費</span>
+      <b>這三種先打電話，別急著寄</b><span>多半不是故障，寄回來就會產生運費與檢測費</span>
     </div></div>
     <ul class="ask">
       <li><b>整台完全不亮</b><span>多為關屏設定、自動開關機時段、節目內容空白，一通電話幾分鐘排除</span></li>
@@ -377,27 +406,41 @@ footer a{color:var(--sky);text-decoration:none}
   <p class="sub">保固是對「產品品質」的承諾，不是對「運送與施工成本」的承諾。</p>
 
   <div class="zero">
-    <div class="z1">保固期內判定為硬體故障，送回本公司維修</div>
-    <div class="z2">
+    <div class="z1">保固期內 · 判定為硬體故障 · 送回本公司維修</div>
+    <div class="z2 z3">
       <div class="zi"><span>零件費</span><b>$0</b></div>
-      <div class="zi"><span>維修工資</span><b>$0</b></div>
+      <div class="zi"><span>更換工資</span><b>$0</b></div>
+      <div class="zi"><span>檢測費</span><b>$0</b></div>
     </div>
   </div>
+
+  <div class="fhd" style="margin-top:16px">送回原廠怎麼收　<span>檢測費固定 NT$300，不因項目多寡而異</span></div>
+  <div class="fee">
+    <div class="fi free"><div class="fq">先打電話，遠端排除<em>不必寄回，最快幾分鐘解決</em></div><div class="fv">完全免費</div></div>
+    <div class="fi free"><div class="fq">新品 7 日內故障<em>直接換新，不必送修</em></div><div class="fv">免費<small>連運費我方負擔</small></div></div>
+    <div class="fi free"><div class="fq">保固內 · 硬體故障<em>零件、更換工資、檢測費全免</em></div><div class="fv">$0</div></div>
+    <div class="fi free"><div class="fq">同一故障 90 日內二次送修<em>我們沒修好，不重複收費</em></div><div class="fv">$0</div></div>
+    <div class="fi chg"><div class="fq">保固內 · 設定或非硬體問題<em>字型、排版、關屏設定等</em></div><div class="fv">$300<small>檢測費</small></div></div>
+    <div class="fi chg"><div class="fq">保固期外<em>不分故障原因</em></div><div class="fv">$300 ＋ 零件<small>更換工資按件報價</small></div></div>
+  </div>
+
+  <div class="tip k"><b>為什麼一律先收檢測費？</b>因為「有沒有壞」是我們說了算，拿它當收費標準對您並不公平。
+  改成<b>機器進廠就有一筆固定的 $300</b>，標準客觀、金額固定，我們沒有多收的空間。
+  而且只要<b>驗出來真的是硬體壞掉、又還在保固內，這 $300 我們吸收</b>，您一毛都不用付。<br>
+  檢測費<b>已含保固期內的拆裝與零件更換工時</b>，不會再跟您收工資。</div>
 
   <div class="extra">
     <b>另計費用</b>
     <div class="eh">以下項目<b>不論保固期內外</b>均由客戶負擔——它們是把機器送到修理台前後所發生的成本，與產品好壞無關。</div>
     <ul class="ex">
       <li><b>來回運費</b><span>單程 NT$150 起</span></li>
-      <li><b>檢測費</b><span>硬體正常或屬設定問題時</span></li>
       <li><b>到府／到車行</b><span>車馬費＋現場工時</span></li>
       <li><b>機具</b><span>吊車、高空車、鷹架、交管</span></li>
       <li><b>急件費</b><span>要求 1–3 個工作天內完工</span></li>
       <li><b>包裝材料費</b><span>原箱不堪運送、代為換箱</span></li>
       <li><b>保管費</b><span>逾 10 日未領回，NT$50–450／日</span></li>
-      <li><b>人為損壞之零件</b><span>依報價有償更換</span></li>
     </ul>
-    <div class="eh" style="margin:11px 0 0"><b>維修前一定先報價並取得您同意</b>，不會事後追加。保固期外或非保固事由，零件費與維修工資改由客戶負擔。</div>
+    <div class="eh" style="margin:11px 0 0"><b>維修前一定先報價並取得您同意</b>，不會事後追加未經同意的費用。</div>
   </div>
 
   <div class="fhd">送修流程　<span>正常排修 3–5 個工作天</span></div>
@@ -445,7 +488,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li><b>產品</b>：本公司所銷售之 LED 字幕機、跑馬燈、LED 顯示看板及其隨機所附之控制主機板、LED 模組、電源供應器、排線、外框等原廠零組件。</li>
       <li><b>硬體故障</b>：產品之實體零組件因<b>材料瑕疵或製造瑕疵</b>而喪失應有功能，經本公司依第四條之檢測方法判定者。</li>
       <li><b>非硬體事項</b>：字幕內容編輯、字型與字寬設定、排版與顯示參數設定、關屏與自動開關機設定、節目內容、播放程式與連線設定、操作教學、軟體安裝等<b>不涉及零組件故障</b>之事項。</li>
-      <li><b>衍生性費用</b>：為使產品進入維修狀態、或回復使用狀態所必然發生，但<b>非屬產品本身修復行為</b>之費用，包括運費、檢測費、出勤車馬費與工時、機具租賃費、急件處理費、包裝材料費及保管費。</li>
+      <li><b>衍生性費用</b>：為使產品進入維修狀態、或回復使用狀態所必然發生，但<b>非屬產品本身修復行為</b>之費用，包括運費、檢測費、保固期外之更換工資、出勤車馬費與工時、機具租賃費、急件處理費、包裝材料費及保管費。</li>
       <li><b>工作天</b>：本公司正常營業日，不含例假日、國定假日、公司公告休假日，亦不含因零件調貨、原廠供貨延遲所生之等待期間。</li>
     </ol>
   </div></details>
@@ -455,7 +498,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li>保固期間<b>自出貨日（整機交付客戶之日）起算</b>。</li>
       <li>保固年限依零組件區分：<b>US 品牌之控制主機板五年（六十個月）</b>；前述以外之全部零組件（含 LED 模組與 LED 燈珠等消耗性發光元件、電源供應器、排線、連接器、外框、機殼）<b>不分品牌一律一年（十二個月）</b>；US 品牌以外之其他品牌產品（含 DART 品牌）<b>全機所有零組件一律一年</b>。</li>
       <li>起算日之認定，依序以出貨單 → 統一發票或收據 → 安裝驗收單為憑。<b>未能提出者，以機身序號所載出廠年月加計三十日推定之</b>。</li>
-      <li><b>新品自受領之日起七日內發生故障者</b>，客戶得直接聯繫本公司更換，不必依第七條送修。</li>
+      <li><b>新品自受領之日起七日內發生故障者</b>，客戶得直接聯繫本公司更換，不必依第七條送修；<b>更換所生之來回運費與檢測費，均由本公司負擔</b>。</li>
       <li><b>保固期間不因維修而延長或暫停</b>，維修完成後仍以原到期日為準。</li>
       <li>更換之零組件，其保固適用原機剩餘之保固期間，不另行起算。</li>
     </ol>
@@ -487,14 +530,22 @@ footer a{color:var(--sky);text-decoration:none}
     <p>下列費用<b>不論是否在保固期間內，均由客戶負擔</b>：</p>
     <ol class="k">
       <li><b>運費</b>：送修之去程與回程運費均由客戶負擔。得自行選擇物流業者自費寄送，或委由本公司代為安排後實報實銷。</li>
-      <li><b>檢測費</b>：下列情形之一者收取——經第四條檢測判定<b>硬體正常</b>者（含客戶主動要求檢查而未發現故障）；故障原因屬<b>非硬體事項</b>；死燈總數未超過千分之三且未明顯影響顯示者；屬第六條之非保固事由而客戶不同意報價維修者。<br>
-        檢測費為<b>固定金額</b>，不因檢測項目多寡或耗用工時長短而增減。<b>判定為硬體故障且在保固內者，不收檢測費。</b></li>
+      <li><b>檢測費</b>：產品送回本公司者，收取檢測費<b>新臺幣三百元整</b>。<br>
+        檢測費為<b>固定金額</b>，不因檢測項目多寡、耗用工時長短或檢測結果而增減，並<b>已包含保固期間內之拆裝、檢測及零組件更換工時，不另計維修工資</b>。<br>
+        有下列情形之一者，<b>檢測費由本公司負擔，客戶無須支付</b>：
+        <ul>
+          <li>保固期間內，經第四條之檢測方法<b>判定為硬體故障</b>者</li>
+          <li>經遠端研判即排除，<b>未實際送回本公司</b>者</li>
+          <li>新品自受領之日起<b>七日內</b>發生故障者（依第三條第四款辦理）</li>
+          <li><b>同一故障於本公司維修完成後九十日內再次送修</b>者</li>
+        </ul>
+        保固期間外送修者，除檢測費外，另依第七條第五款收取零件費與更換工資。</li>
       <li><b>到府／到車行出勤費用</b>：要求本公司人員前往現場檢測、拆卸、安裝或調整者，應負擔<b>出勤車馬費及現場工時</b>。離島、山地及偏遠地區另計。<br><span style="color:var(--ok);font-weight:700">※ 送回本公司維修且判定為硬體故障者，保固期間內不收維修工資。</span></li>
       <li><b>機具與許可費用</b>：吊車、高空作業車、堆高機、鷹架、施工架、交通維持、道路使用許可、路權申請、空橋或招牌結構拆復原等費用，由客戶自行安排並負擔；委由本公司代辦者實報實銷。</li>
       <li><b>急件處理費</b>：要求於三個工作天內完工出貨者加收。正常排修 3–5 個工作天不加收費用。</li>
       <li><b>包裝材料費／換箱費</b>：由本公司代為更換紙箱或補強包材者，材料費實收。</li>
       <li><b>保管費</b>：依第九條規定收取。</li>
-      <li><b>人為損壞之零件</b>：因第六條各款事由而需更換之零組件（含面板、外框），依報價有償更換。<b>非人為損壞者仍屬保固範圍。</b></li>
+      <li><b>零件費與更換工資</b>：保固期間外，或因第六條各款事由而需更換零組件者（含面板、外框），依報價有償更換，更換工資按件計價。<b>非人為損壞且在保固期內者仍屬保固範圍。</b></li>
       <li><b>第三方費用</b>：供電線路、專用電源、網路或通訊費用、招牌與結構體、廣告設計與內容製作，及其他非本公司供應之設備或工程費用。</li>
     </ol>
   </div></details>
@@ -521,7 +572,11 @@ footer a{color:var(--sky);text-decoration:none}
       <li>客戶應先以電話、LINE 或本公司指定之管道報修，並提供機身序號、出貨或安裝日期及故障照片或影片。</li>
       <li>本公司得先行遠端研判；可透過遠端設定、重新下載內容或現場簡易操作排除者，<b>不必拆機送修，亦不發生運費與檢測費</b>。</li>
       <li>送修時應以原廠紙箱加緩衝材妥善包裝。<b>原箱不堪運送者，應更換堅固紙箱並加強包覆</b>；未妥善包裝致運輸途中發生之損壞，不在保固範圍。</li>
-      <li>本公司收件後依第四條檢測。判定為硬體故障且在保固內者免費維修；其餘情形依第五條第二款收取檢測費，並<b>先行報價並取得客戶同意</b>後始行維修，不會逕行維修後請款。</li>
+      <li>本公司收件後依第四條檢測，並依第五條第二款計收檢測費。</li>
+      <li><b>保固期間內判定為硬體故障者</b>，零件費、更換工資及檢測費均由本公司負擔，客戶僅需負擔來回運費。</li>
+      <li><b>保固期間外，或屬第六條之非保固事由者</b>，除檢測費外，另收取<b>零件費</b>及<b>更換工資</b>。更換工資<b>按更換項目逐項計價</b>，與零件費一併載明於報價單，<b>經客戶同意後始行維修</b>，本公司不會逕行維修後請款。</li>
+      <li>客戶不同意報價而選擇不維修者，僅收取檢測費及回程運費，原機回寄。</li>
+      <li><b>同一故障於維修完成後九十日內再次發生</b>而送修者，本公司免費檢測與維修，不收檢測費、零件費及更換工資。</li>
       <li>正常排修時程為 3–5 個工作天；急件依第五條第五款辦理。</li>
       <li>維修完成後回寄，回程運費依第五條第一款由客戶負擔。</li>
     </ol>
@@ -539,7 +594,7 @@ footer a{color:var(--sky);text-decoration:none}
 
   <details class="law"><summary>第九條　久未領回之處理</summary><div class="body">
     <ol class="k">
-      <li>屬非保固事由，經本公司報價而客戶不同意維修者，客戶得選擇原機回寄（負擔檢測費與回程運費）或委由本公司回收處理。</li>
+      <li>經本公司報價而客戶不同意維修者，客戶得選擇原機回寄（負擔檢測費與回程運費）或委由本公司回收處理。</li>
       <li>維修完成或報價後，本公司已以電話、LINE 或書面通知，客戶<b>逾十日</b>未回覆或未領回產品者，本公司得收取保管費用，<b>每日新臺幣五十元至四百五十元</b>，按日計算，依產品尺寸與數量核定。</li>
       <li><b>逾三十日</b>仍未領回者，本公司得於再行<b>最後催告</b>後<b>依法報廢處置</b>，客戶不得異議。前述催告紀錄由本公司留存備查。</li>
     </ol>
@@ -593,9 +648,13 @@ footer a{color:var(--sky);text-decoration:none}
     <p>這就像買一台新車：車子在保固期內引擎出問題，原廠免費修；但如果你開到台東拋錨，<b>把車拖回原廠的拖吊費，原廠不會幫你出</b>。保固保的是產品本身的品質，不是把產品運回來的成本。</p>
   </div></details>
 
-  <details class="qa"><summary>送回去說沒壞，為什麼還要收檢測費？</summary><div class="body">
-    <p>機器進廠要拆箱、上架、接電、逐片跑三色測試，測完還要復原、重新包裝——不論最後有沒有找到故障，這些工時都實際發生了。而且<b>全程錄影</b>，影片留 30 天讓你隨時調閱。</p>
-    <p>檢測費是<b>固定金額</b>，不會因為我們多測幾項就多收；只要判定是<b>硬體故障且在保固內，檢測費就不收</b>。所以我們才一直請你先拍照片、先打電話——能線上解決的，這筆錢就不用花。</p>
+  <details class="qa"><summary>為什麼機器一送回去就要收 300 元檢測費？</summary><div class="body">
+    <p>因為「有沒有壞」是我們判定的，如果拿它當收費標準，對您並不公平——您覺得壞了，我們說沒壞，這種事永遠吵不完。</p>
+    <p>所以我們改成：<b>機器進廠就是固定 300 元</b>，不管檢測結果如何，也不因為我們多測幾項就多收。標準客觀、金額固定，我們沒有多收的空間。</p>
+    <p>而且這 300 元有四種情況<b>我們自己吸收，您一毛都不用付</b>：<br>
+    ① 保固期內驗出是硬體壞掉　② 先打電話就遠端解決、根本沒寄回來<br>
+    ③ 新品 7 日內故障（連運費都我們出）　④ 同一個故障 90 天內再送修</p>
+    <p>這筆錢也<b>已經包含保固期內的拆裝與零件更換工時</b>，不會再另外跟您收工資。</p>
   </div></details>
 
   <details class="qa"><summary>有幾顆燈不亮，你們不是應該免費修？</summary><div class="body">
@@ -621,7 +680,7 @@ footer a{color:var(--sky);text-decoration:none}
 <footer>
   <b>譽昇科技有限公司</b>　USLED<br>
   <span id="ftContact">高雄市岡山區　│　服務電話：請洽您的承辦業務或官方 LINE</span><br>
-  保固條款 <span id="ftVer">v2.4</span>　生效日 <span id="ftDate">2026-09-18</span><br>
+  保固條款 <span id="ftVer">v2.5</span>　生效日 <span id="ftDate">2026-09-30</span><br>
   掃描產品機身 QR Code 可隨時取得本頁最新版本
 </footer>
 </div>
@@ -633,7 +692,7 @@ footer a{color:var(--sky);text-decoration:none}
 'use strict';
 
 /* ── 條款設定（改版改這裡） ── */
-var T = { version:'v2.4', effective:'2026-09-18', months:12, boardMonths:60, presumeDays:30 };
+var T = { version:'v2.5', effective:'2026-09-30', months:12, boardMonths:60, presumeDays:30 };
 var $=function(id){ return document.getElementById(id); };
 if($('ftVer'))  $('ftVer').textContent  = T.version;
 if($('ftDate')) $('ftDate').textContent = T.effective;
