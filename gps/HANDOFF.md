@@ -57,9 +57,13 @@ RAGIC_API_KEY=xxx node tools/probe-fields.js check-in-system/15 visit
 
 **已知狀態**
 
-- Ragic 拜訪紀錄表已建好，路徑 `check-in-system/15`
-- 硬體尚未購入。賣家（深圳市源富信通电子）已提供 G900L 原廠指令表，確認走 GT06
-- Traccar 尚未部署
+- Ragic 拜訪紀錄表已建好，路徑 `check-in-system/15`（欄位 ID 1003426～1003441；到達/離開時間格式到分鐘 → `RAGIC_DATETIME_SECONDS=0`）
+- **2026-09-29 已部署（Railway 專案 luminous-compassion）**
+  - 接收服務 `usled-gps`：https://usled-gps-production.up.railway.app（金鑰用 Railway 引用變數接 usled-linebot，Postgres 共用）
+  - Traccar 6.16 `usled-traccar`：管理頁 https://usled-traccar-production.up.railway.app ，定位器連 **switchback.proxy.rlwy.net:16981**，Volume 掛 /opt/traccar/data，設定全走 `CONFIG_USE_ENVIRONMENT_VARIABLES`
+  - 客戶比對暫不做（Jason 決定不補經緯度），`RAGIC_CUSTOMER_FIELDS` 未設
+  - 已用 `tools/gt06-sim.js` 假 GT06 從 TCP 埠驗證整條線到 Ragic，時間無 8 小時差
+- 硬體：Jason 已決定買淘寶「源富信通 4G定位器GT06」（G900L 系列）；Jason 版開箱工單 = Artifact https://claude.ai/artifact/FhKfxe1PtNRb3FucdKFPx8
 
 ---
 
