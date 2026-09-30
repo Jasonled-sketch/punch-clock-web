@@ -118,38 +118,33 @@ ul.ask li span{color:#6b5327;font-size:13px}
 .tier.dg p.no b{color:#8c1c1c;margin-right:5px}
 .tier.dg p.no .sm{font-size:12.5px;opacity:.85}
 
-/* 流程架構圖 */
-.flowc{display:flex;flex-direction:column;align-items:stretch;margin-top:4px}
-.fnode{background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;text-align:center}
-.fnode b{display:block;font-size:14.5px;font-weight:900}
-.fnode span{display:block;font-size:12.5px;color:var(--mu);margin-top:2px;line-height:1.55}
-.fnode span b{display:inline;font-size:inherit;color:var(--tx)}
-.fnode.start,.fnode.end{background:var(--sky);color:#fff;border-color:var(--sky);font-weight:900;font-size:14px}
-.fnode.end b,.fnode.end span{color:#fff}.fnode.end span{opacity:.9}
-.fnode.key{background:var(--wn-bg);border:2px solid var(--wn-bd)}
-.fnode.key b{color:#7c4a09}.fnode.key span b{color:var(--wn)}
-.farrow{width:2px;height:16px;background:var(--bd);margin:0 auto;position:relative}
-.farrow::after{content:"";position:absolute;left:-4px;bottom:-1px;border:5px solid transparent;border-top:6px solid var(--bd);border-bottom:0}
-.fbranch{display:grid;gap:8px;margin:8px 0 0;padding:10px 0 0;position:relative}
-.fbranch::before{content:"";position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--bd)}
-.fbranch.two{grid-template-columns:1fr 1fr}
-.fbranch.four{grid-template-columns:1fr 1fr}
-.fb{border:1px solid var(--bd2);border-radius:10px;padding:9px 11px;background:var(--surface);position:relative}
-.fb::before{content:"";position:absolute;top:-10px;left:50%;width:2px;height:10px;background:var(--bd);transform:translateX(-50%)}
-.fb.ok{background:var(--ok-bg);border-color:var(--ok-bd)}
-.fb.wn{background:var(--wn-bg);border-color:var(--wn-bd)}
-.fb i{display:block;font-style:normal;font-size:11.5px;font-weight:800;color:var(--mu);letter-spacing:.2px}
-.fb.ok i{color:#3f7d5c}.fb.wn i{color:#8a5a12}
-.fb b{display:block;font-size:14.5px;font-weight:900;margin:2px 0 3px;line-height:1.35}
-.fb.ok b{color:var(--ok)}.fb.wn b{color:var(--wn)}
-.fb span{display:block;font-size:12px;color:#4a6884;line-height:1.55}
-.fb span b{display:inline;font-size:inherit;color:inherit;margin:0}
+/* 三步 */
+.steps3{display:grid;grid-template-columns:1fr 22px 1fr 22px 1fr;align-items:stretch;gap:4px;margin-top:14px}
+.s3{border-radius:12px;padding:12px 6px 11px;text-align:center;border:1.5px solid var(--bd);background:var(--s2)}
+.s3i{font-size:30px;line-height:1;margin-bottom:5px}
+.s3 b{display:block;font-size:14.5px;font-weight:900;line-height:1.3}
+.s3 span{display:block;font-size:12px;font-weight:800;margin-top:3px;color:var(--mu)}
+.s3.ok{background:var(--ok-bg);border-color:var(--ok-bd)}.s3.ok span{color:var(--ok)}
+.s3.wn{background:var(--wn-bg);border-color:var(--wn-bd)}.s3.wn span{color:var(--wn)}
+.s3a{display:flex;align-items:center;justify-content:center;font-size:26px;color:#9db4c9;font-weight:900}
 
-/* 新品特別保障註記 */
-.fnote{margin-top:10px;background:var(--ok-bg);border:1px dashed var(--ok-bd);border-radius:10px;padding:10px 13px;font-size:13px;line-height:1.65}
-.fnote>b{display:block;color:var(--ok);font-size:13.5px;margin-bottom:3px}
-.fnote span{display:block;color:#2f5a44}
-.fnote span b{color:#14532d}
+/* 誰付錢表 */
+.ptab{display:grid;gap:6px;margin-top:4px}
+.pr{display:grid;grid-template-columns:1.55fr 1fr 1fr 1fr;align-items:center;gap:4px;
+  background:var(--s2);border-radius:11px;padding:9px 6px 9px 12px}
+.pr.ph{background:transparent;padding:0 6px 0 12px;font-size:11.5px;font-weight:800;color:var(--mu);text-align:center}
+.pr.ph div:first-child{text-align:left}
+.pr>div{text-align:center}
+.pr .pc{text-align:left}
+.pr .pc b{display:block;font-size:13.5px;font-weight:900;line-height:1.35}
+.pr .pc small{display:block;font-size:11px;color:var(--mu);font-weight:700;margin-top:1px}
+i.p{display:inline-block;font-style:normal;font-size:13px;font-weight:900;padding:5px 9px;border-radius:999px;line-height:1.2;white-space:nowrap}
+i.p.ok{background:#dcfce7;color:var(--ok)}
+i.p.wn{background:#fef3c7;color:var(--wn)}
+i.p.dg{background:#fee2e2;color:var(--dg)}
+i.p.us{background:#dcfce7;color:var(--ok)}
+i.p.half{background:#dcfce7;color:var(--ok);white-space:normal;line-height:1.3;padding:4px 7px;font-size:11.5px}
+i.p.you{background:#fef3c7;color:var(--wn)}
 
 /* 費用 *//* 費用 */
 .zero{background:linear-gradient(160deg,#0e8a4a,#0b7040);color:#fff;border-radius:13px;
@@ -225,9 +220,12 @@ footer a{color:var(--sky);text-decoration:none}
   section{padding:17px 15px;border-radius:12px}
   h2.sh{font-size:17.5px}
   ul.ex{grid-template-columns:1fr}
-  .fbranch.four{grid-template-columns:1fr 1fr}
-  .fb b{font-size:13.5px}
-  .fb span{font-size:11.5px}
+  .pr{grid-template-columns:1.5fr 1fr 1fr 1fr;padding:8px 4px 8px 10px}
+  .pr .pc b{font-size:12.5px}
+  .pr .pc small{font-size:10px}
+  i.p{font-size:12px;padding:4px 7px}
+  .s3i{font-size:26px}
+  .s3 b{font-size:13.5px}
   .zero .z2{grid-template-columns:1fr 1fr}
   .zero .z2.z3{grid-template-columns:repeat(3,1fr);gap:5px}
   .zero .z3 .zi{padding:7px 3px}
@@ -311,23 +309,18 @@ footer a{color:var(--sky);text-decoration:none}
   .fhd span{font-size:8pt}
   .zero .zf{margin-top:1.5mm;font-size:8pt;padding:1.2mm 2.5mm;background:#fff!important;border:.5pt solid #bbf7d0}
   .zero .zf b{color:#a85b09;font-size:9.5pt}
-  /* 流程架構圖 */
-  .fnode{padding:1.6mm 3mm;border-radius:2mm}
-  .fnode b{font-size:9.5pt}
-  .fnode span{font-size:7.8pt;margin-top:.2mm;line-height:1.4}
-  .fnode.start,.fnode.end{background:#0b72c4!important;color:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .fnode.key{background:#fffbeb!important;border-width:1pt}
-  .farrow{height:2.6mm}
-  .farrow::after{border-width:3.5px;border-top-width:4.5px}
-  .fbranch{gap:2.5mm;margin-top:1.5mm;padding-top:2.5mm}
-  .fb{padding:1.8mm 2.8mm;border-radius:1.8mm}
-  .fb::before{top:-2.5mm;height:2.5mm}
-  .fb i{font-size:7.5pt}
-  .fb b{font-size:9.5pt;margin:.3mm 0 .8mm;line-height:1.3}
-  .fb span{font-size:7.8pt;line-height:1.4}
-  .fnote{margin-top:2mm;padding:1.8mm 3mm;font-size:7.8pt;line-height:1.5;border-radius:1.8mm}
-  .fnote>b{font-size:8.5pt;margin-bottom:.5mm}
-
+  /* 三步＋誰付錢表 */
+  .steps3{gap:1mm;margin-top:2.5mm}
+  .s3{padding:2mm 1.5mm;border-radius:2mm}
+  .s3i{font-size:15pt;margin-bottom:.8mm}
+  .s3 b{font-size:9.5pt}.s3 span{font-size:8pt}
+  .s3a{font-size:14pt}
+  .ptab{gap:1.2mm;margin-top:1mm}
+  .pr{padding:1.6mm 1.5mm 1.6mm 3mm;border-radius:2mm;gap:1mm}
+  .pr.ph{font-size:7.5pt}
+  .pr .pc b{font-size:8.8pt}.pr .pc small{font-size:7pt}
+  i.p{font-size:8.5pt;padding:1mm 2.2mm}
+  i.p.half{font-size:7.5pt;padding:.8mm 1.5mm}
   /* 條款與 FAQ：允許跨頁，但單條不切斷 */
   section#law,section#qa{break-inside:auto;page-break-inside:auto}
   details{border:.5pt solid #c3d2df;background:#fff!important;box-shadow:none;margin-bottom:2mm;
@@ -433,48 +426,37 @@ footer a{color:var(--sky);text-decoration:none}
   <p class="sub">保固是對「產品品質」的承諾，不是對「運送與施工成本」的承諾。</p>
 
   <div class="zero">
-    <div class="z1">保固期內 · 硬體故障 · 送回本公司</div>
+    <div class="z1">保固期內 · 送回本公司</div>
     <div class="z2">
       <div class="zi"><span>零件費</span><b>$0</b></div>
       <div class="zi"><span>更換工資</span><b>$0</b></div>
     </div>
-    <div class="zf">檢測費 <b>$300</b> 固定另計　·　新品 30 日內免　·　7 日內連運費都免</div>
+    <div class="zf">檢測費 <b>$300</b> 固定另計　·　運費另計</div>
   </div>
 
-  <div class="tip k"><b>檢測費就像看醫生的掛號費。</b>掛號費不是治療費——不管醫生最後有沒有開藥，看診這件事本身就有成本。
-  車子進廠也一樣：引擎在保固內原廠免費換，但檢測工資照收；手機送修中心也是先收檢測費，再告訴你要不要修。<br>
-  我們的檢測是：<b>拆箱錄影、拍照記錄外觀、確認有無外力或水損痕跡、逐片紅綠藍三色點亮、出檢測報告</b>。
-  機器寄來時多半沒說清楚哪裡有問題，這些工不管結果如何都要做，所以固定 <b>$300</b>，不因項目多寡而異。<br>
-  <b>保固保的是零件和更換工資，不是檢測</b>——這是兩件事。</div>
-
-  <div class="fhd">送修流程架構　<span>正常排修 3–5 個工作天</span></div>
-  <div class="flowc">
-    <div class="fnode start">機器有狀況</div>
-    <div class="farrow"></div>
-    <div class="fnode"><b>① 先聯繫我們</b><span>LINE 或電話，附<b>整片畫面</b>的照片或影片</span></div>
-    <div class="fbranch two">
-      <div class="fb ok"><i>能遠端排除</i><b>完全免費</b><span>不必寄回。多數「整台不亮」在這一步就解決了</span></div>
-      <div class="fb"><i>無法遠端排除</i><b>寄回原廠</b><span>自行送達、郵寄或宅配皆可，<b>來回運費自付</b></span></div>
-    </div>
-    <div class="farrow"></div>
-    <div class="fnode key"><b>② 拆箱錄影 · 三色檢測</b><span>檢測費固定 <b>$300</b>，含保固內拆裝與更換工時</span></div>
-    <div class="farrow"></div>
-    <div class="fnode"><b>③ 依檢測結果判定</b></div>
-    <div class="fbranch two">
-      <div class="fb ok"><i>保固內 · 硬體故障</i><b>零件 $0 · 工資 $0</b><span>只收 $300 檢測費。<br>設定或非硬體問題：同樣只收 $300，遠端協助調整</span></div>
-      <div class="fb wn"><i>保固外 ／ 人為損壞</i><b>$300 ＋ 零件 ＋ 工資</b><span>工資按件計價，先報價、同意才動工</span></div>
-    </div>
-    <div class="fnote">
-      <b>新品特別保障</b>
-      <span><b>7 日內</b>：檢測費、零件、工資全免，<b>來回運費我方負擔</b></span>
-      <span><b>8–30 日</b>：檢測費、零件、工資全免，運費自付</span>
-      <span><b>同一故障 30 日內再送修</b>：檢測費、零件、工資全免，運費自付</span>
-    </div>
-    <div class="farrow"></div>
-    <div class="fnode"><b>④ 完工回寄</b><span>回程運費自付　·　急件 1–3 個工作天加收急件費</span></div>
-    <div class="farrow"></div>
-    <div class="fnode end"><b>⑤ 30 日異議期</b><span>檢修影片保存 30 天，有疑問隨時調閱；逾期視同同意</span></div>
+  <div class="steps3">
+    <div class="s3 ok"><div class="s3i">📞</div><b>先打電話</b><span>電話解決 → 免費</span></div>
+    <div class="s3a">›</div>
+    <div class="s3 wn"><div class="s3i">📦</div><b>寄回檢測</b><span>檢測費 $300</span></div>
+    <div class="s3a">›</div>
+    <div class="s3"><div class="s3i">🔧</div><b>修好寄回</b><span>保固內免費 · 保固外看報價</span></div>
   </div>
+
+  <div class="fhd">誰付錢？看這張表</div>
+  <div class="ptab">
+    <div class="pr ph"><div>你的情況</div><div>檢測費</div><div>零件＋工資</div><div>來回運費</div></div>
+    <div class="pr g"><div class="pc"><b>新品 7 天內壞</b><small>直接換新</small></div><div><i class="p ok">免費</i></div><div><i class="p ok">免費</i></div><div><i class="p us">我們付</i></div></div>
+    <div class="pr g"><div class="pc"><b>新品 30 天內壞</b><small>第 8～30 天</small></div><div><i class="p ok">免費</i></div><div><i class="p ok">免費</i></div><div><i class="p half">寄來你付<br>寄回免費</i></div></div>
+    <div class="pr g"><div class="pc"><b>同一故障 30 天內再送</b><small>上次沒修好</small></div><div><i class="p ok">免費</i></div><div><i class="p ok">免費</i></div><div><i class="p half">寄來你付<br>寄回免費</i></div></div>
+    <div class="pr"><div class="pc"><b>保固內 · 硬體壞了</b><small>模組、主機板、電源</small></div><div><i class="p wn">$300</i></div><div><i class="p ok">免費</i></div><div><i class="p you">你付</i></div></div>
+    <div class="pr"><div class="pc"><b>保固內 · 軟體調整</b><small>字型、排版、設定</small></div><div><i class="p wn">$300</i></div><div><i class="p ok">免費</i></div><div><i class="p you">你付</i></div></div>
+    <div class="pr y"><div class="pc"><b>保固外</b><small>硬體或軟體都一樣</small></div><div><i class="p wn">$300</i></div><div><i class="p dg">看報價</i></div><div><i class="p you">你付</i></div></div>
+  </div>
+  <div class="pleg"><i class="p half">寄來你付<br>寄回免費</i>＝寄來你付、寄回我們付　　<i class="p dg">看報價</i>＝先報價、同意才修</div>
+
+  <div class="tip k"><b>為什麼保固內也收檢測費？</b>檢測費就像掛號費——不管醫生有沒有開藥，看診就要付。
+  我們要拆箱錄影、拍照、確認有無外力或水損、一片一片點亮、寫檢測報告，這些工不管結果都要做。
+  <b>保固保的是零件和工資，檢測是另一件事。</b>檢測費已含保固內拆裝與更換工時，不另收工資。</div>
 
   <div class="extra">
     <b>另計費用</b>
@@ -521,7 +503,7 @@ footer a{color:var(--sky);text-decoration:none}
       <li>保固期間<b>自出貨日（整機交付客戶之日）起算</b>。</li>
       <li>保固年限依零組件區分：<b>US 品牌之控制主機板五年（六十個月）</b>；前述以外之全部零組件（含 LED 模組與 LED 燈珠等消耗性發光元件、電源供應器、排線、連接器、外框、機殼）<b>不分品牌一律一年（十二個月）</b>；US 品牌以外之其他品牌產品（含 DART 品牌）<b>全機所有零組件一律一年</b>。</li>
       <li>起算日之認定，依序以出貨單 → 統一發票或收據 → 安裝驗收單為憑。<b>未能提出者，以機身序號所載出廠年月加計三十日推定之</b>。</li>
-      <li><b>新品自受領之日起三十日內發生故障者</b>，客戶得直接聯繫本公司更換，不必依第七條送修，檢測費、零件費及更換工資均免。其中<b>受領後七日內</b>者，來回運費由本公司負擔；<b>第八日至第三十日</b>者，來回運費由客戶負擔。</li>
+      <li><b>新品自受領之日起三十日內發生故障者</b>，客戶得直接聯繫本公司更換，不必依第七條送修，檢測費、零件費及更換工資均免。運費依下列方式負擔：<b>受領後七日內</b>者，來回運費均由本公司負擔；<b>第八日至第三十日</b>者，<b>運費各自負擔</b>——寄回本公司之運費由客戶負擔，本公司回寄之運費由本公司負擔。</li>
       <li><b>保固期間不因維修而延長或暫停</b>，維修完成後仍以原到期日為準。</li>
       <li>更換之零組件，其保固適用原機剩餘之保固期間，不另行起算。</li>
     </ol>
@@ -596,10 +578,10 @@ footer a{color:var(--sky);text-decoration:none}
       <li>本公司得先行遠端研判；可透過遠端設定、重新下載內容或現場簡易操作排除者，<b>不必拆機送修，亦不發生運費與檢測費</b>。</li>
       <li>送修時應以原廠紙箱加緩衝材妥善包裝。<b>原箱不堪運送者，應更換堅固紙箱並加強包覆</b>；未妥善包裝致運輸途中發生之損壞，不在保固範圍。</li>
       <li>本公司收件後依第四條檢測，並依第五條第二款計收檢測費。</li>
-      <li><b>保固期間內判定為硬體故障者</b>，零件費及更換工資由本公司負擔；客戶負擔檢測費及來回運費。</li>
-      <li><b>保固期間外，或屬第六條之非保固事由者</b>，除檢測費外，另收取<b>零件費</b>及<b>更換工資</b>。更換工資<b>按更換項目逐項計價</b>，與零件費一併載明於報價單，<b>經客戶同意後始行維修</b>，本公司不會逕行維修後請款。</li>
+      <li><b>保固期間內判定為硬體故障者</b>，零件費及更換工資由本公司負擔；<b>保固期間內屬非硬體事項者</b>（字型、排版、顯示參數、關屏或自動開關機等設定），由本公司協助調整，不另收費。以上二者，客戶均負擔檢測費及來回運費。</li>
+      <li><b>保固期間外，或屬第六條之非保固事由者</b>，不論硬體或軟體事項，除檢測費外，另收取<b>零件費</b>及<b>更換工資</b>。更換工資<b>按更換項目逐項計價</b>，與零件費一併載明於報價單，<b>經客戶同意後始行維修</b>，本公司不會逕行維修後請款。</li>
       <li>客戶不同意報價而選擇不維修者，僅收取檢測費及回程運費，原機回寄。</li>
-      <li><b>同一故障於維修完成後三十日內再次發生</b>而送修者，本公司免費檢測與維修，不收檢測費、零件費及更換工資；來回運費仍由客戶負擔。</li>
+      <li><b>同一故障於維修完成後三十日內再次發生</b>而送修者，本公司免費檢測與維修，不收檢測費、零件費及更換工資；運費各自負擔——寄回本公司之運費由客戶負擔，本公司回寄之運費由本公司負擔。</li>
       <li>正常排修時程為 3–5 個工作天；急件依第五條第五款辦理。</li>
       <li>維修完成後回寄，回程運費依第五條第一款由客戶負擔。</li>
     </ol>
@@ -700,7 +682,7 @@ footer a{color:var(--sky);text-decoration:none}
 <footer>
   <b>譽昇科技有限公司</b>　USLED<br>
   <span id="ftContact">高雄市岡山區　│　服務電話：請洽您的承辦業務或官方 LINE</span><br>
-  保固條款 <span id="ftVer">v2.7</span>　生效日 <span id="ftDate">2026-09-30</span><br>
+  保固條款 <span id="ftVer">v2.8</span>　生效日 <span id="ftDate">2026-09-30</span><br>
   掃描產品機身 QR Code 可隨時取得本頁最新版本
 </footer>
 </div>
@@ -712,7 +694,7 @@ footer a{color:var(--sky);text-decoration:none}
 'use strict';
 
 /* ── 條款設定（改版改這裡） ── */
-var T = { version:'v2.7', effective:'2026-09-30', months:12, boardMonths:60, presumeDays:30 };
+var T = { version:'v2.8', effective:'2026-09-30', months:12, boardMonths:60, presumeDays:30 };
 var $=function(id){ return document.getElementById(id); };
 if($('ftVer'))  $('ftVer').textContent  = T.version;
 if($('ftDate')) $('ftDate').textContent = T.effective;
