@@ -2,11 +2,12 @@
 // 入門：單機（localStorage）。標準以上：store 換成雲端 API 即可，畫面與流程不變。
 
 const TIERS = {
-  basic:    { rank: 0, name: '入門', tag: '單機・我們提供主機', desc: '油香系統、自動列印收據、查詢補印。' },
-  standard: { rank: 1, name: '標準', tag: '雲端・半自動', desc: '雲端信眾管理（CRM）、手動推播簡訊、結合字幕機播報。' },
-  deluxe:   { rank: 2, name: '豪華', tag: '雲端・全自動', desc: '標準全部功能，加上全自動推播與字幕機、財務分析。' },
-  flagship: { rank: 3, name: '旗艦', tag: '雲端・全通路', desc: '豪華全部功能，加上 LINE、FB、官網建置與同步，建醮、陣頭模組。' },
+  basic:    { rank: 0, name: '入門', price: 9800,  tag: '單機・不需網路', desc: '油香系統、自動列印收據、查詢補印、加密備份。沒有網路也能用，我們提供主機。' },
+  standard: { rank: 1, name: '標準', price: 29800, tag: '雲端・手機 PWA・半自動', desc: '雲端信眾管理（CRM）、手機也能登記查詢、手動推播簡訊、字幕機按鈕播報。' },
+  deluxe:   { rank: 2, name: '豪華', price: 49800, tag: '雲端・LINE 機器人・全自動', desc: '標準全部功能，加上 LINE 機器人、全自動推播與字幕機、財務分析、法會與慶典。', hot: true },
+  flagship: { rank: 3, name: '旗艦', price: 98000, tag: '雲端・全通路', desc: '豪華全部功能，加上官網建置、FB 同步、LINE Pay 線上點燈、AI 客服、建醮與陣頭。' },
 };
+const YEARLY = { basic: 0, standard: 3600, deluxe: 6000, flagship: 12000 };
 
 const MODULES = [
   { id: 'home',     name: '首頁',           tier: 'basic' },
@@ -17,12 +18,14 @@ const MODULES = [
   { id: 'led',      name: '字幕機播報',     tier: 'standard' },
   { id: 'auto',     name: '全自動設定',     tier: 'deluxe' },
   { id: 'finance',  name: '財務分析',       tier: 'deluxe' },
-  { id: 'online',   name: 'LINE・FB・官網', tier: 'flagship' },
+  { id: 'linebot',  name: 'LINE 機器人',    tier: 'deluxe' },
+  { id: 'online',   name: '官網・FB・金流', tier: 'flagship' },
   { id: 'fahui',    name: '法會',           tier: 'deluxe' },
   { id: 'festival', name: '慶典',           tier: 'deluxe' },
   { id: 'jiao',     name: '建醮',           tier: 'flagship' },
   { id: 'troupe',   name: '陣頭',           tier: 'flagship' },
   { id: 'poster',   name: '海報・帆布輸出', tier: 'basic' },
+  { id: 'backup',   name: '備份・還原',     tier: 'basic' },
   { id: 'charter',  name: '章程・管理辦法', tier: 'basic' },
   { id: 'plans',    name: '方案比較',       tier: 'basic' },
   { id: 'settings', name: '宮廟設定',       tier: 'basic' },
@@ -70,7 +73,7 @@ function seed() {
     temple: { name: '溪湖福安宮', type: '宮', org: 'committee', deity: '天上聖母', address: '彰化縣溪湖鎮○○路 100 號', phone: '04-8800000', head: '陳○○', charter: {} },
     v2: true, tier: 'flagship', records: recs, led: [], sms: [],
     rules: { autoLed: true, autoRemind: true, autoReport: true, autoBirthday: false, autoSync: false },
-    online: { line: false, fb: false, web: false },
+    online: { web: false, fb: false, pay: false, ai: false },
     events: seedEvents(),
     troupes: [
       { name: '溪湖八家將', type: '家將', contact: '黃○○', phone: '0912-000111', date: '2026-10-12' },
@@ -362,13 +365,92 @@ VIEWS.finance = () => {
 VIEWS.online = () => {
   const t = S.temple, o = S.online;
   const row = (k, n, d) => `<label class="switch"><input type="checkbox" data-online="${k}" ${o[k] ? 'checked' : ''}><span><b>${n}</b><br><small class="muted">${d}</small></span></label>`;
-  return `<h2>LINE・FB・官網</h2>
-  <div class="row2"><div class="card">${row('line', 'LINE 官方帳號', '信眾用 LINE 查點燈、線上登記、收電子收據。')}${row('fb', 'Facebook 粉絲專頁', '活動、法會、功德榜自動發文。')}${row('web', '宮廟官網', '我們代建，資料與系統同步。')}</div>
+  return `<h2>官網・FB・金流</h2>
+  <div class="row2"><div class="card">${row('web', '宮廟官網', '我們代建，活動、功德榜與系統同步。')}${row('fb', 'Facebook 粉絲專頁', '活動、法會、功德榜自動發文。')}${row('pay', 'LINE Pay 線上點燈', '信眾在 LINE 付款，自動入帳、開電子收據。')}${row('ai', 'AI 客服', 'LINE 上自動回答開放時間、點燈價格、法會日期。')}</div>
   <div class="card site"><div class="site-h">${esc(t.name)}</div><p>主祀 ${esc(t.deity)}｜${esc(t.address)}</p>
   <p><b>近期活動</b><br>${S.events.map(e => `${esc(e.name)}（${e.date}）`).join('<br>')}</p>
   <p><b>功德榜</b><br>${live().filter(r => r.show).slice(-5).reverse().map(r => `${mask(r.name)}　${r.item}`).join('<br>')}</p>
   <p class="muted">官網預覽（同步後自動更新）</p></div></div>`;
 };
+
+VIEWS.linebot = () => {
+  const t = S.temple, r = [...live()].reverse().find(x => x.item.endsWith('燈')) || live()[0];
+  const b = (who, txt) => `<div class="bub ${who}">${txt}</div>`;
+  return `<h2>LINE 機器人</h2>
+  <p class="muted">豪華方案起。信眾加入宮廟 LINE 官方帳號後，用手機號碼綁定一次，之後查詢都不用再打資料。</p>
+  <div class="row2">
+    <div class="card chat"><div class="chat-h">${esc(t.name)}</div>
+      ${b('me', '查點燈')}
+      ${b('bot', `${esc(mask(r.name))} 大德您好：<br>${new Date().getFullYear() - 1911} 年已登記「${r.item}」${r.qty > 1 ? '×' + r.qty : ''}，收據 ${r.no}。<br>${esc(t.deity)}保佑 闔家平安`)}
+      ${b('me', '我要點明年光明燈')}
+      ${b('bot', '已為您預約 1 盞光明燈，600 元。請到宮內櫃台付款，或回覆「付款」使用 LINE Pay（旗艦）。')}
+      ${b('bot sys', `【主委日報】今日收入 ${money(live().filter(x => new Date(x.date).toDateString() === new Date().toDateString()).reduce((s, x) => s + x.amount, 0))} 元，${live().filter(x => new Date(x.date).toDateString() === new Date().toDateString()).length} 筆。`)}
+    </div>
+    <div class="card"><h3>功能</h3>
+      <ul class="log"><li>信眾查點燈、查收據、查法會日期</li><li>線上預約點燈、法會登記（櫃台確認收款）</li><li>電子收據（省紙，也可再印紙本）</li><li>每日收入日報傳給主委、管理人</li><li>年底自動提醒續點（取代部分簡訊費）</li></ul>
+      <p class="muted">訊息費：信眾先傳訊息、系統回覆是免費的；主動推播才會用到 LINE 官方帳號的月額度。系統預設走免費回覆，推播改成群組一則，盡量不花額度。</p></div>
+  </div>`;
+};
+
+VIEWS.backup = () => {
+  let last = null; try { last = localStorage.getItem(KEY + ':lastBackup'); } catch (e) {}
+  const online = navigator.onLine;
+  return `<h2>備份・還原</h2>
+  <div class="tiles">
+    <div class="tile"><span class="k">上次備份</span><span class="v" style="font-size:18px">${last ? roc(last) + ' ' + new Date(last).toTimeString().slice(0, 5) : '尚未備份'}</span><span class="chip ${last && Date.now() - new Date(last) < 864e5 ? 'up' : 'dn'}">${last && Date.now() - new Date(last) < 864e5 ? '24 小時內' : '請立即備份'}</span></div>
+    <div class="tile"><span class="k">網路</span><span class="v" style="font-size:18px">${online ? '有網路' : '沒有網路'}</span><span class="chip ${online ? 'up' : 'dn'}">${online ? '可加雲端加密備份' : '只備份到隨身碟'}</span></div>
+    <div class="tile"><span class="k">資料筆數</span><span class="v">${S.records.length}<small>筆</small></span></div>
+  </div>
+  <div class="row2">
+    <form class="card form" id="fbak"><h3 class="w2">建立加密備份</h3>
+      <label class="w2">備份密碼（至少 8 碼）<input id="bk-pw" type="password" minlength="8" required autocomplete="new-password"></label>
+      <p class="w2 muted">備份檔用 AES-256 加密，沒有密碼誰都打不開，包括我們公司。密碼請由主委與總幹事各自保管。</p>
+      <div class="w2 act"><button class="btn pri">下載加密備份檔</button></div></form>
+    <form class="card form" id="frst"><h3 class="w2">從備份還原（換機）</h3>
+      <label class="w2">備份檔<input id="rs-file" type="file" accept=".tbak" required></label>
+      <label class="w2">備份密碼<input id="rs-pw" type="password" required autocomplete="current-password"></label>
+      <div class="w2 act"><button class="btn">還原</button><span class="muted" id="rs-msg"></span></div></form>
+  </div>`;
+};
+AFTER.backup = () => {
+  $('#fbak').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const blob = await encryptBackup(JSON.stringify(S), $('#bk-pw').value);
+      const t = new Date();
+      downloadBlob(blob, `backup_${t.getFullYear() - 1911}${pad(t.getMonth() + 1)}${pad(t.getDate())}_${pad(t.getHours())}${pad(t.getMinutes())}.tbak`);
+      try { localStorage.setItem(KEY + ':lastBackup', t.toISOString()); } catch (e2) {}
+      toast('已建立加密備份'); go('backup');
+    } catch (err) { toast('備份失敗：' + err.message); }
+  };
+  $('#frst').onsubmit = async e => {
+    e.preventDefault();
+    const f = $('#rs-file').files[0];
+    try {
+      const data = JSON.parse(await decryptBackup(await f.arrayBuffer(), $('#rs-pw').value));
+      if (!data.temple || !Array.isArray(data.records)) throw new Error('不是本系統的備份檔');
+      S = data; save(); renderShell(); toast(`已還原：${S.temple.name}，${S.records.length} 筆`);
+    } catch (err) { $('#rs-msg').textContent = err.name === 'OperationError' ? '密碼錯誤或檔案損毀' : err.message; }
+  };
+};
+
+// 加密備份：PBKDF2(SHA-256, 310000 次) 衍生金鑰，AES-256-GCM 加密。檔頭 TBAK1 + salt(16) + iv(12) + 密文
+async function deriveKey(pw, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 310000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptBackup(text, pw) {
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await deriveKey(pw, salt), new TextEncoder().encode(text));
+  return new Blob([new TextEncoder().encode('TBAK1'), salt, iv, new Uint8Array(ct)], { type: 'application/octet-stream' });
+}
+async function decryptBackup(buf, pw) {
+  const u = new Uint8Array(buf);
+  if (new TextDecoder().decode(u.slice(0, 5)) !== 'TBAK1') throw new Error('不是本系統的備份檔');
+  const salt = u.slice(5, 21), iv = u.slice(21, 33);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, await deriveKey(pw, salt), u.slice(33));
+  return new TextDecoder().decode(pt);
+}
 
 function eventView(kind) {
   const K = EVENT_KINDS[kind];
@@ -418,23 +500,29 @@ AFTER.charter = () => {
 VIEWS.plans = () => {
   const rows = [
     ['部署方式', '單機（我們提供主機）', '雲端', '雲端', '雲端'],
-    ['油香・點燈登記、自動列印收據', '✔', '✔', '✔', '✔'],
-    ['查詢・補印・作廢', '✔', '✔', '✔', '✔'],
+    ['沒有網路也能用', '✔', '斷線暫存', '斷線暫存', '斷線暫存'],
+    ['油香・點燈登記、自動列印收據、查詢補印', '✔', '✔', '✔', '✔'],
     ['章程・管理辦法套版', '✔', '✔', '✔', '✔'],
+    ['芳名錄海報・帆布輸出', '油香名單', '油香名單', '＋法會・慶典', '＋建醮'],
+    ['加密備份', '隨身碟（有網路可加雲端）', '雲端每日＋隨身碟', '雲端每日＋隨身碟', '雲端每日＋隨身碟'],
     ['雲端信眾管理（CRM）', '', '✔', '✔', '✔'],
+    ['手機 PWA（登記・查詢）', '', '✔', '✔', '✔'],
     ['簡訊推播', '', '手動', '自動排程', '自動排程'],
-    ['字幕機・電視牆播報', '', '按鈕推送', '登記即自動上', '登記即自動上'],
-    ['香火月報', '', '手動匯出', '每月自動寄', '每月自動寄'],
-    ['財務分析', '', '', '✔', '✔'],
-    ['法會・慶典模組', '', '', '✔', '✔'],
-    ['芳名錄海報・帆布一鍵輸出', '油香名單', '油香名單', '＋法會・慶典', '＋建醮'],
-    ['LINE・FB・官網建置與同步', '', '', '', '✔'],
-    ['建醮・陣頭模組', '', '', '', '✔'],
+    ['字幕機・電視牆播報', '加購（區網）', '按鈕推送', '登記即自動上', '登記即自動上'],
+    ['LINE 機器人（查燈・預約・電子收據・主委日報）', '', '', '✔', '✔'],
+    ['財務分析・香火月報自動寄送', '', '', '✔', '✔'],
+    ['法會・慶典', '', '', '✔', '✔'],
+    ['官網建置・FB 同步', '', '', '', '✔'],
+    ['LINE Pay 線上點燈・AI 客服', '', '', '', '✔'],
+    ['建醮・陣頭', '', '', '加購', '✔'],
   ];
   const keys = Object.keys(TIERS);
-  return `<h2>方案比較</h2><div class="card"><div class="tbl"><table class="plans"><thead><tr><th></th>${keys.map(k => `<th class="${k === S.tier ? 'cur' : ''}">${TIERS[k].name}<br><small>${TIERS[k].tag}</small></th>`).join('')}</tr></thead><tbody>
+  return `<h2>方案比較</h2><div class="card"><div class="tbl"><table class="plans"><thead><tr><th></th>${keys.map(k => `<th class="${k === S.tier ? 'cur' : ''}">${TIERS[k].hot ? '<span class="hot">最多廟選擇</span><br>' : ''}${TIERS[k].name}<br><small>${TIERS[k].tag}</small></th>`).join('')}</tr></thead><tbody>
+  <tr class="price"><td>買斷價（未稅）</td>${keys.map(k => `<td class="${k === S.tier ? 'cur' : ''}"><b>${money(TIERS[k].price)}</b> 元</td>`).join('')}</tr>
+  <tr><td>雲端服務年費（第 2 年起）</td>${keys.map(k => `<td class="${k === S.tier ? 'cur' : ''}">${YEARLY[k] ? money(YEARLY[k]) + ' 元' : '免'}</td>`).join('')}</tr>
   ${rows.map(r => `<tr><td>${r[0]}</td>${r.slice(1).map((c, i) => `<td class="${keys[i] === S.tier ? 'cur' : ''}">${c || '—'}</td>`).join('')}</tr>`).join('')}
-  </tbody></table></div><p class="muted">價格待定。上方「展示方案」可切換，看每個方案實際能用的功能。</p></div>`;
+  </tbody></table></div>
+  <p class="muted">升級只補差價：已付金額全額抵扣，例如入門升豪華補 ${money(TIERS.deluxe.price - TIERS.basic.price)} 元。購買譽昇字幕機可再折抵。價格為草案。</p></div>`;
 };
 
 VIEWS.settings = () => {
