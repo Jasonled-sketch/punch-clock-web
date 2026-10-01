@@ -139,6 +139,18 @@ td.act{margin:0;white-space:nowrap}
 .pad .btn{font-size:22px;padding:14px 0}
 .pinin{width:90px;padding:2px 6px}
 details summary{cursor:pointer;color:var(--ink2);font-size:13.5px}
+.tabs{display:flex;flex-wrap:wrap;gap:8px}
+.vz{position:relative;isolation:isolate}
+.vz-wm{position:absolute;inset:0;z-index:2;pointer-events:none;background-repeat:repeat}
+.vz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;user-select:none;-webkit-user-select:none}
+.vcard{position:relative;background:var(--paper);border:1px solid var(--rule);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:4px;background-repeat:repeat}
+.vh{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.cert{flex:none;font-size:11.5px;font-weight:700;color:var(--good);background:var(--goodbg);border-radius:4px;padding:1px 6px}
+.st{color:var(--gold);letter-spacing:1px}
+.vp .price{color:var(--accent);font-variant-numeric:tabular-nums}
+.vid{position:absolute;right:10px;bottom:8px;font-size:10.5px;color:var(--muted);opacity:.7}
+.vz.shield .vp,.vz.shield .vr{filter:blur(7px)}
+.warnbox{border-color:var(--warn);background:var(--warnbg);color:var(--warn)}
 .plans th,.plans td{text-align:center}
 .plans td:first-child{text-align:left}
 .plans .cur{background:var(--soft);font-weight:700}
@@ -158,6 +170,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:13.5px}
   .rcpt .sm{font-size:10pt;text-align:center}
   #print .doc{max-height:none;overflow:visible;border:0}
   .poster-print svg{width:100%;height:auto;display:block}
+  .vz{display:none!important}
 }
 </style>
 </head>
@@ -184,6 +197,7 @@ details summary{cursor:pointer;color:var(--ink2);font-size:13.5px}
 <div id="toast" hidden></div>
 <script src="charter.js"></script>
 <script src="poster.js"></script>
+<script src="vendors.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

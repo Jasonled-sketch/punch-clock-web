@@ -4,8 +4,8 @@
 const TIERS = {
   basic:    { rank: 0, name: '入門', price: 9800,  tag: '單機・不需網路', desc: '油香系統、自動列印收據、查詢補印、加密備份。沒有網路也能用，我們提供主機。' },
   standard: { rank: 1, name: '標準', price: 29800, tag: '雲端・手機 PWA・半自動', desc: '雲端信眾管理（CRM）、手機也能登記查詢、手動推播簡訊、字幕機按鈕播報。' },
-  deluxe:   { rank: 2, name: '豪華', price: 49800, tag: '雲端・LINE 機器人・全自動', desc: '標準全部功能，加上 LINE 機器人、全自動推播與字幕機、財務分析、法會與慶典。', hot: true },
-  flagship: { rank: 3, name: '旗艦', price: 98000, tag: '雲端・全通路', desc: '豪華全部功能，加上官網建置、FB 同步、LINE Pay 線上點燈、AI 客服、建醮與陣頭。' },
+  deluxe:   { rank: 2, name: '豪華', price: 49800, tag: '雲端・LINE 機器人・全自動', desc: '標準全部功能，加上 LINE 機器人、陣頭廠商專區、全自動推播與字幕機、財務分析、法會與慶典。', hot: true },
+  flagship: { rank: 3, name: '旗艦', price: 98000, tag: '雲端・全通路', desc: '豪華全部功能，加上官網建置、FB 同步、LINE Pay 線上點燈、AI 客服、建醮。' },
 };
 const YEARLY = { basic: 0, standard: 3600, deluxe: 6000, flagship: 12000 };
 
@@ -23,7 +23,7 @@ const MODULES = [
   { id: 'fahui',    name: '法會',           tier: 'deluxe' },
   { id: 'festival', name: '慶典',           tier: 'deluxe' },
   { id: 'jiao',     name: '建醮',           tier: 'flagship' },
-  { id: 'troupe',   name: '陣頭',           tier: 'flagship' },
+  { id: 'troupe',   name: '陣頭・廠商專區', tier: 'deluxe' },
   { id: 'poster',   name: '海報・帆布輸出', tier: 'basic' },
   { id: 'backup',   name: '備份・還原',     tier: 'basic' },
   { id: 'audit',    name: '操作紀錄',       tier: 'basic' },
@@ -83,7 +83,7 @@ function seed() {
     }
   }
   return {
-    temple: { name: '溪湖福安宮', type: '宮', org: 'committee', deity: '天上聖母', address: '彰化縣溪湖鎮○○路 100 號', phone: '04-8800000', head: '陳○○', charter: {} },
+    temple: { memberId: '1234', name: '溪湖福安宮', type: '宮', org: 'committee', deity: '天上聖母', address: '彰化縣溪湖鎮○○路 100 號', phone: '04-8800000', head: '陳○○', charter: {} },
     v2: true, tier: 'flagship', records: recs, led: [], sms: [],
     rules: { autoLed: true, autoRemind: true, autoReport: true, autoBirthday: false, autoSync: false },
     online: { web: false, fb: false, pay: false, ai: false },
@@ -494,9 +494,109 @@ VIEWS.fahui = () => eventView('fahui');
 VIEWS.festival = () => eventView('festival');
 VIEWS.jiao = () => eventView('jiao');
 
-VIEWS.troupe = () => `<h2>陣頭</h2><div class="card"><div class="tbl"><table><thead><tr><th>團名</th><th>類別</th><th>聯絡人</th><th>電話</th><th>出陣日</th></tr></thead><tbody>
-  ${S.troupes.map(t => `<tr><td>${esc(t.name)}</td><td>${esc(t.type)}</td><td>${esc(t.contact)}</td><td>${esc(t.phone)}</td><td>${esc(t.date)}</td></tr>`).join('')}</tbody></table></div>
-  <form class="form" id="ftr"><label>團名<input name="name" required></label><label>類別<select name="type"><option>家將</option><option>舞龍舞獅</option><option>宋江陣</option><option>跳鼓陣</option><option>神將</option><option>其他</option></select></label><label>聯絡人<input name="contact"></label><label>電話<input name="phone"></label><label>出陣日<input name="date" type="date"></label><div class="act"><button class="btn pri">新增陣頭</button></div></form></div>`;
+// ---------- 陣頭・廠商專區（豪華）----------
+const VZ = { tab: 'vendors', type: '', region: '', cert: false, sort: 'rating' };
+const ACCESS = { full: '完整開放', no_price: '已鎖定價格區間', blocked: '已停用專區' };
+function vzAccess() { return S.vendorAccess || 'full'; }
+function vzLog(action, detail) {
+  S.vendorLog = [{ t: new Date().toISOString(), who: SRV.user || '櫃台', action, detail: detail || '' }].concat(S.vendorLog || []).slice(0, 100);
+  save();
+}
+function stars(r) { const f = Math.round(r * 2) / 2; return '★'.repeat(Math.floor(f)) + (f % 1 ? '☆' : '') ; }
+
+VIEWS.troupe = () => {
+  const tabs = `<div class="tabs"><button class="btn${VZ.tab === 'vendors' ? ' pri' : ''}" data-vztab="vendors">廠商專區</button><button class="btn${VZ.tab === 'mine' ? ' pri' : ''}" data-vztab="mine">我的陣頭（${S.troupes.length}）</button><button class="btn${VZ.tab === 'log' ? ' pri' : ''}" data-vztab="log">查看紀錄</button></div>`;
+  if (VZ.tab === 'mine') return `<h2>陣頭・廠商專區</h2>${tabs}<div class="card"><div class="tbl"><table><thead><tr><th>團名</th><th>類別</th><th>聯絡人</th><th>電話</th><th>出陣日</th><th>評價</th></tr></thead><tbody>
+  ${S.troupes.map((t, i) => `<tr><td>${esc(t.name)}</td><td>${esc(t.type)}</td><td>${esc(t.contact || '')}</td><td>${esc(t.phone || '')}</td><td>${esc(t.date || '')}</td><td>${t.vendorId ? (t.myRating ? stars(t.myRating) : `<span class="rate" data-ti="${i}">${[1, 2, 3, 4, 5].map(n => `<button class="btn sm" data-rate="${n}">${n}★</button>`).join('')}</span>`) : '—'}</td></tr>`).join('')}</tbody></table></div>
+  <form class="form" id="ftr"><label>團名<input name="name" required></label><label>類別<select name="type">${VENDOR_TYPES.map(t => `<option>${t}</option>`).join('')}<option>其他</option></select></label><label>聯絡人<input name="contact"></label><label>電話<input name="phone"></label><label>出陣日<input name="date" type="date"></label><div class="act"><button class="btn pri">自行新增陣頭</button></div></form></div>`;
+  if (VZ.tab === 'log') return `<h2>陣頭・廠商專區</h2>${tabs}<div class="card"><p class="muted">專區的每次查看、截圖鍵、複製都會記錄，並同步回平台。</p>${(S.vendorLog || []).length ? `<div class="tbl"><table><thead><tr><th>時間</th><th>人員</th><th>動作</th><th>內容</th></tr></thead><tbody>${S.vendorLog.map(l => `<tr><td>${roc(l.t)} ${new Date(l.t).toTimeString().slice(0, 5)}</td><td>${esc(l.who)}</td><td>${esc(l.action)}</td><td>${esc(l.detail)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">尚無紀錄。</p>'}</div>`;
+
+  const acc = vzAccess();
+  if (acc === 'blocked') return `<h2>陣頭・廠商專區</h2>${tabs}<div class="locked"><h2>專區已停用</h2><p>平台偵測到本專區資料外流，已暫停您的使用權限。</p><p class="muted">請聯絡譽昇光電客服說明處理。</p></div>${platformDemo()}`;
+  let list = SAMPLE_VENDORS.filter(v => (!VZ.type || v.type === VZ.type) && (!VZ.region || v.region === VZ.region) && (!VZ.cert || v.certified));
+  list.sort((a, b) => VZ.sort === 'price' ? a.min - b.min : VZ.sort === 'reviews' ? b.reviews - a.reviews : b.rating - a.rating);
+  const t = S.temple, id = t.memberId || '0000';
+  return `<h2>陣頭・廠商專區</h2>${tabs}
+  <div class="card form vz-filter">
+    <label>類別<select id="vz-type"><option value="">全部</option>${VENDOR_TYPES.map(x => `<option ${x === VZ.type ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    <label>地區<select id="vz-region"><option value="">全部</option>${VENDOR_REGIONS.map(x => `<option ${x === VZ.region ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+    <label>排序<select id="vz-sort"><option value="rating" ${VZ.sort === 'rating' ? 'selected' : ''}>評價最高</option><option value="reviews" ${VZ.sort === 'reviews' ? 'selected' : ''}>評價最多</option><option value="price" ${VZ.sort === 'price' ? 'selected' : ''}>價格由低到高</option></select></label>
+    <label class="chk"><input type="checkbox" id="vz-cert" ${VZ.cert ? 'checked' : ''}> 只看譽昇認證</label>
+  </div>
+  ${acc === 'no_price' ? '<div class="card warnbox"><b>價格區間已暫停顯示。</b>平台偵測到本專區截圖外流，請聯絡譽昇光電客服恢復。</div>' : ''}
+  <div class="vz" id="vz" data-mid="${esc(id)}">
+    <div class="vz-wm" aria-hidden="true"></div>
+    <div class="vz-grid">${list.map(v => `<div class="vcard">
+      <div class="vh"><b>${esc(v.name)}</b>${v.certified ? '<span class="cert">譽昇認證</span>' : ''}</div>
+      <div class="muted">${v.type}・${v.region}・${v.size}・創立 ${v.since}</div>
+      <div class="vr"><span class="st">${stars(v.rating)}</span> ${v.rating.toFixed(1)}　<span class="muted">${v.reviews} 間宮廟評價</span></div>
+      <div class="vp">${acc === 'full' ? `出陣價格區間 <b class="price">${money(v.min)}～${money(v.max)} 元</b>` : '<span class="muted">價格區間已鎖定</span>'}</div>
+      ${v.note ? `<div class="muted">${esc(v.note)}</div>` : ''}
+      <div class="act"><button class="btn sm" data-vadd="${v.id}">加入我的陣頭</button></div>
+      <div class="vid">用戶 #${esc(id)}</div></div>`).join('') || '<p class="muted">沒有符合的陣頭。</p>'}</div>
+  </div>
+  <p class="muted">價格區間為各宮廟回報的實際成交行情，僅供豪華版用戶參考。本頁含用戶編號浮水印，截圖、翻拍外流可追查來源，並會停止價格區間顯示。</p>
+  ${platformDemo()}`;
+};
+
+function platformDemo() {
+  return `<details class="card"><summary>平台端操作示範（正式版只有譽昇後台看得到）</summary>
+  <div class="form" style="margin-top:10px"><label>這間宮廟的專區權限<select id="vz-acc">${Object.entries(ACCESS).map(([k, v]) => `<option value="${k}" ${k === vzAccess() ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+  <label class="w2">貼上外流文字，查出是哪間宮廟<textarea id="vz-trace" rows="2" placeholder="把在網路上看到、從專區複製出去的文字貼在這裡"></textarea></label><p class="w2" id="vz-trace-out"></p></div></details>`;
+}
+
+function vzWatermark() {
+  const box = $('#vz'); if (!box) return;
+  const t = S.temple, d = new Date();
+  const label = `${t.name} 用戶編號 ${t.memberId || '0000'} ${d.getFullYear() - 1911}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())} ${SRV.user || ''}`;
+  const apply = () => {
+    let wm = box.querySelector('.vz-wm');
+    if (!wm) { wm = document.createElement('div'); wm.className = 'vz-wm'; box.prepend(wm); }
+    wm.setAttribute('style', `background-image:${watermarkCSS(label, t.memberId || '0000')} !important;display:block !important;opacity:1 !important`);
+    box.querySelectorAll('.vcard').forEach(c => c.style.backgroundImage = watermarkCSS('#' + (t.memberId || '0000'), t.memberId || '0000').split(', ')[1]);
+  };
+  apply();
+  // 有人用開發者工具刪掉浮水印 → 立刻補回並記錄
+  if (vzWatermark.mo) vzWatermark.mo.disconnect();
+  vzWatermark.mo = new MutationObserver(() => { const wm = box.querySelector('.vz-wm'); if (!wm || !/svg/.test(wm.getAttribute('style') || '')) { vzWatermark.mo.disconnect(); apply(); vzLog('浮水印被移除', '已自動補回'); vzWatermark.mo.observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] }); } });
+  vzWatermark.mo.observe(box, { childList: true, subtree: true, attributes: true, attributeFilter: ['style', 'class'] });
+}
+
+AFTER.troupe = () => {
+  document.querySelectorAll('[data-vztab]').forEach(b => b.onclick = () => { VZ.tab = b.dataset.vztab; go('troupe'); });
+  if ($('#vz-acc')) $('#vz-acc').onchange = e => { S.vendorAccess = e.target.value; save(); go('troupe'); toast('權限已改為：' + ACCESS[e.target.value]); };
+  if ($('#vz-trace')) $('#vz-trace').oninput = e => { const id = zwDecode(e.target.value); $('#vz-trace-out').innerHTML = id ? `<span class="chip dn">來源：用戶編號 ${esc(id)}</span>` : (e.target.value ? '這段文字沒有本平台的隱藏編號（可能是手打或翻拍）' : ''); };
+  document.querySelectorAll('.rate [data-rate]').forEach(b => b.onclick = () => {
+    const tr = S.troupes[b.closest('.rate').dataset.ti]; tr.myRating = Number(b.dataset.rate); save(); toast('感謝評價，平台審核後列入'); go('troupe');
+  });
+  if (!$('#vz')) return;
+  vzLog('查看專區', [VZ.type, VZ.region].filter(Boolean).join('・') || '全部');
+  vzWatermark();
+  const re = () => go('troupe');
+  $('#vz-type').onchange = e => { VZ.type = e.target.value; re(); };
+  $('#vz-region').onchange = e => { VZ.region = e.target.value; re(); };
+  $('#vz-sort').onchange = e => { VZ.sort = e.target.value; re(); };
+  $('#vz-cert').onchange = e => { VZ.cert = e.target.checked; re(); };
+  document.querySelectorAll('[data-vadd]').forEach(b => b.onclick = () => {
+    const v = SAMPLE_VENDORS.find(x => x.id === b.dataset.vadd);
+    S.troupes.push({ name: v.name, type: v.type, contact: '', phone: '', date: '', vendorId: v.id });
+    vzLog('加入我的陣頭', v.name); save(); toast('已加入，請到「我的陣頭」填出陣日');
+  });
+};
+
+// 專區防護：截圖鍵、切換視窗、複製
+document.addEventListener('keyup', e => {
+  if (e.key === 'PrintScreen' && $('#vz')) { $('#vz').classList.add('shield'); setTimeout(() => $('#vz') && $('#vz').classList.remove('shield'), 3000); vzLog('按下截圖鍵', ''); toast('專區內容受保護，截圖動作已記錄'); }
+});
+window.addEventListener('blur', () => { if ($('#vz')) $('#vz').classList.add('shield'); });
+window.addEventListener('focus', () => { if ($('#vz')) $('#vz').classList.remove('shield'); });
+document.addEventListener('copy', e => {
+  const box = $('#vz'); const sel = String(window.getSelection() || '');
+  if (!box || !sel || !box.contains(window.getSelection().anchorNode)) return;
+  const id = S.temple.memberId || '0000';
+  e.clipboardData.setData('text/plain', `${sel}\n— 資料來源：宮廟雲陣頭專區・用戶編號 ${id}・禁止轉傳${zwEncode(id)}`);
+  e.preventDefault(); vzLog('複製專區文字', sel.slice(0, 20));
+});
 
 VIEWS.charter = () => {
   const t = S.temple, ty = TEMPLE_TYPES[t.type], org = ORG_TYPES[t.org], p = charterParams(t);
@@ -539,7 +639,8 @@ VIEWS.plans = () => {
     ['法會・慶典', '', '', '✔', '✔'],
     ['官網建置・FB 同步', '', '', '', '✔'],
     ['LINE Pay 線上點燈・AI 客服', '', '', '', '✔'],
-    ['建醮・陣頭', '', '', '加購', '✔'],
+    ['陣頭廠商專區（評價・價格區間・認證）', '', '', '✔', '✔'],
+    ['建醮', '', '', '加購', '✔'],
   ];
   const keys = Object.keys(TIERS);
   return `<h2>方案比較</h2><div class="card"><div class="tbl"><table class="plans"><thead><tr><th></th>${keys.map(k => `<th class="${k === S.tier ? 'cur' : ''}">${TIERS[k].hot ? '<span class="hot">最多廟選擇</span><br>' : ''}${TIERS[k].name}<br><small>${TIERS[k].tag}</small></th>`).join('')}</tr></thead><tbody>
@@ -554,6 +655,7 @@ VIEWS.settings = () => {
   const t = S.temple;
   return `<h2>宮廟設定</h2><form class="card form" id="fset">
   <label>宮廟名稱<input name="name" value="${esc(t.name)}" required></label>
+  <label>平台用戶編號<input value="${esc(t.memberId || '尚未開通')}" disabled></label>
   <label>主祀神明<input name="deity" value="${esc(t.deity)}"></label>
   <label class="w2">地址<input name="address" value="${esc(t.address)}"></label>
   <label>電話<input name="phone" value="${esc(t.phone)}"></label>
@@ -896,7 +998,7 @@ document.addEventListener('submit', e => {
     S.events.push({ id: Math.max(0, ...S.events.map(x => x.id)) + 1, kind: f.dataset.newev, name: fd.get('name'), date: fd.get('date'), roles: [] });
     save(); go(current);
   } else if (f.id === 'ftr') {
-    e.preventDefault(); const fd = new FormData(f); S.troupes.push(Object.fromEntries(fd)); save(); go('troupe');
+    e.preventDefault(); const fd = new FormData(f); S.troupes.push(Object.fromEntries(fd)); save(); VZ.tab = 'mine'; go('troupe');
   }
 });
 $('#tier').onchange = e => { S.tier = e.target.value; save(); renderShell(); toast('已切換到' + TIERS[S.tier].name + '方案'); };

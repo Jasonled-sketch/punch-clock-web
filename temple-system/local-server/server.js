@@ -18,7 +18,7 @@ const IDLE_MS = 15 * 60 * 1000;
 const MAX_FAILS = 5, LOCK_MS = 5 * 60 * 1000;
 const BACKUP_EVERY = 50;
 const STATIC_ROOT = path.resolve(__dirname, '..');
-const STATIC_FILES = new Set(['index.html', 'app.js', 'charter.js', 'poster.js', 'manifest.webmanifest']);
+const STATIC_FILES = new Set(['index.html', 'app.js', 'charter.js', 'poster.js', 'vendors.js', 'manifest.webmanifest']);
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.webmanifest': 'application/manifest+json' };
 
 function rocNo(iso, id) {
