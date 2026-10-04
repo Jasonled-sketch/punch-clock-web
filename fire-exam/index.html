@@ -66,6 +66,14 @@ nav.tabs button.on{color:var(--red);font-weight:700}
 .verdict.ok{background:var(--ok-soft);color:var(--ok)}
 .verdict.bad{background:var(--bad-soft);color:var(--bad)}
 .note{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:14px}
+.exp{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;font-size:16px}
+.exp .why{font-weight:700}
+.exp .eo{display:flex;gap:10px;align-items:flex-start;font-size:15px}
+.exp .eo .k{flex:none;width:24px;height:24px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:13px}
+.exp .eo.right .k{background:var(--ok);border-color:var(--ok);color:var(--card)}
+.exp .eo.mine .k{background:var(--bad);border-color:var(--bad);color:var(--card)}
+.exp .tip{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:8px 10px;font-size:15px}
+.exp .src{font-size:13px;color:var(--muted)}
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:6px 0}
 .stage{display:flex;gap:12px;align-items:flex-start}
 .stage .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800}
@@ -200,6 +208,8 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
     <div id="after" class="stack hidden" style="gap:10px">
       <div class="verdict" id="verdict"></div>
       <div class="note hidden" id="qnote"></div>
+      <button class="ghost-btn hidden" id="btnExp" onclick="toggleExp()">看解析</button>
+      <div class="exp hidden" id="exp"></div>
       <button class="big-btn" id="btnNext" onclick="nextQ()">下一題</button>
       <button class="linkbtn" onclick="undoAnswer()">按錯了，這題重選</button>
     </div>
@@ -230,7 +240,8 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
 const CFG = {
   API: /^(localhost|127.0.0.1)$/.test(location.hostname) ? 'https://fire-exam-api-test.usled.workers.dev' : 'https://fire-exam-api.usled.workers.dev',
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
-  BANK: 'mcq.json?v=1',
+  BANK: 'mcq.json?v=2',
+  EXPLAIN: 'explain.json?v=1',
   EXAM_DAY: '2027-08-01',   // 目標考期（2027 年 8 月）
 };
 const INTERVALS = [1, 3, 7, 14, 30];
@@ -318,6 +329,8 @@ async function loadBank() {
   S.bank = await r.json();
   S.bank.questions.forEach(q => { S.byId[q.id] = q; });
   S.topicName = Object.fromEntries(S.bank.topics.map(t => [t.key, t.name]));
+  S.explain = {};
+  fetch(CFG.EXPLAIN).then(r => r.ok ? r.json() : null).then(d => { if (d) S.explain = d.items || {}; }).catch(() => {});
 }
 async function boot() {
   $('loginMsg').textContent = '載入題庫中…';
@@ -491,9 +504,31 @@ function answer(k) {
   if (q.year <= 108) notes.push(`${q.year} 年舊題：法規可能已修正，答案以當年法規為準`);
   $('qnote').textContent = notes.join('；');
   $('qnote').classList.toggle('hidden', !notes.length);
+  renderExp(q, k, ok);
   $('btnNext').textContent = z.i + 1 < z.items.length ? '下一題' : '看結果';
   $('after').classList.remove('hidden');
   $('btnNext').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+// 解析：答錯自動打開，答對收起來可點開
+function renderExp(q, mine, ok) {
+  const e = (S.explain || {})[q.id];
+  const box = $('exp'), btn = $('btnExp');
+  if (!e) {
+    box.innerHTML = '<div class="src">這題的解析還在製作中，會陸續補上。</div>';
+    box.classList.toggle('hidden', ok); btn.classList.add('hidden'); return;
+  }
+  box.innerHTML = `<div class="why">${esc(e.why)}</div>` +
+    'ABCD'.split('').map((k, i) => e.opts && e.opts[k] ? `<div class="eo ${isRight(q, k) ? 'right' : ''} ${k === mine && !isRight(q, k) ? 'mine' : ''}"><span class="k">${k}</span><span>${esc(e.opts[k])}</span></div>` : '').join('') +
+    (e.calc ? `<div class="calc" style="white-space:pre-wrap;font-family:var(--mono);font-size:14px">${esc(e.calc)}</div>` : '') +
+    (e.tip ? `<div class="tip">記法：${esc(e.tip)}</div>` : '') +
+    `<div class="src">依據：${esc((e.src || []).join('；'))}</div>`;
+  box.classList.toggle('hidden', ok);
+  btn.classList.toggle('hidden', !ok);
+  btn.textContent = '看解析';
+}
+function toggleExp() {
+  const box = $('exp'); box.classList.toggle('hidden');
+  $('btnExp').textContent = box.classList.contains('hidden') ? '看解析' : '收起解析';
 }
 function applyLocal(qid, ok) {
   const c = S.cards[qid] || { qid, lv: 0, seen: 0, wrong: 0 };
