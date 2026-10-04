@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#b3261e">
+<title>消防設備師刷題</title>
+<style>
+:root{
+  --bg:#f5f4f2; --card:#fff; --ink:#1d2124; --muted:#626a6f; --line:#dedbd6;
+  --red:#b3261e; --red-ink:#fff; --red-soft:#f7e4e2;
+  --ok:#2e6b3f; --ok-soft:#e1efe4; --bad:#b3261e; --bad-soft:#f7e4e2; --warn:#8a5a00; --warn-soft:#f8ecd4;
+  --font:-apple-system,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+  --mono:ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#151719; --card:#1e2124; --ink:#e8e6e2; --muted:#a2a8ac; --line:#34383c;
+  --red:#e2574c; --red-ink:#fff; --red-soft:#3a2321;
+  --ok:#86cf98; --ok-soft:#1e3326; --bad:#ff8a80; --bad-soft:#3a2321; --warn:#f0b45a; --warn-soft:#3a2f1c; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:17px;line-height:1.6;-webkit-tap-highlight-color:transparent}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+input{font:inherit;color:inherit}
+.wrap{max-width:640px;margin:0 auto;padding:12px 16px calc(96px + env(safe-area-inset-bottom))}
+.hidden{display:none!important}
+header.top{display:flex;align-items:center;gap:10px;padding:8px 0 12px}
+header.top h1{font-size:19px;margin:0;flex:1}
+.back{border:0;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:16px}
+.chip{display:inline-block;font-size:13px;padding:1px 8px;border-radius:99px;background:var(--line);color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.big-btn{display:block;width:100%;border:0;border-radius:14px;padding:16px;font-size:19px;font-weight:700;background:var(--red);color:var(--red-ink)}
+.big-btn:disabled{opacity:.45}
+.ghost-btn{display:block;width:100%;border:1px solid var(--line);border-radius:14px;padding:13px;font-size:17px;background:var(--card)}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 14px;width:100%;text-align:left}
+.row .r{margin-left:auto;font-family:var(--mono);font-size:15px;color:var(--muted);white-space:nowrap}
+.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line)}
+.d-red{background:var(--red)}.d-ok{background:var(--ok)}.d-warn{background:var(--warn)}
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat span{font-size:13px;color:var(--muted)}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:12px;color:var(--muted)}
+.week i{display:block;height:30px;border-radius:8px;background:var(--line);font-style:normal;line-height:30px;font-weight:700;color:var(--card)}
+.week i.on{background:var(--ok)}
+.week i.today{outline:2px solid var(--red);outline-offset:1px}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav.tabs button{border:0;background:none;padding:10px 0 8px;font-size:14px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav.tabs button b{font-size:20px;line-height:1}
+nav.tabs button.on{color:var(--red);font-weight:700}
+/* 作答 */
+.qbar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.qbar i{display:block;height:100%;background:var(--red);transition:width .2s}
+.qmeta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.stem{font-size:18px;line-height:1.75;white-space:pre-wrap;word-break:break-word}
+.opt{display:flex;gap:12px;align-items:flex-start;width:100%;text-align:left;border:2px solid var(--line);background:var(--card);border-radius:12px;padding:12px 14px;font-size:17px;line-height:1.6}
+.opt .k{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-weight:700;font-size:15px}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)}
+.opt.right .k{background:var(--ok);border-color:var(--ok);color:var(--card)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.opt.wrong .k{background:var(--bad);border-color:var(--bad);color:var(--card)}
+.opt:disabled{cursor:default;color:var(--ink)}
+.verdict{border-radius:12px;padding:12px 14px;font-weight:700}
+.verdict.ok{background:var(--ok-soft);color:var(--ok)}
+.verdict.bad{background:var(--bad-soft);color:var(--bad)}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:14px}
+.linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:6px 0}
+.stage{display:flex;gap:12px;align-items:flex-start}
+.stage .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800}
+.stage.locked{opacity:.5}
+.pbar{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}
+.pbar i{display:block;height:100%;background:var(--ok)}
+.search{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);font-size:17px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:15px;z-index:9;max-width:90vw}
+.center{text-align:center}
+.login-box{min-height:80vh;display:flex;flex-direction:column;justify-content:center;gap:18px}
+.logo{font-size:30px;font-weight:800;line-height:1.3}
+table.adm{width:100%;border-collapse:collapse;font-size:14px}
+table.adm td,table.adm th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+table.adm th{color:var(--muted);font-weight:600;font-size:13px}
+.tblwrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:10px;font-size:16px}
+.seg button.on{border-color:var(--red);color:var(--red);font-weight:700;background:var(--red-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+
+  <!-- 登入 -->
+  <section id="v-login" class="hidden">
+    <div class="login-box">
+      <div class="logo">消防設備師<br>考古題刷題</div>
+      <p class="muted">100～115 年考選部官方試題。每天練一點，錯的題目會照 1、3、7、14、30 天自動回來考你。</p>
+      <div id="gbtn"></div>
+      <p class="muted small" id="loginMsg">用公司核准的 Google 帳號登入。</p>
+    </div>
+  </section>
+
+  <!-- 沒權限 -->
+  <section id="v-deny" class="hidden">
+    <div class="login-box">
+      <div class="logo">這個帳號還沒開通</div>
+      <p>你登入的是：<b id="denyEmail"></b></p>
+      <p class="muted">請把上面這個 Email 傳給 Jason，他在「管理」頁加進名單後，回來重新登入就可以用。</p>
+      <button class="ghost-btn" onclick="switchAccount()">換一個 Google 帳號</button>
+    </div>
+  </section>
+
+  <!-- 今日 -->
+  <section id="v-home" class="hidden stack">
+    <header class="top"><h1 id="hello">今日任務</h1><span class="chip" id="countdown"></span></header>
+    <div class="stat">
+      <div><b id="sStreak">0</b><span>連續天數</span></div>
+      <div><b id="sSeen">0</b><span>做過的題</span></div>
+      <div><b id="sGrad">0</b><span>已畢業</span></div>
+    </div>
+    <div class="card stack" style="gap:8px">
+      <div class="small muted">這 7 天</div>
+      <div class="week" id="week"></div>
+    </div>
+    <div class="stack" style="gap:8px">
+      <div class="row"><span class="dot d-red"></span>到期複習<span class="r" id="tReview">0 題</span></div>
+      <div class="row"><span class="dot d-warn"></span>新題（從最新年度開始）<span class="r" id="tNew">0 題</span></div>
+      <div class="row" style="opacity:.5"><span class="dot"></span>申論要點卡<span class="r">第二期開放</span></div>
+    </div>
+    <button class="big-btn" id="btnToday" onclick="startToday()">開始今日練習</button>
+    <p class="muted small center" id="todayHint"></p>
+  </section>
+
+  <!-- 闖關 -->
+  <section id="v-stages" class="hidden stack">
+    <header class="top"><h1>闖關</h1></header>
+    <div class="card stack">
+      <div class="stage"><span class="n">1</span><div style="flex:1">
+        <b>打地基：法規選擇題分主題練</b>
+        <div class="small muted">每次 10 題，答對 8 題以上這個主題就過關。<span id="stage1Sum"></span></div>
+      </div></div>
+      <div class="stack" id="topicList" style="gap:8px"></div>
+    </div>
+    <div class="card stage locked"><span class="n">2</span><div><b>背骨架：申論要點卡</b><div class="small muted">第二期開放（AI 參考要點製作中）</div></div></div>
+    <div class="card stage locked"><span class="n">3</span><div><b>寫整份：單科年度卷限時練習</b><div class="small muted">第三期開放</div></div></div>
+    <div class="card stage locked"><span class="n">4</span><div><b>全真模擬：6 科一起考</b><div class="small muted">第三期開放</div></div></div>
+  </section>
+
+  <!-- 錯題本＋搜尋 -->
+  <section id="v-book" class="hidden stack">
+    <header class="top"><h1>錯題本・搜尋</h1></header>
+    <input class="search" id="q" type="search" placeholder="搜尋題目，例如：排煙、管制量、防焰" oninput="renderSearch()" autocomplete="off">
+    <div id="searchOut" class="stack" style="gap:8px"></div>
+    <div id="bookBox" class="stack" style="gap:8px">
+      <button class="big-btn" id="btnWrongAll" onclick="startWrong()">錯題全部重做</button>
+      <div id="wrongList" class="stack" style="gap:8px"></div>
+    </div>
+  </section>
+
+  <!-- 我的 -->
+  <section id="v-me" class="hidden stack">
+    <header class="top"><h1>我的</h1></header>
+    <div class="card stack">
+      <div><b id="meName"></b><div class="small muted" id="meEmail"></div></div>
+      <div>
+        <div class="small muted" style="margin-bottom:6px">每天新題數</div>
+        <div class="seg" id="segNew">
+          <button data-n="5" onclick="setDaily(5)">5 題</button>
+          <button data-n="10" onclick="setDaily(10)">10 題</button>
+          <button data-n="20" onclick="setDaily(20)">20 題</button>
+        </div>
+        <div class="small muted" style="margin-top:6px" id="paceHint"></div>
+      </div>
+    </div>
+    <button class="ghost-btn hidden" id="btnAdmin" onclick="go('admin')">管理：名單與大家的進度</button>
+    <button class="ghost-btn" onclick="logout()">登出</button>
+    <p class="small muted">題目來源：考選部 100～115 年專技高考消防設備師「消防法規」測驗題，答案為考選部公布之標準答案（含更正）。較早年度的題目可能依當時法規出題，第二期會逐題比對現行法規並標示。</p>
+  </section>
+
+  <!-- 管理 -->
+  <section id="v-admin" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 返回</button><h1>名單與進度</h1></header>
+    <div class="card stack">
+      <b>新增同仁</b>
+      <input class="search" id="addEmail" type="email" placeholder="對方的 Google 帳號 Email" autocomplete="off">
+      <input class="search" id="addName" type="text" placeholder="稱呼（例如：小陳）" autocomplete="off">
+      <button class="big-btn" onclick="addUser()">加入名單</button>
+    </div>
+    <div class="tblwrap"><table class="adm" id="admTbl"></table></div>
+    <p class="small muted">7 天＝這 7 天有練的天數；過關＝第 1 關 8 個主題過了幾個。</p>
+  </section>
+
+  <!-- 作答 -->
+  <section id="v-quiz" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 結束</button><h1 id="quizTitle">練習</h1><span class="chip" id="quizCount"></span></header>
+    <div class="qbar"><i id="qbar" style="width:0"></i></div>
+    <div class="qmeta" id="qmeta"></div>
+    <div class="stem" id="stem"></div>
+    <div class="stack" id="opts" style="gap:10px"></div>
+    <div id="after" class="stack hidden" style="gap:10px">
+      <div class="verdict" id="verdict"></div>
+      <div class="note hidden" id="qnote"></div>
+      <button class="big-btn" id="btnNext" onclick="nextQ()">下一題</button>
+      <button class="linkbtn" onclick="undoAnswer()">按錯了，這題重選</button>
+    </div>
+  </section>
+
+  <!-- 結果 -->
+  <section id="v-result" class="hidden stack">
+    <header class="top"><h1>完成</h1></header>
+    <div class="card center stack">
+      <div style="font-size:44px;font-weight:800" id="resScore"></div>
+      <div id="resMsg"></div>
+    </div>
+    <div id="resWrong" class="stack" style="gap:8px"></div>
+    <button class="big-btn" onclick="goHome()">回今日任務</button>
+  </section>
+
+</div>
+
+<nav class="tabs hidden" id="tabs">
+  <button data-v="home" onclick="go('home')"><b>◉</b>今日</button>
+  <button data-v="stages" onclick="go('stages')"><b>▲</b>闖關</button>
+  <button data-v="book" onclick="go('book')"><b>✎</b>錯題本</button>
+  <button data-v="me" onclick="go('me')"><b>☰</b>我的</button>
+</nav>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const CFG = {
+  API: /^(localhost|127.0.0.1)$/.test(location.hostname) ? 'https://fire-exam-api-test.usled.workers.dev' : 'https://fire-exam-api.usled.workers.dev',
+  CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
+  BANK: 'mcq.json?v=1',
+  EXAM_DAY: '2027-08-01',   // 目標考期（2027 年 8 月）
+};
+const INTERVALS = [1, 3, 7, 14, 30];
+const $ = id => document.getElementById(id);
+const S = { pass: null, me: null, bank: null, byId: {}, cards: {}, days: [], runs: {}, today: '', newToday: 0, quiz: null };
+const LS = {
+  get(k) { try { return JSON.parse(localStorage.getItem('fe_' + k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem('fe_' + k, JSON.stringify(v)); } catch {} },
+  del(k) { try { localStorage.removeItem('fe_' + k); } catch {} },
+};
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const twDay = (ms = Date.now()) => new Date(ms + 8 * 3600e3).toISOString().slice(0, 10);
+const addDays = (d, n) => twDay(Date.parse(d + 'T00:00:00+08:00') + n * 86400e3);
+function toast(msg, ms = 2200) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), ms);
+}
+
+// ---------- 畫面切換（手機返回鍵＝回上一個畫面） ----------
+const VIEWS = ['login', 'deny', 'home', 'stages', 'book', 'me', 'admin', 'quiz', 'result'];
+function show(v) {
+  VIEWS.forEach(x => $('v-' + x).classList.toggle('hidden', x !== v));
+  const tabbed = ['home', 'stages', 'book', 'me'].includes(v);
+  $('tabs').classList.toggle('hidden', !tabbed);
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  window.scrollTo(0, 0);
+  if (v === 'home') renderHome();
+  if (v === 'stages') renderStages();
+  if (v === 'book') { renderBook(); renderSearch(); }
+  if (v === 'me') renderMe();
+  if (v === 'admin') loadAdmin();
+}
+function go(v) {
+  const cur = history.state && history.state.v;
+  if (cur === v) return show(v);
+  if (['home', 'stages', 'book', 'me'].includes(v) && ['home', 'stages', 'book', 'me'].includes(cur)) history.replaceState({ v }, '');
+  else history.pushState({ v }, '');
+  show(v);
+}
+function goHome() { history.replaceState({ v: 'home' }, ''); show('home'); }
+window.addEventListener('popstate', e => {
+  const v = (e.state && e.state.v) || 'home';
+  if (S.quiz && v !== 'quiz') { finishQuiz(true); }
+  if (!S.pass) return show('login');
+  show(v === 'quiz' || v === 'result' ? 'home' : v);
+});
+
+// ---------- API ----------
+async function api(path, opt = {}) {
+  const r = await fetch(CFG.API + path, {
+    ...opt,
+    headers: { 'Content-Type': 'application/json', ...(S.pass ? { Authorization: 'Bearer ' + S.pass } : {}) },
+  });
+  let data = null; try { data = await r.json(); } catch {}
+  if (r.status === 401) { LS.del('pass'); S.pass = null; show('login'); throw new Error('請重新登入'); }
+  if (!r.ok) throw new Error((data && (data.error + (data.detail ? '：' + data.detail : ''))) || ('連線失敗 ' + r.status));
+  return data;
+}
+
+// ---------- 登入 ----------
+function initGoogle() {
+  if (!window.google || !google.accounts) return setTimeout(initGoogle, 200);
+  google.accounts.id.initialize({ client_id: CFG.CLIENT_ID, callback: onGoogle, auto_select: true, cancel_on_tap_outside: false });
+  google.accounts.id.renderButton($('gbtn'), { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', locale: 'zh-TW', width: 300 });
+}
+async function onGoogle(resp) {
+  $('loginMsg').textContent = '登入中…';
+  try {
+    const r = await fetch(CFG.API + '/api/session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ credential: resp.credential }) });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 403) { $('denyEmail').textContent = d.email || ''; return show('deny'); }
+    if (!r.ok) throw new Error(d.error || '登入失敗');
+    S.pass = d.pass; LS.set('pass', d.pass);
+    await boot();
+  } catch (e) { $('loginMsg').textContent = '登入失敗：' + e.message + '，請再按一次。'; }
+}
+function switchAccount() { try { google.accounts.id.disableAutoSelect(); } catch {} LS.del('pass'); location.reload(); }
+function logout() { try { google.accounts.id.disableAutoSelect(); } catch {} LS.del('pass'); S.pass = null; location.reload(); }
+
+// ---------- 開機 ----------
+async function loadBank() {
+  if (S.bank) return;
+  const r = await fetch(CFG.BANK);
+  if (!r.ok) throw new Error('題庫載入失敗');
+  S.bank = await r.json();
+  S.bank.questions.forEach(q => { S.byId[q.id] = q; });
+  S.topicName = Object.fromEntries(S.bank.topics.map(t => [t.key, t.name]));
+}
+async function boot() {
+  $('loginMsg').textContent = '載入題庫中…';
+  await loadBank();
+  const st = await api('/api/state');
+  S.me = st.me; S.today = st.today; S.newToday = st.newToday || 0;
+  S.cards = {}; st.cards.forEach(c => { S.cards[c.qid] = c; });
+  S.days = st.days; S.runs = {}; st.runs.forEach(r => { S.runs[r.topic] = r; });
+  await flushPending();
+  history.replaceState({ v: 'home' }, '');
+  show('home');
+}
+
+// ---------- 今日 ----------
+function dueList() {
+  const t = twDay();
+  return Object.values(S.cards).filter(c => c.due && c.due <= t && S.byId[c.qid])
+    .sort((a, b) => a.due.localeCompare(b.due) || a.lv - b.lv).map(c => c.qid);
+}
+function newList(n) {
+  const unseen = S.bank.questions.filter(q => !S.cards[q.id]);
+  const byYear = {};
+  unseen.forEach(q => (byYear[q.year] = byYear[q.year] || []).push(q.id));
+  const out = [];
+  Object.keys(byYear).sort((a, b) => b - a).forEach(y => out.push(...shuffle(byYear[y])));
+  return out.slice(0, n);
+}
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function streak() {
+  const set = new Set(S.days.filter(d => d.done > 0).map(d => d.day));
+  let d = twDay(), n = 0;
+  if (!set.has(d)) d = addDays(d, -1);
+  while (set.has(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+function renderHome() {
+  const t = twDay();
+  $('hello').textContent = (S.me.name ? S.me.name + '，' : '') + '今日任務';
+  const left = Math.ceil((Date.parse(CFG.EXAM_DAY + 'T00:00:00+08:00') - Date.now()) / 86400e3);
+  $('countdown').textContent = left > 0 ? '距考試約 ' + left + ' 天' : '';
+  const cards = Object.values(S.cards);
+  $('sStreak').textContent = streak();
+  $('sSeen').textContent = cards.length + '/' + S.bank.questions.length;
+  $('sGrad').textContent = cards.filter(c => c.lv >= 5).length;
+  const dmap = Object.fromEntries(S.days.map(d => [d.day, d]));
+  const wk = ['日', '一', '二', '三', '四', '五', '六'];
+  let h = '';
+  for (let i = 6; i >= 0; i--) {
+    const d = addDays(t, -i); const dd = dmap[d];
+    const w = wk[new Date(Date.parse(d + 'T12:00:00+08:00')).getUTCDay()];
+    h += `<span>${w}<i class="${dd && dd.done ? 'on' : ''} ${i === 0 ? 'today' : ''}">${dd && dd.done ? dd.done : ''}</i></span>`;
+  }
+  $('week').innerHTML = h;
+  const due = dueList().length;
+  const newLeft = Math.max(0, (S.me.daily_new || 10) - S.newToday);
+  const newAvail = Math.min(newLeft, S.bank.questions.filter(q => !S.cards[q.id]).length);
+  $('tReview').textContent = due + ' 題';
+  $('tNew').textContent = newAvail + ' 題';
+  const total = due + newAvail;
+  $('btnToday').disabled = total === 0;
+  $('btnToday').textContent = total ? `開始今日練習（${total} 題）` : '今天的任務完成了';
+  $('todayHint').textContent = total ? '先做複習，再做新題。中途離開也會記住做到哪。' : '想多練可以去「闖關」挑主題，或到「錯題本」重做。';
+}
+function startToday() {
+  const due = dueList();
+  const newLeft = Math.max(0, (S.me.daily_new || 10) - S.newToday);
+  const items = [...due.map(id => ({ id, mode: 'review' })), ...newList(newLeft).map(id => ({ id, mode: 'new' }))];
+  if (!items.length) return toast('今天沒有要做的題目');
+  startQuiz('今日練習', items);
+}
+
+// ---------- 闖關 ----------
+function topicStats(key) {
+  const qs = S.bank.questions.filter(q => q.topic === key);
+  const seen = qs.filter(q => S.cards[q.id]).length;
+  const r = S.runs[key];
+  const passed = r && r.n >= 10 && r.ok / r.n >= 0.8;
+  return { total: qs.length, seen, run: r, passed };
+}
+function renderStages() {
+  let pass = 0;
+  $('topicList').innerHTML = S.bank.topics.map(t => {
+    const s = topicStats(t.key); if (s.passed) pass++;
+    const dot = s.passed ? 'd-ok' : s.run ? 'd-warn' : '';
+    const last = s.run ? `上次 ${s.run.ok}/${s.run.n}` : '還沒挑戰';
+    return `<button class="row" onclick="startTopic('${t.key}')" style="flex-wrap:wrap">
+      <span class="dot ${dot}"></span><span style="flex:1;min-width:0">${esc(t.name)}<div class="small muted">${last}・做過 ${s.seen}/${s.total}</div>
+      <div class="pbar"><i style="width:${Math.round(s.seen / s.total * 100)}%"></i></div></span>
+      <span class="r">${s.passed ? '過關 ✓' : '挑戰 ›'}</span></button>`;
+  }).join('');
+  $('stage1Sum').textContent = `目前過關 ${pass}/${S.bank.topics.length}。`;
+}
+function startTopic(key) {
+  const qs = S.bank.questions.filter(q => q.topic === key).map(q => q.id);
+  const c = id => S.cards[id];
+  const wrong = shuffle(qs.filter(id => c(id) && c(id).lv === 0));
+  const unseen = shuffle(qs.filter(id => !c(id)));
+  const rest = shuffle(qs.filter(id => c(id) && c(id).lv > 0)).sort((a, b) => c(a).lv - c(b).lv);
+  const pickIds = [...wrong, ...unseen, ...rest].slice(0, 10);
+  startQuiz(S.topicName[key] + '・闖關', pickIds.map(id => ({ id, mode: 'topic' })), { topic: key });
+}
+
+// ---------- 錯題本＋搜尋 ----------
+function wrongIds() {
+  return Object.values(S.cards).filter(c => c.wrong > 0 && c.lv < 5 && S.byId[c.qid])
+    .sort((a, b) => a.lv - b.lv || b.wrong - a.wrong).map(c => c.qid);
+}
+function qLine(id, extra = '') {
+  const q = S.byId[id];
+  return `<button class="row" onclick="startSingle('${id}')"><span class="dot ${extra}"></span>
+    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.stem)}</span>
+    <span class="r">${q.year}-${q.n}</span></button>`;
+}
+function renderBook() {
+  const ids = wrongIds();
+  $('btnWrongAll').disabled = !ids.length;
+  $('btnWrongAll').textContent = ids.length ? `錯題全部重做（${Math.min(ids.length, 30)} 題）` : '目前沒有錯題';
+  $('wrongList').innerHTML = ids.length ? ids.map(id => qLine(id, S.cards[id].lv === 0 ? 'd-red' : 'd-warn')).join('')
+    : '<p class="muted center">答錯的題目會自動收進這裡，連續答對 5 次才會畢業離開。</p>';
+}
+function renderSearch() {
+  const kw = $('q').value.trim();
+  $('bookBox').classList.toggle('hidden', !!kw);
+  if (!kw) { $('searchOut').innerHTML = ''; return; }
+  const words = kw.split(/\s+/);
+  const hits = S.bank.questions.filter(q => { const t = q.stem + q.opts.join(''); return words.every(w => t.includes(w)); });
+  $('searchOut').innerHTML = `<div class="small muted">找到 ${hits.length} 題</div>` + hits.slice(0, 60).map(q => qLine(q.id)).join('');
+}
+function startWrong() { const ids = wrongIds().slice(0, 30); if (ids.length) startQuiz('錯題重做', ids.map(id => ({ id, mode: 'wrong' }))); }
+function startSingle(id) { startQuiz('單題練習', [{ id, mode: S.cards[id] ? 'review' : 'new' }]); }
+
+// ---------- 作答 ----------
+function startQuiz(title, items, opt = {}) {
+  S.quiz = { title, items, i: 0, results: [], topic: opt.topic || null, answered: false };
+  $('quizTitle').textContent = title;
+  go('quiz');
+  renderQ();
+}
+function renderQ() {
+  const z = S.quiz; const it = z.items[z.i]; const q = S.byId[it.id];
+  z.answered = false;
+  $('quizCount').textContent = (z.i + 1) + '/' + z.items.length;
+  $('qbar').style.width = (z.i / z.items.length * 100) + '%';
+  const tag = { review: '複習', new: '新題', topic: '闖關', wrong: '錯題' }[it.mode] || '';
+  $('qmeta').innerHTML = `<span class="chip">${tag}</span><span>${q.year} 年 第 ${q.n} 題</span><span>・${esc(S.topicName[q.topic] || '')}</span>`;
+  $('stem').textContent = q.stem;
+  $('opts').innerHTML = q.opts.map((o, k) => `<button class="opt" data-k="${'ABCD'[k]}" onclick="answer('${'ABCD'[k]}')"><span class="k">${'ABCD'[k]}</span><span>${esc(o)}</span></button>`).join('');
+  $('after').classList.add('hidden');
+}
+function isRight(q, k) { return q.ans === '*' || q.ans.includes(k); }
+function answer(k) {
+  const z = S.quiz; if (z.answered) return;
+  const it = z.items[z.i]; const q = S.byId[it.id];
+  const ok = isRight(q, k);
+  z.answered = true;
+  z.results[z.i] = { qid: q.id, choice: k, ok, mode: it.mode, prev: S.cards[q.id] ? { ...S.cards[q.id] } : null };
+  applyLocal(q.id, ok);
+  queuePending({ qid: q.id, choice: k, ok, mode: it.mode });
+  document.querySelectorAll('#opts .opt').forEach(b => {
+    b.disabled = true;
+    if (isRight(q, b.dataset.k)) b.classList.add('right');
+    else if (b.dataset.k === k) b.classList.add('wrong');
+  });
+  const v = $('verdict');
+  v.className = 'verdict ' + (ok ? 'ok' : 'bad');
+  const c = S.cards[q.id];
+  v.textContent = ok ? (c.lv >= 5 ? '答對！這題畢業了 🎓' : `答對！${INTERVALS[c.lv]} 天後再複習`)
+    : `答錯，正確答案是 ${q.ans === '*' ? '任一皆可' : q.ans}。明天會再考你一次`;
+  const notes = [];
+  if (q.note) notes.push(q.note);
+  if (q.year <= 108) notes.push(`${q.year} 年舊題：法規可能已修正，答案以當年法規為準`);
+  $('qnote').textContent = notes.join('；');
+  $('qnote').classList.toggle('hidden', !notes.length);
+  $('btnNext').textContent = z.i + 1 < z.items.length ? '下一題' : '看結果';
+  $('after').classList.remove('hidden');
+  $('btnNext').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+function applyLocal(qid, ok) {
+  const c = S.cards[qid] || { qid, lv: 0, seen: 0, wrong: 0 };
+  c.lv = ok ? Math.min(c.lv + 1, 5) : 0;
+  if (!ok) c.wrong++;
+  c.seen++; c.last_ok = ok ? 1 : 0;
+  c.due = c.lv >= 5 ? null : addDays(twDay(), INTERVALS[c.lv]);
+  S.cards[qid] = c;
+}
+function undoAnswer() {
+  const z = S.quiz; const r = z.results[z.i]; if (!r) return;
+  const pend = LS.get('pending') || [];
+  const idx = pend.map(p => p.qid).lastIndexOf(r.qid);
+  if (idx < 0) return toast('這題已經存檔了，下次複習時再改過來就好');
+  pend.splice(idx, 1); LS.set('pending', pend);
+  const d = S.days.find(x => x.day === twDay());
+  if (d) { d.done--; d.ok -= r.ok ? 1 : 0; }
+  if (r.mode === 'new') S.newToday--;
+  if (r.prev) S.cards[r.qid] = r.prev; else delete S.cards[r.qid];
+  z.results[z.i] = null;
+  renderQ();
+}
+function nextQ() {
+  const z = S.quiz;
+  if (z.i + 1 < z.items.length) { z.i++; renderQ(); window.scrollTo(0, 0); if (z.i % 5 === 0) flushPending(); }
+  else finishQuiz(false);
+}
+async function finishQuiz(leaving) {
+  const z = S.quiz; if (!z) return;
+  S.quiz = null;
+  const done = z.results.filter(Boolean);
+  const ok = done.filter(r => r.ok).length;
+  const run = z.topic && done.length >= 10 ? { topic: z.topic, n: done.length, ok } : null;
+  if (run) S.runs[z.topic] = { topic: z.topic, n: run.n, ok: run.ok };
+  await flushPending(run);
+  if (leaving) return;
+  $('resScore').textContent = done.length ? `${ok} / ${done.length}` : '0';
+  let msg = done.length ? `正確率 ${Math.round(ok / done.length * 100)}%` : '';
+  if (run) msg = run.ok / run.n >= 0.8 ? `「${S.topicName[z.topic]}」過關！` : `差一點，答對 8 題就過關。錯的題目已收進錯題本。`;
+  $('resMsg').textContent = msg;
+  const wrong = done.filter(r => !r.ok);
+  $('resWrong').innerHTML = wrong.length ? '<div class="small muted">這次答錯的（點了可以重做）</div>' + wrong.map(r => qLine(r.qid, 'd-red')).join('') : '';
+  history.replaceState({ v: 'result' }, ''); show('result');
+}
+
+// ---------- 存檔（先存手機，再分批送雲端；斷網不會掉） ----------
+function queuePending(item) {
+  const p = LS.get('pending') || [];
+  p.push(item); LS.set('pending', p);
+  const d = S.days.find(x => x.day === twDay());
+  if (d) { d.done++; d.ok += item.ok ? 1 : 0; } else S.days.push({ day: twDay(), done: 1, ok: item.ok ? 1 : 0 });
+  if (item.mode === 'new') S.newToday++;
+}
+let flushing = null;
+async function flushPending(run = null) {
+  if (flushing) await flushing;
+  const p = LS.get('pending') || [];
+  if (!p.length && !run) return;
+  flushing = (async () => {
+    try {
+      for (let i = 0; i < p.length || (i === 0 && run); i += 50) {
+        const chunk = p.slice(i, i + 50);
+        const last = i + 50 >= p.length;
+        const d = await api('/api/answers', { method: 'POST', body: JSON.stringify({ items: chunk, run: last ? run : null }) });
+        Object.values(d.cards || {}).forEach(c => { S.cards[c.qid] = { ...(S.cards[c.qid] || {}), ...c }; });
+      }
+      const now = LS.get('pending') || [];
+      LS.set('pending', now.slice(p.length));
+    } catch (e) { toast('先存在手機，有網路時會自動補送'); }
+  })();
+  await flushing; flushing = null;
+}
+window.addEventListener('online', () => flushPending());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPending(); });
+
+// ---------- 我的 ----------
+function renderMe() {
+  $('meName').textContent = S.me.name || '';
+  $('meEmail').textContent = S.me.email;
+  document.querySelectorAll('#segNew button').forEach(b => b.classList.toggle('on', +b.dataset.n === (S.me.daily_new || 10)));
+  const left = S.bank.questions.filter(q => !S.cards[q.id]).length;
+  const days = Math.ceil(left / (S.me.daily_new || 10));
+  $('paceHint').textContent = `還有 ${left} 題沒做過，照這個速度約 ${days} 天做完第一輪。`;
+  $('btnAdmin').classList.toggle('hidden', S.me.role !== 'admin');
+}
+async function setDaily(n) {
+  const prev = S.me.daily_new; S.me.daily_new = n; renderMe();
+  try { await api('/api/settings', { method: 'POST', body: JSON.stringify({ daily_new: n }) }); toast(`每天新題改成 ${n} 題`); }
+  catch (e) { S.me.daily_new = prev; renderMe(); toast('沒存成功：' + e.message); }
+}
+
+// ---------- 管理 ----------
+async function loadAdmin() {
+  $('admTbl').innerHTML = '<tr><td class="muted">載入中…</td></tr>';
+  try {
+    const d = await api('/api/admin/users');
+    const n = S.bank.questions.length;
+    $('admTbl').innerHTML = '<tr><th>誰</th><th>7天</th><th>做過</th><th>正確率</th><th>過關</th><th>最後上線</th><th></th></tr>' +
+      d.users.map(u => `<tr style="${u.active ? '' : 'opacity:.45'}">
+        <td><b>${esc(u.name || u.email.split('@')[0])}</b>${u.role === 'admin' ? ' <span class="chip">管理</span>' : ''}<div class="muted" style="font-size:12px">${esc(u.email)}</div></td>
+        <td>${u.days7} 天</td><td>${u.seenQ}/${n}</td>
+        <td>${u.answered ? Math.round(u.correct / u.answered * 100) + '%' : '—'}</td>
+        <td>${u.topicsPassed}/${S.bank.topics.length}</td>
+        <td>${u.last_seen ? esc(twDay(Date.parse(u.last_seen)).slice(5)) : '—'}</td>
+        <td>${u.active && u.email !== S.me.email ? `<button class="linkbtn" onclick="removeUser(this,'${esc(u.email)}')">移除</button>` : (u.active ? '' : `<button class="linkbtn" onclick="readd('${esc(u.email)}')">恢復</button>`)}</td>
+      </tr>`).join('');
+  } catch (e) { $('admTbl').innerHTML = `<tr><td>載入失敗：${esc(e.message)}</td></tr>`; }
+}
+async function addUser() {
+  const email = $('addEmail').value.trim(), name = $('addName').value.trim();
+  if (!email) return toast('請先填 Email');
+  try { await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, name }) }); $('addEmail').value = ''; $('addName').value = ''; toast('已加入，對方現在可以登入了'); loadAdmin(); }
+  catch (e) { toast('沒加成功：' + e.message); }
+}
+async function removeUser(btn, email) {
+  if (btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = '確定移除？'; setTimeout(() => { btn.dataset.sure = ''; btn.textContent = '移除'; }, 4000); return; }
+  try { await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ email, action: 'remove' }) }); toast('已移除，進度會保留，之後可以恢復'); loadAdmin(); }
+  catch (e) { toast('沒移除成功：' + e.message); }
+}
+async function readd(email) {
+  try { await api('/api/admin/users', { method: 'POST', body: JSON.stringify({ email }) }); toast('已恢復'); loadAdmin(); }
+  catch (e) { toast('沒恢復成功：' + e.message); }
+}
+
+// ---------- 啟動 ----------
+(async function start() {
+  S.pass = LS.get('pass');
+  if (S.pass) {
+    try { await boot(); return; } catch (e) { if (S.pass) { toast('連線失敗：' + e.message); } }
+  }
+  show('login'); initGoogle();
+})();
+</script>
+</body>
+</html>
