@@ -74,6 +74,14 @@ nav.tabs button.on{color:var(--red);font-weight:700}
 .exp .eo.mine .k{background:var(--bad);border-color:var(--bad);color:var(--card)}
 .exp .tip{background:var(--ok-soft);color:var(--ok);border-radius:8px;padding:8px 10px;font-size:15px}
 .exp .src{font-size:13px;color:var(--muted)}
+.md{display:flex;flex-direction:column;gap:8px;font-size:16px}
+.md h4{margin:6px 0 0;font-size:16px}
+.md p{margin:0}
+.md ul,.md ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:4px}
+.md .calc{font-family:var(--mono);font-size:14px;background:var(--bg);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-x:auto}
+.figs img{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
+.pt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);font-size:16px}
+.pt input{width:22px;height:22px;margin-top:3px;flex:none;accent-color:var(--ok)}
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:6px 0}
 .stage{display:flex;gap:12px;align-items:flex-start}
 .stage .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800}
@@ -133,7 +141,7 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
     <div class="stack" style="gap:8px">
       <div class="row"><span class="dot d-red"></span>到期複習<span class="r" id="tReview">0 題</span></div>
       <div class="row"><span class="dot d-warn"></span>新題（從最新年度開始）<span class="r" id="tNew">0 題</span></div>
-      <div class="row" style="opacity:.5"><span class="dot"></span>申論要點卡<span class="r">第二期開放</span></div>
+      <button class="row" id="rowEssay" onclick="startEssayToday()"><span class="dot d-ok"></span>申論要點卡（每天 1 張新卡＋到期複習）<span class="r" id="tEssay">0 張</span></button>
     </div>
     <button class="big-btn" id="btnToday" onclick="startToday()">開始今日練習</button>
     <p class="muted small center" id="todayHint"></p>
@@ -149,7 +157,13 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
       </div></div>
       <div class="stack" id="topicList" style="gap:8px"></div>
     </div>
-    <div class="card stage locked"><span class="n">2</span><div><b>背骨架：申論要點卡</b><div class="small muted">第二期開放（AI 參考要點製作中）</div></div></div>
+    <div class="card stack">
+      <div class="stage"><span class="n">2</span><div style="flex:1">
+        <b>背骨架：申論要點卡</b>
+        <div class="small muted">看題目先想重點，翻牌對照，記得的打勾。勾到七成算熟，會隔更久才再出現。<span id="stage2Sum"></span></div>
+      </div></div>
+      <div class="stack" id="subjList" style="gap:8px"></div>
+    </div>
     <div class="card stage locked"><span class="n">3</span><div><b>寫整份：單科年度卷限時練習</b><div class="small muted">第三期開放</div></div></div>
     <div class="card stage locked"><span class="n">4</span><div><b>全真模擬：6 科一起考</b><div class="small muted">第三期開放</div></div></div>
   </section>
@@ -215,6 +229,24 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
     </div>
   </section>
 
+  <!-- 申論要點卡 -->
+  <section id="v-card" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 結束</button><h1 id="cardTitle">要點卡</h1><span class="chip" id="cardCount"></span></header>
+    <div class="qmeta" id="cmeta"></div>
+    <div class="stem" id="cstem"></div>
+    <div class="figs stack" id="cfigs"></div>
+    <p class="muted small" id="cthink">先在腦中或紙上列出你會寫的重點，再翻牌對照。</p>
+    <button class="big-btn" id="btnFlip" onclick="flipCard()">翻牌看要點</button>
+    <div id="cback" class="stack hidden" style="gap:10px">
+      <div class="stack" id="cpts" style="gap:8px"></div>
+      <div class="small muted" id="cscore"></div>
+      <button class="ghost-btn" id="btnAns" onclick="toggleAns()">看完整擬答</button>
+      <div class="exp md hidden" id="cans"></div>
+      <div class="small muted" id="csrc"></div>
+      <button class="big-btn" onclick="nextCard()">記好了，下一張</button>
+    </div>
+  </section>
+
   <!-- 結果 -->
   <section id="v-result" class="hidden stack">
     <header class="top"><h1>完成</h1></header>
@@ -242,6 +274,8 @@ const CFG = {
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
   BANK: 'mcq.json?v=2',
   EXPLAIN: 'explain.json?v=1',
+  ESSAYS: 'essays.json?v=1',
+  CARDS: 'cards.json?v=1',
   EXAM_DAY: '2027-08-01',   // 目標考期（2027 年 8 月）
 };
 const INTERVALS = [1, 3, 7, 14, 30];
@@ -261,7 +295,7 @@ function toast(msg, ms = 2200) {
 }
 
 // ---------- 畫面切換（手機返回鍵＝回上一個畫面） ----------
-const VIEWS = ['login', 'deny', 'home', 'stages', 'book', 'me', 'admin', 'quiz', 'result'];
+const VIEWS = ['login', 'deny', 'home', 'stages', 'book', 'me', 'admin', 'quiz', 'result', 'card'];
 function show(v) {
   VIEWS.forEach(x => $('v-' + x).classList.toggle('hidden', x !== v));
   const tabbed = ['home', 'stages', 'book', 'me'].includes(v);
@@ -269,7 +303,7 @@ function show(v) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   window.scrollTo(0, 0);
   if (v === 'home') renderHome();
-  if (v === 'stages') renderStages();
+  if (v === 'stages') { renderStages(); renderSubjects(); }
   if (v === 'book') { renderBook(); renderSearch(); }
   if (v === 'me') renderMe();
   if (v === 'admin') loadAdmin();
@@ -330,13 +364,19 @@ async function loadBank() {
   S.bank.questions.forEach(q => { S.byId[q.id] = q; });
   S.topicName = Object.fromEntries(S.bank.topics.map(t => [t.key, t.name]));
   S.explain = {};
+  try {
+    const [es, cs] = await Promise.all([fetch(CFG.ESSAYS).then(r => r.json()), fetch(CFG.CARDS).then(r => r.ok ? r.json() : { items: {} })]);
+    S.essays = es; S.essayById = {}; es.questions.forEach(q => { S.essayById[q.id] = q; });
+    S.ecards = cs.items || {};
+    S.subjName = Object.fromEntries(es.subjects.map(x => [x.key, x.name]));
+  } catch (e) { S.essays = null; S.ecards = {}; S.essayById = {}; }
   fetch(CFG.EXPLAIN).then(r => r.ok ? r.json() : null).then(d => { if (d) S.explain = d.items || {}; }).catch(() => {});
 }
 async function boot() {
   $('loginMsg').textContent = '載入題庫中…';
   await loadBank();
   const st = await api('/api/state');
-  S.me = st.me; S.today = st.today; S.newToday = st.newToday || 0;
+  S.me = st.me; S.today = st.today; S.newToday = st.newToday || 0; S.essayNewToday = st.essayNewToday || 0;
   S.cards = {}; st.cards.forEach(c => { S.cards[c.qid] = c; });
   S.days = st.days; S.runs = {}; st.runs.forEach(r => { S.runs[r.topic] = r; });
   await flushPending();
@@ -373,8 +413,12 @@ function renderHome() {
   $('countdown').textContent = left > 0 ? '距考試約 ' + left + ' 天' : '';
   const cards = Object.values(S.cards);
   $('sStreak').textContent = streak();
-  $('sSeen').textContent = cards.length + '/' + S.bank.questions.length;
-  $('sGrad').textContent = cards.filter(c => c.lv >= 5).length;
+  const mcards = cards.filter(c => S.byId[c.qid]);
+  $('sSeen').textContent = mcards.length + '/' + S.bank.questions.length;
+  $('sGrad').textContent = mcards.filter(c => c.lv >= 5).length;
+  const eToday = essayTodayList();
+  $('tEssay').textContent = eToday.length + ' 張';
+  $('rowEssay').disabled = !eToday.length;
   const dmap = Object.fromEntries(S.days.map(d => [d.day, d]));
   const wk = ['日', '一', '二', '三', '四', '五', '六'];
   let h = '';
@@ -603,6 +647,107 @@ async function flushPending(run = null) {
 }
 window.addEventListener('online', () => flushPending());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPending(); });
+
+// ---------- 申論要點卡 ----------
+function readyCards(subject) {
+  return Object.keys(S.ecards || {}).filter(id => S.essayById[id] && (!subject || S.essayById[id].subject === subject));
+}
+function essayDue(subject) {
+  const t = twDay();
+  return readyCards(subject).filter(id => S.cards[id] && S.cards[id].due && S.cards[id].due <= t)
+    .sort((a, b) => S.cards[a].due.localeCompare(S.cards[b].due));
+}
+function essayNew(subject, n) {
+  const ids = readyCards(subject).filter(id => !S.cards[id]);
+  ids.sort((a, b) => S.essayById[b].year - S.essayById[a].year || a.localeCompare(b));
+  return ids.slice(0, n);
+}
+function essayTodayList() {
+  const newLeft = Math.max(0, 1 - (S.essayNewToday || 0));
+  return [...essayDue(), ...essayNew(null, newLeft)];
+}
+function startEssayToday() { const ids = essayTodayList(); if (ids.length) startCards('今日要點卡', ids); }
+function startSubject(key) {
+  const ids = [...essayDue(key), ...essayNew(key, 5)].slice(0, 8);
+  if (!ids.length) return toast('這一科目前沒有要背的卡，晚點再來或換一科');
+  startCards(S.subjName[key] + '・要點卡', ids);
+}
+function renderSubjects() {
+  if (!S.essays) { $('subjList').innerHTML = '<p class="muted">要點卡載入失敗，請重新整理。</p>'; return; }
+  let total = 0, good = 0;
+  $('subjList').innerHTML = S.essays.subjects.map(sb => {
+    const all = S.essays.questions.filter(q => q.subject === sb.key).length;
+    const ready = readyCards(sb.key);
+    const known = ready.filter(id => S.cards[id] && S.cards[id].lv >= 2).length;
+    const due = essayDue(sb.key).length;
+    total += ready.length; good += known;
+    return `<button class="row" onclick="startSubject('${sb.key}')" ${ready.length ? '' : 'disabled style="opacity:.5"'}>
+      <span class="dot ${due ? 'd-red' : ready.length ? 'd-ok' : ''}"></span><span style="flex:1;min-width:0">${esc(sb.name)}
+      <div class="small muted">做好 ${ready.length}/${all} 張・熟 ${known}${due ? '・今天要複習 ' + due : ''}</div></span>
+      <span class="r">${ready.length ? '背 ›' : '製作中'}</span></button>`;
+  }).join('');
+  $('stage2Sum').textContent = `目前 ${good}/${total} 張已熟。`;
+}
+function startCards(title, ids) {
+  S.cq = { ids, i: 0 };
+  $('cardTitle').textContent = title;
+  go('card'); renderCard();
+}
+// 簡易 Markdown：### 小標、- 條列、1. 編號、**粗體**、```calc 算式區塊
+function mdLite(t) {
+  const out = []; let list = null; let calc = null;
+  const inl = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const line of String(t || '').split('\n')) {
+    if (calc !== null) {
+      if (line.startsWith('```')) { out.push(`<div class="calc">${esc(calc.join('\n'))}</div>`); calc = null; } else calc.push(line);
+      continue;
+    }
+    if (line.startsWith('```')) { close(); calc = []; continue; }
+    let m;
+    if ((m = line.match(/^###\s*(.*)/))) { close(); out.push(`<h4>${inl(m[1])}</h4>`); }
+    else if ((m = line.match(/^[-•]\s+(.*)/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inl(m[1])}</li>`); }
+    else if ((m = line.match(/^\d+[.、]\s*(.*)/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inl(m[1])}</li>`); }
+    else if (!line.trim()) close();
+    else { close(); out.push(`<p>${inl(line)}</p>`); }
+  }
+  close();
+  if (calc) out.push(`<div class="calc">${esc(calc.join('\n'))}</div>`);
+  return out.join('');
+}
+const inlineMd = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+function renderCard() {
+  const z = S.cq; const id = z.ids[z.i]; const q = S.essayById[id]; const c = S.ecards[id];
+  $('cardCount').textContent = (z.i + 1) + '/' + z.ids.length;
+  $('cmeta').innerHTML = `<span class="chip">${S.cards[id] ? '複習' : '新卡'}</span><span>${q.year} 年・${esc(S.subjName[q.subject])} 第 ${q.n} 題・25 分</span>`;
+  $('cstem').textContent = q.stem;
+  $('cfigs').innerHTML = (q.imgs || []).map(src => `<img src="${src}" alt="原題附圖" loading="lazy">`).join('');
+  $('cback').classList.add('hidden'); $('btnFlip').classList.remove('hidden'); $('cthink').classList.remove('hidden');
+  $('cpts').innerHTML = c.points.map(p => `<label class="pt"><input type="checkbox" onchange="cardScore()"><span>${inlineMd(p)}</span></label>`).join('');
+  $('cans').innerHTML = mdLite(c.answer) + (c.old ? `<div class="note">法規變動：${esc(c.old)}</div>` : '');
+  $('cans').classList.add('hidden'); $('btnAns').textContent = '看完整擬答';
+  $('csrc').textContent = '依據：' + (c.src || []).join('；') + '。AI 參考答案，非考選部官方解答。';
+  cardScore();
+  window.scrollTo(0, 0);
+}
+function flipCard() { $('cback').classList.remove('hidden'); $('btnFlip').classList.add('hidden'); $('cthink').classList.add('hidden'); }
+function toggleAns() { const a = $('cans'); a.classList.toggle('hidden'); $('btnAns').textContent = a.classList.contains('hidden') ? '看完整擬答' : '收起擬答'; }
+function cardScore() {
+  const box = [...document.querySelectorAll('#cpts input')]; const n = box.filter(b => b.checked).length;
+  const need = Math.ceil(box.length * 0.7);
+  $('cscore').textContent = `記得 ${n}/${box.length} 個要點` + (n >= need ? '，這張算熟了 ✓' : `，勾到 ${need} 個算熟`);
+}
+function nextCard() {
+  const z = S.cq; const id = z.ids[z.i];
+  const box = [...document.querySelectorAll('#cpts input')]; const n = box.filter(b => b.checked).length;
+  const ok = n >= Math.ceil(box.length * 0.7);
+  const isNew = !S.cards[id];
+  applyLocal(id, ok);
+  queuePending({ qid: id, choice: n + '/' + box.length, ok, mode: isNew ? 'enew' : 'essay' });
+  if (isNew) S.essayNewToday = (S.essayNewToday || 0) + 1;
+  if (z.i + 1 < z.ids.length) { z.i++; renderCard(); }
+  else { S.cq = null; flushPending(); toast('這組要點卡背完了'); history.back(); }
+}
 
 // ---------- 我的 ----------
 function renderMe() {
