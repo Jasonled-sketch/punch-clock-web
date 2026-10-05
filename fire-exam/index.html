@@ -78,7 +78,8 @@ nav.tabs button.on{color:var(--red);font-weight:700}
 .md h4{margin:6px 0 0;font-size:16px}
 .md p{margin:0}
 .md ul,.md ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:4px}
-.md .calc{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--bg);border-radius:8px;padding:10px 12px;white-space:pre;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.md .calc{font-family:var(--mono);font-size:14px;background:var(--bg);border-radius:8px;padding:10px 12px;white-space:pre-wrap;overflow-x:auto}
+.md .calc.diagram{font-size:13px;line-height:1.45;white-space:pre;-webkit-overflow-scrolling:touch}
 .figs img{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
 .pt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);font-size:16px}
 .pt input{width:22px;height:22px;margin-top:3px;flex:none;accent-color:var(--ok)}
@@ -694,6 +695,12 @@ function startCards(title, ids) {
   $('cardTitle').textContent = title;
   go('card'); renderCard();
 }
+// 算式區塊：示意圖（框線字元或縮排排版）不斷行、可左右滑；一般算式照常換行
+function calcBlock(lines) {
+  const t = lines.join('\n');
+  const diagram = /[│┌┐└┘─├┤┬┴┼║═]|\+-{2,}|^ {2,}\S/m.test(t);
+  return `<div class="calc${diagram ? ' diagram' : ''}">${esc(t)}</div>`;
+}
 // 簡易 Markdown：### 小標、- 條列、1. 編號、**粗體**、```calc 算式區塊
 function mdLite(t) {
   const out = []; let list = null; let calc = null;
@@ -701,7 +708,7 @@ function mdLite(t) {
   const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
   for (const line of String(t || '').split('\n')) {
     if (calc !== null) {
-      if (line.startsWith('```')) { out.push(`<div class="calc">${esc(calc.join('\n'))}</div>`); calc = null; } else calc.push(line);
+      if (line.startsWith('```')) { out.push(calcBlock(calc)); calc = null; } else calc.push(line);
       continue;
     }
     if (line.startsWith('```')) { close(); calc = []; continue; }
@@ -713,7 +720,7 @@ function mdLite(t) {
     else { close(); out.push(`<p>${inl(line)}</p>`); }
   }
   close();
-  if (calc) out.push(`<div class="calc">${esc(calc.join('\n'))}</div>`);
+  if (calc) out.push(calcBlock(calc));
   return out.join('');
 }
 const inlineMd = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
