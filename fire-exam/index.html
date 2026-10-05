@@ -273,7 +273,7 @@ const CFG = {
   API: /^(localhost|127.0.0.1)$/.test(location.hostname) ? 'https://fire-exam-api-test.usled.workers.dev' : 'https://fire-exam-api.usled.workers.dev',
   CLIENT_ID: '948080912487-922lldt7pmi8qp26nfcij206apkd5f1v.apps.googleusercontent.com',
   BANK: 'mcq.json?v=2',
-  EXPLAIN: 'explain.json?v=4',
+  EXPLAIN: 'explain.json?v=5',
   ESSAYS: 'essays.json?v=1',
   CARDS: 'cards.json?v=3',
   EXAM_DAY: '2027-08-01',   // 目標考期（2027 年 8 月）
@@ -545,7 +545,7 @@ function answer(k) {
     : `答錯，正確答案是 ${q.ans === '*' ? '任一皆可' : q.ans}。明天會再考你一次`;
   const notes = [];
   if (q.note) notes.push(q.note);
-  if (q.year <= 108) notes.push(`${q.year} 年舊題：法規可能已修正，答案以當年法規為準`);
+  if (q.year <= 108 && !(S.explain || {})[q.id]) notes.push(`${q.year} 年舊題：法規可能已修正，答案以當年法規為準`);
   $('qnote').textContent = notes.join('；');
   $('qnote').classList.toggle('hidden', !notes.length);
   renderExp(q, k, ok);
@@ -564,6 +564,7 @@ function renderExp(q, mine, ok) {
   box.innerHTML = `<div class="why">${esc(e.why)}</div>` +
     'ABCD'.split('').map((k, i) => e.opts && e.opts[k] ? `<div class="eo ${isRight(q, k) ? 'right' : ''} ${k === mine && !isRight(q, k) ? 'mine' : ''}"><span class="k">${k}</span><span>${esc(e.opts[k])}</span></div>` : '').join('') +
     (e.calc ? `<div class="calc" style="white-space:pre-wrap;font-family:var(--mono);font-size:14px">${esc(e.calc)}</div>` : '') +
+    (e.old ? `<div class="note">法規已改：${esc(e.old)}</div>` : '') +
     (e.tip ? `<div class="tip">記法：${esc(e.tip)}</div>` : '') +
     `<div class="src">依據：${esc((e.src || []).join('；'))}</div>`;
   box.classList.toggle('hidden', ok);
