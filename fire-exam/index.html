@@ -83,6 +83,19 @@ nav.tabs button.on{color:var(--red);font-weight:700}
 .figs img{width:100%;border:1px solid var(--line);border-radius:10px;background:#fff}
 .pt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);font-size:16px}
 .pt input{width:22px;height:22px;margin-top:3px;flex:none;accent-color:var(--ok)}
+.opt.sel{border-color:var(--red);background:var(--red-soft)}
+.opt.sel .k{background:var(--red);border-color:var(--red);color:var(--card)}
+.ans-box{width:100%;min-height:96px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--card);font-size:16px;line-height:1.6;resize:none;overflow:hidden}
+.qcard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.qhead{display:flex;justify-content:space-between;align-items:center;font-weight:700}
+.timer{font-family:var(--mono);font-size:16px}
+.timer.warn{background:var(--red);color:var(--red-ink)}
+.mcq{display:flex;flex-direction:column;gap:8px;border-top:1px dashed var(--line);padding-top:10px}
+.mcq .opt{padding:9px 12px;font-size:15px}
+.banner{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center}
+.banner button{margin-left:auto;border:0;border-radius:10px;padding:8px 12px;background:var(--warn);color:var(--card);font-weight:700}
+.score-big{font-size:44px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.pass{color:var(--ok)}.fail{color:var(--bad)}
 .linkbtn{border:0;background:none;color:var(--muted);text-decoration:underline;font-size:15px;padding:6px 0}
 .stage{display:flex;gap:12px;align-items:flex-start}
 .stage .n{flex:none;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800}
@@ -165,8 +178,21 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
       </div></div>
       <div class="stack" id="subjList" style="gap:8px"></div>
     </div>
-    <div class="card stage locked"><span class="n">3</span><div><b>寫整份：單科年度卷限時練習</b><div class="small muted">第三期開放</div></div></div>
-    <div class="card stage locked"><span class="n">4</span><div><b>全真模擬：6 科一起考</b><div class="small muted">第三期開放</div></div></div>
+    <div id="paperBanner"></div>
+    <div class="card stack">
+      <div class="stage"><span class="n">3</span><div style="flex:1">
+        <b>寫整份：單科年度卷限時練習</b>
+        <div class="small muted">挑一年一科，照真的考試限時 2 小時。測驗題自動改，申論題交卷後對照參考要點自己打分。</div>
+      </div></div>
+      <div class="stack" id="paperSubjList" style="gap:8px"></div>
+    </div>
+    <div class="card stack">
+      <div class="stage"><span class="n">4</span><div style="flex:1">
+        <b>全真模擬：6 科一起考</b>
+        <div class="small muted">同一年 6 科都考完才算一次。照考選部規則：6 科平均滿 60 分及格，任一科 0 分不及格。</div>
+      </div></div>
+      <div class="stack" id="mockBox" style="gap:8px"></div>
+    </div>
   </section>
 
   <!-- 錯題本＋搜尋 -->
@@ -248,6 +274,33 @@ table.adm th{color:var(--muted);font-weight:600;font-size:13px}
     </div>
   </section>
 
+  <!-- 選年度 -->
+  <section id="v-pick" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 返回</button><h1 id="pickTitle">選年度</h1></header>
+    <p class="small muted" id="pickHint"></p>
+    <div class="stack" id="pickList" style="gap:8px"></div>
+  </section>
+
+  <!-- 年度卷作答 -->
+  <section id="v-paper" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 離開</button><h1 id="paperTitle">年度卷</h1><span class="chip timer" id="paperTimer">120:00</span></header>
+    <p class="small muted">照真的考試：2 小時，時間到自動交卷。可以寫在紙上，也可以在框裡打字（會自動存）。中途離開，回來可以接著寫，時間照算。</p>
+    <div class="stack" id="paperBody" style="gap:12px"></div>
+    <button class="big-btn" id="btnSubmitPaper" onclick="submitPaper(this)">交卷</button>
+  </section>
+
+  <!-- 對答案自評 -->
+  <section id="v-grade" class="hidden stack">
+    <header class="top"><h1 id="gradeTitle">對答案</h1></header>
+    <div class="stack" id="gradeBody" style="gap:12px"></div>
+  </section>
+
+  <!-- 全真模擬 -->
+  <section id="v-mock" class="hidden stack">
+    <header class="top"><button class="back" onclick="history.back()">‹ 返回</button><h1 id="mockTitle">全真模擬</h1></header>
+    <div class="stack" id="mockBody" style="gap:10px"></div>
+  </section>
+
   <!-- 結果 -->
   <section id="v-result" class="hidden stack">
     <header class="top"><h1>完成</h1></header>
@@ -296,7 +349,7 @@ function toast(msg, ms = 2200) {
 }
 
 // ---------- 畫面切換（手機返回鍵＝回上一個畫面） ----------
-const VIEWS = ['login', 'deny', 'home', 'stages', 'book', 'me', 'admin', 'quiz', 'result', 'card'];
+const VIEWS = ['login', 'deny', 'home', 'stages', 'book', 'me', 'admin', 'quiz', 'result', 'card', 'pick', 'paper', 'grade', 'mock'];
 function show(v) {
   VIEWS.forEach(x => $('v-' + x).classList.toggle('hidden', x !== v));
   const tabbed = ['home', 'stages', 'book', 'me'].includes(v);
@@ -304,7 +357,11 @@ function show(v) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   window.scrollTo(0, 0);
   if (v === 'home') renderHome();
-  if (v === 'stages') { renderStages(); renderSubjects(); }
+  if (v === 'stages') { renderStages(); renderSubjects(); renderStage34(); }
+  if (v === 'pick') renderPick();
+  if (v === 'paper') renderPaper();
+  if (v === 'mock') renderMock();
+  if (v !== 'paper') stopTimer();
   if (v === 'book') { renderBook(); renderSearch(); }
   if (v === 'me') renderMe();
   if (v === 'admin') loadAdmin();
@@ -383,6 +440,7 @@ async function boot() {
   await flushPending();
   history.replaceState({ v: 'home' }, '');
   show('home');
+  loadExams();
 }
 
 // ---------- 今日 ----------
@@ -757,6 +815,232 @@ function nextCard() {
   else { S.cq = null; flushPending(); toast('這組要點卡背完了'); history.back(); }
 }
 
+// ---------- 第 3 關：單科年度卷／第 4 關：全真模擬 ----------
+const PAPER_MIN = 120;
+const SUBJ_ORDER = ['fire', 'law', 'alarm', 'evac', 'water', 'chem'];
+S.exams = [];
+async function loadExams() {
+  try { const d = await api('/api/exams'); S.exams = d.exams || []; } catch (e) { S.exams = []; }
+  if (history.state && history.state.v === 'stages') renderStage34();
+}
+function examYears() { return [...new Set(S.essays.questions.map(q => q.year))].sort((a, b) => b - a); }
+function bestScore(subject, year) {
+  const xs = S.exams.filter(e => e.subject === subject && e.year === year).map(e => e.score);
+  return xs.length ? Math.max(...xs) : null;
+}
+function renderStage34() {
+  if (!S.essays) return;
+  const cur = LS.get('paper');
+  $('paperBanner').innerHTML = cur ? `<div class="banner"><span>${cur.year} 年 ${esc(S.subjName[cur.subject])}${cur.kind === 'mock' ? '（全真模擬）' : ''} ${cur.phase === 'grade' ? '已交卷，還沒對完答案' : '還在作答中，剩 ' + Math.max(0, Math.ceil(paperLeftMs(cur) / 60000)) + ' 分鐘'}</span><button onclick="resumePaper()">繼續</button></div>` : '';
+  $('paperSubjList').innerHTML = SUBJ_ORDER.map(k => {
+    const done = S.exams.filter(e => e.kind === 'paper' && e.subject === k);
+    const best = done.length ? Math.max(...done.map(e => e.score)) : null;
+    return `<button class="row" onclick="openPick('paper','${k}')"><span class="dot ${best == null ? '' : best >= 60 ? 'd-ok' : 'd-warn'}"></span><span style="flex:1;min-width:0">${esc(S.subjName[k])}<div class="small muted">${done.length ? `考過 ${done.length} 份・最高 ${best} 分` : '還沒考過'}</div></span><span class="r">選年度 ›</span></button>`;
+  }).join('');
+  const m = LS.get('mock');
+  const past = mockHistory();
+  $('mockBox').innerHTML = (m ? `<button class="row" onclick="go('mock')"><span class="dot d-warn"></span><span style="flex:1">${m.year} 年全真模擬進行中<div class="small muted">已考 ${Object.keys(m.scores).length}/6 科</div></span><span class="r">繼續 ›</span></button>`
+    : `<button class="big-btn" onclick="openPick('mock')">開始一次全真模擬</button>`) +
+    past.map(x => `<div class="row"><span class="dot ${x.pass ? 'd-ok' : 'd-red'}"></span><span style="flex:1">${x.year} 年・平均 ${x.avg} 分<div class="small muted">${x.date}</div></span><span class="r ${x.pass ? 'pass' : 'fail'}">${x.pass ? '及格' : '不及格'}</span></div>`).join('');
+}
+function mockHistory() {
+  const g = {};
+  S.exams.filter(e => e.kind === 'mock' && e.mock_id).forEach(e => { (g[e.mock_id] = g[e.mock_id] || []).push(e); });
+  return Object.values(g).filter(a => a.length >= 6).map(a => {
+    const r = mockVerdict(Object.fromEntries(a.map(e => [e.subject, e.score])));
+    return { year: a[0].year, avg: r.avg, pass: r.pass, date: twDay(Date.parse(a[0].finished_at)) };
+  }).slice(0, 5);
+}
+// 考選部消防設備人員考試規則第 8 條：6 科平均滿 60 及格；任一科 0 分不及格
+function mockVerdict(scores) {
+  const vals = SUBJ_ORDER.map(k => scores[k] ?? 0);
+  const raw = vals.reduce((a, b) => a + b, 0) / 6;
+  const avg = Math.floor(raw * 10 + 1e-9) / 10;             // 顯示用：無條件捨去，避免 59.98 顯示成 60
+  const zero = SUBJ_ORDER.filter(k => (scores[k] ?? 0) === 0);
+  return { avg, zero, pass: raw >= 60 - 1e-9 && !zero.length };
+}
+let PICK = { kind: 'paper', subject: null };
+function openPick(kind, subject) { PICK = { kind, subject: subject || null }; go('pick'); }
+function renderPick() {
+  const ys = examYears();
+  if (PICK.kind === 'mock') {
+    $('pickTitle').textContent = '全真模擬：選年度';
+    $('pickHint').textContent = '選一年，6 科都用這一年的考卷。建議從還沒練過的年度開始。';
+    $('pickList').innerHTML = ys.map(y => {
+      const tried = S.exams.some(e => e.year === y);
+      return `<button class="row" onclick="startMock(${y})"><span class="dot ${tried ? 'd-warn' : ''}"></span><span style="flex:1">${y} 年考卷<div class="small muted">${tried ? '這年有考過部分科目' : '還沒碰過'}</div></span><span class="r">開始 ›</span></button>`;
+    }).join('');
+    return;
+  }
+  const k = PICK.subject;
+  $('pickTitle').textContent = S.subjName[k] + '：選年度';
+  $('pickHint').textContent = k === 'law' ? '消防法規：申論 2 題（50 分）＋測驗 40 題（50 分），限時 2 小時。' : '申論 4 題，每題 25 分，限時 2 小時。';
+  $('pickList').innerHTML = ys.map(y => {
+    const b = bestScore(k, y);
+    return `<button class="row" onclick="startPaper('paper','${k}',${y})"><span class="dot ${b == null ? '' : b >= 60 ? 'd-ok' : 'd-warn'}"></span><span style="flex:1">${y} 年<div class="small muted">${b == null ? '還沒考過' : '最高 ' + b + ' 分'}</div></span><span class="r">開始 ›</span></button>`;
+  }).join('');
+}
+function startMock(year) {
+  LS.set('mock', { id: 'm' + Date.now().toString(36), year, scores: {} });
+  history.replaceState({ v: 'mock' }, ''); show('mock');
+}
+function renderMock() {
+  const m = LS.get('mock');
+  if (!m) { $('mockBody').innerHTML = '<p class="muted">目前沒有進行中的全真模擬。</p>'; return; }
+  $('mockTitle').textContent = m.year + ' 年全真模擬';
+  const doneN = Object.keys(m.scores).length;
+  let head = '';
+  if (doneN === 6) {
+    const r = mockVerdict(m.scores);
+    const weak = SUBJ_ORDER.slice().sort((a, b) => m.scores[a] - m.scores[b]).slice(0, 2).map(k => S.subjName[k]).join('、');
+    head = `<div class="card center stack"><div class="score-big ${r.pass ? 'pass' : 'fail'}">${r.avg} 分</div>
+      <div><b class="${r.pass ? 'pass' : 'fail'}">${r.pass ? '及格' : '不及格'}</b>${r.zero.length ? `（${r.zero.map(k => S.subjName[k]).join('、')} 0 分）` : r.pass ? '' : `，還差 ${Math.round((60 - r.avg) * 10) / 10} 分`}</div>
+      <div class="small muted">最弱的兩科：${esc(weak)}。考選部規定：若全國及格人數未達到考人數 10%，前 10% 且平均滿 50 分、無 0 分者也及格。申論是自評分數，正式閱卷通常較嚴。</div>
+      <button class="ghost-btn" onclick="endMock()">結束這次模擬</button></div>`;
+  } else {
+    head = `<p class="small muted">已考 ${doneN}/6 科。每科獨立限時 2 小時，可以分天考完。</p>`;
+  }
+  $('mockBody').innerHTML = head + SUBJ_ORDER.map(k => {
+    const sc = m.scores[k];
+    return `<button class="row" ${sc != null ? 'disabled' : ''} onclick="startPaper('mock','${k}',${m.year})"><span class="dot ${sc == null ? '' : sc >= 60 ? 'd-ok' : 'd-red'}"></span><span style="flex:1">${esc(S.subjName[k])}</span><span class="r">${sc == null ? '開始 ›' : sc + ' 分'}</span></button>`;
+  }).join('') + (doneN < 6 ? `<button class="linkbtn" onclick="abandonMock(this)">放棄這次模擬</button>` : '');
+}
+function endMock() { LS.del('mock'); goStages(); }
+function abandonMock(btn) {
+  if (btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = '確定放棄？再按一次（已考的成績會保留在紀錄）'; setTimeout(() => { btn.dataset.sure = ''; btn.textContent = '放棄這次模擬'; }, 4000); return; }
+  LS.del('mock'); goStages();
+}
+function goStages() { history.replaceState({ v: 'stages' }, ''); show('stages'); }
+// ---- 作答 ----
+function paperLeftMs(pp) { return pp.startedAt + PAPER_MIN * 60000 - Date.now(); }
+function startPaper(kind, subject, year) {
+  const cur = LS.get('paper');
+  if (cur && !(cur.subject === subject && cur.year === year && cur.kind === kind)) {
+    return toast(`還有一份 ${cur.year} 年 ${S.subjName[cur.subject]} 沒交卷，請先完成或交卷`);
+  }
+  if (!cur) {
+    const essays = S.essays.questions.filter(q => q.year === year && q.subject === subject).sort((a, b) => a.n - b.n).map(q => q.id);
+    const mcq = subject === 'law' ? S.bank.questions.filter(q => q.year === year).sort((a, b) => a.n - b.n).map(q => q.id) : [];
+    if (!essays.length) return toast('這一年這一科沒有題目');
+    const m = LS.get('mock');
+    LS.set('paper', { kind, mockId: kind === 'mock' && m ? m.id : null, year, subject, startedAt: Date.now(), essays, mcq, mcqAns: {}, texts: {}, warned: false });
+  }
+  go('paper');
+}
+function resumePaper() {
+  const cur = LS.get('paper'); if (!cur) return;
+  if (cur.phase === 'grade') return enterGrade();
+  if (paperLeftMs(cur) <= 0) { toast('時間已到，直接進入對答案'); return enterGrade(); }
+  go('paper');
+}
+function renderPaper() {
+  const pp = LS.get('paper'); if (!pp) { goStages(); return; }
+  if (pp.phase === 'grade' || paperLeftMs(pp) <= 0) { enterGrade(); return; }
+  $('paperTitle').textContent = `${pp.year} 年 ${S.subjName[pp.subject]}`;
+  const eqs = pp.essays.map((id, i) => {
+    const q = S.essayById[id];
+    return `<div class="qcard"><div class="qhead"><span>${pp.subject === 'law' ? '甲、申論第' : '第'} ${i + 1} 題</span><span class="small muted">25 分</span></div>
+      <div class="stem">${esc(q.stem)}</div>${(q.imgs || []).map(src => `<img src="${src}" alt="原題附圖" loading="lazy" style="width:100%;border:1px solid var(--line);border-radius:10px;background:#fff">`).join('')}
+      <textarea class="ans-box" id="ta-${id}" placeholder="在這裡打字作答（選填，也可以寫在紙上）" oninput="saveText('${id}',this)">${esc(pp.texts[id] || '')}</textarea></div>`;
+  }).join('');
+  const mq = pp.mcq.length ? `<div class="qcard"><div class="qhead"><span>乙、測驗題</span><span class="small muted">40 題・每題 1.25 分</span></div>
+    ${pp.mcq.map(id => { const q = S.byId[id]; return `<div class="mcq"><div><b>${q.n}.</b> ${esc(q.stem)}</div>${q.opts.map((o, k) => { const L = 'ABCD'[k]; return `<button class="opt ${pp.mcqAns[id] === L ? 'sel' : ''}" onclick="pickMcq('${id}','${L}',this)"><span class="k">${L}</span><span>${esc(o)}</span></button>`; }).join('')}</div>`; }).join('')}</div>` : '';
+  $('paperBody').innerHTML = eqs + mq;
+  document.querySelectorAll('#paperBody textarea').forEach(autoGrow);
+  startTimer();
+}
+function autoGrow(el) { el.style.height = 'auto'; el.style.height = Math.max(96, el.scrollHeight) + 'px'; }
+function saveText(id, el) { autoGrow(el); const pp = LS.get('paper'); if (!pp) return; pp.texts[id] = el.value; LS.set('paper', pp); }
+function pickMcq(id, L, btn) {
+  const pp = LS.get('paper'); if (!pp) return;
+  pp.mcqAns[id] = pp.mcqAns[id] === L ? undefined : L;   // 再按一次＝取消
+  LS.set('paper', pp);
+  btn.parentElement.querySelectorAll('.opt').forEach(b => b.classList.toggle('sel', b === btn && pp.mcqAns[id] === L));
+}
+let TIMER = null;
+function startTimer() {
+  stopTimer();
+  const tick = () => {
+    const pp = LS.get('paper'); if (!pp) return stopTimer();
+    const left = paperLeftMs(pp);
+    if (left <= 0) { stopTimer(); toast('時間到，自動交卷'); return enterGrade(); }
+    const m = Math.floor(left / 60000), sec = Math.floor(left / 1000) % 60;
+    const t = $('paperTimer'); t.textContent = `${m}:${String(sec).padStart(2, '0')}`; t.classList.toggle('warn', left < 10 * 60000);
+    if (left < 10 * 60000 && !pp.warned) { pp.warned = true; LS.set('paper', pp); toast('剩 10 分鐘'); }
+  };
+  tick(); TIMER = setInterval(tick, 1000);
+}
+function stopTimer() { if (TIMER) { clearInterval(TIMER); TIMER = null; } }
+function submitPaper(btn) {
+  const pp = LS.get('paper'); if (!pp) return;
+  const blank = pp.mcq.filter(id => !pp.mcqAns[id]).length;
+  if (btn.dataset.sure !== '1') {
+    btn.dataset.sure = '1'; btn.textContent = blank ? `還有 ${blank} 題測驗沒作答，確定交卷？再按一次` : '確定交卷？再按一次';
+    setTimeout(() => { btn.dataset.sure = ''; btn.textContent = '交卷'; }, 4000); return;
+  }
+  btn.dataset.sure = ''; btn.textContent = '交卷';
+  enterGrade();
+}
+// ---- 對答案自評 ----
+function enterGrade() {
+  stopTimer();
+  const pp = LS.get('paper'); if (!pp) return goStages();
+  pp.phase = 'grade'; pp.marks = pp.marks || {}; LS.set('paper', pp);
+  history.replaceState({ v: 'grade' }, ''); show('grade');
+  $('gradeTitle').textContent = `${pp.year} 年 ${S.subjName[pp.subject]}・對答案`;
+  let html = '';
+  if (pp.mcq.length) {
+    const right = pp.mcq.filter(id => pp.mcqAns[id] && isRight(S.byId[id], pp.mcqAns[id])).length;
+    const wrong = pp.mcq.filter(id => !(pp.mcqAns[id] && isRight(S.byId[id], pp.mcqAns[id])));
+    html += `<div class="qcard"><div class="qhead"><span>測驗題（自動改）</span><span>${right}/40・${(right * 1.25).toFixed(2)} 分</span></div>
+      ${wrong.length ? `<div class="small muted">答錯或沒答的 ${wrong.length} 題（點了看解析）：</div>` + wrong.map(id => qLine(id, 'd-red')).join('') : '<div class="pass">全對！</div>'}</div>`;
+  }
+  html += pp.essays.map((id, i) => {
+    const c = S.ecards[id]; const q = S.essayById[id];
+    const marks = pp.marks[id] || [];
+    return `<div class="qcard"><div class="qhead"><span>申論第 ${i + 1} 題</span><span id="sc-${id}">0/25</span></div>
+      <div class="small muted" style="white-space:pre-wrap">${esc(q.stem.slice(0, 120))}${q.stem.length > 120 ? '…' : ''}</div>
+      ${pp.texts[id] ? `<details><summary class="small">看我寫的答案</summary><div style="white-space:pre-wrap;padding:8px 0">${esc(pp.texts[id])}</div></details>` : ''}
+      <div class="small muted">對照參考要點，你有寫到的打勾：</div>
+      ${c.points.map((pt, j) => `<label class="pt"><input type="checkbox" ${marks[j] ? 'checked' : ''} onchange="markPt('${id}',${j},this.checked)"><span>${inlineMd(pt)}</span></label>`).join('')}
+      <button class="ghost-btn" onclick="const a=this.nextElementSibling;a.classList.toggle('hidden');this.textContent=a.classList.contains('hidden')?'看完整擬答':'收起擬答'">看完整擬答</button>
+      <div class="exp md hidden">${mdLite(c.answer)}</div></div>`;
+  }).join('');
+  html += `<p class="small muted">申論是自評：要點寫到幾成就拿幾成分數。正式閱卷通常比自評嚴，建議看分數時打個折。</p>
+    <button class="big-btn" id="btnFinish" onclick="finishPaper(this)">算出成績</button>`;
+  $('gradeBody').innerHTML = html;
+  pp.essays.forEach(updEssayScore);
+  window.scrollTo(0, 0);
+}
+function essayScore(pp, id) {
+  const n = S.ecards[id].points.length; const k = (pp.marks[id] || []).filter(Boolean).length;
+  return Math.round(25 * k / n * 10) / 10;
+}
+function updEssayScore(id) { const pp = LS.get('paper'); const el = $('sc-' + id); if (pp && el) el.textContent = essayScore(pp, id) + '/25'; }
+function markPt(id, j, on) { const pp = LS.get('paper'); if (!pp) return; (pp.marks[id] = pp.marks[id] || [])[j] = on; LS.set('paper', pp); updEssayScore(id); }
+async function finishPaper(btn) {
+  const pp = LS.get('paper'); if (!pp) return;
+  btn.disabled = true; btn.textContent = '存檔中…';
+  const right = pp.mcq.filter(id => pp.mcqAns[id] && isRight(S.byId[id], pp.mcqAns[id])).length;
+  const detail = { mcq: pp.mcq.length ? { right, total: pp.mcq.length } : null, essays: Object.fromEntries(pp.essays.map(id => [id, essayScore(pp, id)])) };
+  const total = Math.round((pp.essays.reduce((a, id) => a + essayScore(pp, id), 0) + right * 1.25) * 10) / 10;
+  // 作答也進間隔複習：測驗題對錯、申論勾到七成算熟
+  pp.mcq.forEach(id => { if (!pp.mcqAns[id]) return; const ok = isRight(S.byId[id], pp.mcqAns[id]); applyLocal(id, ok); queuePending({ qid: id, choice: pp.mcqAns[id], ok, mode: 'paper' }); });
+  pp.essays.forEach(id => { const n = S.ecards[id].points.length; const k = (pp.marks[id] || []).filter(Boolean).length; const ok = k >= Math.ceil(n * 0.7); applyLocal(id, ok); queuePending({ qid: id, choice: k + '/' + n, ok, mode: 'paper' }); });
+  try {
+    await api('/api/exams', { method: 'POST', body: JSON.stringify({ kind: pp.kind, mock_id: pp.mockId, year: pp.year, subject: pp.subject, score: total, detail, started_at: new Date(pp.startedAt).toISOString() }) });
+  } catch (e) { btn.disabled = false; btn.textContent = '算出成績'; return toast('沒存成功：' + e.message + '，請再按一次'); }
+  flushPending();
+  S.exams.unshift({ kind: pp.kind, mock_id: pp.mockId, year: pp.year, subject: pp.subject, score: total, finished_at: new Date().toISOString() });
+  LS.del('paper');
+  if (pp.kind === 'mock') { const m = LS.get('mock'); if (m && m.id === pp.mockId) { m.scores[pp.subject] = total; LS.set('mock', m); } }
+  $('gradeBody').innerHTML = `<div class="card center stack"><div class="score-big ${total >= 60 ? 'pass' : 'fail'}">${total} 分</div>
+    <div>${pp.year} 年 ${esc(S.subjName[pp.subject])}${pp.mcq.length ? `・測驗 ${right}/40` : ''}</div>
+    <div class="small muted">${total >= 60 ? '這科達到 60 分。' : `距離 60 分還差 ${Math.round((60 - total) * 10) / 10} 分。`}答錯的測驗題和沒寫到的要點，已排進每日複習。</div></div>
+    <button class="big-btn" onclick="${pp.kind === 'mock' ? "history.replaceState({v:'mock'},'');show('mock')" : 'goStages()'}">${pp.kind === 'mock' ? '回全真模擬' : '回闖關'}</button>`;
+  window.scrollTo(0, 0);
+}
+
 // ---------- 我的 ----------
 function renderMe() {
   $('meName').textContent = S.me.name || '';
@@ -779,12 +1063,13 @@ async function loadAdmin() {
   try {
     const d = await api('/api/admin/users');
     const n = S.bank.questions.length;
-    $('admTbl').innerHTML = '<tr><th>誰</th><th>7天</th><th>做過</th><th>正確率</th><th>過關</th><th>最後上線</th><th></th></tr>' +
+    $('admTbl').innerHTML = '<tr><th>誰</th><th>7天</th><th>做過</th><th>正確率</th><th>過關</th><th>年度卷</th><th>最後上線</th><th></th></tr>' +
       d.users.map(u => `<tr style="${u.active ? '' : 'opacity:.45'}">
         <td><b>${esc(u.name || u.email.split('@')[0])}</b>${u.role === 'admin' ? ' <span class="chip">管理</span>' : ''}<div class="muted" style="font-size:12px">${esc(u.email)}</div></td>
         <td>${u.days7} 天</td><td>${u.seenQ}/${n}</td>
         <td>${u.answered ? Math.round(u.correct / u.answered * 100) + '%' : '—'}</td>
         <td>${u.topicsPassed}/${S.bank.topics.length}</td>
+        <td>${u.papers ? u.papers + ' 份・均 ' + u.paperAvg : '—'}</td>
         <td>${u.last_seen ? esc(twDay(Date.parse(u.last_seen)).slice(5)) : '—'}</td>
         <td>${u.active && u.email !== S.me.email ? `<button class="linkbtn" onclick="removeUser(this,'${esc(u.email)}')">移除</button>` : (u.active ? '' : `<button class="linkbtn" onclick="readd('${esc(u.email)}')">恢復</button>`)}</td>
       </tr>`).join('');
