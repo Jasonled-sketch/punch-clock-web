@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>維修服務單｜譽昇科技 USLED</title>
+<style>
+:root{--bg:#eef5fb;--surface:#fff;--s2:#f6fafd;--bd:#cfe0ee;--bd2:#e6eef6;--tx:#14304a;--mu:#5d7b97;
+  --sky:#0b72c4;--sky-d:#065a9e;--ok:#15803d;--wn:#a85b09;--dg:#b4201d;--sh:0 1px 3px rgba(11,114,196,.09)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);line-height:1.55;font-size:14px;
+  font-family:-apple-system,BlinkMacSystemFont,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif}
+.bar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--bd);padding:9px 14px;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.bar .t{font-weight:900;color:var(--sky);margin-right:auto;font-size:14px}
+button{font-family:inherit;font-size:13px;font-weight:800;border:none;border-radius:8px;padding:8px 14px;cursor:pointer}
+.b1{background:var(--sky);color:#fff}.b1:hover{background:var(--sky-d)}
+.b2{background:var(--s2);color:var(--tx);border:1px solid var(--bd)}
+.hint{font-size:12px;color:var(--mu);width:100%;line-height:1.6}
+.sheet{max-width:820px;margin:14px auto 60px;background:#fff;border:1px solid var(--bd);border-radius:10px;
+  padding:22px 24px;box-shadow:var(--sh)}
+
+/* 表頭 */
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:2.5px solid var(--tx);padding-bottom:8px;margin-bottom:10px}
+.hd .co{font-size:11.5px;color:var(--mu);font-weight:700;letter-spacing:.3px}
+.hd .co b{display:block;font-size:17px;color:var(--tx);letter-spacing:.5px}
+.hd h1{margin:2px 0 0;font-size:21px;font-weight:900;letter-spacing:2px}
+.hd .no{text-align:right;font-size:12px;color:var(--mu);white-space:nowrap}
+.hd .no input{width:168px;font-weight:900;font-size:15px;color:var(--dg);text-align:center;letter-spacing:.5px;
+  font-family:ui-monospace,Consolas,monospace}
+.basis{font-size:11.5px;color:var(--mu);background:var(--s2);border:1px solid var(--bd2);border-radius:7px;padding:6px 10px;margin-bottom:12px;line-height:1.55}
+.basis b{color:var(--tx)}
+
+/* 區塊 */
+.sec{border:1px solid var(--bd);border-radius:8px;margin-bottom:10px;break-inside:avoid;page-break-inside:avoid}
+.sec h2{margin:0;font-size:12.5px;font-weight:900;background:var(--s2);border-bottom:1px solid var(--bd);
+  padding:5px 10px;border-radius:8px 8px 0 0;display:flex;justify-content:space-between;gap:8px}
+.sec h2 small{font-weight:700;color:var(--mu);font-size:11px}
+.g{display:grid;grid-template-columns:repeat(12,1fr);gap:6px 10px;padding:8px 10px}
+.f{display:flex;flex-direction:column;gap:2px;min-width:0}
+.f>span{font-size:10.5px;font-weight:800;color:var(--mu);white-space:nowrap}
+.c2{grid-column:span 2}.c3{grid-column:span 3}.c4{grid-column:span 4}.c5{grid-column:span 5}
+.c6{grid-column:span 6}.c8{grid-column:span 8}.c9{grid-column:span 9}.c12{grid-column:span 12}
+input,select,textarea{width:100%;padding:5px 7px;border:1px solid var(--bd);border-radius:6px;font-size:13.5px;
+  font-family:inherit;background:#fff;color:var(--tx);min-height:30px}
+textarea{resize:vertical;min-height:46px;line-height:1.5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px rgba(11,114,196,.13)}
+input[readonly]{background:var(--s2);color:var(--sky-d);font-weight:800}
+input.money{text-align:right;font-family:ui-monospace,Consolas,monospace}
+.row{display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center;min-height:30px}
+.ck{display:inline-flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap;cursor:pointer}
+.ck input{width:15px;height:15px;min-height:0;margin:0;accent-color:var(--sky)}
+.note{font-size:11px;color:var(--mu);line-height:1.5}
+.note b{color:var(--wn)}
+.auto{font-size:10.5px;color:var(--sky-d);font-weight:700}
+
+/* 費用表 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-top:1px solid var(--bd2);padding:4px 8px;text-align:left;vertical-align:middle}
+th{font-size:11px;color:var(--mu);font-weight:800;border-top:none;background:#fbfdff}
+td.r,th.r{text-align:right}
+td input{min-height:28px;padding:3px 6px}
+td .cond{font-size:10.5px;color:var(--mu)}
+tr.tot td{border-top:2px solid var(--tx);font-weight:900;font-size:15px;padding-top:7px}
+tr.tot td.r{color:var(--dg)}
+.sub2{font-size:11px;color:var(--mu);padding:0 10px 8px;line-height:1.55}
+
+/* 簽名 */
+.sign{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:10px}
+.sign div{border-bottom:1.5px solid var(--tx);min-height:58px;position:relative}
+.sign div span{position:absolute;left:0;top:0;font-size:10.5px;font-weight:800;color:var(--mu)}
+.sign div em{position:absolute;right:0;bottom:3px;font-size:10px;color:var(--mu);font-style:normal}
+.terms{font-size:10.5px;color:var(--mu);line-height:1.6;padding:8px 10px;columns:2;column-gap:16px}
+.terms li{margin:0 0 2px 14px}
+.terms b{color:var(--tx)}
+.pg{break-before:page;page-break-before:always}
+
+@media(max-width:620px){
+  .g{grid-template-columns:repeat(6,1fr)}
+  .c8,.c9,.c12{grid-column:span 6}.c5{grid-column:span 3}
+  .sheet{padding:14px;margin:8px}
+  .sign{grid-template-columns:1fr}
+  .terms{columns:1}
+}
+@media print{
+  @page{size:A4;margin:10mm 11mm}
+  body{background:#fff;font-size:11.5px}
+  .bar{display:none!important}
+  .sheet{max-width:none;margin:0;border:none;border-radius:0;padding:0;box-shadow:none}
+  .sec{margin-bottom:5px;border-color:#9fb4c8}
+  .sec h2{padding:2px 8px;font-size:11px;background:#f3f6f9;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .g{gap:2px 8px;padding:4px 8px}
+  .f>span{font-size:9.5px}
+  input,select,textarea{border:none;border-bottom:1px solid #8ea4b8;border-radius:0;background:transparent!important;
+    padding:0 3px;min-height:18px;font-size:11px;color:#000;line-height:1.4}
+  textarea{min-height:30px}
+  .row{min-height:20px}
+  .sub2{padding:0 8px 4px;font-size:10px}
+  .terms{line-height:1.45;padding:5px 8px}
+  input[readonly]{color:#000}
+  input::placeholder,textarea::placeholder{color:transparent}
+  select{appearance:none;-webkit-appearance:none}
+  .ck input{width:12px;height:12px}
+  .ck{font-size:11px}
+  .sign div{min-height:42px}
+  .sign{padding:6px 8px;gap:10px}
+  .basis{margin-bottom:8px;border-color:#c4d2df}
+  .hd{margin-bottom:8px;padding-bottom:6px}
+  .hd h1{font-size:18px}
+  th,td{padding:1px 6px}
+  td input{min-height:18px;padding:0 4px}
+  tr.tot td{font-size:13px}
+  .terms{font-size:9.5px}
+}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="t">維修服務單產生器｜內部使用</span>
+  <button class="b2" id="bNew">新單號</button>
+  <button class="b2" id="bClear">清空</button>
+  <button class="b1" id="bPrint">列印／存 PDF</button>
+  <div class="hint">填好後按「列印／存 PDF」：一份給客戶、一份留底，PDF 存進維修單號資料夾。空白直接列印可手寫。欄位會自動存在這台裝置的瀏覽器裡（草稿），按「清空」才會刪。
+    掃機身 QR 進來（網址帶 <code>sn / mo / b / d</code>）會自動帶入產品資料。灰底欄位為自動計算，不必填。</div>
+</div>
+
+<div class="sheet" id="sheet">
+
+<div class="hd">
+  <div class="co"><b>譽昇科技有限公司</b>USLED　LED 字幕機・跑馬燈・顯示看板
+    <h1>維修服務單</h1></div>
+  <div class="no">維修單號 RMA No.<br><input id="rma" placeholder="RMA-260101-01"><br>
+    <span style="font-size:11px">收件日 <input id="dIn" style="width:118px;display:inline-block;font-size:12px" placeholder="YYYY-MM-DD"></span></div>
+</div>
+
+<div class="basis">本單依 <b>USLED 保固條款 v3.0（2026-10-18 生效）</b>辦理，各欄位括號內為對應條號。條款全文：<b>jasonled-sketch.github.io/punch-clock-web/warranty/</b>，或掃機身 QR Code。客戶簽名即確認已知悉並同意本單記載事項與上開條款。</div>
+
+<!-- 一、客戶 -->
+<div class="sec">
+  <h2>一、客戶資料 <small>個資依第十一條僅供保固維修使用</small></h2>
+  <div class="g">
+    <label class="f c5"><span>客戶／公司名稱</span><input id="cName"></label>
+    <label class="f c3"><span>聯絡人</span><input id="cContact"></label>
+    <label class="f c4"><span>電話</span><input id="cTel"></label>
+    <label class="f c8"><span>回寄地址</span><input id="cAddr"></label>
+    <label class="f c4"><span>LINE／Email</span><input id="cLine"></label>
+    <label class="f c6"><span>經銷商（經經銷售出者）</span><input id="cDealer"></label>
+    <label class="f c6"><span>承辦業務</span><input id="cSales"></label>
+  </div>
+</div>
+
+<!-- 二、產品 -->
+<div class="sec">
+  <h2>二、產品資料 <small>保固期間依第三條，自出貨日起算</small></h2>
+  <div class="g">
+    <label class="f c2"><span>品牌</span><select id="pBrand"><option value="">—</option><option value="US">US</option><option value="DART">DART</option><option value="其他">其他</option></select></label>
+    <label class="f c4"><span>型號</span><input id="pModel"></label>
+    <label class="f c4"><span>機身序號</span><input id="pSN"></label>
+    <label class="f c2"><span>數量</span><input id="pQty" value="1"></label>
+    <label class="f c3"><span>出貨日（保固起算日）</span><input id="pShip" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>一般零組件保固至 <i class="auto">自動</i></span><input id="pW1" readonly></label>
+    <label class="f c3"><span>US 控制主機板保固至 <i class="auto">自動</i></span><input id="pW5" readonly></label>
+    <label class="f c3"><span>保固狀態（收件日） <i class="auto">自動</i></span><input id="pStat" readonly></label>
+    <div class="f c12"><span>起算憑證（第三條第三款，依序）</span>
+      <div class="row"><label class="ck"><input type="checkbox" id="ev1">出貨單</label><label class="ck"><input type="checkbox" id="ev2">發票／收據</label><label class="ck"><input type="checkbox" id="ev3">安裝驗收單</label><label class="ck"><input type="checkbox" id="ev4">無憑證，依序號出廠年月＋30 日推定</label></div></div>
+  </div>
+</div>
+
+<!-- 三、報修 -->
+<div class="sec">
+  <h2>三、報修與取號紀錄 <small>第七條第一至五款</small></h2>
+  <div class="g">
+    <label class="f c3"><span>報修日期</span><input id="rDate" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>報修管道</span><select id="rVia"><option value="">—</option><option>電話</option><option>LINE</option><option>經銷商轉達</option><option>現場</option></select></label>
+    <label class="f c6"><span>遠端排除嘗試與結果（第七條第二款）</span><input id="rRemote" placeholder="例：確認非關屏／自動開關機設定，重下內容仍無畫面"></label>
+    <label class="f c12"><span>客戶描述之故障現象</span><textarea id="rDesc"></textarea></label>
+    <div class="f c12"><span>取號時已告知客戶（勾選）</span>
+      <div class="row">
+        <label class="ck"><input type="checkbox" id="t1">維修單號寫外箱，未取號或到付拒收（第七條第三款）</label>
+        <label class="ck"><input type="checkbox" id="t2">請自行備份字幕內容與設定（第七條第五款）</label>
+        <label class="ck"><input type="checkbox" id="t3">包檢處理費 NT$300 與來回運費（第五條第一、二款）</label>
+        <label class="ck"><input type="checkbox" id="t4">妥善包裝，運輸損壞不保（第七條第四款）</label>
+      </div></div>
+  </div>
+</div>
+
+<!-- 四、收件檢視 -->
+<div class="sec">
+  <h2>四、收件檢視與錄影 <small>第八條　自拆箱起全程錄影一鏡到底</small></h2>
+  <div class="g">
+    <label class="f c3"><span>物流／寄件方式</span><input id="iShip"></label>
+    <label class="f c3"><span>外箱狀態</span><select id="iBox"><option value="">—</option><option>完好</option><option>輕微凹損</option><option>明顯破損</option><option>無外箱</option></select></label>
+    <label class="f c3"><span>包裝方式</span><select id="iPack"><option value="">—</option><option>原廠箱＋緩衝材</option><option>他箱＋緩衝材</option><option>無緩衝材</option></select></label>
+    <label class="f c3"><span>外箱有維修單號</span><select id="iTag"><option value="">—</option><option>有</option><option>無</option></select></label>
+    <label class="f c6"><span>機身外觀（刮痕、凹陷、燒灼、水痕、封條）</span><input id="iLook"></label>
+    <label class="f c6"><span>隨附配件清點</span><input id="iAcc" placeholder="例：電源線 1、遙控器 0、USB 0"></label>
+    <label class="f c4"><span>檢修影片編號</span><input id="iVid"></label>
+    <label class="f c4"><span>錄影人員</span><input id="iCam"></label>
+    <label class="f c4"><span>影片保存至 <i class="auto">維修完成日＋30</i></span><input id="iVidTo" readonly></label>
+  </div>
+</div>
+
+<!-- 五、檢測判定 -->
+<div class="sec">
+  <h2>五、檢測與判定 <small>第四條　LED 模組紅綠藍三色全亮逐片點測</small></h2>
+  <div class="g">
+    <label class="f c3"><span>檢測日期</span><input id="jDate" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>檢測人員</span><input id="jBy"></label>
+    <label class="f c2"><span>死燈數</span><input id="jDead"></label>
+    <label class="f c2"><span>總燈珠數</span><input id="jTotal"></label>
+    <label class="f c2"><span>千分比 <i class="auto">自動</i></span><input id="jPermille" readonly></label>
+    <div class="f c12"><span>判定結果</span>
+      <div class="row">
+        <label class="ck"><input type="radio" name="jr" value="hw">硬體故障（第四條）</label>
+        <label class="ck"><input type="radio" name="jr" value="sw">非硬體事項：設定／字型／排版（第二條第三款）</label>
+        <label class="ck"><input type="radio" name="jr" value="ex">不適用保固（第六條第 <input id="jEx" style="width:34px;display:inline-block;min-height:22px;padding:1px 4px;text-align:center"> 款）</label>
+        <label class="ck"><input type="radio" name="jr" value="nf">無法重現</label>
+      </div></div>
+    <label class="f c6"><span>故障零組件（模組／主機板／電源／排線／面板…）</span><input id="jPart"></label>
+    <label class="f c6"><span>判定依據與說明（含錄影時間點）</span><input id="jWhy" placeholder="例：第 3 片模組 B 色整片不亮，影片 04:12"></label>
+  </div>
+</div>
+
+<!-- ───── 第二頁 ───── -->
+<div class="pg"></div>
+
+<!-- 六、費用 -->
+<div class="sec">
+  <h2>六、費用明細 <small>第五條　衍生性費用保固內外均由客戶負擔；保固內硬體故障零件與工資 $0</small></h2>
+  <table>
+    <tr><th style="width:38%">項目</th><th>條件／說明</th><th class="r" style="width:120px">金額 NT$</th></tr>
+    <tr><td>包檢處理費（第五條第二款）</td>
+      <td><div class="row" style="min-height:0"><label class="ck"><input type="checkbox" id="x1">新品 30 日內免</label><label class="ck"><input type="checkbox" id="x2">同一故障 30 日內再送免</label><label class="ck"><input type="checkbox" id="x3">未送回免</label></div></td>
+      <td class="r"><input class="money" id="fPack" value="300"></td></tr>
+    <tr><td>零件費（保固外或第六條事由）</td><td><input id="fPartDesc" placeholder="品名×數量"></td><td class="r"><input class="money" id="fPart" placeholder="0"></td></tr>
+    <tr><td>更換工資（按更換項目逐項計價）</td><td><input id="fLaborDesc" placeholder="項目×數量"></td><td class="r"><input class="money" id="fLabor" placeholder="0"></td></tr>
+    <tr><td>急件處理費（第五條第五款）</td><td><span class="cond">要求 1–3 個工作天內完工者</span></td><td class="r"><input class="money" id="fRush" placeholder="0"></td></tr>
+    <tr><td>包裝材料費／換箱費（第五條第六款）</td><td><span class="cond">代為換箱或補強包材，材料實收</span></td><td class="r"><input class="money" id="fBox" placeholder="0"></td></tr>
+    <tr><td>回程運費（第五條第一款）</td><td><span class="cond">實報實銷；新品 7 日內由本公司負擔</span></td><td class="r"><input class="money" id="fShip" placeholder="0"></td></tr>
+    <tr><td>到府出勤費（第五條第三款）</td><td><span class="cond">NT$1,200／趟；當場有償維修可全額抵扣，填抵扣後金額</span></td><td class="r"><input class="money" id="fVisit" placeholder="0"></td></tr>
+    <tr><td>保管費（第九條第二款）</td><td><span class="cond">通知後逾 14 日，第 15 日起 NT$80／日 × <input id="fDays" style="width:46px;display:inline-block;min-height:22px;padding:1px 4px;text-align:center" placeholder="0"> 日</span></td><td class="r"><input class="money" id="fStore" readonly value="0"></td></tr>
+    <tr class="tot"><td colspan="2">合計（未稅）</td><td class="r"><input class="money" id="fTotal" readonly value="300"></td></tr>
+  </table>
+  <div class="sub2">保固期間內判定為硬體故障者，零件費與更換工資為 $0（第四條、第七條第七款）。保固外付費維修，僅該次更換之零組件自維修完成日起保固 90 日（第三條第七款）。</div>
+</div>
+
+<!-- 七、報價同意 -->
+<div class="sec">
+  <h2>七、報價與客戶回覆 <small>第七條第八、九款　報價後 3 個工作天內未回覆視同放棄維修，入帳後排修</small></h2>
+  <div class="g">
+    <label class="f c3"><span>報價日期</span><input id="qDate" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>報價方式</span><select id="qVia"><option value="">—</option><option>電話</option><option>LINE</option><option>Email</option><option>經銷商轉達</option></select></label>
+    <label class="f c3"><span>回覆期限 <i class="auto">報價日＋3 工作天</i></span><input id="qDue" readonly></label>
+    <label class="f c3"><span>客戶回覆日</span><input id="qReply" placeholder="YYYY-MM-DD"></label>
+    <div class="f c12"><span>客戶決定</span>
+      <div class="row">
+        <label class="ck"><input type="radio" name="qd" value="ok">同意維修，依上表報價</label>
+        <label class="ck"><input type="radio" name="qd" value="no">不維修，原機回寄（收包檢處理費＋回程運費）</label>
+        <label class="ck"><input type="radio" name="qd" value="rc">不維修，委由本公司回收處理</label>
+        <label class="ck"><input type="radio" name="qd" value="na">逾期未回覆，視同放棄維修</label>
+      </div></div>
+    <label class="f c3"><span>付款方式</span><input id="qPay"></label>
+    <label class="f c3"><span>入帳日（排修起點）</span><input id="qPaid" placeholder="YYYY-MM-DD"></label>
+    <label class="f c6"><span>客戶同意之憑證（LINE 截圖編號／簽名／Email）</span><input id="qProof"></label>
+  </div>
+</div>
+
+<!-- 八、維修回寄 -->
+<div class="sec">
+  <h2>八、維修與回寄 <small>第四條更換方式　換下之故障零組件所有權歸本公司</small></h2>
+  <div class="g">
+    <label class="f c3"><span>維修完成日</span><input id="mDone" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>本次更換零件保固至 <i class="auto">保固外＋90 日</i></span><input id="mW90" readonly></label>
+    <label class="f c6"><span>維修內容與更換零組件（良品／整新件）</span><input id="mWork"></label>
+    <label class="f c3"><span>回寄日</span><input id="mShip" placeholder="YYYY-MM-DD"></label>
+    <label class="f c5"><span>物流與單號</span><input id="mTrack"></label>
+    <label class="f c4"><span>修後三色複測</span><select id="mTest"><option value="">—</option><option>R／G／B 全數正常</option><option>有異常，備註</option></select></label>
+    <label class="f c12"><span>備註（含建議客戶收件 7 日內檢查回報，第八條第三款）</span><input id="mNote"></label>
+  </div>
+</div>
+
+<!-- 十、簽名 -->
+<div class="sec">
+  <h2>九、簽認 <small>客戶簽名即確認本單記載與 USLED 保固條款 v3.0</small></h2>
+  <div class="sign">
+    <div><span>客戶簽名（收件／同意報價）</span><em>日期：　　　　　　</em></div>
+    <div><span>檢測人員</span><em>日期：　　　　　　</em></div>
+    <div><span>承辦人</span><em>日期：　　　　　　</em></div>
+  </div>
+  <ul class="terms">
+    <li><b>保固範圍</b>：機體所有原廠零組件。US 主機板 5 年，其餘 1 年，自出貨日起算，不因維修延長。（第三、四條）</li>
+    <li><b>包檢處理費 NT$300</b>：送回本公司者一律收取，與運費同屬物流成本，保固內外相同。新品 30 日內、同一故障 30 日內再送、未送回者免。（第五條第二款）</li>
+    <li><b>運費</b>：來回運費由客戶負擔；新品 7 日內由本公司負擔，第 8–30 日與同一故障 30 日內再送各付一趟。（第三條第四款、第五條第一款）</li>
+    <li><b>報價</b>：3 個工作天內未回覆視同放棄，入帳後排修；不維修者收包檢處理費與回程運費原機回寄。（第七條第八、九款）</li>
+    <li><b>錄影</b>：自拆箱起全程錄影，保存 30 日；請收件 7 日內檢查回報。（第八條）</li>
+    <li><b>久未領回</b>：通知後逾 14 日，第 15 日起每日 NT$80；逾 90 日經兩次書面催告視為拋棄，本公司得處置。（第九條）</li>
+    <li><b>資料</b>：送修視為已備份，檢修可能清除字幕內容與設定。（第七條第五款）</li>
+    <li><b>三修換退</b>：同一零組件同一現象送修三次未修復，得換同型或退價金。（第四條）</li>
+  </ul>
+</div>
+
+<!-- 九、未領回 -->
+<div class="sec">
+  <h2>十、通知與久未領回紀錄 <small style="margin-right:auto">內部填寫</small> <small>第九條　逾 14 日起保管費；逾 90 日經兩次書面催告視為拋棄</small></h2>
+  <div class="g">
+    <label class="f c3"><span>完成／報價通知日（起算日）</span><input id="nDate" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>通知方式</span><select id="nVia"><option value="">—</option><option>電話</option><option>LINE</option><option>書面</option></select></label>
+    <label class="f c3"><span>保管費起算日 <i class="auto">通知日＋15</i></span><input id="nFee" readonly></label>
+    <label class="f c3"><span>90 日屆至日 <i class="auto">通知日＋90</i></span><input id="n90" readonly></label>
+    <label class="f c3"><span>第一次書面催告日</span><input id="nW1" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>寄送方式／單號</span><input id="nW1h"></label>
+    <label class="f c3"><span>第二次書面催告日</span><input id="nW2" placeholder="YYYY-MM-DD"></label>
+    <label class="f c3"><span>寄送方式／單號</span><input id="nW2h"></label>
+    <label class="f c12"><span>其他聯繫紀錄（日期／方式／結果）</span><textarea id="nLog"></textarea></label>
+  </div>
+</div>
+
+</div><!-- /sheet -->
+
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var KEY='usled.rma.draft';
+var FIELDS=Array.prototype.slice.call(document.querySelectorAll('#sheet input,#sheet select,#sheet textarea'));
+
+function pad(n){return (n<10?'0':'')+n}
+function fmt(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function parse(s){ if(!s) return null; var m=/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(s.trim()); if(!m) return null;
+  var d=new Date(+m[1],+m[2]-1,+m[3]); return isNaN(d)?null:d }
+function addDays(d,n){var x=new Date(d);x.setDate(x.getDate()+n);return x}
+function addMonths(d,n){var x=new Date(d);x.setMonth(x.getMonth()+n);x.setDate(x.getDate()-1);return x}
+function addWorkdays(d,n){var x=new Date(d),c=0;while(c<n){x.setDate(x.getDate()+1);var w=x.getDay();if(w!==0&&w!==6)c++}return x}
+function num(v){var n=parseFloat(String(v).replace(/[^\d.-]/g,''));return isNaN(n)?0:n}
+function money(n){return n.toLocaleString('zh-Hant-TW')}
+
+function newRma(){var d=new Date();return 'RMA-'+String(d.getFullYear()).slice(2)+pad(d.getMonth()+1)+pad(d.getDate())+'-01'}
+
+function calc(){
+  var ship=parse($('pShip').value), inn=parse($('dIn').value);
+  $('pW1').value= ship? fmt(addMonths(ship,12)):'';
+  $('pW5').value= ship? ($('pBrand').value==='US'? fmt(addMonths(ship,60)) : '不適用（非 US）'):'';
+  var st='';
+  if(ship&&inn){
+    var days=Math.round((inn-ship)/864e5);
+    if(days<0) st='收件日早於出貨日？';
+    else if(days<=7) st='新品 7 日內：免包檢費，來回運費本公司付';
+    else if(days<=30) st='新品 30 日內：免包檢費，運費各付一趟';
+    else if(inn<=addMonths(ship,12)) st='保固內（第 '+days+' 日）';
+    else if($('pBrand').value==='US'&&inn<=addMonths(ship,60)) st='一般零組件過保；US 主機板仍保固中';
+    else st='已逾保固期';
+  }
+  $('pStat').value=st;
+  if(ship&&inn){var dd=Math.round((inn-ship)/864e5); if(dd>=0&&dd<=30&&!$('x1').dataset.user){$('x1').checked=true}}
+
+  var dead=num($('jDead').value), tot=num($('jTotal').value);
+  $('jPermille').value= tot>0 ? (dead/tot*1000).toFixed(2)+'‰'+(dead/tot*1000>3?'（超過 3‰）':'（未超過 3‰）') : '';
+
+  var done=parse($('mDone').value);
+  $('iVidTo').value= done? fmt(addDays(done,30)):'';
+  var over = st.indexOf('逾保固')>=0 || st.indexOf('過保')>=0 || (document.querySelector('input[name=jr]:checked')||{}).value==='ex';
+  $('mW90').value= done? (over? fmt(addDays(done,90)) : '保固內：隨原機剩餘保固'):'';
+
+  var q=parse($('qDate').value);
+  $('qDue').value= q? fmt(addWorkdays(q,3))+'（不含例假日；遇國定假日順延）':'';
+
+  var n=parse($('nDate').value);
+  $('nFee').value= n? fmt(addDays(n,15)):'';
+  $('n90').value= n? fmt(addDays(n,90)):'';
+
+  var packFree = $('x1').checked||$('x2').checked||$('x3').checked;
+  if(packFree){ $('fPack').value='0'; } else if(num($('fPack').value)===0){ $('fPack').value='300'; }
+  var store=num($('fDays').value)*80; $('fStore').value=store? money(store):'0';
+  var total=['fPack','fPart','fLabor','fRush','fBox','fShip','fVisit'].reduce(function(a,id){return a+num($(id).value)},0)+store;
+  $('fTotal').value=money(total);
+}
+
+function save(){
+  var o={};
+  FIELDS.forEach(function(el){ if(!el.id&&!el.name) return;
+    var k=el.id||(el.name+'='+el.value);
+    o[k]= (el.type==='checkbox'||el.type==='radio')? el.checked : el.value });
+  try{localStorage.setItem(KEY,JSON.stringify(o))}catch(e){}
+}
+function load(){
+  var o; try{o=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
+  if(!o) return false;
+  FIELDS.forEach(function(el){ var k=el.id||(el.name+'='+el.value); if(!(k in o)) return;
+    if(el.type==='checkbox'||el.type==='radio') el.checked=!!o[k]; else el.value=o[k] });
+  return true;
+}
+function fromQuery(){
+  var q={}; location.search.replace(/^\?/,'').split('&').forEach(function(p){ if(!p) return; var i=p.indexOf('='); var k=decodeURIComponent(i<0?p:p.slice(0,i)), v=decodeURIComponent(i<0?'':p.slice(i+1).replace(/\+/g,' ')); q[k]=v });
+  if(q.sn) $('pSN').value=q.sn;
+  if(q.mo) $('pModel').value=q.mo;
+  if(q.b){ var b=q.b.toUpperCase(); $('pBrand').value= b==='US'?'US': b==='DART'?'DART': '其他' }
+  if(q.d) $('pShip').value=q.d;
+  return !!(q.sn||q.mo||q.b||q.d);
+}
+function clearAll(){
+  FIELDS.forEach(function(el){ if(el.type==='checkbox'||el.type==='radio') el.checked=false; else if(!el.readOnly) el.value='' });
+  $('pQty').value='1'; $('fPack').value='300'; $('fDays').value=''; delete $('x1').dataset.user;
+  $('rma').value=newRma(); $('dIn').value=fmt(new Date());
+  try{localStorage.removeItem(KEY)}catch(e){}
+  calc(); save();
+}
+
+var had=load(); var q=fromQuery();
+if(!had||q){ if(!$('rma').value) $('rma').value=newRma(); if(!$('dIn').value) $('dIn').value=fmt(new Date()); }
+$('x1').addEventListener('change',function(){this.dataset.user='1'});
+FIELDS.forEach(function(el){ el.addEventListener('input',function(){calc();save()}); el.addEventListener('change',function(){calc();save()}) });
+$('bPrint').onclick=function(){ save(); window.print() };
+$('bNew').onclick=function(){ $('rma').value=newRma(); $('dIn').value=fmt(new Date()); calc(); save() };
+$('bClear').onclick=function(){ if(confirm('清空整張單據（含瀏覽器草稿）？')) clearAll() };
+calc(); save();
+})();
+</script>
+</body>
+</html>
