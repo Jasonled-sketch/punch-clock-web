@@ -4495,20 +4495,36 @@ function vPrompt(opts){
 /* ===================================================================
    啟動
    =================================================================== */
-const APP_VERSION = 'v1.17.0';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
+const APP_VERSION = 'v1.17.1';   // ← 每次部署 +1，方便確認載到新版（沒變就是吃到快取）
 if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }   // PWA:加到主畫面=獨立APP;SW 網路優先不吃舊版
 (function(){ const vt=document.getElementById('verTag'); if(vt) vt.textContent=APP_VERSION; const lv=document.getElementById('loginVer'); if(lv) lv.textContent='版本 '+APP_VERSION+(isBeta()?' · 測試版':''); })();
 document.getElementById('modeFlag').textContent = (CONFIG.MODE==='LOCAL'?'本機模式（資料存這台手機）':'雲端模式')+' · '+APP_VERSION;
 /* 記住的登入(30天內)：先進 app 外殼不跳登入畫面；renderLogin 再跑 GIS 靜默拿新 token → 載資料 */
-{ const _s=cachedSession();
+function bootNormal(){ const _s=cachedSession();
   if(_s){
     let gt=null; try{ gt=JSON.parse(localStorage.getItem('usled_gtoken')||'null'); }catch(e){}
-    if(wsess()){ login(_s.id); }   // 7 天通行證有效→秒進,Google 條 7 天只彈一次
+    if(wsess()){ login(_s.id); }   // 通行證(30天)有效→秒進
     else if(gt && gt.cred && (gt.exp-Date.now())>5*60000){ STATE.googleToken=gt.cred; login(_s.id); }   // Google token 還有效(50分內)→秒進
     else { enterAppShell(userById(_s.id)); STATE._reloginTimer=setTimeout(()=>{ if(!STATE.googleToken) forceRelogin(); },8000); }   // 等 GIS 靜默;8秒沒完成自動回登入頁(解卡死)
   }
+  renderLogin();
 }
-renderLogin();
+/* 2026-10-28 行事曆單一登入：從公司行事曆打開＝網址 # 後面帶一次性入場碼 cal_sso → 交給 taskwall-push /session 換 30 天通行證,不用再按 Google
+   (碼放在 # 後面不會送到 github.io、不進 Referer;用完馬上從網址拿掉;換不到就照舊流程) */
+(function(){
+  const m=(location.hash||'').match(/cal_sso=([A-Za-z0-9_-]{43})/);
+  if(m){ try{ history.replaceState(history.state,'',location.pathname+location.search); }catch(e){} }
+  if(!m || CONFIG.MODE!=='CLOUD') return bootNormal();
+  // 每次從行事曆開都換一次（同一台電腦換人用時，才不會沿用上一個人留下的通行證）
+  let settled=false;   // 審核：逾時跟晚到的回應只認先到的那個，免得登入兩次／跑兩次原流程
+  const done=(fn)=>{ if(settled) return; settled=true; clearTimeout(tm); fn(); };
+  const tm=setTimeout(()=>done(bootNormal), 8000);   // 8 秒換不到→照舊
+  fetch(CONFIG.PUSH.WORKER+'/session',{method:'POST',headers:{'X-Cal-Code':m[1]}}).then(r=>r.ok?r.json():null).then(j=>{
+    const user=j&&j.token&&CONFIG.USERS.find(u=>(u.email||'').toLowerCase()===String(j.email||'').toLowerCase());
+    if(!user) return done(bootNormal);
+    done(()=>{ try{ localStorage.setItem('usled_wsess', JSON.stringify({token:j.token, exp:j.exp})); }catch(e){} login(user.id); renderLogin(); });
+  }).catch(()=>done(bootNormal));
+})();
 /* 安卓返回鍵：返回=關最上層彈窗→關到底停在首頁(Jason 定案);要離開連按兩下返回(安卓慣例)或 Home 鍵
    ⚠️ 深修根因:Chrome「歷史操縱防護」會把 popstate 裡程式補推的攔截層標記為「可跳過」→之前攔一次後就失效跳出
    正規繞法:改在「每次使用者觸碰畫面」時補建攔截層(有真手勢的 entry 不會被跳過);三星不回報 standalone→安卓一律啟用 */
