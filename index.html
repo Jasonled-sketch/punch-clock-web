@@ -279,7 +279,7 @@
 <!-- ══ APP ══ -->
 <div id="app" class="hidden">
   <div id="topbar">
-    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.21</span></div>
+    <div class="t">打卡系統 <span class="ver" id="app-ver">v11.22</span></div>
     <div style="display:flex;align-items:center;gap:10px">
       <span id="tb-user" style="font-size:13px;opacity:.9"></span>
       <button class="btn-logout" onclick="logout()">登出</button>
@@ -2560,7 +2560,7 @@ async function getPayrollLocks(ym) {
 function snapAbsentTxt(s) {
   if (s.absentPart === undefined) return s.absentd ? `　－曠職/天災 $${s.absentd.toLocaleString()}` : '';
   return (s.absentPart ? `　－曠職 $${s.absentPart.toLocaleString()}` : '')
-       + (s.disasterPart ? `　－天災（不支薪） $${s.disasterPart.toLocaleString()}` : '');
+       + (s.disasterPart ? `　－天災假不計薪 $${s.disasterPart.toLocaleString()}` : '');
 }
 function snapExtra(s) {
   return Math.round(s.net - s.base - s.ot + s.absentd + s.lated + s.leaved + s.labor + s.health);
@@ -2640,7 +2640,7 @@ async function viewReport() {
       ? `<div class="lock-note"><span class="lock-on">🔒 ${ym} 薪資已鎖定（${(payrollLocks[0].locked_at||'').slice(0,16)}）</span><div style="font-size:11.5px;color:#0a6b0a;margin-top:4px">✅ 以下薪資數字＝鎖定當時的定版值（與實發一致）。若鎖定後有補核准的單據，會在該員工卡片標示重算差額。</div></div>` : ''}
       <div class="lock-acts">
         <button class="btn" style="background:${isLocked ? '#b45309' : '#1a73e8'}" onclick="lockPayroll(${isLocked ? 'true' : ''})">${isLocked ? '🔄 重新鎖定' : '🔒 鎖定薪資'}</button>
-        <button class="btn" style="background:#0f9d58" onclick="exportMonthDetail()">📥 匯出明細</button>
+        <button class="btn" style="background:#0f9d58" onclick="exportMonthExcel()">📊 出勤明細 Excel</button>
         <button class="btn" style="background:#6b21a8" onclick="exportPayrollRegister()">📑 工資清冊</button>
         <button class="btn" style="background:#0b7285" onclick="printSignSheets()">🖨 個人明細（簽名用）</button>
         <button class="btn" style="background:#c2410c" onclick="sendPayslips()">📨 發薪資單</button>
@@ -2816,7 +2816,7 @@ async function viewReport() {
           <div class="pay-detail">
             ${snap
               ? `${isFull?'月薪':'本薪'} $${dBase.toLocaleString()}${dOtPay?`　＋加班 $${dOtPay.toLocaleString()}`:''}${snapExtraTxt(snap)}${snapAbsentTxt(snap)}${dLate?`　－遲退 $${dLate.toLocaleString()}`:''}${dLeave?`　－請假 $${dLeave.toLocaleString()}`:''}${dLabor?`　－勞保自付 $${dLabor.toLocaleString()}`:''}${dHealth?`　－健保自付 $${dHealth.toLocaleString()}`:''}`
-              : `${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${attendBonus?`　＋全勤獎金 $${attendBonus.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災（不支薪） $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保自付 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保自付 $${healthIns.toLocaleString()}`:''}`}
+              : `${isFull?'月薪':'本薪'} $${base.toLocaleString()}${otPay?`　＋加班 $${otPay.toLocaleString()}`:''}${attendBonus?`　＋全勤獎金 $${attendBonus.toLocaleString()}`:''}${holidayBonus?`　＋假日加給 $${holidayBonus.toLocaleString()}`:''}${absentDeduct?`　－曠職 $${absentDeduct.toLocaleString()}`:''}${disasterDeduct?`　－天災假不計薪 $${disasterDeduct.toLocaleString()}`:''}${lateDeduct?`　－遲退 $${lateDeduct.toLocaleString()}`:''}${leaveDeduct?`　－請假 $${leaveDeduct.toLocaleString()}`:''}${laborIns?`　－勞保自付 $${laborIns.toLocaleString()}`:''}${healthIns?`　－健保自付 $${healthIns.toLocaleString()}`:''}`}
           </div>
         </div>` : ''}
       </div>`;
@@ -2887,9 +2887,18 @@ function buildEmpDetailRows(w) {
     if (_pbd && (_pbd.cpH || 0) > 0) memo = `加班 ${_pbd.otH}h 已換補休 ${_pbd.cpH}h（不另計加班費）`;
     else if (dayOt.length && _pbd && !(_pbd.ot > 0) && !(_pbd.otH > 0)) memo = '加班時段與實際打卡無交集，未計加班費';
     else if (dayOt.length && _pbd && (_pbd.otH || 0) > 0 && (_pbd.otH || 0) < dayOt.reduce((a, o) => a + (parseFloat(o.hours) || 0), 0)) memo = `加班依實際在場計 ${_pbd.otH}h（申請時數未做滿）`;
-    if (isDisasterAbsent) memo = (memo ? memo + '；' : '') + '天災停班未出勤，不支薪';
+    // 🌀 颱風／天災停班日：有來沒來都要看得出是颱風假，金額寫成算式（Jason 2026-11-09；用「不計薪」不用「扣」）
+    const isTyphoon = !!(spc && /颱風|天災/.test(spc.type || '') && isFull);
+    if (isTyphoon) {
+      const tyH = _pbd && _pbd.tyH > 0 ? _pbd.tyH : 0;
+      const hp = (_apiC && _apiC.hourlyPay) || Math.round(hourlyPayOf(w, ym) * 100) / 100, mult = (_apiC && _apiC.typhoonMult) || 1.5;
+      const disTxt = _pbd && _pbd.dis ? `當天停班不計薪 −$${Math.round(_pbd.dis).toLocaleString()}` : '當天停班';
+      const tyMemo = tyH ? `${spc.type}有來上班 ${tyH}h × 時薪 $${hp} × ${mult} ＝ ＋$${Math.round(_pbd.hol || 0).toLocaleString()}；${disTxt}`
+        : rec ? `${spc.type}有來上班；${disTxt}` : `${spc.type}未出勤；${disTxt}`;
+      memo = memo ? memo + '；' + tyMemo : tyMemo;
+    }
     out.push([w.name, w.email, ds, wkd[dow], sh ? sh.am[0] : '', sh ? sh.pm[1] : '', sh ? `${sh.am[1]}-${sh.pm[0]}` : '',
-      dispIn, dispOut, lv.start_time || '', lv.end_time || '', lv.leave_type || (isDisasterAbsent ? `${spc.type}(不支薪)` : ''),
+      dispIn, dispOut, lv.start_time || '', lv.end_time || '', [lv.leave_type, spc && /颱風|天災/.test(spc.type || '') ? spc.type : ''].filter(Boolean).join('、'),
       ot.start_time || '', ot.end_time || '', dayRecs.length ? sumWH : '', late || '', early || '', addPay || '', dedPay || '', memo]);
   }
   return out;
@@ -2922,6 +2931,99 @@ function paySummaryOf(w) {
   };
 }
 
+// 📊 出勤明細 Excel（Jason 2026-11-09 定版：以後出勤明細就是這個格式）
+//   第 1 頁＝全部人逐日明細；「總表」＝公司薪資總表＋合計；之後每人一頁＝逐日明細＋合計＋薪資彙總＋右下紅框簽名。
+//   數字全部來自 buildEmpDetailRows／paySummaryOf（與個人明細列印、工資清冊同一份），API 沒連上就不給匯出。
+let _excelJsP = null;
+function loadExcelJs() {
+  if (window.ExcelJS) return Promise.resolve(window.ExcelJS);
+  if (!_excelJsP) _excelJsP = new Promise((ok, bad) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js'; sc.onload = () => window.ExcelJS ? ok(window.ExcelJS) : bad(new Error('ExcelJS 載入失敗')); sc.onerror = () => { _excelJsP = null; bad(new Error('Excel 元件下載失敗，請檢查網路後再試')); }; document.head.appendChild(sc); });
+  return _excelJsP;
+}
+async function exportMonthExcel() {
+  if (!_RPT) { alert('請先載入薪資月報'); return; }
+  if (!_API_SALARY) { toast('薪資 API 未連線（離線估算中），為避免匯出備用數字，請稍後重新整理再匯出', 'red'); return; }
+  let ExcelJS;
+  try { toast('Excel 製作中…'); ExcelJS = await loadExcelJs(); } catch (e) { toast(e.message, 'red'); return; }
+  const wb = buildMonthWorkbook(ExcelJS);
+  if (!wb) { alert('本月無資料可匯出'); return; }
+  const ymF = _RPT.ym.replace('/', '-');
+  const buf = await wb.xlsx.writeBuffer();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = `出勤明細_${ymF}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  toast(`✅ 已下載 出勤明細_${ymF}.xlsx（總明細＋總表＋${wb.worksheets.length - 2} 人）`);
+}
+function buildMonthWorkbook(ExcelJS) {
+  const ym = _RPT.ym, ymF = ym.replace('/', '-');
+  const ver = ((document.getElementById('app-ver') || {}).textContent || '').trim();
+  const D_HEAD = ['姓名', '日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除', '備註'];
+  const S_HEAD = ['年月', '姓名', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假不計薪', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)'];
+  const MONEY = '#,##0;-#,##0;"-"', HRS = '0.##;-0.##;"-"';
+  const thin = { style: 'thin', color: { argb: 'FF808080' } }, box = { top: thin, left: thin, bottom: thin, right: thin };
+  const red = { style: 'medium', color: { argb: 'FFC00000' } };
+  const font = { name: 'Microsoft JhengHei', size: 11 };
+  const headStyle = row => row.eachCell(c => { c.font = { ...font, bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEF7' } }; c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }; c.border = box; });
+  const bodyStyle = (row, n) => { for (let i = 1; i <= n; i++) { const c = row.getCell(i); c.font = font; c.border = box; c.alignment = { vertical: 'middle', horizontal: 'center' }; } };
+  const numOr = v => (v === '' || v == null) ? null : (typeof v === 'number' ? v : (isNaN(Number(v)) ? v : Number(v)));
+  const detailVals = r => [r[0], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], numOr(r[14]), numOr(r[15]), numOr(r[16]), numOr(r[17]), numOr(r[18]), r[19]];
+  const fmtDetail = row => { row.getCell(14).numFmt = HRS; [17, 18].forEach(i => row.getCell(i).numFmt = MONEY); [15, 16].forEach(i => row.getCell(i).font = { ...font, color: { argb: 'FFC00000' } }); row.getCell(19).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }; if (/颱風|天災/.test(String(row.getCell(11).value || ''))) row.getCell(11).font = { ...font, bold: true, color: { argb: 'FFE65100' } }; };
+  const sumVals = (w, s) => { const drift = s.locked ? Math.round(s.liveNet - s.net) : 0; return [ym, w.name, s.attendDays, s.totH, s.base, s.otH, s.otPay, s.attendBonus, s.holidayBonus, s.absentDeduct, numOr(s.disasterDeduct), s.lateDeduct, s.leaveDeduct, s.laborIns, s.healthIns, s.net, s.annualRemain, s.compRemain, s.locked ? (drift ? `已鎖定(鎖後有異動,差${drift})` : '已鎖定') : '未鎖定', s.locked ? s.liveNet : null]; };
+  const fmtSum = row => { row.getCell(4).numFmt = HRS; row.getCell(6).numFmt = HRS; [5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 20].forEach(i => row.getCell(i).numFmt = MONEY); row.getCell(16).font = { ...font, bold: true }; };
+  const widths = [10, 12.5, 8, 9, 9, 13, 10, 9, 9, 9, 13, 9, 9, 9, 9, 11, 11, 12, 44, 13];
+  const setup = ws => { ws.pageSetup = { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 } }; };
+  const people = (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').map(w => ({ w, rows: buildEmpDetailRows(w), s: paySummaryOf(w) })).filter(p => p.rows.length || p.s);
+  if (!people.length) return null;
+  const wb = new ExcelJS.Workbook(); wb.creator = '譽昇科技 打卡系統 ' + ver;
+
+  // ① 全部人逐日明細
+  const all = wb.addWorksheet(`出勤明細_${ymF}`, { views: [{ state: 'frozen', ySplit: 1 }] });
+  headStyle(all.addRow(D_HEAD));
+  people.forEach(p => p.rows.forEach(r => { const row = all.addRow(detailVals(r)); bodyStyle(row, 19); fmtDetail(row); }));
+  all.columns.forEach((c, i) => c.width = widths[i] || 9); all.autoFilter = { from: 'A1', to: 'S1' }; setup(all);
+
+  // ② 總表（公司薪資總表＋合計）
+  const tot = wb.addWorksheet('總表', { views: [{ state: 'frozen', ySplit: 2 }] });
+  tot.mergeCells('A1:T1'); const t1 = tot.getCell('A1'); t1.value = `譽昇科技有限公司　${ym} 出勤暨薪資總表　（打卡系統 ${ver}）`; t1.font = { ...font, size: 14, bold: true }; t1.alignment = { horizontal: 'center' };
+  headStyle(tot.addRow(S_HEAD));
+  const sumIdx = [5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16], acc = {};
+  people.filter(p => p.s).forEach(p => { const v = sumVals(p.w, p.s); sumIdx.forEach(i => acc[i] = (acc[i] || 0) + (Number(v[i - 1]) || 0)); const row = tot.addRow(v); bodyStyle(row, 20); fmtSum(row); });
+  const tr = tot.addRow(S_HEAD.map((h, i) => i === 0 ? '合　計' : (sumIdx.includes(i + 1) ? acc[i + 1] : null))); bodyStyle(tr, 20); fmtSum(tr);
+  for (let i = 1; i <= 20; i++) { const c = tr.getCell(i); c.font = { ...font, bold: true }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }; }
+  tot.columns.forEach((c, i) => c.width = [9, 9, 9, 8, 10, 11, 9, 9, 9, 9, 12, 11, 9, 9, 9, 11, 12, 15, 22, 14][i] || 9); setup(tot);
+
+  // ③ 每人一頁：逐日明細＋合計＋薪資彙總＋右下紅框簽名
+  people.forEach(({ w, rows, s }) => {
+    const ws = wb.addWorksheet(String(w.name || w.email).replace(/[\\/?*\[\]:]/g, '').slice(0, 31));
+    ws.mergeCells('A1:S1'); const h1 = ws.getCell('A1'); h1.value = '譽昇科技有限公司　出勤暨薪資明細'; h1.font = { ...font, size: 14, bold: true }; h1.alignment = { horizontal: 'center' };
+    ws.mergeCells('A2:S2'); const h2 = ws.getCell('A2'); h2.value = `${ym}　${w.name}　${w.emp_type || ''}${w.shift ? '　' + w.shift + ' 班' : ''}${s && s.locked ? '　（薪資已鎖定定版值）' : ''}　打卡系統 ${ver}`; h2.font = { ...font, color: { argb: 'FF555555' } }; h2.alignment = { horizontal: 'center' };
+    headStyle(ws.addRow(D_HEAD));
+    if (!rows.length) ws.addRow(['本月無出勤資料']);
+    rows.forEach(r => { const row = ws.addRow(detailVals(r)); bodyStyle(row, 19); fmtDetail(row); });
+    const n = i => rows.reduce((a, r) => a + (parseFloat(r[i]) || 0), 0);
+    const tAdd = n(17), tDed = n(18);
+    if (rows.length) { const tr2 = ws.addRow(['合　計', '', '', '', '', '', '', '', '', '', '', '', '', Math.round(n(14) * 100) / 100, n(15) || null, n(16) || null, tAdd || null, tDed || null, '']); bodyStyle(tr2, 19); fmtDetail(tr2); for (let i = 1; i <= 19; i++) tr2.getCell(i).font = { ...tr2.getCell(i).font, bold: true }; }
+    if (s) {
+      const tieAdd = Math.round((s.otPay || 0) + (s.holidayBonus || 0)), tieDed = Math.round((s.leaveDeduct || 0) + (Number(s.disasterDeduct) || 0));
+      if (Math.round(tAdd) !== tieAdd || Math.round(tDed) !== tieDed) { const wr = ws.addRow([`⚠️ 逐日合計與彙總不符（應加發 ${Math.round(tAdd)} vs ${tieAdd}、應扣除 ${Math.round(tDed)} vs ${tieDed}），請通知系統管理者，勿逕行簽名。`]); wr.getCell(1).font = { ...font, bold: true, color: { argb: 'FFC00000' } }; }
+      ws.addRow([]);
+      headStyle(ws.addRow(S_HEAD));
+      const sr = ws.addRow(sumVals(w, s)); bodyStyle(sr, 20); fmtSum(sr);
+    }
+    ws.addRow([]); ws.addRow([]);
+    const top = ws.rowCount + 1, bot = top + 3;
+    ws.mergeCells(top, 11, bot, 19);
+    const sg = ws.getCell(top, 11);
+    sg.value = '本人已確認本期出勤紀錄、薪資明細及應發（扣）款項無誤，並已領取本期薪資。\n\n員工簽名：＿＿＿＿＿＿＿＿＿　　日期：＿＿＿年＿＿＿月＿＿＿日';
+    sg.font = { ...font, size: 12, bold: true }; sg.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    for (let r = top; r <= bot; r++) ws.getRow(r).height = 26;
+    sg.border = { top: red, left: red, bottom: red, right: red };   // 合併格的外框只認主格，四邊都設在主格上
+    ws.columns.forEach((c, i) => c.width = widths[i] || 9); setup(ws);
+  });
+  return wb;
+}
+
 function exportMonthDetail() {
   if (!_RPT) { alert('請先載入薪資月報'); return; }
   const ym = _RPT.ym;
@@ -2948,7 +3050,7 @@ function printSignSheets() {
   const esc = v => String(v == null ? '' : v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const dash = v => (v === '' || v == null || v === 0) ? '-' : (typeof v === 'number' ? v.toLocaleString() : esc(v));
   const D_HEAD = ['日期', '星期', '預定上班', '預定下班', '預定休息', '實際上班', '實際下班', '請假開始', '請假結束', '假別', '加班開始', '加班結束', '實際工時', '遲到分', '早退分', '應加發', '應扣除', '備註'];
-  const S_HEAD = ['年月', '姓名', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)'];
+  const S_HEAD = ['年月', '姓名', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假不計薪', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)'];
 
   let sheets = '';
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
@@ -3027,7 +3129,7 @@ function exportPayrollRegister() {
   // ⚠️ 已鎖薪的月份：「實發金額」一律用鎖定當時的快照（＝真正發出去的錢），
   //    即時重算值另列「重算實發(對照)」，避免拿重算數字去發薪或報稅
   const lockMap = (_RPT && _RPT.lockMap) || {}, isLocked = !!(_RPT && _RPT.isLocked);
-  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假扣', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
+  const rows = [['年月', '姓名', 'Email', '出勤天數', '總工時', '本薪', '本月加班時數', '加班費', '全勤獎金', '假日加給', '曠職扣', '天災假不計薪', '遲到早退扣', '請假扣', '勞保自付', '健保自付', '實發金額', '特休剩餘(天)', '本月補休餘額(時)', '薪資狀態', '重算實發(對照)']];
   (WORKERS || []).filter(w => w.active !== '0' && w.emp_type !== '管理者' && w.emp_type !== '測試號').forEach(w => {
     const s = paySummaryOf(w); if (!s) return;                           // 共用彙總：與個人簽名明細同一份數字
     const drift = s.locked ? Math.round(s.liveNet - s.net) : 0;
@@ -3336,7 +3438,7 @@ function showReportDetail(email) {
       const sp = (_RPT && _RPT.isLocked) ? (_RPT.lockMap || {})[String(email || '').toLowerCase()] : null;
       if (!sp) return `<div class="pay-box" style="margin-top:14px">
         <div class="pay-net">應發薪資　$${net.toLocaleString()}</div>
-        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災（不支薪） $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保自付 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保自付 $${healthIns.toLocaleString()}` : ''}</div>
+        <div class="pay-detail">${isFull ? '月薪' : '本薪'} $${base.toLocaleString()}${attendBonus ? `　＋全勤獎金 $${attendBonus.toLocaleString()}` : ''}${otPay ? `　＋加班 $${otPay.toLocaleString()}` : ''}${holidayBonus ? `　＋假日加給 $${holidayBonus.toLocaleString()}` : ''}${absentDeduct ? `　－曠職 $${absentDeduct.toLocaleString()}` : ''}${disasterDeduct ? `　－天災假不計薪 $${disasterDeduct.toLocaleString()}` : ''}${lateDeduct ? `　－遲退 $${lateDeduct.toLocaleString()}` : ''}${leaveDeduct ? `　－請假 $${leaveDeduct.toLocaleString()}` : ''}${laborIns ? `　－勞保自付 $${laborIns.toLocaleString()}` : ''}${healthIns ? `　－健保自付 $${healthIns.toLocaleString()}` : ''}</div>
       </div>`;
       const ex = snapExtra(sp), drift = Math.round(net - sp.net);
       return `<div class="pay-box" style="margin-top:14px">
