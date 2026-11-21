@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">語音快捷</string>
+    <string name="settings_name">語音快捷設定</string>
+    <string name="a11y_label">語音快捷：LINE 通話</string>
+    <string name="a11y_desc">說「用賴打給某某」時，代替你在 LINE 裡搜尋好友並按下語音通話。只在 LINE 畫面運作，不會讀取其他 App。</string>
+</resources>
