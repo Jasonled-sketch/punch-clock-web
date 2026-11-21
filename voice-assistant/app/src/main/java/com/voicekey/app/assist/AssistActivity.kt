@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.VibrationEffect
@@ -74,6 +75,10 @@ class AssistActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SOURCE = "source"
+
+        /** 設定頁「打字執行」用：只能由本 App 自己設定，外部 App 塞不進來。 */
+        @Volatile
+        var pendingText: String? = null
         private const val LISTEN_TIMEOUT_MS = 12_000L
     }
 
@@ -90,6 +95,10 @@ class AssistActivity : ComponentActivity() {
     private var recognizer: SpeechRecognizer? = null
     private var flow: Job? = null
     private var unlocking = false
+    private var listenError = 0
+
+    /** 只有測試版（debuggable）才會有內容：用 adb 預先排好後續要「說」的回答，方便在沒有麥克風的模擬器上跑完整流程。 */
+    private val scriptedAnswers = ArrayDeque<String>()
 
     private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) start() else {
@@ -108,6 +117,7 @@ class AssistActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         start()
     }
 
@@ -146,10 +156,13 @@ class AssistActivity : ComponentActivity() {
         heardText = ""
         val config = Store.config(this)
 
-        show(Mode.LISTENING, "請說指令")
-        val heard = listen(bias(config), showHeard = true)
+        val typed = takeTypedText()
+        val heard = if (typed != null) listOf(typed) else {
+            show(Mode.LISTENING, "請說指令")
+            listen(bias(config), showHeard = true)
+        }
         if (heard.isEmpty()) {
-            giveUp("沒有聽到聲音", speak = false)
+            giveUp(silenceReason(), speak = false)
             return
         }
         heardText = heard.first()
@@ -213,6 +226,21 @@ class AssistActivity : ComponentActivity() {
         }
     }
 
+    /** 打字代替說話：設定頁的「打字執行」，或測試版用 adb 帶 text 參數（正式版不接受外部參數）。 */
+    private fun takeTypedText(): String? {
+        val own = pendingText
+        pendingText = null
+        if (!own.isNullOrBlank()) return own
+        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (!debuggable) return null
+        val fromIntent = intent?.getStringExtra("text")
+        scriptedAnswers.clear()
+        intent?.getStringExtra("answers")?.split('|')?.let(scriptedAnswers::addAll)
+        intent?.removeExtra("text")
+        intent?.removeExtra("answers")
+        return fromIntent?.takeIf { it.isNotBlank() }
+    }
+
     private suspend fun askYesNo(question: String): Boolean {
         show(Mode.WORKING, question)
         say(question)
@@ -233,14 +261,21 @@ class AssistActivity : ComponentActivity() {
             giveUp("密碼說錯太多次，請 $locked 分鐘後再試")
             return false
         }
+        var retryPrompt = ""
         repeat(2) { attempt ->
-            val prompt = if (attempt == 0) "確定要$what，請說密碼" else "密碼不對，請再說一次"
+            val prompt = if (attempt == 0) "確定要$what，請說密碼" else retryPrompt
             show(Mode.WORKING, prompt)
             say(prompt)
             show(Mode.LISTENING, "請說密碼")
             heardText = ""
             // 密碼不顯示在畫面上，也不寫進紀錄
             val answer = listen(emptyList(), showHeard = false)
+            if (answer.isEmpty()) {
+                // 沒聽到不算說錯，不累計鎖定次數
+                Store.log(this, "沒有聽到密碼（第 ${attempt + 1} 次）")
+                retryPrompt = "沒有聽到，請再說一次密碼"
+                return@repeat
+            }
             if (Spoken.isNo(answer)) {
                 giveUp("已取消")
                 return false
@@ -252,13 +287,27 @@ class AssistActivity : ComponentActivity() {
             }
             Store.secretFailed(this)
             Store.log(this, "密碼不符（第 ${attempt + 1} 次）")
+            retryPrompt = "密碼不對，請再說一次"
             if (Store.lockedMinutes(this) > 0) {
                 giveUp("密碼說錯太多次，暫時鎖定十分鐘")
                 return false
             }
         }
-        giveUp("密碼不對，已取消")
+        giveUp("沒有通過密碼，已取消")
         return false
+    }
+
+    /** 沒聽到內容時，分辨是真的沒聲音，還是辨識引擎本身有狀況。 */
+    private fun silenceReason(): String = when (listenError) {
+        SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_SERVER_DISCONNECTED ->
+            "語音辨識沒有啟動，請到設定頁檢查辨識引擎"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+            "辨識引擎沒有麥克風權限，請到手機設定開啟 Google 的麥克風權限"
+        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+            "網路不通，語音辨識失敗"
+        SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+            "辨識引擎還沒有中文語音，請到 Google 語音設定下載"
+        else -> "沒有聽到聲音"
     }
 
     private suspend fun giveUp(message: String, speak: Boolean = true) {
@@ -305,6 +354,7 @@ class AssistActivity : ComponentActivity() {
     // ---- 語音辨識 ----
 
     private suspend fun listen(biasStrings: List<String>, showHeard: Boolean): List<String> {
+        scriptedAnswers.removeFirstOrNull()?.let { return if (it.isBlank()) emptyList() else listOf(it) }
         val result = withTimeoutOrNull(LISTEN_TIMEOUT_MS) { listenOnce(biasStrings, showHeard) }
         stopListening()
         return result ?: emptyList()
@@ -313,11 +363,13 @@ class AssistActivity : ComponentActivity() {
     private suspend fun listenOnce(biasStrings: List<String>, showHeard: Boolean): List<String> =
         suspendCancellableCoroutine { cont ->
             val component = Store.recognizer(this)
+            listenError = 0
             val sr = try {
                 if (component != null) SpeechRecognizer.createSpeechRecognizer(this, component)
                 else SpeechRecognizer.createSpeechRecognizer(this)
             } catch (e: Exception) {
                 Store.log(this, "建立語音辨識失敗：${e.message}")
+                listenError = SpeechRecognizer.ERROR_CLIENT
                 cont.resume(emptyList())
                 return@suspendCancellableCoroutine
             }
@@ -343,6 +395,7 @@ class AssistActivity : ComponentActivity() {
                 }
 
                 override fun onError(error: Int) {
+                    listenError = error
                     if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                         Store.log(this@AssistActivity, "語音辨識錯誤代碼 $error（引擎：${component?.packageName ?: "系統預設"}）")
                     }
@@ -361,6 +414,7 @@ class AssistActivity : ComponentActivity() {
             }
             runCatching { sr.startListening(intent) }.onFailure {
                 Store.log(this, "開始聆聽失敗：${it.message}")
+                listenError = SpeechRecognizer.ERROR_CLIENT
                 if (cont.isActive) cont.resume(emptyList())
             }
             cont.invokeOnCancellation { runOnUiThread { stopListening() } }

@@ -362,6 +362,12 @@ class MainActivity : ComponentActivity() {
                 else -> "會先反問：你是說「${Matcher.describe(r.parsed)}」嗎？（相似度 ${"%.0f".format(r.score * 100)}%）"
             }
         }) { Text("測試（不會真的執行）") }
+        OutlinedButton(onClick = {
+            if (text.isBlank()) toast("請先輸入一句話") else {
+                AssistActivity.pendingText = text
+                startActivity(Intent(this@MainActivity, AssistActivity::class.java))
+            }
+        }) { Text("打字執行（會真的做，確認與密碼照常要用說的）") }
         if (result.isNotEmpty()) Text(result, fontSize = 14.sp)
     }
 
