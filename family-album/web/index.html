@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>我們家的相簿</title>
+<style>
+:root{
+  --bg:#faf7f2; --card:#fff; --ink:#2b2622; --sub:#857b70; --line:#ece5da; --accent:#d9713c; --accent-ink:#fff; --soft:#f3ece2; --ok:#3f8f5f;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#191613; --card:#242019; --ink:#f1ebe2; --sub:#a39888; --line:#352f27; --accent:#e58a57; --accent-ink:#1b1410; --soft:#2c261f; --ok:#6cc08c; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;-webkit-text-size-adjust:100%}
+a{color:inherit}
+button,input,select{font:inherit;color:inherit}
+main{max-width:980px;margin:0 auto;padding:14px 14px calc(84px + env(safe-area-inset-bottom))}
+h1{font-size:22px;margin:6px 0 12px;letter-spacing:.02em}
+h2{font-size:17px;margin:22px 0 10px}
+.sub{color:var(--sub);font-size:13px}
+.row{display:flex;gap:10px;align-items:center}
+.wrap{flex-wrap:wrap}
+.grow{flex:1;min-width:0}
+.btn{text-decoration:none;display:inline-block;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 16px;cursor:pointer;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.small{padding:5px 12px;font-size:14px}
+.btn:disabled{opacity:.5}
+.input{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 14px;width:100%;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px}
+.search{position:sticky;top:0;z-index:5;background:var(--bg);padding:8px 0 10px}
+.people{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 10px;scrollbar-width:none}
+.people::-webkit-scrollbar{display:none}
+.person{flex:0 0 auto;width:68px;text-align:center;text-decoration:none;font-size:13px}
+.person img,.person .ph{width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--soft);display:block;margin:0 auto 4px;border:2px solid var(--card);box-shadow:0 0 0 1px var(--line)}
+.person .n{color:var(--sub);font-size:12px}
+.months{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.month{position:relative;border-radius:16px;overflow:hidden;aspect-ratio:4/3;background:var(--soft);text-decoration:none;display:block}
+.month img{width:100%;height:100%;object-fit:cover;display:block}
+.month span{position:absolute;inset:auto 0 0 0;padding:26px 12px 9px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.66));font-weight:600;font-size:15px}
+.month small{font-weight:400;opacity:.85;margin-left:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:4px}
+.grid a{position:relative;aspect-ratio:1;background:var(--soft);border-radius:6px;overflow:hidden;display:block}
+.grid img{width:100%;height:100%;object-fit:cover;display:block}
+.grid .v{position:absolute;right:5px;bottom:4px;color:#fff;font-size:12px;text-shadow:0 1px 3px #000}
+.day{font-size:14px;color:var(--sub);margin:16px 2px 6px}
+.detail img.big{width:100%;max-height:72vh;object-fit:contain;background:#000;border-radius:14px;display:block}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{background:var(--soft);border-radius:999px;padding:3px 11px;font-size:13px;text-decoration:none}
+.cluster{margin-bottom:12px}
+.facesrow{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+.facesrow img{width:76px;height:76px;border-radius:12px;object-fit:cover;flex:0 0 auto;background:var(--soft)}
+.guess{color:var(--accent);font-weight:600}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav a{flex:1;max-width:160px;text-align:center;padding:9px 0 8px;text-decoration:none;font-size:12px;color:var(--sub)}
+nav a b{display:block;font-size:20px;font-weight:400;line-height:1.2}
+nav a.on{color:var(--accent)}
+.badge{display:inline-block;min-width:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:11px;line-height:18px;margin-left:2px;vertical-align:top}
+.empty{text-align:center;color:var(--sub);padding:44px 10px}
+video{width:100%;border-radius:14px;background:#000;display:block}
+.toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);background:#222;color:#fff;padding:9px 18px;border-radius:999px;font-size:14px;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+.toast.show{opacity:.95}
+.back{display:inline-block;margin:2px 0 8px;text-decoration:none;color:var(--sub);font-size:14px}
+hr{border:0;border-top:1px solid var(--line);margin:14px 0}
+</style>
+</head>
+<body>
+<main id="app"><div class="empty">載入中…</div></main>
+<nav>
+  <a href="#" data-tab="home"><b>📒</b>相簿</a>
+  <a href="#who" data-tab="who"><b>🙋</b>認人<span id="whoBadge"></span></a>
+  <a href="#recaps" data-tab="recaps"><b>🎬</b>回顧</a>
+  <a href="#settings" data-tab="settings"><b>⚙️</b>設定</a>
+</nav>
+<div class="toast" id="toast"></div>
+<script>
+// 通行碼只用一次（伺服器已換成 cookie），馬上從網址列拿掉，避免截圖或分享時外流
+if (location.search) history.replaceState(null, '', location.pathname + location.hash);
+
+const $ = s => document.querySelector(s);
+const app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const zhMonth = ym => { const [y, m] = ym.split('-'); return `${y} 年 ${+m} 月`; };
+const fmtDay = ymd => { const [y, m, d] = ymd.split('-'); return `${+m} 月 ${+d} 日`; };
+const fmtTime = ms => new Date(ms).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2400); }
+
+async function api(path, opts = {}) {
+  const res = await fetch('/api' + path, { ...opts, headers: opts.body ? { 'Content-Type': 'application/json' } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `發生錯誤（${res.status}）`);
+  return data;
+}
+
+function grid(photos) {
+  let html = '', day = '';
+  for (const p of photos) {
+    if (p.ymd !== day) { if (day) html += '</div>'; day = p.ymd; html += `<div class="day">${p.ymd.slice(0, 4)} 年 ${fmtDay(p.ymd)}</div><div class="grid">`; }
+    html += `<a href="#p/${p.id}" title="${esc(p.caption || '')}"><img loading="lazy" src="/m/thumb/${p.id}" alt="${esc(p.caption || '照片')}">${p.kind === 'video' ? '<span class="v">▶ 影片</span>' : ''}</a>`;
+  }
+  return html ? html + '</div>' : '<div class="empty">這裡還沒有照片 📭</div>';
+}
+
+const views = {
+  async home() {
+    const d = await api('/home');
+    setBadge(d.stats.pendingFaces);
+    app.innerHTML = `
+      <div class="search"><form id="sf" class="row"><input class="input" id="sq" placeholder="找照片：妹妹 生日、去年夏天 海邊…" enterkeyhint="search"><button class="btn primary">找</button></form></div>
+      <h1>我們家的相簿</h1>
+      <div class="sub">${d.stats.total} 個回憶${d.stats.videos ? `・影片 ${d.stats.videos}` : ''}${d.stats.pendingFaces ? `・<a href="#who">有 ${d.stats.pendingFaces} 張臉等你認</a>` : ''}</div>
+      ${d.people.length ? `<h2>家人</h2><div class="people">${d.people.map(p => `<a class="person" href="#person/${encodeURIComponent(p.name)}">${p.coverFace ? `<img src="/m/face/${p.coverFace}" alt="">` : '<div class="ph"></div>'}${esc(p.name)}<div class="n">${p.photos} 張</div></a>`).join('')}</div>` : ''}
+      <h2>時間軸</h2>
+      ${d.months.length ? `<div class="months">${d.months.map(m => `<a class="month" href="#m/${m.ym}"><img loading="lazy" src="/m/thumb/${m.cover}" alt=""><span>${zhMonth(m.ym)}<small>${m.n}</small></span></a>`).join('')}</div>`
+        : `<div class="empty">還沒有照片。<br>把照片傳到 LINE 給小秘書，或到「設定」連結雲端硬碟。</div>`}`;
+    $('#sf').onsubmit = e => { e.preventDefault(); const v = $('#sq').value.trim(); if (v) location.hash = 's/' + encodeURIComponent(v); };
+  },
+  async m(ym) {
+    const d = await api(`/photos?ym=${ym}&limit=500`);
+    app.innerHTML = `<a class="back" href="#">‹ 相簿</a><div class="row"><h1 class="grow">${zhMonth(ym)}</h1><button class="btn small" id="mk">🎬 做這個月的回顧</button></div><div class="sub">${d.total} 個</div>${grid(d.photos)}`;
+    $('#mk').onclick = () => makeRecap(ym);
+  },
+  async person(name) {
+    name = decodeURIComponent(name);
+    const d = await api(`/photos?person=${encodeURIComponent(name)}&limit=500`);
+    app.innerHTML = `<a class="back" href="#">‹ 相簿</a><h1>${esc(name)}</h1><div class="sub">${d.total} 張</div>${grid(d.photos)}`;
+  },
+  async s(query) {
+    query = decodeURIComponent(query);
+    app.innerHTML = `<a class="back" href="#">‹ 相簿</a><h1>🔍 ${esc(query)}</h1><div class="empty">找找看…</div>`;
+    const d = await api(`/photos?q=${encodeURIComponent(query)}&limit=300`);
+    const c = d.parsed ? [d.parsed.people.join('、'), d.parsed.from && `${d.parsed.from} ~ ${d.parsed.to || ''}`, d.parsed.keywords.join(' / ')].filter(Boolean).join('｜') : '';
+    app.innerHTML = `<a class="back" href="#">‹ 相簿</a><h1>🔍 ${esc(query)}</h1><div class="sub">${d.total} 張${c ? `・我理解成：${esc(c)}` : ''}</div>${grid(d.photos)}`;
+  },
+  async p(id) {
+    const p = await api(`/photo/${id}`);
+    app.innerHTML = `<a class="back" href="javascript:history.back()">‹ 返回</a>
+      <div class="detail">
+        <img class="big" src="/m/display/${p.id}" alt="${esc(p.caption || '')}">
+        ${p.caption ? `<h2>${esc(p.caption)}</h2>` : p.aiPending ? '<h2 class="sub">AI 註記整理中…</h2>' : '<div style="height:12px"></div>'}
+        <div class="sub">${fmtTime(p.taken_at)}${p.taken_src === 'upload' ? '（上傳時間）' : ''}・${p.source === 'line' ? 'LINE' : p.source === 'drive' ? '雲端硬碟' : '匯入'}${p.uploader ? `・${esc(p.uploader)}` : ''}</div>
+        <div class="chips" style="margin:10px 0">
+          ${p.faces.filter(f => f.name && f.status !== 'ignored').map(f => `<a class="chip" href="#person/${encodeURIComponent(f.name)}">👤 ${esc(f.name)}${f.status === 'suggest' ? '？' : ''}</a>`).join('')}
+          ${[p.event, p.scene, ...p.tags].filter(Boolean).map(t => `<a class="chip" href="#s/${encodeURIComponent(t)}">${esc(t)}</a>`).join('')}
+        </div>
+        ${p.faces.length ? `<div class="card"><div class="sub" style="margin-bottom:8px">照片裡的臉（點名字可以改）</div><div class="row wrap">${p.faces.map(f => `<button class="btn small" data-face="${f.id}"><img src="/m/face/${f.id}" alt="" style="width:26px;height:26px;border-radius:50%;vertical-align:-7px;margin-right:6px">${f.status === 'ignored' ? '路人' : f.name ? esc(f.name) + (f.status === 'suggest' ? '？' : '') : '這是誰？'}</button>`).join('')}</div></div>` : ''}
+        <div class="row wrap" style="margin-top:14px">
+          ${p.hasOriginal ? `<a class="btn small" href="/m/orig/${p.id}" download>⬇ 下載原檔</a>` : ''}
+          ${p.drive_file_id ? `<a class="btn small" href="https://drive.google.com/file/d/${esc(p.drive_file_id)}/view" target="_blank" rel="noopener">在雲端硬碟開啟原檔</a>` : ''}
+          <button class="btn small" id="hide">從相簿移除</button>
+        </div>
+      </div>`;
+    app.querySelectorAll('[data-face]').forEach(b => b.onclick = async () => {
+      const name = prompt('這張臉是誰？（留空白＝路人，不用認）');
+      if (name === null) return;
+      if (name.trim()) await api('/faces/name', { method: 'POST', body: { faceIds: [+b.dataset.face], name } });
+      else await api('/faces/ignore', { method: 'POST', body: { faceIds: [+b.dataset.face] } });
+      toast('記住了'); views.p(id);
+    });
+    $('#hide').onclick = async () => { if (confirm('從相簿移除這張？（原檔不會被刪）')) { await api(`/photo/${id}/hide`, { method: 'POST', body: {} }); history.back(); } };
+  },
+  async who() {
+    const d = await api('/who');
+    setBadge(d.clusters.reduce((s, c) => s + c.count, 0));
+    const names = d.people.map(p => p.name);
+    app.innerHTML = `<h1>🙋 這是誰？</h1>
+      <div class="sub">告訴我一次，之後同一個人的照片我就會自動歸類。標越多張（不同角度、不同年紀）認得越準。</div>
+      <datalist id="names">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <div style="margin-top:14px">${d.clusters.length ? d.clusters.map((c, i) => `
+        <div class="card cluster" data-i="${i}">
+          <div class="facesrow">${c.faces.map(f => `<a href="#p/${f.photoId}"><img loading="lazy" src="/m/face/${f.id}" alt=""></a>`).join('')}</div>
+          ${c.guess ? `<div style="margin-bottom:8px">看起來像 <span class="guess">${esc(c.guess)}</span>，對嗎？（${c.count} 張）</div>
+            <div class="row wrap"><button class="btn primary small" data-act="yes">對，是${esc(c.guess)}</button><button class="btn small" data-act="other">是別人</button><button class="btn small" data-act="skip">路人</button></div>`
+          : `<div class="row"><input class="input grow" list="names" placeholder="名字（例：哥哥、妹妹、阿嬤）"><button class="btn primary small" data-act="name">記住</button><button class="btn small" data-act="skip">路人</button></div>
+             ${names.length ? `<div class="chips" style="margin-top:8px">${names.map(n => `<button class="btn small" data-quick="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : ''}`}
+        </div>`).join('') : '<div class="empty">👍 目前的臉我都認得了</div>'}</div>`;
+    app.querySelectorAll('.cluster').forEach(el => {
+      const c = d.clusters[+el.dataset.i], ids = c.faces.map(f => f.id);
+      const save = async name => {
+        if (!name || !name.trim()) return toast('先輸入名字');
+        const r = await api('/faces/name', { method: 'POST', body: { faceIds: ids, name } });
+        toast(`記住了${r.rematched ? `，順便多認出 ${r.rematched} 張` : ''}`); views.who();
+      };
+      el.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => save(b.dataset.quick));
+      el.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
+        const act = b.dataset.act;
+        if (act === 'yes') return save(c.guess);
+        if (act === 'name') return save(el.querySelector('input').value);
+        if (act === 'other') { const n = prompt('那這是誰？'); if (n) save(n); return; }
+        if (act === 'skip') { await api('/faces/ignore', { method: 'POST', body: { faceIds: ids } }); views.who(); }
+      });
+      const input = el.querySelector('input');
+      if (input) input.onkeydown = e => { if (e.key === 'Enter') save(input.value); };
+    });
+  },
+  async recaps() {
+    const [d, home] = await Promise.all([api('/recaps'), api('/home')]);
+    const making = d.recaps.some(r => r.status === 'making');
+    app.innerHTML = `<h1>🎬 回顧影片</h1>
+      <div class="card"><div class="row wrap"><select class="input grow" id="per" style="max-width:240px">
+        ${[...new Set(home.months.map(m => m.ym.slice(0, 4)))].map(y => `<option value="${y}">${y} 整年</option>`).join('')}
+        ${home.months.map(m => `<option value="${m.ym}">${zhMonth(m.ym)}（${m.n}）</option>`).join('')}
+      </select><button class="btn primary" id="mk">製作</button></div>
+      <div class="sub" style="margin-top:8px">每月 1 號晚上會自動做上個月的回顧，傳到 LINE 家庭群組。</div></div>
+      <div style="margin-top:16px">${d.recaps.length ? d.recaps.map(r => `<div class="card" style="margin-bottom:12px">
+        <div class="row"><b class="grow">${esc(r.title)}</b><span class="sub">${r.status === 'ready' ? `${r.photo_count} 張・${Math.round(r.duration)} 秒` : r.status === 'making' ? '製作中…' : '失敗'}</span></div>
+        ${r.status === 'ready' ? `<video controls preload="none" poster="/m/recapposter/${r.period}" src="/m/recap/${r.period}" style="margin-top:10px"></video>
+          <div class="row" style="margin-top:8px"><a class="btn small" href="/m/recap/${r.period}" download="${esc(r.title)}.mp4">⬇ 下載</a></div>` : ''}
+        ${r.status === 'failed' ? `<div class="sub">${esc(r.error || '')}</div>` : ''}
+      </div>`).join('') : '<div class="empty">還沒有回顧影片</div>'}</div>`;
+    const first = home.months[0]; if (first) $('#per').value = first.ym;
+    $('#mk').onclick = () => makeRecap($('#per').value);
+    if (making) setTimeout(() => current === 'recaps' && views.recaps(), 5000);
+  },
+  async settings() {
+    const [d, home] = await Promise.all([api('/drive'), api('/home')]);
+    app.innerHTML = `<h1>⚙️ 設定</h1>
+      <div class="card">
+        <b>目前狀態</b>
+        <div class="sub" style="margin-top:6px">
+          LINE 機器人：${home.line ? (home.bound ? '✅ 已綁定家庭群組' : '⚠️ 已連線，但還沒綁定（到 LINE 群組輸入「綁定 通行碼」）') : '⚠️ 尚未設定'}<br>
+          AI 照片註記：${home.ai ? '✅ 啟用' : '⚠️ 未啟用（沒有 API 金鑰）'}<br>
+          相簿：${home.stats.total} 個檔案，待認的臉 ${home.stats.pendingFaces} 張
+        </div>
+      </div>
+      <h2>Google 雲端硬碟</h2>
+      ${!d.configured ? `<div class="card sub">尚未設定 Google 授權（GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET）。設定方式見 README。</div>` : `
+        <div class="sub">爸爸、媽媽各按一次「連結」，再貼上放照片的資料夾網址。小秘書只會「讀」，不會改動或刪除雲端硬碟裡的任何東西。</div>
+        ${d.accounts.map(a => `<div class="card" style="margin-top:12px" data-acc="${a.id}">
+          <div class="row"><div class="grow"><b>${esc(a.name)}</b><div class="sub">${esc(a.email)}・已整理 ${a.indexed} 個</div></div><button class="btn small" data-del>解除</button></div>
+          ${a.folders.map(f => `<div class="row" style="margin-top:8px"><span class="grow">📁 ${esc(f.name)}</span><button class="btn small" data-rm="${esc(f.id)}">移除</button></div>`).join('')}
+          <form class="row" style="margin-top:10px"><input class="input grow" placeholder="貼上雲端硬碟資料夾網址"><button class="btn small primary">加入</button></form>
+          ${a.last_scan_note ? `<div class="sub" style="margin-top:8px">上次掃描 ${fmtTime(a.last_scan_at)}：${esc(a.last_scan_note)}</div>` : ''}
+        </div>`).join('')}
+        <div class="row wrap" style="margin-top:12px"><a class="btn primary" href="/auth/google">＋ 連結一個 Google 帳號</a>
+        ${d.accounts.length ? `<button class="btn" id="scan" ${d.scanning ? 'disabled' : ''}>${d.scanning ? '掃描中…' : '立即掃描新照片'}</button>` : ''}</div>`}`;
+    app.querySelectorAll('[data-acc]').forEach(el => {
+      const id = el.dataset.acc;
+      el.querySelector('form').onsubmit = async e => {
+        e.preventDefault();
+        try { const f = await api(`/drive/${id}/folders`, { method: 'POST', body: { url: el.querySelector('input').value } }); toast(`已加入「${f.name}」`); views.settings(); } catch (err) { toast(err.message); }
+      };
+      el.querySelectorAll('[data-rm]').forEach(b => b.onclick = async () => { await api(`/drive/${id}/folders/${b.dataset.rm}`, { method: 'DELETE' }); views.settings(); });
+      el.querySelector('[data-del]').onclick = async () => { if (confirm('解除這個帳號？（已整理好的相簿內容會保留）')) { await api(`/drive/${id}`, { method: 'DELETE' }); views.settings(); } };
+    });
+    const scan = $('#scan'); if (scan) scan.onclick = async () => { await api('/drive/scan', { method: 'POST', body: {} }); toast('開始掃描，照片會陸續出現'); setTimeout(views.settings, 1500); };
+    if (d.scanning) setTimeout(() => current === 'settings' && views.settings(), 6000);
+  }
+};
+
+async function makeRecap(period) {
+  try { const r = await api('/recaps', { method: 'POST', body: { period } }); toast(`開始製作${r.title}，約 1～2 分鐘`); location.hash = 'recaps'; if (current === 'recaps') views.recaps(); }
+  catch (e) { toast(e.message); }
+}
+function setBadge(n) { $('#whoBadge').innerHTML = n ? `<span class="badge">${n > 99 ? '99+' : n}</span>` : ''; }
+
+let current = '';
+async function route() {
+  const [name, ...rest] = location.hash.replace(/^#/, '').split('/');
+  const view = views[name] ? name : 'home';
+  current = view;
+  document.querySelectorAll('nav a').forEach(a => a.classList.toggle('on', a.dataset.tab === (['who', 'recaps', 'settings'].includes(view) ? view : 'home')));
+  window.scrollTo(0, 0);
+  try { await views[view](rest.join('/')); }
+  catch (e) { app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+addEventListener('hashchange', route);
+route();
+</script>
+</body>
+</html>

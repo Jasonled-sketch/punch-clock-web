@@ -1,0 +1,27 @@
+{
+  "name": "family-album-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "家庭相簿小秘書：LINE 收照片 → 人臉分類 + AI 描述 → 月度/年度回顧影片",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "import": "node --disable-warning=ExperimentalWarning scripts/import-folder.js",
+    "recap": "node --disable-warning=ExperimentalWarning scripts/make-recap.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/e2e.test.js test/vision.test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.12.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-wasm": "^4.22.0",
+    "@vladmandic/face-api": "^1.7.15",
+    "exifr": "^7.1.3",
+    "express": "^5.3.0",
+    "heic-convert": "^2.1.0",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  }
+}
