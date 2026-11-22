@@ -110,6 +110,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 直接跳到本 App 無障礙服務的開關頁；不支援時退回協助工具總頁。 */
+    private fun openLineServiceSettings() {
+        val component = ComponentName(this, LineCallService::class.java).flattenToString()
+        val details = Intent("android.settings.ACCESSIBILITY_DETAILS_SETTINGS")
+            .putExtra(Intent.EXTRA_COMPONENT_NAME, component)
+        open(details, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+    }
+
     private fun appDetails() = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
 
     // ---- 狀態檢查 ----
@@ -168,10 +176,12 @@ class MainActivity : ComponentActivity() {
                     open(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS), Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS))
                 }
                 Check("LINE 通話（無障礙）", lineServiceOn(), "代替手指在 LINE 按語音通話") {
-                    open(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    openLineServiceSettings()
                 }
                 Text(
-                    "無障礙開關如果是灰色點不了：先按下方按鈕進「應用程式資訊」，右上角 ⋮ →「允許受限制的設定」，再回來開。",
+                    "按「去開啟」會直接跳到開關頁，把「語音快捷：LINE 通話」打開。" +
+                        "沒有跳到開關的話，請在「協助工具 → 已安裝的應用程式」裡找。" +
+                        "開關是灰色點不了：先按下方按鈕進「應用程式資訊」，點右上角三個點 →「允許受限制的設定」，再回來開。",
                     fontSize = 13.sp, color = Color(0xFF57606A),
                 )
                 OutlinedButton(onClick = { open(appDetails()) }) { Text("開啟應用程式資訊") }
