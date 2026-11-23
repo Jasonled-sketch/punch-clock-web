@@ -4,6 +4,8 @@ sealed class Parsed {
     data class Run(val command: Command) : Parsed()
     data class Call(val contact: Contact, val channel: Channel) : Parsed()
     data class Open(val app: AppEntry) : Parsed()
+    /** label 空白＝只打開地圖；place 有值＝設定頁存的地點；query 是交給地圖的目的地。 */
+    data class Navigate(val label: String, val place: Place?, val query: String, val mode: String) : Parsed()
     data class Unknown(val reason: String) : Parsed()
 }
 
@@ -86,6 +88,28 @@ object Matcher {
             }
         }
 
+        Nav.parse(text)?.let { ask ->
+            if (ask.dest.isEmpty()) {
+                offer(Parsed.Navigate("", null, "", ask.mode), 0.9)
+            } else {
+                val destToks = Phonetic.tokens(ask.dest)
+                var place: Place? = null
+                var placeScore = 0.0
+                for (p in config.places) {
+                    for (a in (p.aliases + p.name).distinct()) {
+                        val pt = Phonetic.tokens(a)
+                        if (pt.isEmpty() || destToks.isEmpty()) continue
+                        val s = Phonetic.score(pt, destToks)
+                        val coverage = minOf(1.0, pt.size.toDouble() / destToks.size)
+                        val adjusted = s * (0.7 + 0.3 * coverage)
+                        if (adjusted > placeScore) { placeScore = adjusted; place = p }
+                    }
+                }
+                val hit = place?.takeIf { placeScore >= 0.8 }
+                offer(Parsed.Navigate(hit?.name ?: ask.dest, hit, hit?.address ?: ask.dest, ask.mode), 0.96)
+            }
+        }
+
         val verb = OPEN_VERBS.firstOrNull { text.contains(it) }
         if (verb != null) {
             val rest = Phonetic.tokens(text.substring(text.indexOf(verb) + verb.length))
@@ -126,6 +150,7 @@ object Matcher {
         is Parsed.Run -> p.command.name
         is Parsed.Call -> if (p.channel == Channel.LINE) "用 LINE 打給${p.contact.name}" else "打電話給${p.contact.name}"
         is Parsed.Open -> "打開${p.app.label}"
+        is Parsed.Navigate -> if (p.label.isEmpty()) "打開地圖導航" else "導航到${p.label}"
         is Parsed.Unknown -> "聽不懂"
     }
 }

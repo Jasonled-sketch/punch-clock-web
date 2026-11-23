@@ -327,7 +327,8 @@ class AssistActivity : ComponentActivity() {
     private fun bias(config: Config): List<String> =
         (config.commands.flatMap { it.triggers + it.name } +
             config.contacts.flatMap { it.aliases + it.name } +
-            listOf("用賴打給", "打給", "打電話給", "打開"))
+            config.places.flatMap { it.aliases + it.name } +
+            listOf("用賴打給", "打給", "打電話給", "打開", "導航到", "導航回"))
             .filter { it.isNotBlank() }.distinct().take(100)
 
     // ---- 解鎖 ----

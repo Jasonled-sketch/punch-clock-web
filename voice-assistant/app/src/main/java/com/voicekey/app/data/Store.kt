@@ -10,6 +10,7 @@ import com.voicekey.app.core.Channel
 import com.voicekey.app.core.Command
 import com.voicekey.app.core.Config
 import com.voicekey.app.core.Contact
+import com.voicekey.app.core.Place
 import com.voicekey.app.core.Protection
 import org.json.JSONArray
 import org.json.JSONObject
@@ -59,7 +60,10 @@ object Store {
                 requireUnlock = true,
             ),
         ),
+        places = seedPlaces(),
     )
+
+    private fun seedPlaces() = listOf(Place(newId(), "公司", emptyList(), ""))
 
     fun toJson(c: Config): String {
         val cmds = JSONArray()
@@ -81,14 +85,33 @@ object Store {
                     .put("defaultChannel", it.defaultChannel.name),
             )
         }
-        return JSONObject().put("version", 1).put("commands", cmds).put("contacts", contacts).toString(2)
+        val places = JSONArray()
+        c.places.forEach {
+            places.put(
+                JSONObject()
+                    .put("id", it.id).put("name", it.name).put("aliases", JSONArray(it.aliases))
+                    .put("address", it.address),
+            )
+        }
+        return JSONObject().put("version", 1).put("commands", cmds).put("contacts", contacts)
+            .put("places", places).toString(2)
     }
 
     fun fromJson(raw: String): Config {
         val o = JSONObject(raw)
         val cmds = o.optJSONArray("commands") ?: JSONArray()
         val contacts = o.optJSONArray("contacts") ?: JSONArray()
+        val places = o.optJSONArray("places")
         return Config(
+            places = if (places == null) seedPlaces() else (0 until places.length()).map { i ->
+                val p = places.getJSONObject(i)
+                Place(
+                    id = p.optString("id").ifBlank { newId() },
+                    name = p.optString("name"),
+                    aliases = strings(p.optJSONArray("aliases")),
+                    address = p.optString("address"),
+                )
+            },
             commands = (0 until cmds.length()).map { i ->
                 val c = cmds.getJSONObject(i)
                 Command(

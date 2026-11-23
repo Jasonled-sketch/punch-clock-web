@@ -23,7 +23,7 @@ object ActionRunner {
     /** 會跳去別的 App 的動作，要先把話說完再執行，免得語音蓋到通話。 */
     fun leavesApp(p: Parsed): Boolean = when (p) {
         is Parsed.Run -> p.command.type != ActionType.WEBHOOK
-        is Parsed.Call, is Parsed.Open -> true
+        is Parsed.Call, is Parsed.Open, is Parsed.Navigate -> true
         is Parsed.Unknown -> false
     }
 
@@ -31,7 +31,7 @@ object ActionRunner {
     fun needsUnlock(p: Parsed): Boolean = when (p) {
         is Parsed.Run -> p.command.requireUnlock || p.command.type != ActionType.WEBHOOK
         is Parsed.Call -> p.channel == Channel.LINE
-        is Parsed.Open -> true
+        is Parsed.Open, is Parsed.Navigate -> true
         is Parsed.Unknown -> false
     }
 
@@ -41,7 +41,29 @@ object ActionRunner {
             if (p.channel == Channel.LINE) lineCall(activity, p.contact.lineName.ifBlank { p.contact.name })
             else phoneCall(activity, p.contact.phone)
         is Parsed.Open -> openApp(activity, p.app.pkg)
+        is Parsed.Navigate -> navigate(activity, p)
         is Parsed.Unknown -> Outcome(false, "聽不懂")
+    }
+
+    private const val MAPS = "com.google.android.apps.maps"
+
+    private fun navigate(activity: Activity, p: Parsed.Navigate): Outcome {
+        val place = p.place
+        if (place != null && place.address.isBlank()) {
+            return Outcome(false, "還沒有設定${place.name}的地址，請到設定頁的地點填寫")
+        }
+        val hasMaps = activity.packageManager.getLaunchIntentForPackage(MAPS) != null
+        if (p.query.isBlank()) {
+            return if (hasMaps) openApp(activity, MAPS) else openUrl(activity, "geo:0,0")
+        }
+        val q = Uri.encode(p.query.trim())
+        val intent = if (hasMaps) {
+            Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$q&mode=${p.mode}")).setPackage(MAPS)
+        } else {
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$q"))
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return if (runCatching { activity.startActivity(intent) }.isSuccess) Outcome(true, "") else Outcome(false, "打不開地圖")
     }
 
     private suspend fun runCommand(activity: Activity, c: Command): Outcome = when (c.type) {

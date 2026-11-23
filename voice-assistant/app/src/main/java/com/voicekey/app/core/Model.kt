@@ -37,9 +37,17 @@ data class Contact(
     val defaultChannel: Channel = Channel.LINE,
 )
 
+data class Place(
+    val id: String,
+    val name: String,
+    val aliases: List<String>,
+    val address: String,
+)
+
 data class Config(
     val commands: List<Command> = emptyList(),
     val contacts: List<Contact> = emptyList(),
+    val places: List<Place> = emptyList(),
 )
 
 data class AppEntry(val label: String, val pkg: String)

@@ -12,6 +12,9 @@ import android.os.Looper
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
+import android.content.ClipData
+import android.content.ClipboardManager
+import com.voicekey.app.core.Names
 import com.voicekey.app.data.Store
 
 /**
@@ -30,12 +33,13 @@ class LineCallService : AccessibilityService() {
         var instance: LineCallService? = null
 
         private val SEARCH = listOf("搜尋", "search", "検索")
-        private val VOICE = listOf("語音通話", "免費通話", "voice call", "音声通話")
+        private val VOICE = listOf("語音通話", "免費通話", "voice call", "音声通話", "無料通話")
         private val VIDEO = listOf("視訊通話", "video call", "ビデオ通話")
         private val CALL_ICON = listOf("通話", "語音通話", "call", "撥打")
         private val GO = listOf("開始", "確定", "撥打", "通話", "start", "ok", "call")
 
         private const val TICK_MS = 450L
+        private const val LAUNCH_TIMEOUT_MS = 15_000L
         private const val CLICK_GAP_MS = 1200L
 
         fun launchLine(ctx: Context): Boolean {
@@ -46,7 +50,7 @@ class LineCallService : AccessibilityService() {
     }
 
     private enum class Stage(val timeoutMs: Long) {
-        SEARCH(9000), PICK(7000), OPENED(9000), CONFIRM(3500)
+        SEARCH(9000), PICK(9000), OPENED(9000), CONFIRM(3500)
     }
 
     private class Job(val name: String) {
@@ -54,6 +58,11 @@ class LineCallService : AccessibilityService() {
         var stageSince = System.currentTimeMillis()
         var lastClick = 0L
         var typedAt = 0L
+        var editBottom = 0
+        var pasted = false
+        var seen: List<String> = emptyList()
+        val createdAt = System.currentTimeMillis()
+        var lineSeen = false
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -103,8 +112,14 @@ class LineCallService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val root = rootInActiveWindow
         if (root == null || root.packageName?.toString() != LINE_PKG) {
-            if (now - j.stageSince > j.stage.timeoutMs) fail("LINE 沒有開到前景")
+            // LINE 冷啟動可能要好幾秒；還沒出現前不算進各步驟的時間
+            if (!j.lineSeen && now - j.createdAt > LAUNCH_TIMEOUT_MS) fail("LINE 沒有開到前景")
+            else if (j.lineSeen && now - j.stageSince > j.stage.timeoutMs) fail("LINE 被切到背景，已停止")
             return
+        }
+        if (!j.lineSeen) {
+            j.lineSeen = true
+            j.stageSince = now
         }
         val nodes = collect(root)
         val screenH = resources.displayMetrics.heightPixels
@@ -124,6 +139,7 @@ class LineCallService : AccessibilityService() {
                     }
                     if (edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)) {
                         j.typedAt = now
+                        j.editBottom = edit.bounds().bottom
                         go(j, Stage.PICK)
                     }
                     return
@@ -136,17 +152,37 @@ class LineCallService : AccessibilityService() {
 
             Stage.PICK -> {
                 if (now - j.typedAt < 800) return
-                val hit = nodes.firstOrNull { !it.isEditable && it.textOf() == j.name }
-                if (hit != null && now - j.lastClick > CLICK_GAP_MS && click(hit)) {
-                    j.lastClick = now
-                    go(j, Stage.OPENED)
+                val want = Names.norm(j.name)
+                // 只看搜尋欄下面的結果；名稱比對忽略空白、emoji、符號，但不接受「包含」以免打錯人
+                val results = nodes.filter {
+                    !it.isEditable && it.textOf().isNotEmpty() && it.bounds().top >= j.editBottom - 4
+                }
+                j.seen = results.map { it.textOf() }.distinct().take(8)
+                val hit = results.firstOrNull { Names.norm(it.textOf()) == want }
+                if (hit != null) {
+                    if (now - j.lastClick > CLICK_GAP_MS && click(hit)) {
+                        j.lastClick = now
+                        go(j, Stage.OPENED)
+                    }
+                    return
+                }
+                // 直接塞文字 LINE 有時不會開始搜尋：改用「貼上」再試一次
+                if (!j.pasted && now - j.typedAt > 3000) {
+                    j.pasted = true
+                    val edit = nodes.firstOrNull { it.isEditable }
+                    if (edit != null) {
+                        Store.log(this, "LINE 搜尋沒有結果，改用貼上再試")
+                        paste(edit, j.name)
+                        j.typedAt = now
+                    }
                 }
             }
 
             Stage.OPENED -> {
                 if (now - j.lastClick < 700) return
-                val voice = nodes.filter { n -> VOICE.any { n.says(it) } }
+                var voice = nodes.filter { n -> VOICE.any { n.says(it) } }
                 val video = nodes.filter { n -> VIDEO.any { n.says(it) } }
+                if (voice.isEmpty() && video.isNotEmpty()) voice = nodes.filter { it.says("通話") }
                 if (voice.isNotEmpty() && video.isNotEmpty()) {
                     // 同時看到「語音通話」「視訊通話」＝好友資料卡或通話選單，挑跟視訊並排的那顆
                     val refY = video.first().bounds().centerY()
@@ -178,11 +214,30 @@ class LineCallService : AccessibilityService() {
         if (job === j && now - j.stageSince > j.stage.timeoutMs) {
             when (j.stage) {
                 Stage.SEARCH -> fail("找不到 LINE 的搜尋欄")
-                Stage.PICK -> fail("LINE 搜尋不到「${j.name}」，請確認好友名稱一字不差")
+                Stage.PICK -> {
+                    val shown = j.seen.filter { it != j.name }.take(5)
+                    fail(
+                        "LINE 搜尋不到「${j.name}」" +
+                            (if (shown.isNotEmpty()) "。畫面上看到：${shown.joinToString("、")}" else "") +
+                            "。請把聯絡人的 LINE 名稱改成跟 LINE 顯示的一樣",
+                    )
+                }
                 Stage.OPENED -> fail("找不到通話按鈕")
                 Stage.CONFIRM -> done("已按下語音通話")
             }
         }
+    }
+
+    private fun paste(edit: AccessibilityNodeInfo, text: String) {
+        runCatching {
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("語音快捷", text))
+            edit.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+            edit.performAction(
+                AccessibilityNodeInfo.ACTION_SET_TEXT,
+                Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, "") },
+            )
+            edit.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        }.onFailure { Store.log(this, "貼上失敗：${it.message}") }
     }
 
     private fun go(j: Job, stage: Stage) {

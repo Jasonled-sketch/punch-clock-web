@@ -15,7 +15,10 @@ class MatcherTest {
     private val guan = Contact("1", "小關", listOf("關先生"), "小關", "0912345678", Channel.LINE)
     private val wang = Contact("2", "王大明", listOf("大明"), "王大明", "", Channel.LINE)
     private val chen = Contact("3", "陳會計", emptyList(), "", "0223456789", Channel.LINE)
-    private val config = Config(listOf(gate), listOf(guan, wang, chen))
+    private val ruru = Contact("4", "陳如如", emptyList(), "陳如如", "", Channel.LINE)
+    private val office = Place("p1", "公司", listOf("A館"), "22.6273,120.3014")
+    private val home = Place("p2", "家", emptyList(), "")
+    private val config = Config(listOf(gate), listOf(guan, wang, chen, ruru), listOf(office, home))
     private val apps = listOf(
         AppEntry("LINE", "jp.naver.line.android"),
         AppEntry("YouTube", "com.google.android.youtube"),
@@ -97,6 +100,52 @@ class MatcherTest {
 
     @Test fun gateBeatsOpenApp() {
         assertTrue(m("打開鐵門").parsed is Parsed.Run)
+    }
+
+    @Test fun lineCallWordOrder() {
+        val call = m("打LINE給陳如如").parsed as Parsed.Call
+        assertEquals(ruru, call.contact)
+        assertEquals(Channel.LINE, call.channel)
+    }
+
+    private fun nav(s: String) = m(s).parsed as Parsed.Navigate
+
+    @Test fun navigateSavedPlace() {
+        val n = nav("開啟地圖導航回公司")
+        assertEquals(office, n.place)
+        assertEquals("22.6273,120.3014", n.query)
+        assertEquals("d", n.mode)
+        assertEquals(office, nav("導航到公司").place)
+        assertEquals(office, nav("帶我回公司").place)
+        assertEquals(office, nav("導航去A館").place)
+    }
+
+    @Test fun navigateFreeText() {
+        val n = nav("導航到高雄車站")
+        assertEquals(null, n.place)
+        assertEquals("高雄車站", n.query)
+        assertEquals("高雄車站", nav("到高雄車站怎麼走").query)
+        assertEquals("w", nav("走路導航到捷運站").mode)
+        assertEquals("l", nav("騎車導航回公司").mode)
+    }
+
+    @Test fun navigateNoDestinationOpensMaps() {
+        assertEquals("", nav("打開導航").label)
+    }
+
+    @Test fun placeWithoutAddressStillMatches() {
+        val n = nav("導航回家")
+        assertEquals(home, n.place)
+    }
+
+    @Test fun openMapsStillOpensApp() {
+        assertTrue(m("打開地圖").parsed is Parsed.Open)
+    }
+
+    @Test fun lineNameNormalize() {
+        assertEquals(Names.norm("陳如如"), Names.norm("陳 如如 🌸"))
+        assertEquals(Names.norm("Ruru Chen"), Names.norm("ｒｕｒｕ　chen"))
+        assertTrue(Names.norm("陳如如") != Names.norm("陳如如的老公"))
     }
 
     @Test fun yesNo() {

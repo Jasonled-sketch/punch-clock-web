@@ -68,6 +68,7 @@ import com.voicekey.app.core.Command
 import com.voicekey.app.core.Config
 import com.voicekey.app.core.Contact
 import com.voicekey.app.core.Matcher
+import com.voicekey.app.core.Place
 import com.voicekey.app.core.Parsed
 import com.voicekey.app.core.Protection
 import com.voicekey.app.data.Store
@@ -147,6 +148,7 @@ class MainActivity : ComponentActivity() {
         @Suppress("UNUSED_VARIABLE") val tick = refresh
         var editContact by remember { mutableStateOf<Contact?>(null) }
         var editCommand by remember { mutableStateOf<Command?>(null) }
+        var editPlace by remember { mutableStateOf<Place?>(null) }
         var showSecret by remember { mutableStateOf(false) }
         var showLog by remember { mutableStateOf(false) }
 
@@ -203,6 +205,19 @@ class MainActivity : ComponentActivity() {
                 OutlinedButton(onClick = {
                     editContact = Contact(Store.newId(), "", emptyList(), "", "", Channel.LINE)
                 }) { Text("＋ 新增聯絡人") }
+            }
+
+            Section("地點（說「導航回公司」時用）") {
+                config.places.forEach { p ->
+                    ItemRow(
+                        title = p.name,
+                        sub = if (p.address.isBlank()) "⚠ 還沒填地址" else p.address,
+                    ) { editPlace = p }
+                }
+                OutlinedButton(onClick = {
+                    editPlace = Place(Store.newId(), "", emptyList(), "")
+                }) { Text("＋ 新增地點") }
+                Hint("沒存的地方也能說，例如「導航到高雄車站」。說「騎車導航」「走路導航」會換成機車／步行路線。")
             }
 
             Section("指令") {
@@ -287,6 +302,24 @@ class MainActivity : ComponentActivity() {
                     editCommand = null
                 },
                 onDismiss = { editCommand = null },
+            )
+        }
+        editPlace?.let { p ->
+            PlaceDialog(
+                initial = p,
+                isNew = config.places.none { it.id == p.id },
+                onSave = { saved ->
+                    val list = config.places.toMutableList()
+                    val i = list.indexOfFirst { it.id == saved.id }
+                    if (i >= 0) list[i] = saved else list.add(saved)
+                    update(config.copy(places = list))
+                    editPlace = null
+                },
+                onDelete = {
+                    update(config.copy(places = config.places.filter { it.id != p.id }))
+                    editPlace = null
+                },
+                onDismiss = { editPlace = null },
             )
         }
         if (showSecret) SecretDialog { showSecret = false }
@@ -534,6 +567,41 @@ class MainActivity : ComponentActivity() {
             },
             confirmButton = {},
             dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+        )
+    }
+
+    @Composable
+    private fun PlaceDialog(
+        initial: Place, isNew: Boolean,
+        onSave: (Place) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+    ) {
+        var name by remember { mutableStateOf(initial.name) }
+        var aliases by remember { mutableStateOf(initial.aliases.joinToString("、")) }
+        var address by remember { mutableStateOf(initial.address) }
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text(if (isNew) "新增地點" else "編輯地點") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Field("你怎麼稱呼這裡（例：公司、A館、岡山倉庫）", name) { name = it }
+                    Field("其他叫法，用、分開（可不填）", aliases) { aliases = it }
+                    Field("地址或地標名稱", address) { address = it }
+                    Hint("最準的是座標：在 Google 地圖長按那個位置，上方會出現像「22.6273, 120.3014」的數字，複製貼上即可。")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (name.isBlank()) toast("請填名稱") else onSave(
+                        initial.copy(name = name.trim(), aliases = split(aliases), address = address.trim()),
+                    )
+                }) { Text("儲存") }
+            },
+            dismissButton = {
+                Row {
+                    if (!isNew) TextButton(onClick = onDelete) { Text("刪除", color = Color(0xFFCF222E)) }
+                    TextButton(onClick = onDismiss) { Text("取消") }
+                }
+            },
         )
     }
 
