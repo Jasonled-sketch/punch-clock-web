@@ -38,6 +38,7 @@ class WakeService : Service() {
         const val KEYWORD_FILE = "wake.ppn"
         private const val CHANNEL = "wake"
         private const val NOTE_ID = 41
+        private const val ASK_ID = 42
         private const val ACTION_STOP = "com.voicekey.app.WAKE_STOP"
 
         @Volatile
@@ -75,6 +76,32 @@ class WakeService : Service() {
             ctx.stopService(Intent(ctx, WakeService::class.java))
         }
 
+        private fun channel(ctx: Context) {
+            ctx.getSystemService(NotificationManager::class.java).createNotificationChannel(
+                NotificationChannel(CHANNEL, "呼喊喚醒", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) },
+            )
+        }
+
+        /** 系統不准在背景自己開：跳一則通知，點一下就開（那時 App 在前景，系統就准了）。 */
+        fun askTap(ctx: Context) {
+            runCatching {
+                channel(ctx)
+                val tap = PendingIntent.getActivity(
+                    ctx, 2, Intent(ctx, WakeOnActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE,
+                )
+                val n = Notification.Builder(ctx, CHANNEL)
+                    .setSmallIcon(R.drawable.ic_mic)
+                    .setContentTitle("語音快捷：點一下開始聽喚醒詞")
+                    .setContentText("系統不讓它在背景自己開始，點這裡就會開")
+                    .setContentIntent(tap).setAutoCancel(true).build()
+                ctx.getSystemService(NotificationManager::class.java).notify(ASK_ID, n)
+            }
+        }
+
+        fun cancelAskTap(ctx: Context) {
+            runCatching { ctx.getSystemService(NotificationManager::class.java).cancel(ASK_ID) }
+        }
+
         @Volatile
         private var uiOpen = false
 
@@ -98,10 +125,7 @@ class WakeService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(
-            NotificationChannel(CHANNEL, "呼喊喚醒", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) },
-        )
+        channel(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,13 +139,15 @@ class WakeService : Service() {
             else startForeground(NOTE_ID, note("準備中…"))
         } catch (e: Exception) {
             // 安卓 14 起：App 不在前景時不能自己開「用麥克風的常駐服務」
-            lastError = "系統不讓它在背景自己啟動，請打開「語音快捷設定」再開一次"
-            Store.log(this, "呼喊喚醒：${e.javaClass.simpleName}")
+            lastError = "系統不讓它在背景自己啟動，請點通知或打開「語音快捷設定」再開一次"
+            Store.log(this, "呼喊喚醒：系統不准在背景啟動（${e.javaClass.simpleName}），改跳通知")
+            askTap(this)
             stopSelf()
             return START_NOT_STICKY
         }
         running = true
         lastError = ""
+        cancelAskTap(this)
         if (manager != null) {
             startListening()
         } else if (!building) {

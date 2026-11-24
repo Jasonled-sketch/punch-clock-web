@@ -520,7 +520,7 @@ class AssistActivity : ComponentActivity() {
         val r = Matcher.match(g, config, Store.apps(this), learned)
         if (r.score < Matcher.EXECUTE) return false
         return when (val p = r.parsed) {
-            is Parsed.Run, is Parsed.Call, is Parsed.Open -> true
+            is Parsed.Run, is Parsed.Call, is Parsed.Open, is Parsed.Media -> true
             is Parsed.Navigate -> p.place != null || p.query.isBlank()
             is Parsed.Schedule -> p.detail.length < 4
             is Parsed.Keep -> p.detail.length < 4

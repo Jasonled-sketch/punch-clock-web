@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 呼喊喚醒自動開關：知道「連上的是不是我選的那台藍牙（車子）」 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
 
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -133,6 +136,21 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- 連上／斷開藍牙：只有系統發得出來的廣播。
+             「插上充電」系統不會送給沒在執行的 App，所以改由常駐的助理服務（VkInteractionService）自己註冊接收。 -->
+        <receiver android:name=".assist.AutoWakeReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+        <activity
+            android:name=".assist.WakeOnActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity="com.voicekey.app.wakeon"
+            android:theme="@style/Theme.VoiceKey.Assist" />
 
         <service
             android:name=".assist.WakeService"

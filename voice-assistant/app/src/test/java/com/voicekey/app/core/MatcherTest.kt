@@ -234,6 +234,33 @@ class MatcherTest {
         assertFalse(m("打開知識庫").parsed is Parsed.Keep)
     }
 
+    @Test fun genericAppNames() {
+        // 手機裡的音樂 App 不叫「音樂」（例如 Samsung Music）：說通稱也要開得了
+        val noMusic = listOf(AppEntry("Samsung Music", "com.sec.android.app.music"), AppEntry("相機", "com.sec.android.app.camera"))
+        val open = Matcher.match(listOf("打開音樂"), config, noMusic).parsed as Parsed.Open
+        assertEquals("kind:music", open.app.pkg)
+        assertEquals("music", Generic.kindOf(open.app.pkg))
+        assertTrue(Matcher.match(listOf("打開音樂"), config, noMusic).score >= Matcher.EXECUTE)
+        // 真的有叫這個名字的 App 就開那個，不走通稱
+        assertEquals("com.sec.android.app.camera", (Matcher.match(listOf("打開相機"), config, noMusic).parsed as Parsed.Open).app.pkg)
+        assertEquals("kind:calculator", (Matcher.match(listOf("打開計算機"), config, noMusic).parsed as Parsed.Open).app.pkg)
+        assertEquals("kind:settings", (Matcher.match(listOf("開啟設定"), config, noMusic).parsed as Parsed.Open).app.pkg)
+        assertEquals(null, Generic.kindOf("com.sec.android.app.music"))
+    }
+
+    @Test fun mediaControls() {
+        fun media(s: String) = (m(s).parsed as Parsed.Media).kind
+        assertEquals("next", media("下一首"))
+        assertEquals("prev", media("上一首"))
+        assertEquals("pause", media("暫停"))
+        assertEquals("pause", media("關掉音樂"))
+        assertEquals("play", media("播放音樂"))
+        assertEquals("play", media("放音樂"))
+        // 自己設的指令優先
+        assertTrue(m("開鐵門").parsed is Parsed.Run)
+        assertTrue(m("打開音樂").parsed is Parsed.Open)
+    }
+
     @Test fun yesNo() {
         assertTrue(Spoken.isYes(listOf("確定")))
         assertTrue(Spoken.isYes(listOf("缺定")))

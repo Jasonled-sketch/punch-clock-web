@@ -9,6 +9,8 @@ sealed class Parsed {
     data class Schedule(val detail: String, val calendar: String) : Parsed()
     /** 存到公司行事曆裡的知識庫：detail 空白＝存當下畫面的截圖；有內容＝存這段話。 */
     data class Keep(val detail: String) : Parsed()
+    /** 媒體控制：kind＝play／pause／next／prev */
+    data class Media(val kind: String) : Parsed()
     data class Navigate(val label: String, val place: Place?, val query: String, val mode: String) : Parsed()
     data class Unknown(val reason: String) : Parsed()
 }
@@ -118,6 +120,7 @@ object Matcher {
             }
         }
 
+        Generic.media(text)?.let { kind -> offer(Parsed.Media(kind), 0.93) }
         Schedule.parse(text)?.let { ask -> offer(Parsed.Schedule(ask.detail, ask.calendar), 0.97) }
         Knowledge.parse(text)?.let { detail -> offer(Parsed.Keep(detail), 0.98) }
 
@@ -147,7 +150,7 @@ object Matcher {
         if (verb != null) {
             val rest = Phonetic.tokens(text.substring(text.indexOf(verb) + verb.length))
             if (rest.isNotEmpty()) {
-                for (app in apps) {
+                for (app in apps + Generic.entries) {
                     val names = if (app.pkg == LINE_PKG) listOf(app.label, "賴") else listOf(app.label)
                     for (name in names) {
                         val p = Phonetic.tokens(name)
@@ -185,6 +188,7 @@ object Matcher {
         is Parsed.Open -> "打開${p.app.label}"
         is Parsed.Schedule -> "登記行程"
         is Parsed.Keep -> "存到知識庫"
+        is Parsed.Media -> Generic.mediaLabel(p.kind)
         is Parsed.Navigate -> if (p.label.isEmpty()) "打開地圖導航" else "導航到${p.label}"
         is Parsed.Unknown -> "聽不懂"
     }

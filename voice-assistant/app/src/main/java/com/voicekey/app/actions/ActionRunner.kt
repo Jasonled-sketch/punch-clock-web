@@ -12,6 +12,7 @@ import java.io.File
 import com.voicekey.app.core.ActionType
 import com.voicekey.app.core.Channel
 import com.voicekey.app.core.Command
+import com.voicekey.app.core.Generic
 import com.voicekey.app.core.Parsed
 import com.voicekey.app.data.Store
 import com.voicekey.app.line.LineCallService
@@ -28,6 +29,7 @@ object ActionRunner {
     fun leavesApp(p: Parsed): Boolean = when (p) {
         is Parsed.Run -> p.command.type != ActionType.WEBHOOK
         is Parsed.Call, is Parsed.Open, is Parsed.Navigate, is Parsed.Schedule, is Parsed.Keep -> true
+        is Parsed.Media -> p.kind == "play"
         is Parsed.Unknown -> false
     }
 
@@ -36,6 +38,7 @@ object ActionRunner {
         is Parsed.Run -> p.command.requireUnlock || p.command.type != ActionType.WEBHOOK
         is Parsed.Call -> p.channel == Channel.LINE
         is Parsed.Open, is Parsed.Navigate, is Parsed.Schedule, is Parsed.Keep -> true
+        is Parsed.Media -> false
         is Parsed.Unknown -> false
     }
 
@@ -45,7 +48,8 @@ object ActionRunner {
         is Parsed.Call ->
             if (p.channel == Channel.LINE) lineCall(activity, p.contact.lineName.ifBlank { p.contact.name })
             else phoneCall(activity, p.contact.phone)
-        is Parsed.Open -> openApp(activity, p.app.pkg)
+        is Parsed.Open -> Generic.kindOf(p.app.pkg)?.let { openKind(activity, it) } ?: openApp(activity, p.app.pkg)
+        is Parsed.Media -> media(activity, p.kind)
         is Parsed.Navigate -> navigate(activity, p)
         is Parsed.Schedule -> toCalendar(activity, p.detail, hintOf(p), shot)
         is Parsed.Keep -> toCalendar(activity, p.detail, "#知識庫", shot)
@@ -103,6 +107,61 @@ object ActionRunner {
         }
         return if (runCatching { activity.startActivity(intent) }.isSuccess) Outcome(true, "")
         else Outcome(false, "打不開公司行事曆")
+    }
+
+    private val MUSIC_APPS = listOf(
+        "com.sec.android.app.music", "com.google.android.apps.youtube.music", "com.spotify.music",
+        "com.skysoft.kkbox.android", "com.apple.android.music", "com.amazon.mp3", "com.google.android.youtube",
+    )
+
+    /** 開手機預設的那一種 App（音樂、相機、地圖…）。 */
+    private fun openKind(activity: Activity, kind: String): Outcome {
+        fun byCategory(cat: String) = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, cat)
+        val intent: Intent = when (kind) {
+            "music" -> byCategory(Intent.CATEGORY_APP_MUSIC)
+            "camera" -> Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+            "gallery" -> byCategory(Intent.CATEGORY_APP_GALLERY)
+            "maps" -> byCategory(Intent.CATEGORY_APP_MAPS)
+            "browser" -> byCategory(Intent.CATEGORY_APP_BROWSER)
+            "calculator" -> byCategory(Intent.CATEGORY_APP_CALCULATOR)
+            "contacts" -> byCategory(Intent.CATEGORY_APP_CONTACTS)
+            "dialer" -> Intent(Intent.ACTION_DIAL)
+            "messages" -> byCategory(Intent.CATEGORY_APP_MESSAGING)
+            "email" -> byCategory(Intent.CATEGORY_APP_EMAIL)
+            "clock" -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+            "settings" -> Intent(android.provider.Settings.ACTION_SETTINGS)
+            "files" -> if (android.os.Build.VERSION.SDK_INT >= 29) byCategory(Intent.CATEGORY_APP_FILES) else Intent(Intent.ACTION_GET_CONTENT).setType("*/*")
+            else -> return Outcome(false, "不知道要開哪一種 App")
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (runCatching { activity.startActivity(intent) }.isSuccess) return Outcome(true, "")
+        // 手機沒有指定預設的那一種：音樂退而求其次，開手機裡有裝的常見播放器
+        if (kind == "music") {
+            for (pkg in MUSIC_APPS) {
+                val li = activity.packageManager.getLaunchIntentForPackage(pkg) ?: continue
+                li.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (runCatching { activity.startActivity(li) }.isSuccess) return Outcome(true, "")
+            }
+        }
+        return Outcome(false, "手機裡找不到可以開的 App，請到設定頁新增一個「打開 App」的指令指定要開哪一個")
+    }
+
+    /** 播放／暫停／上下首：送媒體按鍵給手機，上次在放的那個播放器會接手。 */
+    private fun media(activity: Activity, kind: String): Outcome {
+        val code = when (kind) {
+            "next" -> android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+            "prev" -> android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            "pause" -> android.view.KeyEvent.KEYCODE_MEDIA_PAUSE
+            else -> android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+        }
+        val ok = runCatching {
+            val am = activity.getSystemService(android.media.AudioManager::class.java)
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+            am.dispatchMediaKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+        }.isSuccess
+        if (!ok) return Outcome(false, "送不出播放指令")
+        // 「播放音樂」但沒有播放器在背景：順便把音樂 App 開起來
+        return if (kind == "play") openKind(activity, "music").let { Outcome(true, "") } else Outcome(true, "好，" + Generic.mediaLabel(kind))
     }
 
     private const val MAPS = "com.google.android.apps.maps"

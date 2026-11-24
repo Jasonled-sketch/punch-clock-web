@@ -424,6 +424,13 @@ class MainActivity : ComponentActivity() {
         refresh++
     }
 
+    /** 手機已經配對過的藍牙裝置（位址, 名稱）；沒權限或沒開藍牙回空的。 */
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun pairedBluetooth(): List<Pair<String, String>> = runCatching {
+        val adapter = getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter
+        adapter?.bondedDevices.orEmpty().map { it.address to (it.name ?: it.address) }.sortedBy { it.second }
+    }.getOrDefault(emptyList())
+
     @Composable
     private fun WakeSettings() {
         val W = com.voicekey.app.assist.WakeService
@@ -471,6 +478,34 @@ class MainActivity : ComponentActivity() {
             sens = levels[i].second
             Store.setWakeSensitivity(this, sens)
         }
+        HorizontalDivider()
+        Text("自動開關（不用整天開著）", fontWeight = FontWeight.Bold)
+        var charge by remember { mutableStateOf(Store.autoCharge(this)) }
+        var btName by remember(refresh) { mutableStateOf(Store.autoBtName(this)) }
+        var btOpen by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("插上充電就開始聽，拔掉就停", Modifier.weight(1f))
+            Switch(checked = charge, onCheckedChange = { charge = it; Store.setAutoCharge(this@MainActivity, it) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("連上這台藍牙就開始聽：", Modifier.weight(1f))
+            Box {
+                TextButton(onClick = {
+                    if (android.os.Build.VERSION.SDK_INT >= 31 && !granted(Manifest.permission.BLUETOOTH_CONNECT)) {
+                        askPermissions.launch(arrayOf(Manifest.permission.BLUETOOTH_CONNECT)); toast("請先允許「附近的裝置」，再按一次")
+                    } else btOpen = true
+                }) { Text(btName.ifBlank { "不使用" }) }
+                DropdownMenu(expanded = btOpen, onDismissRequest = { btOpen = false }) {
+                    DropdownMenuItem(text = { Text("不使用") }, onClick = { Store.setAutoBt(this@MainActivity, "", ""); btName = ""; btOpen = false })
+                    pairedBluetooth().forEach { (addr, name) ->
+                        DropdownMenuItem(text = { Text(name) }, onClick = { Store.setAutoBt(this@MainActivity, addr, name); btName = name; btOpen = false })
+                    }
+                }
+            }
+        }
+        Hint("選車子的藍牙：上車連上就自動開始聽，下車斷線就自動停。清單是手機已經配對過的裝置。")
+        Hint("自動開關要語音快捷是「預設數位助理」才有效（這樣系統才准它在背景自己打開麥克風）。萬一被擋，會跳一則通知「點一下開始聽喚醒詞」，點它就好。")
+        HorizontalDivider()
         Hint("怎麼拿到這兩樣：到 Picovoice Console 註冊（免費方案）→ 首頁複製 AccessKey → 進 Porcupine，語言選「中文」，打你想喊的詞（例如「小幫手」），平台選 Android，按下載。下載的壓縮檔解開，裡面那個 .ppn 就是喚醒詞檔案。")
         Hint("喚醒詞是在手機本機辨識，聲音不會傳出去；但通知列會一直有一則通知，螢幕上方的麥克風綠點也會常亮，會多耗一些電。")
         Hint("三星會自動關掉背景 App：請到手機設定 → 應用程式 → 語音快捷 → 電池，選「不受限制」。")

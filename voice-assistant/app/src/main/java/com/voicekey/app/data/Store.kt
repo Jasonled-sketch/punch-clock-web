@@ -36,6 +36,10 @@ object Store {
     private const val KEY_PICO = "pico_key"
     private const val KEY_WAKE_SENS = "wake_sens"
     private const val KEY_WAKE_NAME = "wake_name"
+    private const val KEY_WAKE_AUTO = "wake_auto"
+    private const val KEY_AUTO_CHARGE = "auto_charge"
+    private const val KEY_AUTO_BT = "auto_bt"
+    private const val KEY_AUTO_BT_NAME = "auto_bt_name"
     private const val LEARNED_MAX = 200
     private const val KEY_FAILS = "secret_fails"
     private const val KEY_LOCK_UNTIL = "secret_lock_until"
@@ -244,6 +248,17 @@ object Store {
     fun setWakeSensitivity(ctx: Context, v: Float) { prefs(ctx).edit().putFloat(KEY_WAKE_SENS, v.coerceIn(0.1f, 0.9f)).apply() }
     fun wakeName(ctx: Context): String = prefs(ctx).getString(KEY_WAKE_NAME, "").orEmpty()
     fun setWakeName(ctx: Context, name: String) { prefs(ctx).edit().putString(KEY_WAKE_NAME, name).apply() }
+
+    /** 這次是不是「自動開起來的」（自動關的時候只關這種，手動開的不動） */
+    fun wakeAuto(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_WAKE_AUTO, false)
+    fun setWakeAuto(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean(KEY_WAKE_AUTO, on).apply() }
+    fun autoCharge(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_AUTO_CHARGE, false)
+    fun setAutoCharge(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean(KEY_AUTO_CHARGE, on).apply() }
+    fun autoBtAddress(ctx: Context): String = prefs(ctx).getString(KEY_AUTO_BT, "").orEmpty()
+    fun autoBtName(ctx: Context): String = prefs(ctx).getString(KEY_AUTO_BT_NAME, "").orEmpty()
+    fun setAutoBt(ctx: Context, address: String, name: String) {
+        prefs(ctx).edit().putString(KEY_AUTO_BT, address).putString(KEY_AUTO_BT_NAME, name).apply()
+    }
 
     // ---- 語音回覆 ----
 

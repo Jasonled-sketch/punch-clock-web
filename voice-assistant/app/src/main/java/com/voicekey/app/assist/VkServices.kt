@@ -25,9 +25,24 @@ class VkInteractionService : VoiceInteractionService() {
             private set
     }
 
+    private var power: AutoWakeReceiver? = null
+
     override fun onReady() {
         super.onReady()
         instance = this
+        // 「插上／拔掉充電」只送給正在執行的 App：預設助理是系統常駐綁著的，由它來收
+        if (power == null) {
+            val r = AutoWakeReceiver()
+            val filter = android.content.IntentFilter().apply { addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED) }
+            runCatching {
+                androidx.core.content.ContextCompat.registerReceiver(this, r, filter, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
+                power = r
+            }
+        }
+        // 開機時本來就插著充電
+        if (Store.autoCharge(this) && runCatching { getSystemService(android.os.BatteryManager::class.java).isCharging }.getOrDefault(false)) {
+            AutoWake.on(this, "充電中")
+        }
         // 開機後系統會自己把預設助理叫起來：呼喊喚醒有開的話順便接著聽（系統不准的話會記一筆，等人打開設定頁再開）
         if (Store.wakeEnabled(this) && !WakeService.running) {
             WakeService.start(this).let { if (it.isNotEmpty()) Store.log(this, "開機後接著聽喚醒詞：$it") }
@@ -35,6 +50,8 @@ class VkInteractionService : VoiceInteractionService() {
     }
 
     override fun onShutdown() {
+        power?.let { runCatching { unregisterReceiver(it) } }
+        power = null
         instance = null
         super.onShutdown()
     }

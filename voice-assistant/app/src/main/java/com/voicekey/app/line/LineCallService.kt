@@ -33,6 +33,7 @@ class LineCallService : AccessibilityService() {
         var instance: LineCallService? = null
 
         private val SEARCH = listOf("搜尋", "search", "検索")
+        private val FRIEND_TAB = listOf("好友", "friends", "友だち")
         private val VOICE = listOf("語音通話", "免費通話", "voice call", "音声通話", "無料通話")
         private val VIDEO = listOf("視訊通話", "video call", "ビデオ通話")
         private val CALL_ICON = listOf("通話", "語音通話", "call", "撥打")
@@ -60,6 +61,7 @@ class LineCallService : AccessibilityService() {
         var typedAt = 0L
         var editBottom = 0
         var pasted = false
+        var friendTab = false
         var seen: List<String> = emptyList()
         val createdAt = System.currentTimeMillis()
         var lineSeen = false
@@ -156,6 +158,20 @@ class LineCallService : AccessibilityService() {
                 // 只看搜尋欄下面的結果；名稱比對忽略空白、emoji、符號，但不接受「包含」以免打錯人
                 val results = nodes.filter {
                     !it.isEditable && it.textOf().isNotEmpty() && it.bounds().top >= j.editBottom - 4
+                }
+                // 真的 LINE（Jason 11/24 截圖）：搜尋結果預設在「全部」分頁，先列一大串有對方在裡面的群組，好友本人排在很下面
+                //   → 先切到上面那排分頁的「好友」，結果就只剩好友
+                if (!j.friendTab && now - j.lastClick > CLICK_GAP_MS) {
+                    val tab = results.firstOrNull { n ->
+                        n.bounds().top < screenH * 0.3 && FRIEND_TAB.any { n.textOf().equals(it, true) || n.descOf().equals(it, true) }
+                    }
+                    if (tab != null && click(tab)) {
+                        j.friendTab = true
+                        j.lastClick = now
+                        j.typedAt = now
+                        Store.log(this, "LINE 通話：切到「好友」分頁")
+                        return
+                    }
                 }
                 j.seen = results.map { it.textOf() }.distinct().take(8)
                 val hit = results.firstOrNull { Names.norm(it.textOf()) == want }
