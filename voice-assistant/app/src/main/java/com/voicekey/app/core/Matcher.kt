@@ -5,6 +5,8 @@ sealed class Parsed {
     data class Call(val contact: Contact, val channel: Channel) : Parsed()
     data class Open(val app: AppEntry) : Parsed()
     /** label 空白＝只打開地圖；place 有值＝設定頁存的地點；query 是交給地圖的目的地。 */
+    /** detail 空白＝用當下畫面的截圖交給行事曆讀；有內容＝把這段話交給行事曆。calendar＝使用者說的「個人／公司」。 */
+    data class Schedule(val detail: String, val calendar: String) : Parsed()
     data class Navigate(val label: String, val place: Place?, val query: String, val mode: String) : Parsed()
     data class Unknown(val reason: String) : Parsed()
 }
@@ -88,6 +90,8 @@ object Matcher {
             }
         }
 
+        Schedule.parse(text)?.let { ask -> offer(Parsed.Schedule(ask.detail, ask.calendar), 0.97) }
+
         Nav.parse(text)?.let { ask ->
             if (ask.dest.isEmpty()) {
                 offer(Parsed.Navigate("", null, "", ask.mode), 0.9)
@@ -150,6 +154,7 @@ object Matcher {
         is Parsed.Run -> p.command.name
         is Parsed.Call -> if (p.channel == Channel.LINE) "用 LINE 打給${p.contact.name}" else "打電話給${p.contact.name}"
         is Parsed.Open -> "打開${p.app.label}"
+        is Parsed.Schedule -> "登記行程"
         is Parsed.Navigate -> if (p.label.isEmpty()) "打開地圖導航" else "導航到${p.label}"
         is Parsed.Unknown -> "聽不懂"
     }

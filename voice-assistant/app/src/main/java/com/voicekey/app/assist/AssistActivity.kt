@@ -163,6 +163,7 @@ class AssistActivity : ComponentActivity() {
         canRetry = false
         heardText = ""
         choice = null
+        val shot = VkSession.takeFreshShot()
         val config = Store.config(this)
         val secret = Store.secret(this)
         redactSecret = secret
@@ -188,6 +189,14 @@ class AssistActivity : ComponentActivity() {
         }
         val what = Matcher.describe(parsed)
         Store.log(this, "比對到：$what（${"%.2f".format(result.score)}）")
+
+        if (parsed is Parsed.Schedule) {
+            ActionRunner.scheduleProblem(this, parsed, shot)?.let { problem ->
+                Store.log(this, "登記行程：$problem")
+                giveUp(problem)
+                return
+            }
+        }
 
         var confirmed = false
         if (result.score < Matcher.EXECUTE) {
@@ -232,9 +241,10 @@ class AssistActivity : ComponentActivity() {
         }
 
         if (ActionRunner.leavesApp(parsed)) {
-            show(Mode.OK, "好，$what")
-            say("好，$what")
-            val out = ActionRunner.run(this, parsed)
+            val opening = if (parsed is Parsed.Schedule) scheduleOpening(parsed) else "好，$what"
+            show(Mode.OK, opening)
+            say(opening)
+            val out = ActionRunner.run(this, parsed, shot)
             Store.log(this, "執行：$what → ${if (out.ok) "成功" else out.message}")
             if (out.ok) finish() else giveUp(out.message)
         } else {
@@ -252,6 +262,12 @@ class AssistActivity : ComponentActivity() {
         }
     }
 
+    private fun scheduleOpening(p: Parsed.Schedule): String {
+        val which = if (p.calendar.isEmpty()) "" else "，記得選${p.calendar}"
+        return if (p.detail.length < 4) "好，把這個畫面交給行事曆讀，填好後請看一下再按儲存$which"
+        else "好，交給行事曆登記，填好後請看一下再按儲存$which"
+    }
+
     /** 打字代替說話：設定頁的「打字執行」，或測試版用 adb 帶 text 參數（正式版不接受外部參數）。 */
     private fun takeTypedText(): String? {
         val own = pendingText
@@ -259,7 +275,10 @@ class AssistActivity : ComponentActivity() {
         if (!own.isNullOrBlank()) return own
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         if (!debuggable) return null
-        val fromIntent = intent?.getStringExtra("text")
+        // 測試版：長按側鍵叫出來時沒辦法帶參數，改讀這個檔（用完就刪）
+        val script = java.io.File(filesDir, "debug_text.txt")
+        val fromFile = if (script.exists()) script.readText().trim().also { script.delete() } else ""
+        val fromIntent = intent?.getStringExtra("text") ?: fromFile.takeIf { it.isNotEmpty() }
         scriptedAnswers.clear()
         intent?.getStringExtra("answers")?.split('|')?.let(scriptedAnswers::addAll)
         intent?.removeExtra("text")
@@ -382,7 +401,7 @@ class AssistActivity : ComponentActivity() {
         (config.commands.flatMap { it.triggers + it.name } +
             config.contacts.flatMap { it.aliases + it.name } +
             config.places.flatMap { it.aliases + it.name } +
-            listOf("用賴打給", "打給", "打電話給", "打開", "導航到", "導航回"))
+            listOf("用賴打給", "打給", "打電話給", "打開", "導航到", "導航回", "登記行程", "行事曆", "個人", "公司"))
             .filter { it.isNotBlank() }.distinct().take(100)
 
     // ---- 解鎖 ----

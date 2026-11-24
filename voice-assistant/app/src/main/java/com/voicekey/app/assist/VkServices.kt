@@ -3,7 +3,10 @@ package com.voicekey.app.assist
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.Bundle
 import android.service.quicksettings.TileService
 import android.service.voice.VoiceInteractionService
@@ -25,7 +28,29 @@ class VkSession(context: Context) : VoiceInteractionSession(context) {
     companion object {
         @Volatile
         var current: VkSession? = null
+
+        @Volatile
+        private var shot: Bitmap? = null
+        @Volatile
+        private var shotAt = 0L
+        private const val SHOT_WAIT_MS = 450L
+        private const val SHOT_FRESH_MS = 4000L
+
+        /**
+         * 叫出助理那一刻的畫面（系統提供、只留在記憶體）。只有說「登記行程」時才會用到，
+         * 取一次就清掉；不是剛剛才叫出來的一律不給，免得用到舊畫面。
+         */
+        fun takeFreshShot(): Bitmap? {
+            val b = shot
+            val fresh = b != null && System.currentTimeMillis() - shotAt < SHOT_FRESH_MS
+            shot = null
+            return if (fresh) b else null
+        }
     }
+
+    private val handler = Handler(Looper.getMainLooper())
+    private var waiting = false
+    private val startNow = Runnable { openUi() }
 
     override fun onPrepareShow(args: Bundle?, showFlags: Int) {
         super.onPrepareShow(args, showFlags)
@@ -36,6 +61,27 @@ class VkSession(context: Context) : VoiceInteractionSession(context) {
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
         current = this
+        shot = null
+        // 系統會給畫面截圖時，先等它到（最多不到半秒）再開聆聽畫面，截圖裡才不會拍到我們自己
+        if (showFlags and SHOW_WITH_SCREENSHOT != 0) {
+            waiting = true
+            handler.postDelayed(startNow, SHOT_WAIT_MS)
+        } else {
+            openUi()
+        }
+    }
+
+    override fun onHandleScreenshot(screenshot: Bitmap?) {
+        shot = screenshot
+        shotAt = System.currentTimeMillis()
+        if (waiting) {
+            handler.removeCallbacks(startNow)
+            openUi()
+        }
+    }
+
+    private fun openUi() {
+        waiting = false
         val intent = Intent(context, AssistActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(AssistActivity.EXTRA_SOURCE, "assistant")
@@ -49,6 +95,7 @@ class VkSession(context: Context) : VoiceInteractionSession(context) {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(startNow)
         if (current === this) current = null
         super.onDestroy()
     }

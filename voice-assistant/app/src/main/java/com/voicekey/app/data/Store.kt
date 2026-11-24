@@ -218,6 +218,21 @@ object Store {
         prefs(ctx).edit().putFloat(KEY_TTS_RATE, rate).apply()
     }
 
+    // ---- 公司行事曆（裝在桌面的那個，可以接收分享）----
+
+    /** 找出名字有「行事曆」、而且收得下圖片或文字分享的 App；找不到回 null。 */
+    fun calendarTarget(ctx: Context, mime: String): ComponentName? {
+        val pm = ctx.packageManager
+        val probe = Intent(Intent.ACTION_SEND).setType(mime)
+        val hits = pm.queryIntentActivities(probe, 0).filter { it.activityInfo.packageName != ctx.packageName }
+        fun label(r: android.content.pm.ResolveInfo) = r.loadLabel(pm).toString()
+        val pick = hits.firstOrNull { label(it).contains("譽昇行事曆") }
+            ?: hits.firstOrNull { label(it) == "行事曆" }
+            ?: hits.firstOrNull { label(it).contains("行事曆") && !it.activityInfo.packageName.startsWith("com.google.") &&
+                !it.activityInfo.packageName.startsWith("com.samsung.") }
+        return pick?.let { ComponentName(it.activityInfo.packageName, it.activityInfo.name) }
+    }
+
     // ---- 已安裝的 App ----
 
     fun apps(ctx: Context): List<AppEntry> {

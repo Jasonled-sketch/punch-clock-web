@@ -227,6 +227,18 @@ class MainActivity : ComponentActivity() {
                 Hint("沒存的地方也能說，例如「導航到高雄車站」。說「騎車導航」「走路導航」會換成機車／步行路線。")
             }
 
+            Section("登記行程（公司行事曆）") {
+                val cal = remember(refresh) { Store.calendarTarget(this@MainActivity, "image/jpeg") }
+                Text(
+                    if (cal != null) "✅ 已找到公司行事曆" else "⬜ 手機上找不到公司行事曆",
+                    color = if (cal != null) Color(0xFF1A7F37) else Color(0xFFCF222E),
+                )
+                if (cal == null) Hint("請用 Chrome 打開公司行事曆，右上角選單 →「安裝應用程式／加到主畫面」，裝好再回來。")
+                Hint("在 LINE 對話或任何畫面上長按側鍵，說「幫我登記行程」，就會把那個畫面交給行事曆讀、把表單填好，你看過再按儲存。")
+                Hint("也可以直接說內容：「登記行程，明天下午三點去永康估價」。")
+                Hint("拿不到畫面時：到手機設定 → 應用程式 → 選擇預設應用程式 → 數位助理應用程式，把「分析螢幕上的內容／使用螢幕截圖」打開。")
+            }
+
             Section("指令") {
                 config.commands.forEach { c ->
                     val warn = if (c.type == ActionType.WEBHOOK && c.target.isBlank()) "　⚠ 還沒填網址" else ""

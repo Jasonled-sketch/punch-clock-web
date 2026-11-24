@@ -21,6 +21,15 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- 找出「公司行事曆」這個可以接收分享的 App -->
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
     </queries>
 
     <application
@@ -109,6 +118,17 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/line_accessibility" />
         </service>
+
+        <!-- 把畫面截圖交給行事曆時用的暫存檔，只給收件的 App 讀一次 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name=".assist.QuickTile"

@@ -190,6 +190,31 @@ class MatcherTest {
         assertTrue(Spoken.isYes(listOf("OK")))
     }
 
+    private fun sch(s: String) = m(s).parsed as Parsed.Schedule
+
+    @Test fun scheduleFromScreen() {
+        assertEquals("", sch("幫我登記行程").detail)
+        assertEquals("個人", sch("幫我登記行程 個人").calendar)
+        assertEquals("", sch("幫我登記行程 個人").detail)
+        assertEquals("公司", sch("登記行程，公司").calendar)
+        assertEquals("公司", sch("把這個登記到公司行事曆").calendar)
+        assertEquals("", sch("把這個登記到公司行事曆").detail)
+        assertEquals("個人", sch("幫我加到我的行事曆").calendar)
+    }
+
+    @Test fun scheduleWithSpokenDetail() {
+        val a = sch("登記行程，公司，明天下午三點去永康估價")
+        assertEquals("公司", a.calendar)
+        assertEquals("明天下午三點去永康估價", a.detail)
+        assertEquals("後天早上九點岡山倉庫盤點", sch("幫我把後天早上九點岡山倉庫盤點登記到行事曆").detail)
+        assertEquals("", sch("登記行程").calendar)
+    }
+
+    @Test fun openCalendarIsNotSchedule() {
+        assertFalse(m("打開行事曆").parsed is Parsed.Schedule)
+        assertFalse(m("今天行程很滿").parsed is Parsed.Schedule)
+    }
+
     @Test fun yesNo() {
         assertTrue(Spoken.isYes(listOf("確定")))
         assertTrue(Spoken.isYes(listOf("缺定")))
