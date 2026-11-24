@@ -1,6 +1,7 @@
 package com.voicekey.app.assist
 
 import android.content.Context
+import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import com.voicekey.app.data.Store
@@ -22,6 +23,7 @@ class Speaker(context: Context, enginePkg: String? = Store.ttsEngine(context)) {
     private val ready = CompletableDeferred<Boolean>()
     private val speaking = ConcurrentHashMap<String, CancellableContinuation<Unit>>()
     private var tts: TextToSpeech? = null
+    private var mutedLogged = false
 
     init {
         val onInit = TextToSpeech.OnInitListener { code ->
@@ -91,16 +93,30 @@ class Speaker(context: Context, enginePkg: String? = Store.ttsEngine(context)) {
         return runCatching { tts?.engines?.map { EngineOption(it.name, it.label) } }.getOrNull().orEmpty()
     }
 
-    /** 把話說完才返回，免得接下來的聆聽錄到自己的聲音。 */
-    suspend fun say(text: String) {
+    /** 手機現在是靜音或震動，而且設定要跟著安靜：這時一個字都不唸。 */
+    fun muted(): Boolean = Store.muteRespect(ctx) && runCatching {
+        (ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager).ringerMode != AudioManager.RINGER_MODE_NORMAL
+    }.getOrDefault(false)
+
+    /**
+     * 把話說完才返回，免得接下來的聆聽錄到自己的聲音。
+     * force＝設定頁的試聽：手機靜音也照唸。maxMs＝最多唸多久（長的回答要給久一點）。
+     */
+    suspend fun say(text: String, force: Boolean = false, maxMs: Long = 12_000) {
         if (text.isBlank()) return
+        if (!force && muted()) {
+            if (!mutedLogged) { mutedLogged = true; Store.log(ctx, "手機是靜音／震動，這次不出聲") }
+            // 不出聲，但留一點時間讓人看到畫面上的字
+            delay(350)
+            return
+        }
         val engine = engine()
         if (engine == null) {
             delay(900)
             return
         }
         val id = Store.newId()
-        withTimeoutOrNull(12_000) {
+        withTimeoutOrNull(maxMs) {
             suspendCancellableCoroutine<Unit> { cont ->
                 speaking[id] = cont
                 cont.invokeOnCancellation { speaking.remove(id); runCatching { engine.stop() } }

@@ -48,4 +48,16 @@ object Wake {
         val h = heard(json)
         return h.isNotEmpty() && simplified.any { it.isNotEmpty() && h.contains(it) }
     }
+
+    /**
+     * 現在是不是在「休息時段」裡。時間都用「從 0 點起算的分鐘數」（7:30 → 450）。
+     * 起訖一樣＝沒有休息時段；起比訖晚＝跨過半夜（23:00～07:00）。到訖的那一分鐘就算結束。
+     */
+    fun inQuiet(nowMin: Int, startMin: Int, endMin: Int): Boolean = when {
+        startMin == endMin -> false
+        startMin < endMin -> nowMin in startMin until endMin
+        else -> nowMin >= startMin || nowMin < endMin
+    }
+
+    fun clock(min: Int): String = "%02d:%02d".format((min / 60) % 24, min % 60)
 }

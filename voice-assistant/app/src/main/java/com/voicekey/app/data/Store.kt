@@ -40,6 +40,13 @@ object Store {
     private const val KEY_AUTO_CHARGE = "auto_charge"
     private const val KEY_AUTO_BT = "auto_bt"
     private const val KEY_AUTO_BT_NAME = "auto_bt_name"
+    private const val KEY_CLAUDE = "claude_key"
+    private const val KEY_AI_MODEL = "ai_model"
+    private const val KEY_WAKE_GREETING = "wake_greeting"
+    private const val KEY_QUIET_ON = "quiet_on"
+    private const val KEY_QUIET_START = "quiet_start"
+    private const val KEY_QUIET_END = "quiet_end"
+    private const val KEY_MUTE_RESPECT = "mute_respect"
     private const val LEARNED_MAX = 200
     private const val KEY_FAILS = "secret_fails"
     private const val KEY_LOCK_UNTIL = "secret_lock_until"
@@ -258,7 +265,31 @@ object Store {
         prefs(ctx).edit().putString(KEY_AUTO_BT, address).putString(KEY_AUTO_BT_NAME, name).apply()
     }
 
+    /** 被喊醒時回的那句話；空白＝不回話。 */
+    fun wakeGreeting(ctx: Context): String = prefs(ctx).getString(KEY_WAKE_GREETING, "老闆我來了！") ?: ""
+    fun setWakeGreeting(ctx: Context, text: String) { prefs(ctx).edit().putString(KEY_WAKE_GREETING, text.trim()).apply() }
+
+    /** 休息時段：這段時間不聽喚醒詞（長按側鍵照常能用）。時間是「從 0 點起算的分鐘數」。 */
+    fun quietOn(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_QUIET_ON, false)
+    fun quietStart(ctx: Context): Int = prefs(ctx).getInt(KEY_QUIET_START, 0)
+    fun quietEnd(ctx: Context): Int = prefs(ctx).getInt(KEY_QUIET_END, 7 * 60)
+    fun setQuiet(ctx: Context, on: Boolean, startMin: Int, endMin: Int) {
+        prefs(ctx).edit().putBoolean(KEY_QUIET_ON, on).putInt(KEY_QUIET_START, startMin).putInt(KEY_QUIET_END, endMin).apply()
+    }
+
+    // ---- 問答（金鑰只存在這支手機，不會隨匯出帶出去）----
+
+    const val AI_MODEL_DEFAULT = "claude-opus-5-5"
+    fun claudeKey(ctx: Context): String = prefs(ctx).getString(KEY_CLAUDE, "").orEmpty()
+    fun setClaudeKey(ctx: Context, key: String) { prefs(ctx).edit().putString(KEY_CLAUDE, key.trim()).apply() }
+    fun aiModel(ctx: Context): String = prefs(ctx).getString(KEY_AI_MODEL, AI_MODEL_DEFAULT) ?: AI_MODEL_DEFAULT
+    fun setAiModel(ctx: Context, model: String) { prefs(ctx).edit().putString(KEY_AI_MODEL, model).apply() }
+
     // ---- 語音回覆 ----
+
+    /** 手機切到靜音或震動時，語音快捷也不出聲（預設開）。 */
+    fun muteRespect(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_MUTE_RESPECT, true)
+    fun setMuteRespect(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean(KEY_MUTE_RESPECT, on).apply() }
 
     fun ttsEngine(ctx: Context): String? = prefs(ctx).getString(KEY_TTS_ENGINE, null)
     fun ttsVoice(ctx: Context): String? = prefs(ctx).getString(KEY_TTS_VOICE, null)

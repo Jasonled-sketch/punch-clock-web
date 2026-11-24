@@ -20,8 +20,8 @@ android {
         applicationId = "com.voicekey.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 11
-        versionName = "0.9.0"
+        versionCode = 12
+        versionName = "0.10.0"
     }
 
     signingConfigs {
@@ -69,6 +69,9 @@ dependencies {
     // 中文模型（vosk-model-small-cn-0.22，約 66MB）不進版控：打包前解壓到 app/src/main/assets/vosk-model-small-cn/（見 README）
     implementation("com.alphacephei:vosk-android:0.3.75")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+
+    // 問答（查資料、回答問題）：Anthropic 官方 SDK。金鑰由使用者貼在手機上，不進版控。
+    implementation("com.anthropic:anthropic-java:3.3.0")
 
     testImplementation("junit:junit:4.13.2")
 }

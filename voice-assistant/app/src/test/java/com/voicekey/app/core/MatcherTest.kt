@@ -286,4 +286,19 @@ class MatcherTest {
         assertTrue(Spoken.secretMatches(listOf("芝麻開門"), "芝麻開門"))
         assertFalse(Spoken.secretMatches(listOf("西瓜開門"), "芝麻開門"))
     }
+
+    @Test fun twoGatesWithPasswordInOneSentence() {
+        // Jason 的實際用法：A 館、B 館各一個鐵門指令，一句話「打開B館鐵門＋密碼」
+        val a = gate.copy(id = "a", name = "打開A館鐵門", triggers = listOf("打開A館鐵門", "開A館鐵門", "開啟A館鐵門"))
+        val b = gate.copy(id = "b", name = "打開B館鐵門", triggers = listOf("打開B館鐵門", "開B館鐵門", "開啟B館鐵門"))
+        val cfg = Config(listOf(a, b), emptyList(), emptyList())
+        for (h in listOf("打開B館鐵門1234", "打開b館鐵門 1234", "打開B館鐵門一二三四", "打開B館鐵門密碼1234", "打開 B 館鐵門 1 2 3 4", "開啟B館鐵門1234")) {
+            val r = Matcher.match(listOf(h), cfg, apps)
+            assertEquals(h, b, (r.parsed as Parsed.Run).command)
+            assertTrue("$h → ${r.score}", r.score >= Matcher.EXECUTE)
+            assertEquals(h, Spoken.Inline.MATCH, Spoken.inlineSecret(listOf(h), "1234"))
+        }
+        val ra = Matcher.match(listOf("打開A館鐵門1234"), cfg, apps)
+        assertEquals(a, (ra.parsed as Parsed.Run).command)
+    }
 }

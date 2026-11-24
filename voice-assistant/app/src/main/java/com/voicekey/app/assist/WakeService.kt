@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.icu.text.Transliterator
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -20,6 +21,7 @@ import android.service.voice.VoiceInteractionSession
 import com.voicekey.app.R
 import com.voicekey.app.core.Wake
 import com.voicekey.app.data.Store
+import com.voicekey.app.line.LineCallService
 import com.voicekey.app.ui.MainActivity
 import org.vosk.Model
 import org.vosk.Recognizer
@@ -43,6 +45,7 @@ class WakeService : Service() {
         private const val NOTE_ID = 41
         private const val ASK_ID = 42
         private const val ACTION_STOP = "com.voicekey.app.WAKE_STOP"
+        private const val GUARD_MS = 20_000L
 
         @Volatile
         var running = false
@@ -113,6 +116,34 @@ class WakeService : Service() {
         @Volatile
         private var uiOpen = false
 
+        /** 剛被喊醒的時間：聆聽畫面用它判斷這次是不是「喊出來的」，要不要先回一句話。 */
+        @Volatile
+        private var wokeAt = 0L
+
+        /** 這次聆聽畫面是不是被喊出來的（問一次就清掉）。 */
+        fun takeWoke(): Boolean {
+            val fresh = System.currentTimeMillis() - wokeAt < 6_000
+            wokeAt = 0
+            return fresh
+        }
+
+        /** 這個時間點之前先不聽（剛撥出電話時用：對方還沒接，鈴聲和「喂」很容易被聽成喚醒詞）。 */
+        @Volatile
+        private var holdUntil = 0L
+
+        fun holdOff(ms: Long) {
+            holdUntil = System.currentTimeMillis() + ms
+            instance?.guardSoon()
+        }
+
+        /** 現在是不是休息時段（設定頁也拿來顯示）。 */
+        fun quietNow(ctx: Context): Boolean {
+            if (!Store.quietOn(ctx)) return false
+            val c = java.util.Calendar.getInstance()
+            val now = c.get(java.util.Calendar.HOUR_OF_DAY) * 60 + c.get(java.util.Calendar.MINUTE)
+            return Wake.inQuiet(now, Store.quietStart(ctx), Store.quietEnd(ctx))
+        }
+
         /** 聆聽畫面要用麥克風：先停聽。 */
         fun pause() { uiOpen = true; instance?.pauseEngine() }
 
@@ -131,6 +162,47 @@ class WakeService : Service() {
     @Volatile
     private var building = false
     private val resumeLater = Runnable { startListening() }
+    private var blockedNote = ""
+
+    /** 定時巡一下：該停就停（進了休息時段、開始通話），可以聽了就接著聽。 */
+    private val guard = object : Runnable {
+        override fun run() {
+            handler.removeCallbacks(this)
+            if (instance !== this@WakeService) return
+            val why = blocked()
+            if (why.isNotEmpty() && listening) {
+                stopSpeech()
+                Store.log(this@WakeService, "呼喊喚醒：$why，先不聽")
+            }
+            if (why.isNotEmpty()) {
+                if (!paused && why != blockedNote) { blockedNote = why; update("$why，先不聽") }
+            } else {
+                if (blockedNote.isNotEmpty()) Store.log(this@WakeService, "呼喊喚醒：可以聽了，接著聽")
+                blockedNote = ""
+                if (!listening && !paused && recognizer != null) startListening()
+            }
+            handler.postDelayed(this, GUARD_MS)
+        }
+    }
+
+    private val modeListener: Any? = if (Build.VERSION.SDK_INT >= 31) AudioManager.OnModeChangedListener { guardSoon() } else null
+
+    private fun guardSoon() {
+        handler.removeCallbacks(guard)
+        handler.postDelayed(guard, 300)
+    }
+
+    /** 現在不該聽的原因；空字串＝可以聽。 */
+    private fun blocked(): String {
+        val mode = runCatching { (getSystemService(Context.AUDIO_SERVICE) as AudioManager).mode }.getOrDefault(AudioManager.MODE_NORMAL)
+        return when {
+            mode != AudioManager.MODE_NORMAL -> "通話中"
+            LineCallService.busy -> "正在幫你撥 LINE"
+            System.currentTimeMillis() < holdUntil -> "剛撥出電話"
+            quietNow(this) -> "休息時段（${Wake.clock(Store.quietStart(this))}～${Wake.clock(Store.quietEnd(this))}）"
+            else -> ""
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -138,6 +210,11 @@ class WakeService : Service() {
         super.onCreate()
         instance = this
         channel(this)
+        if (Build.VERSION.SDK_INT >= 31) runCatching {
+            (getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+                .addOnModeChangedListener(mainExecutor, modeListener as AudioManager.OnModeChangedListener)
+        }
+        handler.postDelayed(guard, GUARD_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -179,6 +256,10 @@ class WakeService : Service() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        if (Build.VERSION.SDK_INT >= 31) runCatching {
+            (getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+                .removeOnModeChangedListener(modeListener as AudioManager.OnModeChangedListener)
+        }
         stopSpeech()
         release()
         running = false
@@ -270,6 +351,14 @@ class WakeService : Service() {
     private fun startListening() {
         if (paused || listening) return
         val r = recognizer ?: return
+        val why = blocked()
+        if (why.isNotEmpty()) {
+            // 不佔麥克風；巡邏的那個定時器會在可以聽的時候接回來
+            if (why != blockedNote) { blockedNote = why; update("$why，先不聽"); Store.log(this, "呼喊喚醒：$why，先不聽") }
+            guardSoon()
+            return
+        }
+        blockedNote = ""
         try {
             runCatching { r.reset() }
             val s = SpeechService(r, RATE)
@@ -312,7 +401,9 @@ class WakeService : Service() {
 
     private fun onWake() {
         if (paused) return
+        if (blocked().isNotEmpty()) { guardSoon(); return }
         Store.log(this, "聽到喚醒詞")
+        wokeAt = System.currentTimeMillis()
         // 先把麥克風讓出來，聆聽畫面才收得到聲音
         paused = true
         stopSpeech()

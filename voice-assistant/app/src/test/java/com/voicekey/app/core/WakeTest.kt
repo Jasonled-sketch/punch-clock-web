@@ -52,4 +52,22 @@ class WakeTest {
         assertFalse(Wake.hit("""{ "partial" : "" }""", listOf("小帮手")))
         assertFalse(Wake.hit("""{ "text" : "小 帮 手" }""", emptyList()))
     }
+
+    @Test fun quietHours() {
+        // 0:00～7:00（Jason 舉的例子）
+        assertTrue(Wake.inQuiet(0, 0, 420))
+        assertTrue(Wake.inQuiet(419, 0, 420))
+        assertFalse(Wake.inQuiet(420, 0, 420))
+        assertFalse(Wake.inQuiet(23 * 60 + 59, 0, 420))
+        // 跨過半夜：23:00～07:00
+        assertTrue(Wake.inQuiet(23 * 60, 23 * 60, 420))
+        assertTrue(Wake.inQuiet(30, 23 * 60, 420))
+        assertFalse(Wake.inQuiet(12 * 60, 23 * 60, 420))
+        assertFalse(Wake.inQuiet(22 * 60 + 59, 23 * 60, 420))
+        // 起訖一樣＝沒有休息時段
+        assertFalse(Wake.inQuiet(100, 300, 300))
+        assertEquals("00:00", Wake.clock(0))
+        assertEquals("07:00", Wake.clock(420))
+        assertEquals("23:30", Wake.clock(23 * 60 + 30))
+    }
 }

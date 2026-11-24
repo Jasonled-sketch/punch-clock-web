@@ -32,6 +32,9 @@ class LineCallService : AccessibilityService() {
         @Volatile
         var instance: LineCallService? = null
 
+        /** 正在代替手指操作 LINE：這段時間呼喊喚醒不能跳出來蓋住它。 */
+        val busy: Boolean get() = instance?.job != null
+
         private val SEARCH = listOf("搜尋", "search", "検索")
         private val FRIEND_TAB = listOf("好友", "friends", "友だち")
         private val VOICE = listOf("語音通話", "免費通話", "voice call", "音声通話", "無料通話")
@@ -65,9 +68,12 @@ class LineCallService : AccessibilityService() {
         var seen: List<String> = emptyList()
         val createdAt = System.currentTimeMillis()
         var lineSeen = false
+        /** LINE 不在最上面時，蓋在上面的是誰（寫進紀錄，才知道是被什麼擋住）。 */
+        var covered = ""
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    @Volatile
     private var job: Job? = null
     private val ticker = object : Runnable {
         override fun run() {
@@ -101,6 +107,13 @@ class LineCallService : AccessibilityService() {
         handler.postDelayed(ticker, 700)
     }
 
+    /** 使用者又叫出聆聽畫面要做別的事：正在撥的這通就不繼續了。 */
+    fun cancel(reason: String) {
+        if (job == null) return
+        Store.log(this, "LINE 通話取消：$reason")
+        job = null
+    }
+
     /** 設定頁的工具：幾秒後把目前畫面結構寫進紀錄。 */
     fun dumpLater(delayMs: Long) {
         handler.postDelayed({
@@ -114,13 +127,29 @@ class LineCallService : AccessibilityService() {
         val now = System.currentTimeMillis()
         val root = rootInActiveWindow
         if (root == null || root.packageName?.toString() != LINE_PKG) {
+            // 蓋在上面的是誰：自己的聆聽畫面、別的 App，或系統不給看（讀不到）
+            val top = when (val pkg = root?.packageName?.toString()) {
+                null -> "別的畫面"
+                packageName -> "語音快捷自己的畫面"
+                else -> pkg
+            }
+            if (j.lineSeen && top != j.covered) {
+                j.covered = top
+                Store.log(this, "LINE 通話：LINE 被蓋住了，現在最上面是$top")
+            }
             // LINE 冷啟動可能要好幾秒；還沒出現前不算進各步驟的時間
-            if (!j.lineSeen && now - j.createdAt > LAUNCH_TIMEOUT_MS) fail("LINE 沒有開到前景")
-            else if (j.lineSeen && now - j.stageSince > j.stage.timeoutMs) fail("LINE 被切到背景，已停止")
+            if (!j.lineSeen && now - j.createdAt > LAUNCH_TIMEOUT_MS) fail("LINE 沒有開到前景（最上面是$top）")
+            else if (j.lineSeen && now - j.stageSince > j.stage.timeoutMs) fail("LINE 被${top}蓋住，已停止")
             return
         }
         if (!j.lineSeen) {
             j.lineSeen = true
+            j.stageSince = now
+        }
+        if (j.covered.isNotEmpty()) {
+            // 蓋住的東西走了：這一步的時間重新算，接著做
+            Store.log(this, "LINE 通話：LINE 回到最上面，接著做")
+            j.covered = ""
             j.stageSince = now
         }
         val nodes = collect(root)

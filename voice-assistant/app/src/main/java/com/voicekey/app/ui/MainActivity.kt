@@ -257,6 +257,8 @@ class MainActivity : ComponentActivity() {
 
             Section("語音辨識（聽得更準）") { SttSettings() }
 
+            Section("問答（查資料、回答問題）") { AiSettings() }
+
             Section("呼喊喚醒（喊一聲就叫出來）") { WakeSettings() }
 
             Section("語音回覆的聲音") { VoiceSettings() }
@@ -265,7 +267,8 @@ class MainActivity : ComponentActivity() {
                 val has = Store.secret(this@MainActivity).isNotEmpty()
                 Text(if (has) "已設定密碼" else "尚未設定密碼", color = if (has) Color(0xFF1A7F37) else Color(0xFFCF222E))
                 OutlinedButton(onClick = { showSecret = true }) { Text(if (has) "更改密碼" else "設定密碼") }
-                Hint("可以一口氣說完，例如「開鐵門一二三四」，就不會再問第二次。只說「開鐵門」則會再問密碼。")
+                Hint("可以一口氣說完，例如「開鐵門一二三四」，就不會再問第二次。重點是中間不要停：停超過大約一秒，手機的語音辨識就當你講完了。")
+                Hint("萬一中間停了：它不會開口問，會直接接著聽（畫面顯示「請說密碼」、震一下），把密碼說完就好。幾秒都沒聲音才會開口問。")
                 Hint("密碼是用說的，旁邊有人時會被聽到；連續說錯 5 次會鎖 10 分鐘。")
             }
 
@@ -466,6 +469,38 @@ class MainActivity : ComponentActivity() {
                 TextButton(onClick = { refresh++ }) { Text("更新") }
             }
         }
+        var greeting by remember { mutableStateOf(Store.wakeGreeting(this)) }
+        OutlinedTextField(
+            value = greeting, onValueChange = { greeting = it; Store.setWakeGreeting(this, it) },
+            label = { Text("被喊醒時回你的話（留空白＝不回話）") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(),
+        )
+        Hint("喊了之後它會先回這句，你聽到再說指令。手機靜音或震動時不出聲，只會震一下、畫面顯示這句。")
+        HorizontalDivider()
+        Text("休息時段（這段時間喊不醒）", fontWeight = FontWeight.Bold)
+        var quietOn by remember { mutableStateOf(Store.quietOn(this)) }
+        var quietStart by remember { mutableIntStateOf(Store.quietStart(this)) }
+        var quietEnd by remember { mutableIntStateOf(Store.quietEnd(this)) }
+        val hours = (0..23).map { "%02d:00".format(it) }
+        fun saveQuiet() { Store.setQuiet(this, quietOn, quietStart, quietEnd); restartIfOn() }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("使用休息時段", Modifier.weight(1f))
+            Switch(checked = quietOn, onCheckedChange = { quietOn = it; saveQuiet() })
+        }
+        if (quietOn) {
+            Picker("幾點開始不聽", hours[(quietStart / 60) % 24], hours) { i -> quietStart = i * 60; saveQuiet() }
+            Picker("幾點恢復", hours[(quietEnd / 60) % 24], hours) { i -> quietEnd = i * 60; saveQuiet() }
+            Text(
+                when {
+                    quietStart == quietEnd -> "⚠ 開始和恢復是同一個時間，等於沒有休息時段"
+                    W.quietNow(this) -> "現在在休息時段裡：喊不醒，麥克風也放掉了"
+                    else -> "現在不在休息時段"
+                },
+                fontSize = 14.sp,
+            )
+        }
+        Hint("休息時段只管「喊」：這段時間長按側鍵、點桌面圖示照樣能用。時間到了會自己恢復，不用手動開。")
+        HorizontalDivider()
         Hint("不用註冊帳號、不用金鑰、不用網路：用的是裝在手機裡的離線語音引擎，只聽你設定的這幾個字，聲音不會傳出去。")
         Hint("挑喚醒詞：3～4 個字、平常講話不太會講到的，比較不會誤觸，例如「小幫手」「阿福管家」。可以用「、」分開設最多 3 個。")
         Hint("叫不醒：對著手機喊一次，按上面「更新」看它聽成什麼字，把喚醒詞改成比較好認的。")
@@ -552,6 +587,51 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun AiSettings() {
+        val scope = rememberCoroutineScope()
+        val models = com.voicekey.app.ai.ClaudeAsk.MODELS
+        var model by remember { mutableStateOf(Store.aiModel(this)) }
+        var saved by remember { mutableStateOf(Store.claudeKey(this)) }
+        var input by remember { mutableStateOf("") }
+        var checking by remember { mutableStateOf(false) }
+
+        Text(
+            if (saved.isBlank()) "⬜ 還沒開：問問題它只會說聽不懂" else "✅ 已開啟（金鑰結尾 ${saved.takeLast(4)}）",
+            color = if (saved.isBlank()) Color(0xFFCF222E) else Color(0xFF1A7F37),
+        )
+        Hint("開了之後，不是指令的話（例如「這週黃金一錢多少錢」「明天台南會下雨嗎」）會交給 Claude 回答；需要最新資訊它會自己上網查，答案唸給你聽、也顯示在畫面上。")
+        Hint("開頭說「請問」「幫我查」「查一下」就一定走問答，不會被當成指令。")
+        OutlinedTextField(
+            value = input, onValueChange = { input = it },
+            label = { Text("貼上 Claude API 金鑰（sk-ant- 開頭）") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(),
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = !checking, onClick = {
+                val k = input.trim()
+                if (k.length < 20) { toast("金鑰看起來不完整"); return@OutlinedButton }
+                checking = true
+                scope.launch {
+                    val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.voicekey.app.ai.ClaudeAsk.check(k, model) }
+                    checking = false
+                    if (result.ok) { Store.setClaudeKey(this@MainActivity, k); saved = k; input = "" }
+                    toast(result.message.ifEmpty { "金鑰可以用，已存好" })
+                }
+            }) { Text(if (checking) "檢查中…" else "檢查並儲存") }
+            if (saved.isNotBlank()) OutlinedButton(onClick = { Store.setClaudeKey(this@MainActivity, ""); saved = ""; toast("金鑰已移除，問答已關閉") }) { Text("移除金鑰") }
+        }
+        Picker("回答用的模型", models.firstOrNull { it.first == model }?.second ?: model, models.map { it.second }) { i ->
+            model = models[i].first
+            Store.setAiModel(this, model)
+        }
+        Hint("金鑰只存在這支手機，不會隨「匯出設定」帶出去。問的那句話會送到 Anthropic（Claude 的公司）；密碼不會送。")
+        Hint("這是按用量計費（跟 Claude 訂閱方案分開算）：要上網查的問題，一題大約是台幣幾塊錢的等級，實際以 Anthropic 後台的帳單為準。")
+        Hint("如果正常的問題被模型的安全機制誤擋，會自動改用備援模型再答一次。")
+    }
+
+    @Composable
     private fun VoiceSettings() {
         val scope = rememberCoroutineScope()
         var enginePkg by remember { mutableStateOf(Store.ttsEngine(this)) }
@@ -568,8 +648,15 @@ class MainActivity : ComponentActivity() {
             voices = speaker.voices()
         }
         fun preview() {
-            scope.launch { speaker.say("好，幫你用 LINE 打給小關。這是目前的聲音。") }
+            // 試聽：手機靜音也照唸，不然不知道選的聲音長怎樣
+            scope.launch { speaker.say("好，幫你用 LINE 打給小關。這是目前的聲音。", force = true) }
         }
+        var muteRespect by remember { mutableStateOf(Store.muteRespect(this)) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("手機靜音或震動時不出聲", Modifier.weight(1f))
+            Switch(checked = muteRespect, onCheckedChange = { muteRespect = it; Store.setMuteRespect(this@MainActivity, it) })
+        }
+        Hint("開會時把手機切靜音或震動，語音快捷就完全不講話（包含被喊醒的回應），只在畫面上顯示字、用震動提示。指令照常會做。")
 
         if (engines.size > 1) {
             Picker(

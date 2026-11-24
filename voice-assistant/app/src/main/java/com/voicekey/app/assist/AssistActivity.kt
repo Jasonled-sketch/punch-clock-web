@@ -28,6 +28,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -55,6 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
 import com.voicekey.app.actions.ActionRunner
+import com.voicekey.app.ai.ClaudeAsk
+import com.voicekey.app.core.ActionType
+import com.voicekey.app.core.Ask
+import com.voicekey.app.line.LineCallService
 import com.voicekey.app.core.Config
 import com.voicekey.app.core.Matcher
 import com.voicekey.app.core.OpenAiStt
@@ -91,6 +98,7 @@ class AssistActivity : ComponentActivity() {
         @Volatile
         var pendingText: String? = null
         private const val LISTEN_TIMEOUT_MS = 12_000L
+        private const val QUIET_PASSWORD_MS = 4_000L
         private val YES_NO_BIAS = listOf("好", "好的", "確定", "對", "可以", "沒問題", "取消", "不要", "不用")
     }
 
@@ -100,6 +108,9 @@ class AssistActivity : ComponentActivity() {
     private var heardText by mutableStateOf("")
     private var mode by mutableStateOf(Mode.IDLE)
     private var canRetry by mutableStateOf(false)
+
+    /** 問答的回答：有內容時畫面改成可以捲動的長文字。 */
+    private var answer by mutableStateOf("")
 
     private lateinit var speaker: Speaker
 
@@ -129,6 +140,7 @@ class AssistActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         speaker = Speaker(this)
         WakeService.pause()   // 聆聽畫面要用麥克風，呼喊喚醒先讓出來
+        dropLineJob()
         setContent { AssistScreen() }
         start()
     }
@@ -137,7 +149,13 @@ class AssistActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         WakeService.pause()
+        dropLineJob()
         start()
+    }
+
+    /** 人又把聆聽畫面叫出來＝要做別的事了：還在幫忙撥 LINE 的話就不繼續，免得兩邊搶畫面。 */
+    private fun dropLineJob() {
+        LineCallService.instance?.cancel("又叫出了聆聽畫面")
     }
 
     override fun onStop() {
@@ -174,7 +192,9 @@ class AssistActivity : ComponentActivity() {
     private suspend fun runFlow() {
         canRetry = false
         heardText = ""
+        answer = ""
         choice = null
+        val woke = WakeService.takeWoke() || debugWoke()
         val shot = VkSession.takeFreshShot()
         val config = Store.config(this)
         val secret = Store.secret(this)
@@ -184,6 +204,14 @@ class AssistActivity : ComponentActivity() {
         val learned = Store.learned(this)
         cloudError = ""
         val heard = if (typed != null) listOf(typed) else {
+            // 被喊醒的：先回一句，人才知道它醒了（手機靜音時不出聲，只顯示字、震一下）
+            val greeting = if (woke) Store.wakeGreeting(this) else ""
+            if (greeting.isNotBlank()) {
+                Store.log(this, "被喊醒，回應：$greeting" + if (speaker.muted()) "（手機靜音，只顯示不出聲）" else "")
+                show(Mode.WORKING, greeting)
+                buzz()
+                say(greeting)
+            }
             show(Mode.LISTENING, "我在聽，請說")
             hearCommand(config, learned)
         }
@@ -196,6 +224,27 @@ class AssistActivity : ComponentActivity() {
 
         val result = Matcher.match(heard, config, Store.apps(this), learned)
         val parsed = result.parsed
+        // 不是指令而是在問問題（或擺明說「幫我查…」）：交給問答
+        val question = heard.first()
+        val unknown = parsed as? Parsed.Unknown
+        val asking = Ask.direct(question) ||
+            (unknown != null && unknown.reason.isEmpty()) ||
+            (unknown == null && result.score < Matcher.EXECUTE && Ask.looksLikeQuestion(question))
+        if (asking) {
+            if (Store.claudeKey(this).isNotBlank()) {
+                answerQuestion(question, secret)
+                return
+            }
+            if (unknown != null) {
+                Store.log(this, "比對不到（問答還沒開）")
+                giveUp(
+                    if (Ask.looksLikeQuestion(question)) "這是在問問題，問答功能還沒開，請到設定頁的「問答」貼上金鑰"
+                    else "不好意思，我沒聽懂，可以再說一次嗎",
+                )
+                return
+            }
+            // 沒開問答、但比對得到指令：照原本的流程反問
+        }
         if (parsed is Parsed.Unknown) {
             Store.log(this, "比對不到")
             giveUp(parsed.reason.ifEmpty { "不好意思，我沒聽懂，可以再說一次嗎" })
@@ -260,7 +309,10 @@ class AssistActivity : ComponentActivity() {
                         Store.log(this, "一句話帶的密碼不符")
                         if (!askPassword(what, "密碼好像不對，再說一次密碼好嗎")) return
                     }
-                    Spoken.Inline.NONE -> if (!askPassword(what, "好，要$what，請說密碼")) return
+                    Spoken.Inline.NONE -> {
+                        Store.log(this, "這句話裡沒有聽到密碼，接著聽")
+                        if (!askPassword(what, "請說密碼", quietFirst = true)) return
+                    }
                 }
             }
         }
@@ -273,6 +325,10 @@ class AssistActivity : ComponentActivity() {
             }
             show(Mode.OK, opening)
             say(opening)
+            // 撥電話：對方接起來之前先別聽喚醒詞，免得鈴聲或「喂」被聽成喚醒詞、聆聽畫面跳出來蓋住 LINE
+            val calling = parsed is Parsed.Call ||
+                (parsed is Parsed.Run && (parsed.command.type == ActionType.LINE_CALL || parsed.command.type == ActionType.CALL_PHONE))
+            if (calling) WakeService.holdOff(25_000)
             val out = ActionRunner.run(this, parsed, shot)
             Store.log(this, "執行：$what → ${if (out.ok) "成功" else out.message}")
             if (out.ok) finish() else giveUp(out.message)
@@ -297,6 +353,14 @@ class AssistActivity : ComponentActivity() {
         else "好，交給行事曆登記$which，填好後請看一下再按儲存"
     }
 
+    /** 測試版：用 adb 帶 woke 參數，假裝這次是被喊醒的（模擬器沒有麥克風）。 */
+    private fun debugWoke(): Boolean {
+        if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) return false
+        val w = intent?.getBooleanExtra("woke", false) == true
+        intent?.removeExtra("woke")
+        return w
+    }
+
     /** 打字代替說話：設定頁的「打字執行」，或測試版用 adb 帶 text 參數（正式版不接受外部參數）。 */
     private fun takeTypedText(): String? {
         val own = pendingText
@@ -304,6 +368,16 @@ class AssistActivity : ComponentActivity() {
         if (!own.isNullOrBlank()) return own
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         if (!debuggable) return null
+        // 測試版：問答改連假的伺服器（模擬器上沒有金鑰也能跑完整流程）
+        val aiBase = java.io.File(filesDir, "debug_ai_base.txt")
+        if (aiBase.exists()) {
+            ClaudeAsk.testBaseUrl = aiBase.readText().trim()
+            val probe = java.io.File(filesDir, "debug_ai_check.txt")
+            if (probe.exists()) {
+                probe.delete()
+                Thread { Store.log(this, "測試：檢查金鑰 → " + ClaudeAsk.check("not-a-real-key", Store.aiModel(this))) }.start()
+            }
+        }
         // 測試版：長按側鍵叫出來時沒辦法帶參數，改讀這個檔（用完就刪）
         val script = java.io.File(filesDir, "debug_text.txt")
         val fromFile = if (script.exists()) script.readText().trim().also { script.delete() } else ""
@@ -352,7 +426,23 @@ class AssistActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun askPassword(what: String, firstPrompt: String): Boolean {
+    private enum class Pw { OK, EMPTY, CLIPPED, WRONG, CANCEL }
+
+    private fun judge(answer: List<String>, secret: String): Pw = when {
+        answer.isEmpty() -> Pw.EMPTY
+        Spoken.isNo(answer) -> Pw.CANCEL
+        Spoken.secretMatches(answer, secret) -> Pw.OK
+        // 數字比密碼短＝多半是開頭被切掉沒錄到，不是猜錯（短的數字本來就不可能猜中）
+        secret.all { it in '0'..'9' } && answer.all { Spoken.digits(it).length < secret.length } -> Pw.CLIPPED
+        else -> Pw.WRONG
+    }
+
+    /**
+     * quietFirst＝先不出聲、直接接著聽一小段：人常常是「開鐵門…（停一下）…一二三四」，
+     * 辨識引擎在停頓那裡就收工了，密碼正要說出口，這時再唸一句「請說密碼」反而蓋掉它。
+     * 那一小段沒聽到東西，才開口問。
+     */
+    private suspend fun askPassword(what: String, firstPrompt: String, quietFirst: Boolean = false): Boolean {
         val secret = Store.secret(this)
         if (secret.isEmpty()) {
             giveUp("還沒有設定密碼喔，請先到設定頁設定")
@@ -363,40 +453,79 @@ class AssistActivity : ComponentActivity() {
             giveUp("密碼說錯太多次了，請 $locked 分鐘後再試")
             return false
         }
-        var retryPrompt = ""
-        repeat(2) { attempt ->
-            val prompt = if (attempt == 0) firstPrompt else retryPrompt
-            show(Mode.WORKING, prompt)
-            say(prompt)
+        var prompt = firstPrompt
+        var quiet = quietFirst
+        repeat(if (quietFirst) 3 else 2) { attempt ->
+            if (!quiet) {
+                show(Mode.WORKING, prompt)
+                say(prompt)
+            }
             show(Mode.LISTENING, "請說密碼")
             heardText = ""
             // 密碼不顯示在畫面上，也不寫進紀錄
-            val answer = listen(emptyList(), showHeard = false)
-            if (answer.isEmpty()) {
-                // 沒聽到不算說錯，不累計鎖定次數
-                Store.log(this, "沒有聽到密碼（第 ${attempt + 1} 次）")
-                retryPrompt = "我沒聽到，再說一次密碼好嗎"
-                return@repeat
-            }
-            if (Spoken.isNo(answer)) {
-                giveUp("好，那先不做")
-                return false
-            }
-            if (Spoken.secretMatches(answer, secret)) {
-                Store.secretPassed(this)
-                Store.log(this, "密碼通過")
-                return true
-            }
-            Store.secretFailed(this)
-            Store.log(this, "密碼不符（第 ${attempt + 1} 次）")
-            retryPrompt = "密碼好像不對，再說一次好嗎"
-            if (Store.lockedMinutes(this) > 0) {
-                giveUp("密碼說錯太多次了，先鎖定十分鐘")
-                return false
+            val answer = listen(emptyList(), showHeard = false, timeoutMs = if (quiet) QUIET_PASSWORD_MS else LISTEN_TIMEOUT_MS)
+            val wasQuiet = quiet
+            quiet = false
+            when (judge(answer, secret)) {
+                Pw.OK -> {
+                    Store.secretPassed(this)
+                    Store.log(this, if (wasQuiet) "密碼通過（停頓後接著說的）" else "密碼通過")
+                    return true
+                }
+                Pw.CANCEL -> {
+                    giveUp("好，那先不做")
+                    return false
+                }
+                Pw.EMPTY -> {
+                    // 沒聽到不算說錯，不累計鎖定次數
+                    Store.log(this, "沒有聽到密碼（第 ${attempt + 1} 次）")
+                    if (!wasQuiet) prompt = "我沒聽到，再說一次密碼好嗎"
+                }
+                Pw.CLIPPED -> {
+                    Store.log(this, "密碼沒聽完整（第 ${attempt + 1} 次）")
+                    prompt = "密碼沒聽完整，再說一次好嗎"
+                }
+                Pw.WRONG -> {
+                    Store.secretFailed(this)
+                    Store.log(this, "密碼不符（第 ${attempt + 1} 次）")
+                    prompt = "密碼好像不對，再說一次好嗎"
+                    if (Store.lockedMinutes(this) > 0) {
+                        giveUp("密碼說錯太多次了，先鎖定十分鐘")
+                        return false
+                    }
+                }
             }
         }
         giveUp("密碼沒有通過，先不做了")
         return false
+    }
+
+    /** 問答：把問題交給 Claude（需要最新資訊它會自己上網查），答案顯示在畫面上並唸出來。 */
+    private suspend fun answerQuestion(question: String, secret: String) {
+        // 萬一句子裡帶到密碼，先拿掉再送出去
+        val q = if (secret.isBlank()) question else question.replace(secret, "")
+        Store.log(this, "問答：$q")
+        show(Mode.WORKING, "我查一下，稍等…")
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd（EEEE）", Locale.TAIWAN).format(java.util.Date())
+        val reply = coroutineScope {
+            val asking = async(Dispatchers.IO) { ClaudeAsk.ask(Store.claudeKey(this@AssistActivity), Store.aiModel(this@AssistActivity), q, today) }
+            say("我查一下")
+            asking.await()
+        }
+        if (reply.error.isNotEmpty()) {
+            Store.log(this, "問答失敗：${reply.error}")
+            giveUp(reply.error)
+            return
+        }
+        Store.log(this, "回答：${reply.text.take(80)}")
+        answer = reply.text
+        show(Mode.OK, "")
+        canRetry = true
+        val silent = speaker.muted()
+        speaker.say(reply.text, maxMs = 90_000)
+        // 唸完再留一下讓人看；靜音時沒唸，就留久一點
+        delay(if (silent) 60_000 else 20_000)
+        finish()
     }
 
     /** 沒聽到內容時，分辨是真的沒聲音，還是辨識引擎本身有狀況。 */
@@ -528,9 +657,9 @@ class AssistActivity : ComponentActivity() {
         }
     }
 
-    private suspend fun listen(biasStrings: List<String>, showHeard: Boolean): List<String> {
+    private suspend fun listen(biasStrings: List<String>, showHeard: Boolean, timeoutMs: Long = LISTEN_TIMEOUT_MS): List<String> {
         scriptedAnswers.removeFirstOrNull()?.let { return if (it.isBlank()) emptyList() else listOf(it) }
-        val result = withTimeoutOrNull(LISTEN_TIMEOUT_MS) { listenOnce(biasStrings, showHeard) }
+        val result = withTimeoutOrNull(timeoutMs) { listenOnce(biasStrings, showHeard) }
         stopListening()
         return result ?: emptyList()
     }
@@ -665,10 +794,17 @@ class AssistActivity : ComponentActivity() {
                             )
                         }
                         Spacer(Modifier.height(14.dp))
-                        Text(
-                            status, color = Color.White, fontSize = 22.sp, lineHeight = 30.sp,
-                            textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
-                        )
+                        if (answer.isNotBlank()) {
+                            Text(
+                                answer, color = Color.White, fontSize = 19.sp, lineHeight = 28.sp,
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                            )
+                        } else {
+                            Text(
+                                status, color = Color.White, fontSize = 22.sp, lineHeight = 30.sp,
+                                textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
                         if (heardText.isNotBlank()) {
                             Spacer(Modifier.height(10.dp))
                             Text(
@@ -695,7 +831,7 @@ class AssistActivity : ComponentActivity() {
                                 startActivity(Intent(this@AssistActivity, MainActivity::class.java))
                                 finish()
                             }) { Text("設定") }
-                            if (canRetry) TextButton(onClick = { start() }) { Text("再說一次") }
+                            if (canRetry) TextButton(onClick = { speaker.stop(); start() }) { Text(if (answer.isNotBlank()) "再問一題" else "再說一次") }
                             TextButton(onClick = { finish() }) { Text("關閉") }
                         }
                     }
