@@ -35,7 +35,7 @@ object Store {
     private const val KEY_WAKE_ON = "wake_on"
     private const val KEY_PICO = "pico_key"
     private const val KEY_WAKE_SENS = "wake_sens"
-    private const val KEY_WAKE_NAME = "wake_name"
+    private const val KEY_WAKE_PHRASE = "wake_phrase"
     private const val KEY_WAKE_AUTO = "wake_auto"
     private const val KEY_AUTO_CHARGE = "auto_charge"
     private const val KEY_AUTO_BT = "auto_bt"
@@ -238,16 +238,14 @@ object Store {
 
     fun clearLearned(ctx: Context) { prefs(ctx).edit().remove(KEY_LEARNED).apply() }
 
-    // ---- 呼喊喚醒（Picovoice AccessKey 只存在這支手機）----
+    // ---- 呼喊喚醒（離線引擎，不用帳號金鑰；KEY_PICO 是舊版留下的，存喚醒詞時順手清掉）----
 
     fun wakeEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_WAKE_ON, false)
     fun setWakeEnabled(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean(KEY_WAKE_ON, on).apply() }
-    fun picoKey(ctx: Context): String = prefs(ctx).getString(KEY_PICO, "").orEmpty()
-    fun setPicoKey(ctx: Context, key: String) { prefs(ctx).edit().putString(KEY_PICO, key.trim()).apply() }
+    fun wakePhrase(ctx: Context): String = prefs(ctx).getString(KEY_WAKE_PHRASE, "小幫手") ?: "小幫手"
+    fun setWakePhrase(ctx: Context, phrase: String) { prefs(ctx).edit().putString(KEY_WAKE_PHRASE, phrase.trim()).remove(KEY_PICO).apply() }
     fun wakeSensitivity(ctx: Context): Float = prefs(ctx).getFloat(KEY_WAKE_SENS, 0.5f)
     fun setWakeSensitivity(ctx: Context, v: Float) { prefs(ctx).edit().putFloat(KEY_WAKE_SENS, v.coerceIn(0.1f, 0.9f)).apply() }
-    fun wakeName(ctx: Context): String = prefs(ctx).getString(KEY_WAKE_NAME, "").orEmpty()
-    fun setWakeName(ctx: Context, name: String) { prefs(ctx).edit().putString(KEY_WAKE_NAME, name).apply() }
 
     /** 這次是不是「自動開起來的」（自動關的時候只關這種，手動開的不動） */
     fun wakeAuto(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_WAKE_AUTO, false)

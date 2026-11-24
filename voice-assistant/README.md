@@ -26,6 +26,17 @@
 
 需要 JDK 17 以上與 Android SDK（platform 35、build-tools 35）。
 
+呼喊喚醒用的中文語音模型很大（約 66MB），不進版控。打包前先下載解壓到 assets：
+
+```bash
+curl -L -o /tmp/vosk-cn.zip https://alphacephei.com/vosk/models/vosk-model-small-cn-0.22.zip
+unzip -q /tmp/vosk-cn.zip -d /tmp
+mkdir -p app/src/main/assets/vosk-model-small-cn
+cp -r /tmp/vosk-model-small-cn-0.22/. app/src/main/assets/vosk-model-small-cn/
+```
+
+模型與引擎（Vosk）都是 Apache-2.0，不用帳號、不用金鑰。
+
 ```bash
 echo "sdk.dir=/path/to/android-sdk" > local.properties
 gradle :app:testDebugUnitTest   # 比對邏輯測試

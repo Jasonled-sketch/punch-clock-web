@@ -411,19 +411,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val pickKeyword = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@registerForActivityResult
-        val ok = runCatching {
-            val bytes = contentResolver.openInputStream(uri)!!.use { it.readBytes() }
-            require(bytes.size in 500..2_000_000)
-            com.voicekey.app.assist.WakeService.keywordFile(this).writeBytes(bytes)
-            val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
-            Store.setWakeName(this, name ?: "喚醒詞檔案")
-        }.isSuccess
-        toast(if (ok) "喚醒詞檔案已存好" else "這個檔案讀不了，請選 .ppn 檔")
-        refresh++
-    }
-
     /** 手機已經配對過的藍牙裝置（位址, 名稱）；沒權限或沒開藍牙回空的。 */
     @android.annotation.SuppressLint("MissingPermission")
     private fun pairedBluetooth(): List<Pair<String, String>> = runCatching {
@@ -435,12 +422,11 @@ class MainActivity : ComponentActivity() {
     private fun WakeSettings() {
         val W = com.voicekey.app.assist.WakeService
         @Suppress("UNUSED_VARIABLE") val tick = refresh
-        val levels = listOf("不容易誤觸" to 0.35f, "一般" to 0.5f, "容易叫醒" to 0.7f)
-        var key by remember { mutableStateOf("") }
-        var saved by remember(refresh) { mutableStateOf(Store.picoKey(this)) }
+        val levels = listOf("不容易誤觸（等話講完才算）" to 0.5f, "容易叫醒（一聽到就算）" to 0.7f)
+        var phrase by remember { mutableStateOf(Store.wakePhrase(this)) }
         var sens by remember { mutableStateOf(Store.wakeSensitivity(this)) }
         var on by remember(refresh) { mutableStateOf(Store.wakeEnabled(this)) }
-        val hasFile = W.keywordFile(this).exists()
+        fun restartIfOn() { if (on) { W.stop(this); window.decorView.postDelayed({ W.start(this); refresh++ }, 800) } }
 
         Text(
             when {
@@ -453,31 +439,36 @@ class MainActivity : ComponentActivity() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("開啟呼喊喚醒", Modifier.weight(1f))
             Switch(checked = on, onCheckedChange = { want ->
-                if (!want) { Store.setWakeEnabled(this@MainActivity, false); W.stop(this@MainActivity); on = false; refresh++; return@Switch }
+                if (!want) { Store.setWakeEnabled(this@MainActivity, false); Store.setWakeAuto(this@MainActivity, false); W.stop(this@MainActivity); on = false; refresh++; return@Switch }
                 if (android.os.Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) askPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.RECORD_AUDIO))
                 val problem = W.start(this@MainActivity)
                 if (problem.isNotEmpty()) { toast(problem); return@Switch }
                 Store.setWakeEnabled(this@MainActivity, true); on = true
-                window.decorView.postDelayed({ refresh++ }, 1500)
+                window.decorView.postDelayed({ refresh++ }, 2500)
             })
         }
-        HorizontalDivider()
-        Text(if (saved.isBlank()) "⬜ 還沒有 Picovoice AccessKey" else "✅ 已存 AccessKey（結尾 ${saved.takeLast(4)}）", color = if (saved.isBlank()) Color(0xFFCF222E) else Color(0xFF1A7F37))
         OutlinedTextField(
-            value = key, onValueChange = { key = it }, label = { Text("貼上 Picovoice AccessKey") },
+            value = phrase, onValueChange = { phrase = it }, label = { Text("喚醒詞（中文 3～4 個字最好）") },
             singleLine = true, modifier = Modifier.fillMaxWidth(),
-            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
         )
         OutlinedButton(onClick = {
-            if (key.trim().length < 20) toast("AccessKey 看起來不完整") else { Store.setPicoKey(this@MainActivity, key); saved = key.trim(); key = ""; toast("已存好") }
-        }) { Text("儲存 AccessKey") }
-        Text(if (hasFile) "✅ 喚醒詞檔案：${Store.wakeName(this)}" else "⬜ 還沒有選喚醒詞檔案", color = if (hasFile) Color(0xFF1A7F37) else Color(0xFFCF222E))
-        OutlinedButton(onClick = { pickKeyword.launch(arrayOf("*/*")) }) { Text(if (hasFile) "換一個喚醒詞檔案（.ppn）" else "選喚醒詞檔案（.ppn）") }
-        Picker("靈敏度（改了要關掉再開才生效）", levels.minByOrNull { kotlin.math.abs(it.second - sens) }!!.first, levels.map { it.first }) { i ->
+            val problem = com.voicekey.app.core.Wake.problem(phrase)
+            if (problem.isNotEmpty()) toast(problem) else { Store.setWakePhrase(this@MainActivity, phrase.trim()); toast("喚醒詞已存好"); restartIfOn() }
+        }) { Text("儲存喚醒詞") }
+        Picker("靈敏度", levels.minByOrNull { kotlin.math.abs(it.second - sens) }!!.first, levels.map { it.first }) { i ->
             sens = levels[i].second
             Store.setWakeSensitivity(this, sens)
+            restartIfOn()
         }
+        if (on && W.running) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("剛才聽到：" + W.lastHeard.ifBlank { "（還沒聽到像喚醒詞的聲音）" }, Modifier.weight(1f), fontSize = 14.sp)
+                TextButton(onClick = { refresh++ }) { Text("更新") }
+            }
+        }
+        Hint("不用註冊帳號、不用金鑰、不用網路：用的是裝在手機裡的離線語音引擎，只聽你設定的這幾個字，聲音不會傳出去。")
+        Hint("挑喚醒詞：3～4 個字、平常講話不太會講到的，比較不會誤觸，例如「小幫手」「阿福管家」。可以用「、」分開設最多 3 個。")
+        Hint("叫不醒：對著手機喊一次，按上面「更新」看它聽成什麼字，把喚醒詞改成比較好認的。")
         HorizontalDivider()
         Text("自動開關（不用整天開著）", fontWeight = FontWeight.Bold)
         var charge by remember { mutableStateOf(Store.autoCharge(this)) }
@@ -506,10 +497,9 @@ class MainActivity : ComponentActivity() {
         Hint("選車子的藍牙：上車連上就自動開始聽，下車斷線就自動停。清單是手機已經配對過的裝置。")
         Hint("自動開關要語音快捷是「預設數位助理」才有效（這樣系統才准它在背景自己打開麥克風）。萬一被擋，會跳一則通知「點一下開始聽喚醒詞」，點它就好。")
         HorizontalDivider()
-        Hint("怎麼拿到這兩樣：到 Picovoice Console 註冊（免費方案）→ 首頁複製 AccessKey → 進 Porcupine，語言選「中文」，打你想喊的詞（例如「小幫手」），平台選 Android，按下載。下載的壓縮檔解開，裡面那個 .ppn 就是喚醒詞檔案。")
-        Hint("喚醒詞是在手機本機辨識，聲音不會傳出去；但通知列會一直有一則通知，螢幕上方的麥克風綠點也會常亮，會多耗一些電。")
+        Hint("開著的時候通知列會有一則通知，螢幕上方的麥克風綠點會常亮，會多耗一些電；建議搭配上面的自動開關。")
         Hint("三星會自動關掉背景 App：請到手機設定 → 應用程式 → 語音快捷 → 電池，選「不受限制」。")
-        Hint("要先把語音快捷設成「預設數位助理」，喊了才跳得出畫面。重開機後如果沒有自己接著聽，打開這一頁再開一次。")
+        Hint("要先把語音快捷設成「預設數位助理」，喊了才跳得出畫面。")
     }
 
     @Composable

@@ -20,8 +20,8 @@ android {
         applicationId = "com.voicekey.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 10
-        versionName = "0.8.1"
+        versionCode = 11
+        versionName = "0.9.0"
     }
 
     signingConfigs {
@@ -36,7 +36,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 模擬器（x86_64）＋實機（arm64）
+            ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
+        }
         release {
+            // 只留現在手機用的 64 位元版本，安裝檔小很多
+            ndk { abiFilters += listOf("arm64-v8a") }
             isMinifyEnabled = false
             signingConfig = signingConfigs.findByName("personal") ?: signingConfigs.getByName("debug")
         }
@@ -59,8 +65,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("io.github.biezhi:TinyPinyin:2.0.3.RELEASE")
-    // 呼喊喚醒（離線喚醒詞）。中文模型 porcupine_params_zh.pv 放在 assets，來源同一個專案（Apache-2.0）
-    implementation("ai.picovoice:porcupine-android:4.0.2")
+    // 呼喊喚醒：開源離線語音引擎 Vosk（Apache-2.0），不用帳號金鑰。
+    // 中文模型（vosk-model-small-cn-0.22，約 66MB）不進版控：打包前解壓到 app/src/main/assets/vosk-model-small-cn/（見 README）
+    implementation("com.alphacephei:vosk-android:0.3.75")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 
     testImplementation("junit:junit:4.13.2")
 }

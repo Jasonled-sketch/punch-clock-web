@@ -6,3 +6,5 @@ local.properties
 keystore.properties
 *.apk
 .kotlin/
+# 語音模型很大（約 66MB），不進版控；打包前照 README 下載解壓
+app/src/main/assets/vosk-model-small-cn/
