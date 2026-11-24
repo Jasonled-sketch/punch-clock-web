@@ -128,6 +128,7 @@ class AssistActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speaker = Speaker(this)
+        WakeService.pause()   // 聆聽畫面要用麥克風，呼喊喚醒先讓出來
         setContent { AssistScreen() }
         start()
     }
@@ -135,6 +136,7 @@ class AssistActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        WakeService.pause()
         start()
     }
 
@@ -153,6 +155,7 @@ class AssistActivity : ComponentActivity() {
         stopListening()
         speaker.shutdown()
         runCatching { VkSession.current?.hide() }
+        WakeService.resume()
         super.onDestroy()
     }
 

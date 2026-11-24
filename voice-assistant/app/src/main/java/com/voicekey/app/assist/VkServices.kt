@@ -18,7 +18,27 @@ import android.speech.SpeechRecognizer
 import com.voicekey.app.data.Store
 
 /** 被選為「預設數位助理」後，系統會常駐綁定這個服務；長按側鍵時由它開出聆聽畫面。 */
-class VkInteractionService : VoiceInteractionService()
+class VkInteractionService : VoiceInteractionService() {
+    companion object {
+        @Volatile
+        var instance: VkInteractionService? = null
+            private set
+    }
+
+    override fun onReady() {
+        super.onReady()
+        instance = this
+        // 開機後系統會自己把預設助理叫起來：呼喊喚醒有開的話順便接著聽（系統不准的話會記一筆，等人打開設定頁再開）
+        if (Store.wakeEnabled(this) && !WakeService.running) {
+            WakeService.start(this).let { if (it.isNotEmpty()) Store.log(this, "開機後接著聽喚醒詞：$it") }
+        }
+    }
+
+    override fun onShutdown() {
+        instance = null
+        super.onShutdown()
+    }
+}
 
 class VkSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession = VkSession(this)

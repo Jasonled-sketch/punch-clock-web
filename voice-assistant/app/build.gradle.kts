@@ -20,8 +20,8 @@ android {
         applicationId = "com.voicekey.app"
         minSdk = 29
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.6.0"
+        versionCode = 8
+        versionName = "0.7.0"
     }
 
     signingConfigs {
@@ -59,6 +59,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("io.github.biezhi:TinyPinyin:2.0.3.RELEASE")
+    // 呼喊喚醒（離線喚醒詞）。中文模型 porcupine_params_zh.pv 放在 assets，來源同一個專案（Apache-2.0）
+    implementation("ai.picovoice:porcupine-android:4.0.2")
 
     testImplementation("junit:junit:4.13.2")
 }

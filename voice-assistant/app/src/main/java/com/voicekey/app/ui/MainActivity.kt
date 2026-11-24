@@ -257,6 +257,8 @@ class MainActivity : ComponentActivity() {
 
             Section("語音辨識（聽得更準）") { SttSettings() }
 
+            Section("呼喊喚醒（喊一聲就叫出來）") { WakeSettings() }
+
             Section("語音回覆的聲音") { VoiceSettings() }
 
             Section("密碼（保護開鐵門這類指令）") {
@@ -407,6 +409,72 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private val pickKeyword = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val ok = runCatching {
+            val bytes = contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+            require(bytes.size in 500..2_000_000)
+            com.voicekey.app.assist.WakeService.keywordFile(this).writeBytes(bytes)
+            val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+            Store.setWakeName(this, name ?: "喚醒詞檔案")
+        }.isSuccess
+        toast(if (ok) "喚醒詞檔案已存好" else "這個檔案讀不了，請選 .ppn 檔")
+        refresh++
+    }
+
+    @Composable
+    private fun WakeSettings() {
+        val W = com.voicekey.app.assist.WakeService
+        @Suppress("UNUSED_VARIABLE") val tick = refresh
+        val levels = listOf("不容易誤觸" to 0.35f, "一般" to 0.5f, "容易叫醒" to 0.7f)
+        var key by remember { mutableStateOf("") }
+        var saved by remember(refresh) { mutableStateOf(Store.picoKey(this)) }
+        var sens by remember { mutableStateOf(Store.wakeSensitivity(this)) }
+        var on by remember(refresh) { mutableStateOf(Store.wakeEnabled(this)) }
+        val hasFile = W.keywordFile(this).exists()
+
+        Text(
+            when {
+                on && W.running -> "✅ 正在聽喚醒詞"
+                on -> "⬜ 有打開但還沒在聽" + (if (W.lastError.isNotEmpty()) "：" + W.lastError else "")
+                else -> "⬜ 沒有開"
+            },
+            color = if (on && W.running) Color(0xFF1A7F37) else Color(0xFFCF222E),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("開啟呼喊喚醒", Modifier.weight(1f))
+            Switch(checked = on, onCheckedChange = { want ->
+                if (!want) { Store.setWakeEnabled(this@MainActivity, false); W.stop(this@MainActivity); on = false; refresh++; return@Switch }
+                if (android.os.Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) askPermissions.launch(arrayOf(Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.RECORD_AUDIO))
+                val problem = W.start(this@MainActivity)
+                if (problem.isNotEmpty()) { toast(problem); return@Switch }
+                Store.setWakeEnabled(this@MainActivity, true); on = true
+                window.decorView.postDelayed({ refresh++ }, 1500)
+            })
+        }
+        HorizontalDivider()
+        Text(if (saved.isBlank()) "⬜ 還沒有 Picovoice AccessKey" else "✅ 已存 AccessKey（結尾 ${saved.takeLast(4)}）", color = if (saved.isBlank()) Color(0xFFCF222E) else Color(0xFF1A7F37))
+        OutlinedTextField(
+            value = key, onValueChange = { key = it }, label = { Text("貼上 Picovoice AccessKey") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(),
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        )
+        OutlinedButton(onClick = {
+            if (key.trim().length < 20) toast("AccessKey 看起來不完整") else { Store.setPicoKey(this@MainActivity, key); saved = key.trim(); key = ""; toast("已存好") }
+        }) { Text("儲存 AccessKey") }
+        Text(if (hasFile) "✅ 喚醒詞檔案：${Store.wakeName(this)}" else "⬜ 還沒有選喚醒詞檔案", color = if (hasFile) Color(0xFF1A7F37) else Color(0xFFCF222E))
+        OutlinedButton(onClick = { pickKeyword.launch(arrayOf("*/*")) }) { Text(if (hasFile) "換一個喚醒詞檔案（.ppn）" else "選喚醒詞檔案（.ppn）") }
+        Picker("靈敏度（改了要關掉再開才生效）", levels.minByOrNull { kotlin.math.abs(it.second - sens) }!!.first, levels.map { it.first }) { i ->
+            sens = levels[i].second
+            Store.setWakeSensitivity(this, sens)
+        }
+        Hint("怎麼拿到這兩樣：到 Picovoice Console 註冊（免費方案）→ 首頁複製 AccessKey → 進 Porcupine，語言選「中文」，打你想喊的詞（例如「小幫手」），平台選 Android，按下載。下載的壓縮檔解開，裡面那個 .ppn 就是喚醒詞檔案。")
+        Hint("喚醒詞是在手機本機辨識，聲音不會傳出去；但通知列會一直有一則通知，螢幕上方的麥克風綠點也會常亮，會多耗一些電。")
+        Hint("三星會自動關掉背景 App：請到手機設定 → 應用程式 → 語音快捷 → 電池，選「不受限制」。")
+        Hint("要先把語音快捷設成「預設數位助理」，喊了才跳得出畫面。重開機後如果沒有自己接著聽，打開這一頁再開一次。")
     }
 
     @Composable

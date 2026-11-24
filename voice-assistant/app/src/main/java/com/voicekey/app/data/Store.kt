@@ -32,6 +32,10 @@ object Store {
     private const val KEY_STT_MODE = "stt_mode"
     private const val KEY_OPENAI = "openai_key"
     private const val KEY_LEARNED = "learned"
+    private const val KEY_WAKE_ON = "wake_on"
+    private const val KEY_PICO = "pico_key"
+    private const val KEY_WAKE_SENS = "wake_sens"
+    private const val KEY_WAKE_NAME = "wake_name"
     private const val LEARNED_MAX = 200
     private const val KEY_FAILS = "secret_fails"
     private const val KEY_LOCK_UNTIL = "secret_lock_until"
@@ -229,6 +233,17 @@ object Store {
     }
 
     fun clearLearned(ctx: Context) { prefs(ctx).edit().remove(KEY_LEARNED).apply() }
+
+    // ---- 呼喊喚醒（Picovoice AccessKey 只存在這支手機）----
+
+    fun wakeEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_WAKE_ON, false)
+    fun setWakeEnabled(ctx: Context, on: Boolean) { prefs(ctx).edit().putBoolean(KEY_WAKE_ON, on).apply() }
+    fun picoKey(ctx: Context): String = prefs(ctx).getString(KEY_PICO, "").orEmpty()
+    fun setPicoKey(ctx: Context, key: String) { prefs(ctx).edit().putString(KEY_PICO, key.trim()).apply() }
+    fun wakeSensitivity(ctx: Context): Float = prefs(ctx).getFloat(KEY_WAKE_SENS, 0.5f)
+    fun setWakeSensitivity(ctx: Context, v: Float) { prefs(ctx).edit().putFloat(KEY_WAKE_SENS, v.coerceIn(0.1f, 0.9f)).apply() }
+    fun wakeName(ctx: Context): String = prefs(ctx).getString(KEY_WAKE_NAME, "").orEmpty()
+    fun setWakeName(ctx: Context, name: String) { prefs(ctx).edit().putString(KEY_WAKE_NAME, name).apply() }
 
     // ---- 語音回覆 ----
 
