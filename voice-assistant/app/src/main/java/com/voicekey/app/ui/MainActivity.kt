@@ -255,6 +255,8 @@ class MainActivity : ComponentActivity() {
                 Hint("不用新增也能說「打開＋App 名稱」，例如「打開相機」「打開賴」。")
             }
 
+            Section("語音辨識（聽得更準）") { SttSettings() }
+
             Section("語音回覆的聲音") { VoiceSettings() }
 
             Section("密碼（保護開鐵門這類指令）") {
@@ -405,6 +407,55 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun SttSettings() {
+        val scope = rememberCoroutineScope()
+        val modes = listOf("google" to "只用手機內建（最快）", "both" to "兩段式：內建先聽，沒把握再送雲端", "cloud" to "一律送雲端（最準，多等 1～2 秒）")
+        var mode by remember { mutableStateOf(Store.sttMode(this)) }
+        var saved by remember { mutableStateOf(Store.openAiKey(this)) }
+        var input by remember { mutableStateOf("") }
+        var checking by remember { mutableStateOf(false) }
+        var learnedCount by remember(refresh) { mutableIntStateOf(Store.learned(this).size) }
+
+        Picker("辨識方式", modes.first { it.first == mode }.second, modes.map { it.second }) { i ->
+            mode = modes[i].first
+            Store.setSttMode(this, mode)
+            if (mode != "google" && saved.isBlank()) toast("還沒有填 OpenAI 金鑰，會先照舊用手機內建")
+        }
+        Text(
+            if (saved.isBlank()) "⬜ 還沒有 OpenAI 金鑰" else "✅ 已存金鑰（結尾 ${saved.takeLast(4)}）",
+            color = if (saved.isBlank()) Color(0xFFCF222E) else Color(0xFF1A7F37),
+        )
+        OutlinedTextField(
+            value = input, onValueChange = { input = it },
+            label = { Text("貼上 OpenAI API 金鑰（sk- 開頭）") },
+            singleLine = true, modifier = Modifier.fillMaxWidth(),
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(enabled = !checking, onClick = {
+                val k = input.trim()
+                if (k.length < 20) { toast("金鑰看起來不完整"); return@OutlinedButton }
+                checking = true
+                scope.launch {
+                    val problem = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.voicekey.app.core.OpenAiStt.checkKey(k) }
+                    checking = false
+                    if (problem.isEmpty()) { Store.setOpenAiKey(this@MainActivity, k); saved = k; input = ""; toast("金鑰可以用，已存好") }
+                    else toast(problem)
+                }
+            }) { Text(if (checking) "檢查中…" else "檢查並儲存") }
+            if (saved.isNotBlank()) OutlinedButton(onClick = { Store.setOpenAiKey(this@MainActivity, ""); saved = ""; toast("金鑰已移除") }) { Text("移除金鑰") }
+        }
+        Hint("金鑰只存在這支手機，不會隨「匯出設定」帶出去。用的是跟公司行事曆「提醒代辦用講的」同一個辨識模型。")
+        Hint("「好／取消」和密碼一律用手機內建辨識，密碼的聲音不會送到雲端。")
+        Hint("兩段式如果反而聽不到或變慢，改選「一律送雲端」或「只用手機內建」。")
+        HorizontalDivider()
+        Text("已經記住 $learnedCount 種你的說法")
+        Hint("它不確定時會反問「你是要…對嗎？」，你答「對」之後就會記住，下次同一句話直接做。")
+        if (learnedCount > 0) OutlinedButton(onClick = { Store.clearLearned(this@MainActivity); learnedCount = 0; toast("已清除") }) { Text("清除記住的說法") }
     }
 
     @Composable

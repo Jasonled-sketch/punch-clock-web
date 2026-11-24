@@ -30,7 +30,33 @@ object Matcher {
     private val PHONE_WORDS = listOf("電話", "手機", "市話")
     private val CALL_WORDS = listOf("打給", "撥給", "撥打", "打去", "聯絡", "連絡")
 
-    fun match(candidates: List<String>, config: Config, apps: List<AppEntry>): MatchResult {
+    /** 一句話的「讀音指紋」：同音字、捲舌不捲舌都算同一句。 */
+    fun phraseKey(text: String): String = Phonetic.tokens(text).joinToString(" ") { Phonetic.canon(it) }
+
+    /** 記住的說法要對到什麼："cmd:<id>"、"line:<聯絡人 id>"、"phone:<聯絡人 id>"；其他種類不記。 */
+    fun targetOf(p: Parsed): String = when (p) {
+        is Parsed.Run -> "cmd:" + p.command.id
+        is Parsed.Call -> (if (p.channel == Channel.LINE) "line:" else "phone:") + p.contact.id
+        else -> ""
+    }
+
+    private fun resolve(target: String, config: Config): Parsed? {
+        val id = target.substringAfter(':', "")
+        return when (target.substringBefore(':')) {
+            "cmd" -> config.commands.firstOrNull { it.id == id }?.let { Parsed.Run(it) }
+            "line" -> config.contacts.firstOrNull { it.id == id }?.let { Parsed.Call(it, Channel.LINE) }
+            "phone" -> config.contacts.firstOrNull { it.id == id }?.let { Parsed.Call(it, Channel.PHONE) }
+            else -> null
+        }
+    }
+
+    fun match(candidates: List<String>, config: Config, apps: List<AppEntry>, learned: Map<String, String> = emptyMap()): MatchResult {
+        if (learned.isNotEmpty()) {
+            for (text in candidates) {
+                val p = learned[phraseKey(text)]?.let { resolve(it, config) } ?: continue
+                return MatchResult(p, 1.0, text)
+            }
+        }
         var best: MatchResult? = null
         var bestAdjusted = -1.0
         candidates.forEachIndexed { i, text ->

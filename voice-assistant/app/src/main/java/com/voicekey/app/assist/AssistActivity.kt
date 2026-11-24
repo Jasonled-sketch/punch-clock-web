@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.speech.RecognitionListener
@@ -56,6 +57,8 @@ import androidx.lifecycle.lifecycleScope
 import com.voicekey.app.actions.ActionRunner
 import com.voicekey.app.core.Config
 import com.voicekey.app.core.Matcher
+import com.voicekey.app.core.OpenAiStt
+import com.voicekey.app.core.Wav
 import com.voicekey.app.core.Parsed
 import com.voicekey.app.core.Protection
 import com.voicekey.app.core.Spoken
@@ -64,7 +67,10 @@ import com.voicekey.app.ui.MainActivity
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.selects.select
@@ -104,6 +110,9 @@ class AssistActivity : ComponentActivity() {
     private var flow: Job? = null
     private var unlocking = false
     private var listenError = 0
+    private var cloudError = ""
+    @Volatile
+    private var recorder: Recorder? = null
 
     /** 只有測試版（debuggable）才會有內容：用 adb 預先排好後續要「說」的回答，方便在沒有麥克風的模擬器上跑完整流程。 */
     private val scriptedAnswers = ArrayDeque<String>()
@@ -169,9 +178,11 @@ class AssistActivity : ComponentActivity() {
         redactSecret = secret
 
         val typed = takeTypedText()
+        val learned = Store.learned(this)
+        cloudError = ""
         val heard = if (typed != null) listOf(typed) else {
             show(Mode.LISTENING, "我在聽，請說")
-            listen(bias(config), showHeard = true)
+            hearCommand(config, learned)
         }
         if (heard.isEmpty()) {
             giveUp(silenceReason(), speak = false)
@@ -180,7 +191,7 @@ class AssistActivity : ComponentActivity() {
         heardText = Spoken.redact(heard.first(), secret)
         Store.log(this, "聽到：${heard.map { Spoken.redact(it, secret) }}")
 
-        val result = Matcher.match(heard, config, Store.apps(this))
+        val result = Matcher.match(heard, config, Store.apps(this), learned)
         val parsed = result.parsed
         if (parsed is Parsed.Unknown) {
             Store.log(this, "比對不到")
@@ -210,6 +221,12 @@ class AssistActivity : ComponentActivity() {
                 return
             }
             confirmed = true
+            // 記住這個說法，下次同一句話就不用再問（帶數字的不記，免得把密碼記進去）
+            val target = Matcher.targetOf(parsed)
+            if (target.isNotEmpty() && Spoken.digits(result.heard).length < 3) {
+                Store.learn(this, Matcher.phraseKey(result.heard), target)
+                Store.log(this, "記住這個說法 → $what")
+            }
         }
 
         if (ActionRunner.needsUnlock(parsed) && isLocked()) {
@@ -380,7 +397,7 @@ class AssistActivity : ComponentActivity() {
     }
 
     /** 沒聽到內容時，分辨是真的沒聲音，還是辨識引擎本身有狀況。 */
-    private fun silenceReason(): String = when (listenError) {
+    private fun silenceReason(): String = if (cloudError.isNotEmpty()) cloudError else when (listenError) {
         SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_SERVER_DISCONNECTED ->
             "語音辨識沒有啟動，請到設定頁檢查辨識引擎"
         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
@@ -436,6 +453,78 @@ class AssistActivity : ComponentActivity() {
 
     // ---- 語音辨識 ----
 
+    /**
+     * 聽「指令」這一句。設定頁選了雲端辨識而且有金鑰才會走下面這段，否則就是原本的手機內建辨識。
+     *   both（兩段式）：自己錄音，同一份聲音同時餵給手機內建辨識；內建的先回來而且對得上固定指令就直接用（快），
+     *                  沒把握或是地名、行程內容這種自由發揮的句子，再把錄音送雲端重聽（準）。
+     *   cloud：不用內建，錄完直接送雲端。
+     * 確認（好／取消）和密碼一律走手機內建，密碼的聲音不會送到雲端。
+     */
+    private suspend fun hearCommand(config: Config, learned: Map<String, String>): List<String> {
+        val mode = Store.sttMode(this)
+        val key = Store.openAiKey(this)
+        if (mode == "google" || key.isBlank()) return listen(bias(config), showHeard = true)
+        scriptedAnswers.removeFirstOrNull()?.let { return if (it.isBlank()) emptyList() else listOf(it) }
+
+        val rec = Recorder()
+        recorder = rec
+        var pipeRead: ParcelFileDescriptor? = null
+        var tee: java.io.OutputStream? = null
+        if (mode == "both" && android.os.Build.VERSION.SDK_INT >= 33) {
+            runCatching { ParcelFileDescriptor.createPipe() }.getOrNull()?.let { p ->
+                pipeRead = p[0]
+                tee = ParcelFileDescriptor.AutoCloseOutputStream(p[1])
+            }
+        }
+        buzz()
+        return try {
+            coroutineScope {
+                val clipJob = async(Dispatchers.IO) { rec.record(tee) }
+                val fd = pipeRead
+                val google: Deferred<List<String>>? = if (fd != null) async { withTimeoutOrNull(LISTEN_TIMEOUT_MS + 4000) { listenOnce(bias(config), true, fd) } ?: emptyList<String>() } else null
+                // 內建辨識先有結果就不用等到偵測出安靜
+                var g: List<String> = emptyList()
+                if (google != null) {
+                    val first = select<List<String>?> {
+                        google.onAwait { it }
+                        clipJob.onAwait { null }
+                    }
+                    g = first ?: (withTimeoutOrNull(1500) { google.await() } ?: emptyList())
+                    if (g.isNotEmpty()) rec.stop()
+                }
+                val clip = clipJob.await()
+                google?.cancel()
+                stopListening()
+                if (g.isNotEmpty() && sureEnough(g, config, learned)) return@coroutineScope g
+                if (!clip.spoke || clip.pcm.size < Recorder.RATE) return@coroutineScope g   // 沒錄到人聲：內建有聽到就用它的
+                show(Mode.WORKING, "聽清楚一點…")
+                val r = withContext(Dispatchers.IO) { OpenAiStt.transcribe(key, Wav.wrap(clip.pcm, Recorder.RATE), OpenAiStt.promptOf(bias(config))) }
+                if (r.text.isBlank()) {
+                    if (r.error.isNotEmpty()) { Store.log(this@AssistActivity, "雲端辨識：${r.error}"); if (g.isEmpty()) cloudError = r.error }
+                    return@coroutineScope g
+                }
+                heardText = Spoken.redact(r.text, redactSecret)
+                listOf(r.text) + g
+            }
+        } finally {
+            recorder = null
+            runCatching { pipeRead?.close() }
+        }
+    }
+
+    /** 內建辨識的結果夠不夠用：對得上固定指令／聯絡人／App／存過的地點，或是只是要把畫面交出去，就不必再送雲端。 */
+    private fun sureEnough(g: List<String>, config: Config, learned: Map<String, String>): Boolean {
+        val r = Matcher.match(g, config, Store.apps(this), learned)
+        if (r.score < Matcher.EXECUTE) return false
+        return when (val p = r.parsed) {
+            is Parsed.Run, is Parsed.Call, is Parsed.Open -> true
+            is Parsed.Navigate -> p.place != null || p.query.isBlank()
+            is Parsed.Schedule -> p.detail.length < 4
+            is Parsed.Keep -> p.detail.length < 4
+            is Parsed.Unknown -> false
+        }
+    }
+
     private suspend fun listen(biasStrings: List<String>, showHeard: Boolean): List<String> {
         scriptedAnswers.removeFirstOrNull()?.let { return if (it.isBlank()) emptyList() else listOf(it) }
         val result = withTimeoutOrNull(LISTEN_TIMEOUT_MS) { listenOnce(biasStrings, showHeard) }
@@ -443,7 +532,7 @@ class AssistActivity : ComponentActivity() {
         return result ?: emptyList()
     }
 
-    private suspend fun listenOnce(biasStrings: List<String>, showHeard: Boolean): List<String> =
+    private suspend fun listenOnce(biasStrings: List<String>, showHeard: Boolean, audio: ParcelFileDescriptor? = null): List<String> =
         suspendCancellableCoroutine { cont ->
             val component = Store.recognizer(this)
             listenError = 0
@@ -458,7 +547,7 @@ class AssistActivity : ComponentActivity() {
             }
             recognizer = sr
             sr.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) { buzz() }
+                override fun onReadyForSpeech(params: Bundle?) { if (audio == null) buzz() }
                 override fun onBeginningOfSpeech() {}
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
@@ -495,6 +584,13 @@ class AssistActivity : ComponentActivity() {
             if (biasStrings.isNotEmpty() && android.os.Build.VERSION.SDK_INT >= 33) {
                 intent.putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS, ArrayList(biasStrings))
             }
+            if (audio != null) {
+                // Android 13 起可以把自己錄的聲音交給辨識引擎（它就不會自己再開一次麥克風）
+                intent.putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE, audio)
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, android.media.AudioFormat.ENCODING_PCM_16BIT)
+                    .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, Recorder.RATE)
+            }
             runCatching { sr.startListening(intent) }.onFailure {
                 Store.log(this, "開始聆聽失敗：${it.message}")
                 listenError = SpeechRecognizer.ERROR_CLIENT
@@ -504,6 +600,7 @@ class AssistActivity : ComponentActivity() {
         }
 
     private fun stopListening() {
+        recorder?.stop()
         recognizer?.let { runCatching { it.cancel() }; runCatching { it.destroy() } }
         recognizer = null
     }

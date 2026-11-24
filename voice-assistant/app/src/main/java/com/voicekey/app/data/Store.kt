@@ -29,6 +29,10 @@ object Store {
     private const val KEY_TTS_ENGINE = "tts_engine"
     private const val KEY_TTS_VOICE = "tts_voice"
     private const val KEY_TTS_RATE = "tts_rate"
+    private const val KEY_STT_MODE = "stt_mode"
+    private const val KEY_OPENAI = "openai_key"
+    private const val KEY_LEARNED = "learned"
+    private const val LEARNED_MAX = 200
     private const val KEY_FAILS = "secret_fails"
     private const val KEY_LOCK_UNTIL = "secret_lock_until"
     private const val MAX_FAILS = 5
@@ -199,6 +203,32 @@ object Store {
     fun setRecognizer(ctx: Context, c: ComponentName) {
         prefs(ctx).edit().putString(KEY_RECOGNIZER, c.flattenToString()).apply()
     }
+
+    // ---- 雲端語音辨識（金鑰只存在這支手機，不會隨匯出帶出去）----
+
+    /** "google"＝只用手機內建（最快）；"both"＝先用內建、沒把握再送雲端；"cloud"＝一律送雲端（最準） */
+    fun sttMode(ctx: Context): String = prefs(ctx).getString(KEY_STT_MODE, "google") ?: "google"
+    fun setSttMode(ctx: Context, mode: String) { prefs(ctx).edit().putString(KEY_STT_MODE, mode).apply() }
+    fun openAiKey(ctx: Context): String = prefs(ctx).getString(KEY_OPENAI, "").orEmpty()
+    fun setOpenAiKey(ctx: Context, key: String) { prefs(ctx).edit().putString(KEY_OPENAI, key.trim()).apply() }
+
+    // ---- 記住你的說法：反問「你是要…對嗎」答「對」之後，下次同一句話直接執行 ----
+
+    fun learned(ctx: Context): Map<String, String> = runCatching {
+        val o = JSONObject(prefs(ctx).getString(KEY_LEARNED, "{}") ?: "{}")
+        o.keys().asSequence().associateWith { o.optString(it) }
+    }.getOrDefault(emptyMap())
+
+    fun learn(ctx: Context, phraseKey: String, target: String) {
+        if (phraseKey.isBlank() || target.isBlank()) return
+        val m = LinkedHashMap(learned(ctx))
+        m.remove(phraseKey)
+        m[phraseKey] = target
+        while (m.size > LEARNED_MAX) m.remove(m.keys.first())
+        prefs(ctx).edit().putString(KEY_LEARNED, JSONObject(m as Map<*, *>).toString()).apply()
+    }
+
+    fun clearLearned(ctx: Context) { prefs(ctx).edit().remove(KEY_LEARNED).apply() }
 
     // ---- 語音回覆 ----
 
