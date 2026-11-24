@@ -33,7 +33,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,7 +64,10 @@ import com.voicekey.app.ui.MainActivity
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -80,6 +85,7 @@ class AssistActivity : ComponentActivity() {
         @Volatile
         var pendingText: String? = null
         private const val LISTEN_TIMEOUT_MS = 12_000L
+        private val YES_NO_BIAS = listOf("好", "好的", "確定", "對", "可以", "沒問題", "取消", "不要", "不用")
     }
 
     private enum class Mode { IDLE, LISTENING, WORKING, OK, ERROR }
@@ -89,9 +95,11 @@ class AssistActivity : ComponentActivity() {
     private var mode by mutableStateOf(Mode.IDLE)
     private var canRetry by mutableStateOf(false)
 
-    private var tts: TextToSpeech? = null
-    private val ttsReady = CompletableDeferred<Boolean>()
-    private val speaking = ConcurrentHashMap<String, CancellableContinuation<Unit>>()
+    private lateinit var speaker: Speaker
+
+    /** 正在等「好／取消」時不是 null：畫面會多出兩顆按鈕，按了等於說了。 */
+    private var choice by mutableStateOf<CompletableDeferred<Boolean>?>(null)
+    private var redactSecret = ""
     private var recognizer: SpeechRecognizer? = null
     private var flow: Job? = null
     private var unlocking = false
@@ -110,7 +118,7 @@ class AssistActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        initTts()
+        speaker = Speaker(this)
         setContent { AssistScreen() }
         start()
     }
@@ -134,7 +142,7 @@ class AssistActivity : ComponentActivity() {
     override fun onDestroy() {
         flow?.cancel()
         stopListening()
-        tts?.let { runCatching { it.stop() }; runCatching { it.shutdown() } }
+        speaker.shutdown()
         runCatching { VkSession.current?.hide() }
         super.onDestroy()
     }
@@ -154,25 +162,28 @@ class AssistActivity : ComponentActivity() {
     private suspend fun runFlow() {
         canRetry = false
         heardText = ""
+        choice = null
         val config = Store.config(this)
+        val secret = Store.secret(this)
+        redactSecret = secret
 
         val typed = takeTypedText()
         val heard = if (typed != null) listOf(typed) else {
-            show(Mode.LISTENING, "請說指令")
+            show(Mode.LISTENING, "我在聽，請說")
             listen(bias(config), showHeard = true)
         }
         if (heard.isEmpty()) {
             giveUp(silenceReason(), speak = false)
             return
         }
-        heardText = heard.first()
-        Store.log(this, "聽到：$heard")
+        heardText = Spoken.redact(heard.first(), secret)
+        Store.log(this, "聽到：${heard.map { Spoken.redact(it, secret) }}")
 
         val result = Matcher.match(heard, config, Store.apps(this))
         val parsed = result.parsed
         if (parsed is Parsed.Unknown) {
             Store.log(this, "比對不到")
-            giveUp(parsed.reason.ifEmpty { "聽不懂這個指令" })
+            giveUp(parsed.reason.ifEmpty { "不好意思，我沒聽懂，可以再說一次嗎" })
             return
         }
         val what = Matcher.describe(parsed)
@@ -180,17 +191,17 @@ class AssistActivity : ComponentActivity() {
 
         var confirmed = false
         if (result.score < Matcher.EXECUTE) {
-            if (!askYesNo("你是說，$what，嗎？")) {
-                giveUp("已取消")
+            if (!askYesNo("你是要，$what，對嗎？")) {
+                giveUp("好，那先不做")
                 return
             }
             confirmed = true
         }
 
         if (ActionRunner.needsUnlock(parsed) && isLocked()) {
-            show(Mode.WORKING, "請先解鎖手機")
+            show(Mode.WORKING, "麻煩先解鎖手機")
             if (!unlock()) {
-                giveUp("手機沒有解鎖，已取消")
+                giveUp("手機沒有解鎖，先不做了")
                 return
             }
         }
@@ -198,21 +209,36 @@ class AssistActivity : ComponentActivity() {
         val protection = (parsed as? Parsed.Run)?.command?.protection ?: Protection.NONE
         when (protection) {
             Protection.NONE -> {}
-            Protection.CONFIRM -> if (!confirmed && !askYesNo("確定要${what}嗎？")) {
-                giveUp("已取消")
+            Protection.CONFIRM -> if (!confirmed && !askYesNo("要${what}，對嗎？")) {
+                giveUp("好，那先不做")
                 return
             }
-            Protection.PASSWORD -> if (!askPassword(what)) return
+            Protection.PASSWORD -> {
+                // 指令和密碼一口氣說完就不用再問第二次
+                val inline = if (Store.lockedMinutes(this) > 0) Spoken.Inline.NONE else Spoken.inlineSecret(heard, secret)
+                when (inline) {
+                    Spoken.Inline.MATCH -> {
+                        Store.secretPassed(this)
+                        Store.log(this, "密碼通過（一句話帶密碼）")
+                    }
+                    Spoken.Inline.WRONG -> {
+                        Store.secretFailed(this)
+                        Store.log(this, "一句話帶的密碼不符")
+                        if (!askPassword(what, "密碼好像不對，再說一次密碼好嗎")) return
+                    }
+                    Spoken.Inline.NONE -> if (!askPassword(what, "好，要$what，請說密碼")) return
+                }
+            }
         }
 
         if (ActionRunner.leavesApp(parsed)) {
-            show(Mode.OK, what)
-            say(what)
+            show(Mode.OK, "好，$what")
+            say("好，$what")
             val out = ActionRunner.run(this, parsed)
             Store.log(this, "執行：$what → ${if (out.ok) "成功" else out.message}")
             if (out.ok) finish() else giveUp(out.message)
         } else {
-            show(Mode.WORKING, "執行中…")
+            show(Mode.WORKING, "馬上處理…")
             val out = ActionRunner.run(this, parsed)
             Store.log(this, "執行：$what → ${out.message}")
             if (out.ok) {
@@ -241,29 +267,57 @@ class AssistActivity : ComponentActivity() {
         return fromIntent?.takeIf { it.isNotBlank() }
     }
 
+    /** 問「好不好」：可以用說的，也可以直接按畫面上的按鈕；聽不清楚會再問一次，還是不清楚就當作不要。 */
     private suspend fun askYesNo(question: String): Boolean {
-        show(Mode.WORKING, question)
-        say(question)
-        show(Mode.LISTENING, question)
-        val answer = listen(listOf("確定", "取消"), showHeard = true)
-        Store.log(this, "確認回答：$answer")
-        return Spoken.isYes(answer)
+        val tap = CompletableDeferred<Boolean>()
+        choice = tap
+        try {
+            var prompt = question
+            repeat(2) {
+                show(Mode.WORKING, prompt)
+                say(prompt)
+                if (tap.isCompleted) return tap.await()
+                show(Mode.LISTENING, prompt)
+                val verdict: Boolean? = coroutineScope {
+                    val heard = async { listen(YES_NO_BIAS, showHeard = true) }
+                    val v = select<Boolean?> {
+                        tap.onAwait { it }
+                        heard.onAwait { answer ->
+                            Store.log(this@AssistActivity, "確認回答：$answer")
+                            when {
+                                Spoken.isNo(answer) -> false
+                                Spoken.isYes(answer) -> true
+                                else -> null
+                            }
+                        }
+                    }
+                    heard.cancel()
+                    v
+                }
+                if (verdict != null) return verdict
+                heardText = ""
+                prompt = "不好意思沒聽清楚。要的話請說「好」，不要請說「取消」，也可以直接按畫面上的按鈕"
+            }
+            return false
+        } finally {
+            choice = null
+        }
     }
 
-    private suspend fun askPassword(what: String): Boolean {
+    private suspend fun askPassword(what: String, firstPrompt: String): Boolean {
         val secret = Store.secret(this)
         if (secret.isEmpty()) {
-            giveUp("還沒有設定密碼，請先到設定頁設定")
+            giveUp("還沒有設定密碼喔，請先到設定頁設定")
             return false
         }
         val locked = Store.lockedMinutes(this)
         if (locked > 0) {
-            giveUp("密碼說錯太多次，請 $locked 分鐘後再試")
+            giveUp("密碼說錯太多次了，請 $locked 分鐘後再試")
             return false
         }
         var retryPrompt = ""
         repeat(2) { attempt ->
-            val prompt = if (attempt == 0) "確定要$what，請說密碼" else retryPrompt
+            val prompt = if (attempt == 0) firstPrompt else retryPrompt
             show(Mode.WORKING, prompt)
             say(prompt)
             show(Mode.LISTENING, "請說密碼")
@@ -273,11 +327,11 @@ class AssistActivity : ComponentActivity() {
             if (answer.isEmpty()) {
                 // 沒聽到不算說錯，不累計鎖定次數
                 Store.log(this, "沒有聽到密碼（第 ${attempt + 1} 次）")
-                retryPrompt = "沒有聽到，請再說一次密碼"
+                retryPrompt = "我沒聽到，再說一次密碼好嗎"
                 return@repeat
             }
             if (Spoken.isNo(answer)) {
-                giveUp("已取消")
+                giveUp("好，那先不做")
                 return false
             }
             if (Spoken.secretMatches(answer, secret)) {
@@ -287,13 +341,13 @@ class AssistActivity : ComponentActivity() {
             }
             Store.secretFailed(this)
             Store.log(this, "密碼不符（第 ${attempt + 1} 次）")
-            retryPrompt = "密碼不對，請再說一次"
+            retryPrompt = "密碼好像不對，再說一次好嗎"
             if (Store.lockedMinutes(this) > 0) {
-                giveUp("密碼說錯太多次，暫時鎖定十分鐘")
+                giveUp("密碼說錯太多次了，先鎖定十分鐘")
                 return false
             }
         }
-        giveUp("沒有通過密碼，已取消")
+        giveUp("密碼沒有通過，先不做了")
         return false
     }
 
@@ -307,7 +361,7 @@ class AssistActivity : ComponentActivity() {
             "網路不通，語音辨識失敗"
         SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
             "辨識引擎還沒有中文語音，請到 Google 語音設定下載"
-        else -> "沒有聽到聲音"
+        else -> "我沒聽到聲音，按「再說一次」試試"
     }
 
     private suspend fun giveUp(message: String, speak: Boolean = true) {
@@ -386,7 +440,7 @@ class AssistActivity : ComponentActivity() {
                 override fun onPartialResults(partial: Bundle?) {
                     if (!showHeard) return
                     partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        ?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { heardText = it }
+                        ?.firstOrNull()?.takeIf { it.isNotBlank() }?.let { heardText = Spoken.redact(it, redactSecret) }
                 }
 
                 override fun onResults(results: Bundle?) {
@@ -436,54 +490,7 @@ class AssistActivity : ComponentActivity() {
 
     // ---- 語音回覆 ----
 
-    private fun initTts() {
-        tts = TextToSpeech(applicationContext) { code ->
-            val engine = tts
-            if (code != TextToSpeech.SUCCESS || engine == null) {
-                ttsReady.complete(false)
-                return@TextToSpeech
-            }
-            val ok = listOf(Locale.TAIWAN, Locale.TRADITIONAL_CHINESE, Locale.CHINESE).any {
-                engine.setLanguage(it) >= TextToSpeech.LANG_AVAILABLE
-            }
-            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(id: String?) {}
-                override fun onDone(id: String?) { finishUtterance(id) }
-                @Deprecated("Deprecated in Java")
-                override fun onError(id: String?) { finishUtterance(id) }
-                override fun onError(id: String?, errorCode: Int) { finishUtterance(id) }
-                override fun onStop(id: String?, interrupted: Boolean) { finishUtterance(id) }
-            })
-            ttsReady.complete(ok)
-        }
-    }
-
-    private fun finishUtterance(id: String?) {
-        speaking.remove(id ?: return)?.let { if (it.isActive) it.resume(Unit) }
-    }
-
-    /** 把話說完才往下走，免得接下來的聆聽錄到自己的聲音。 */
-    private suspend fun say(text: String) {
-        if (text.isBlank()) return
-        val ready = withTimeoutOrNull(2500) { ttsReady.await() } ?: false
-        val engine = tts
-        if (!ready || engine == null) {
-            delay(900)
-            return
-        }
-        val id = Store.newId()
-        withTimeoutOrNull(10_000) {
-            suspendCancellableCoroutine<Unit> { cont ->
-                speaking[id] = cont
-                cont.invokeOnCancellation { speaking.remove(id); runCatching { engine.stop() } }
-                if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
-                    speaking.remove(id)
-                    if (cont.isActive) cont.resume(Unit)
-                }
-            }
-        }
-        delay(150)
-    }
+    private suspend fun say(text: String) = speaker.say(text)
 
     // ---- 畫面 ----
 
@@ -540,6 +547,19 @@ class AssistActivity : ComponentActivity() {
                                 "「$heardText」", color = Color(0xFF9AA4B2), fontSize = 16.sp,
                                 textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
                             )
+                        }
+                        choice?.let { pending ->
+                            Spacer(Modifier.height(16.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedButton(
+                                    onClick = { pending.complete(false); speaker.stop() },
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                ) { Text("取消", fontSize = 18.sp) }
+                                Button(
+                                    onClick = { pending.complete(true); speaker.stop() },
+                                    modifier = Modifier.weight(1f).height(52.dp),
+                                ) { Text("好", fontSize = 18.sp) }
+                            }
                         }
                         Spacer(Modifier.height(14.dp))
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

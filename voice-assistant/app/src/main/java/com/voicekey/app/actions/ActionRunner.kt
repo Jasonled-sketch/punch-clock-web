@@ -91,10 +91,10 @@ object ActionRunner {
                 val code = conn.responseCode
                 runCatching { (if (code in 200..299) conn.inputStream else conn.errorStream)?.close() }
                 conn.disconnect()
-                if (code in 200..299) Outcome(true, "${c.name}，指令已送出")
-                else Outcome(false, "${c.name}失敗，伺服器回應 $code")
+                if (code in 200..299) Outcome(true, "好了，${c.name}，已經送出囉")
+                else Outcome(false, "不好意思，${c.name}沒有成功，伺服器回應 $code")
             } catch (e: Exception) {
-                Outcome(false, "${c.name}失敗，連不上網路或網址有誤")
+                Outcome(false, "不好意思，${c.name}沒有成功，可能是網路不通或網址有誤")
             }
         }
     }

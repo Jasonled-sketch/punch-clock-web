@@ -60,6 +60,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voicekey.app.assist.AssistActivity
+import com.voicekey.app.assist.EngineOption
+import com.voicekey.app.assist.Speaker
+import com.voicekey.app.assist.VoiceOption
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.voicekey.app.assist.VkInteractionService
 import com.voicekey.app.core.ActionType
 import com.voicekey.app.core.AppEntry
@@ -234,10 +241,13 @@ class MainActivity : ComponentActivity() {
                 Hint("不用新增也能說「打開＋App 名稱」，例如「打開相機」「打開賴」。")
             }
 
+            Section("語音回覆的聲音") { VoiceSettings() }
+
             Section("密碼（保護開鐵門這類指令）") {
                 val has = Store.secret(this@MainActivity).isNotEmpty()
                 Text(if (has) "已設定密碼" else "尚未設定密碼", color = if (has) Color(0xFF1A7F37) else Color(0xFFCF222E))
                 OutlinedButton(onClick = { showSecret = true }) { Text(if (has) "更改密碼" else "設定密碼") }
+                Hint("可以一口氣說完，例如「開鐵門一二三四」，就不會再問第二次。只說「開鐵門」則會再問密碼。")
                 Hint("密碼是用說的，旁邊有人時會被聽到；連續說錯 5 次會鎖 10 分鐘。")
             }
 
@@ -381,6 +391,63 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    @Composable
+    private fun VoiceSettings() {
+        val scope = rememberCoroutineScope()
+        var enginePkg by remember { mutableStateOf(Store.ttsEngine(this)) }
+        var speaker by remember { mutableStateOf(Speaker(this, enginePkg)) }
+        var engines by remember { mutableStateOf<List<EngineOption>>(emptyList()) }
+        var voices by remember { mutableStateOf<List<VoiceOption>>(emptyList()) }
+        var voiceId by remember { mutableStateOf(Store.ttsVoice(this)) }
+        var rate by remember { mutableStateOf(Store.ttsRate(this)) }
+        val rates = listOf("慢" to 0.85f, "正常" to 1.0f, "稍快" to 1.15f, "快" to 1.3f)
+
+        DisposableEffect(speaker) { onDispose { speaker.shutdown() } }
+        LaunchedEffect(speaker) {
+            engines = speaker.engines()
+            voices = speaker.voices()
+        }
+        fun preview() {
+            scope.launch { speaker.say("好，幫你用 LINE 打給小關。這是目前的聲音。") }
+        }
+
+        if (engines.size > 1) {
+            Picker(
+                "語音引擎",
+                engines.firstOrNull { it.pkg == enginePkg }?.label ?: "手機預設",
+                engines.map { it.label },
+            ) { i ->
+                enginePkg = engines[i].pkg
+                Store.setTtsEngine(this, enginePkg)
+                voiceId = null
+                voices = emptyList()
+                speaker = Speaker(this, enginePkg)
+            }
+        }
+        if (voices.isEmpty()) {
+            Hint("這個引擎沒有列出可選的中文聲音，會用它的預設聲音。")
+        } else {
+            Picker(
+                "聲音（選了會馬上試聽）",
+                voices.firstOrNull { it.id == voiceId }?.label ?: "預設",
+                voices.map { it.label },
+            ) { i ->
+                voiceId = voices[i].id
+                Store.setTtsVoice(this, voiceId)
+                speaker.applyVoice(voiceId)
+                preview()
+            }
+        }
+        Picker("語速", rates.minByOrNull { kotlin.math.abs(it.second - rate) }!!.first, rates.map { it.first }) { i ->
+            rate = rates[i].second
+            Store.setTtsRate(this, rate)
+            speaker.setRate(rate)
+            preview()
+        }
+        OutlinedButton(onClick = { preview() }) { Text("試聽") }
+        Hint("想要更多聲音：手機「設定」搜尋「文字轉語音」，進去可以換引擎、下載其他語音。")
     }
 
     private fun engineName(c: ComponentName): String =

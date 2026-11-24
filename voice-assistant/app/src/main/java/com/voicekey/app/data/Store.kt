@@ -26,6 +26,9 @@ object Store {
     private const val KEY_CONFIG = "config"
     private const val KEY_SECRET = "secret"
     private const val KEY_RECOGNIZER = "recognizer"
+    private const val KEY_TTS_ENGINE = "tts_engine"
+    private const val KEY_TTS_VOICE = "tts_voice"
+    private const val KEY_TTS_RATE = "tts_rate"
     private const val KEY_FAILS = "secret_fails"
     private const val KEY_LOCK_UNTIL = "secret_lock_until"
     private const val MAX_FAILS = 5
@@ -195,6 +198,24 @@ object Store {
 
     fun setRecognizer(ctx: Context, c: ComponentName) {
         prefs(ctx).edit().putString(KEY_RECOGNIZER, c.flattenToString()).apply()
+    }
+
+    // ---- 語音回覆 ----
+
+    fun ttsEngine(ctx: Context): String? = prefs(ctx).getString(KEY_TTS_ENGINE, null)
+    fun ttsVoice(ctx: Context): String? = prefs(ctx).getString(KEY_TTS_VOICE, null)
+    fun ttsRate(ctx: Context): Float = prefs(ctx).getFloat(KEY_TTS_RATE, 1.0f)
+
+    fun setTtsEngine(ctx: Context, pkg: String?) {
+        prefs(ctx).edit().putString(KEY_TTS_ENGINE, pkg).remove(KEY_TTS_VOICE).apply()
+    }
+
+    fun setTtsVoice(ctx: Context, id: String?) {
+        prefs(ctx).edit().putString(KEY_TTS_VOICE, id).apply()
+    }
+
+    fun setTtsRate(ctx: Context, rate: Float) {
+        prefs(ctx).edit().putFloat(KEY_TTS_RATE, rate).apply()
     }
 
     // ---- 已安裝的 App ----

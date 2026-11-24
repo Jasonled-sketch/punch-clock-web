@@ -3,7 +3,7 @@ package com.voicekey.app.core
 /** 「確定／取消」與口說密碼的判讀。 */
 object Spoken {
     private val NO = listOf("取消", "不要", "不用", "不是", "不對", "不行", "算了", "否", "停", "no", "cancel")
-    private val YES = listOf("確定", "確認", "沒錯", "可以", "是", "對", "好", "要", "yes", "ok")
+    private val YES = listOf("確定", "確認", "沒錯", "沒問題", "可以", "執行", "是", "對", "好", "要", "行", "yes", "ok", "okay")
     private val YES_SOUND = listOf(listOf("que", "din"), listOf("que", "len"))
 
     private val NUMERAL = mapOf(
@@ -56,6 +56,35 @@ object Spoken {
             val got = Phonetic.tokens(c).map(Phonetic::canon)
             if (numeric) got == want else containsRun(got, want)
         }
+    }
+
+    enum class Inline { NONE, MATCH, WRONG }
+
+    /**
+     * 指令和密碼一口氣說完（「開A館鐵門一二三四」）時，檢查句尾有沒有帶對的密碼。
+     * WRONG＝句子裡有一串數字但不對，要算一次說錯，免得有人用這個方式無限猜。
+     */
+    fun inlineSecret(candidates: List<String>, secret: String): Inline {
+        val s = secret.trim()
+        if (s.isEmpty()) return Inline.NONE
+        if (!s.all { it in '0'..'9' }) {
+            return if (secretMatches(candidates, s)) Inline.MATCH else Inline.NONE
+        }
+        val all = candidates.map(::digits)
+        return when {
+            all.any { it.endsWith(s) } -> Inline.MATCH
+            all.any { it.length >= 3 } -> Inline.WRONG
+            else -> Inline.NONE
+        }
+    }
+
+    private val DIGIT_RUN = Regex("(?:[0-9０-９零〇一二三四五六七八九兩两壹貳參肆伍陸柒捌玖幺么洞]\\s*){3,}")
+
+    /** 顯示在畫面或寫進紀錄前，把密碼和成串數字遮掉。 */
+    fun redact(text: String, secret: String): String {
+        var t = text
+        if (secret.isNotBlank()) t = t.replace(secret.trim(), "●●●●")
+        return DIGIT_RUN.replace(t, "●●●●")
     }
 
     private fun containsRun(hay: List<String>, needle: List<String>): Boolean {

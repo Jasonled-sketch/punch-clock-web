@@ -148,6 +148,48 @@ class MatcherTest {
         assertTrue(Names.norm("陳如如") != Names.norm("陳如如的老公"))
     }
 
+    @Test fun navigateUnsavedPlaces() {
+        assertEquals("大內二溪朝天宮", nav("導航到大內二溪朝天宮").query)
+        assertEquals("台東金樽安檢所", nav("導航去台東金樽安檢所").query)
+        assertEquals("台東金樽安檢所", nav("帶我去台東金樽安檢所").query)
+        assertEquals("大內二溪朝天宮", nav("開啟地圖導航到大內二溪朝天宮").query)
+    }
+
+    @Test fun gateWithPasswordInOneSentence() {
+        val r = m("開鐵門1234")
+        assertEquals(gate, (r.parsed as Parsed.Run).command)
+        assertTrue(r.score >= Matcher.EXECUTE)
+        assertTrue(m("開啟公司鐵門一二三四").score >= Matcher.EXECUTE)
+    }
+
+    @Test fun inlineSecret() {
+        assertEquals(Spoken.Inline.MATCH, Spoken.inlineSecret(listOf("開鐵門1234"), "1234"))
+        assertEquals(Spoken.Inline.MATCH, Spoken.inlineSecret(listOf("開鐵門一二三四"), "1234"))
+        assertEquals(Spoken.Inline.MATCH, Spoken.inlineSecret(listOf("開鐵門 密碼 1 2 3 4"), "1234"))
+        assertEquals(Spoken.Inline.MATCH, Spoken.inlineSecret(listOf("聽錯", "開鐵門1234"), "1234"))
+        assertEquals(Spoken.Inline.NONE, Spoken.inlineSecret(listOf("開鐵門"), "1234"))
+        assertEquals(Spoken.Inline.NONE, Spoken.inlineSecret(listOf("開一下鐵門"), "1234"))
+        assertEquals(Spoken.Inline.WRONG, Spoken.inlineSecret(listOf("開鐵門9999"), "1234"))
+        assertEquals(Spoken.Inline.WRONG, Spoken.inlineSecret(listOf("開鐵門12345"), "1234"))
+        assertEquals(Spoken.Inline.NONE, Spoken.inlineSecret(listOf("開鐵門1234"), ""))
+    }
+
+    @Test fun redactHidesPassword() {
+        assertEquals("開鐵門●●●●", Spoken.redact("開鐵門1234", "1234"))
+        assertEquals("開鐵門●●●●", Spoken.redact("開鐵門一二三四", "1234"))
+        assertEquals("開鐵門", Spoken.redact("開鐵門", "1234"))
+        assertEquals("開一下鐵門", Spoken.redact("開一下鐵門", "1234"))
+        assertEquals("開鐵門●●●●", Spoken.redact("開鐵門芝麻開門", "芝麻開門"))
+    }
+
+    @Test fun unclearAnswerIsNeitherYesNorNo() {
+        assertFalse(Spoken.isYes(listOf("關閉")))
+        assertFalse(Spoken.isNo(listOf("關閉")))
+        assertTrue(Spoken.isYes(listOf("好的")))
+        assertTrue(Spoken.isYes(listOf("沒問題")))
+        assertTrue(Spoken.isYes(listOf("OK")))
+    }
+
     @Test fun yesNo() {
         assertTrue(Spoken.isYes(listOf("確定")))
         assertTrue(Spoken.isYes(listOf("缺定")))
