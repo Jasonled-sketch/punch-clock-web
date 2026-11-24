@@ -215,6 +215,25 @@ class MatcherTest {
         assertFalse(m("今天行程很滿").parsed is Parsed.Schedule)
     }
 
+    @Test fun scheduleHeardAsXingZheng() {
+        // 語音常把「行程」聽成「行政」
+        assertEquals("個人", sch("幫我登記行政 個人").calendar)
+        assertEquals("", sch("幫我登記行政 個人").detail)
+        assertEquals("公司", sch("幫我登記行政，公司").calendar)
+        assertEquals("公司", sch("登記到公司形事曆").calendar)
+    }
+
+    private fun keep(s: String) = (m(s).parsed as Parsed.Keep).detail
+
+    @Test fun keepToKnowledgeBase() {
+        assertEquals("", keep("存到知識庫"))
+        assertEquals("", keep("幫我把這個存到知識庫"))
+        assertEquals("", keep("放進知識庫"))
+        assertEquals("", keep("存到芝士庫"))
+        assertEquals("每天早上先做最難的事", keep("存到知識庫，每天早上先做最難的事"))
+        assertFalse(m("打開知識庫").parsed is Parsed.Keep)
+    }
+
     @Test fun yesNo() {
         assertTrue(Spoken.isYes(listOf("確定")))
         assertTrue(Spoken.isYes(listOf("缺定")))

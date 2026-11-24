@@ -190,9 +190,14 @@ class AssistActivity : ComponentActivity() {
         val what = Matcher.describe(parsed)
         Store.log(this, "比對到：$what（${"%.2f".format(result.score)}）")
 
-        if (parsed is Parsed.Schedule) {
-            ActionRunner.scheduleProblem(this, parsed, shot)?.let { problem ->
-                Store.log(this, "登記行程：$problem")
+        val toCal = when (parsed) {
+            is Parsed.Schedule -> parsed.detail
+            is Parsed.Keep -> parsed.detail
+            else -> null
+        }
+        if (toCal != null) {
+            ActionRunner.calendarProblem(this, toCal, shot)?.let { problem ->
+                Store.log(this, "$what：$problem")
                 giveUp(problem)
                 return
             }
@@ -241,7 +246,11 @@ class AssistActivity : ComponentActivity() {
         }
 
         if (ActionRunner.leavesApp(parsed)) {
-            val opening = if (parsed is Parsed.Schedule) scheduleOpening(parsed) else "好，$what"
+            val opening = when (parsed) {
+                is Parsed.Schedule -> scheduleOpening(parsed)
+                is Parsed.Keep -> if (parsed.detail.length < 4) "好，把這個畫面存進知識庫" else "好，存進知識庫"
+                else -> "好，$what"
+            }
             show(Mode.OK, opening)
             say(opening)
             val out = ActionRunner.run(this, parsed, shot)
@@ -263,9 +272,9 @@ class AssistActivity : ComponentActivity() {
     }
 
     private fun scheduleOpening(p: Parsed.Schedule): String {
-        val which = if (p.calendar.isEmpty()) "" else "，記得選${p.calendar}"
-        return if (p.detail.length < 4) "好，把這個畫面交給行事曆讀，填好後請看一下再按儲存$which"
-        else "好，交給行事曆登記，填好後請看一下再按儲存$which"
+        val which = if (p.calendar.isEmpty()) "" else "，放${p.calendar}的"
+        return if (p.detail.length < 4) "好，把這個畫面交給行事曆讀$which，填好後請看一下再按儲存"
+        else "好，交給行事曆登記$which，填好後請看一下再按儲存"
     }
 
     /** 打字代替說話：設定頁的「打字執行」，或測試版用 adb 帶 text 參數（正式版不接受外部參數）。 */
@@ -401,7 +410,7 @@ class AssistActivity : ComponentActivity() {
         (config.commands.flatMap { it.triggers + it.name } +
             config.contacts.flatMap { it.aliases + it.name } +
             config.places.flatMap { it.aliases + it.name } +
-            listOf("用賴打給", "打給", "打電話給", "打開", "導航到", "導航回", "登記行程", "行事曆", "個人", "公司"))
+            listOf("用賴打給", "打給", "打電話給", "打開", "導航到", "導航回", "登記行程", "行事曆", "個人", "公司", "存到知識庫", "知識庫"))
             .filter { it.isNotBlank() }.distinct().take(100)
 
     // ---- 解鎖 ----
